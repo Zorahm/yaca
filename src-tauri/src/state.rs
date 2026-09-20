@@ -20,8 +20,11 @@ use tokio_util::sync::CancellationToken;
 /// A live chat: the core session and the bridge pumping its events out.
 struct Chat {
     handle: Arc<SessionHandle>,
-    /// Stops this chat's bridge. One per chat: a bridge left running for a
-    /// closed session is a source of events out of nowhere.
+    /// Stops this chat's side jobs: the bridge to the webview and the
+    /// watcher that raises an OS toast on permission requests.
+    ///
+    /// One per chat: a watcher left running for a closed session is a source
+    /// of toasts out of nowhere.
     bridge: CancellationToken,
 }
 
@@ -54,6 +57,10 @@ impl AppState {
             crate::EVENT_CHANNEL,
             id.clone(),
         ));
+        // Тост §15 слушает тот же поток отдельно: мост про транспорт,
+        // наблюдатель про уведомления, и в один файл их сводить — значит
+        // смешать две обязанности.
+        tokio::spawn(crate::notify::watch(app.clone(), handle.subscribe(), stop.clone()));
 
         let chat = Chat {
             handle,

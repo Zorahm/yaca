@@ -30,6 +30,8 @@ tauri = { version = "2", features = [] }
 # Выбор папки проекта в чипе §9.1. Своего диалога у вебвью нет.
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
+# Тосты §15 — напрямую `notify-rust`, не плагин: см. комментарий в `notify.rs`.
+notify-rust = "4.18"
 tokio.workspace = true
 tokio-util.workspace = true
 # `Startup` уезжает в вебвью, как и типы ядра, и разойтись с ним не должен.

@@ -6,6 +6,7 @@
 //! получать сырой поток.
 
 mod bridge;
+mod notify;
 mod profile;
 mod providers;
 mod settings;
