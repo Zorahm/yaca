@@ -16,12 +16,14 @@ pub mod delete_file;
 pub mod edit_file;
 pub mod exit_plan_mode;
 pub(crate) mod files;
+pub(crate) mod net;
 pub mod glob;
 pub mod grep;
 pub(crate) mod page;
 pub mod read_file;
 pub mod todo_write;
 pub mod web_fetch;
+pub mod web_search;
 pub mod write_file;
 
 use std::collections::BTreeMap;
@@ -260,6 +262,7 @@ impl ToolRegistry {
             Arc::new(glob::Glob),
             Arc::new(grep::Grep::new()),
             Arc::new(web_fetch::WebFetch),
+            Arc::new(web_search::WebSearch::default()),
             Arc::new(todo_write::TodoWrite),
             Arc::new(exit_plan_mode::ExitPlanMode),
             Arc::new(write_file::WriteFile),

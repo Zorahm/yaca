@@ -390,7 +390,8 @@ async fn режим_plan_не_отдаёт_модели_пишущих_туло�
             "Grep",
             "Read",
             "TodoWrite",
-            "WebFetch"
+            "WebFetch",
+            "WebSearch"
         ]
     );
     assert!(seen[0].system.contains("Mode: plan"));
