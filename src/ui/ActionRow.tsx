@@ -56,7 +56,7 @@ export function ActionRowView({
           {row.target && <div className="row-target">{plainPath(row.target)}</div>}
 
           {row.diff ? (
-            <Diff diff={row.diff} soft />
+            <Diff diff={row.diff} soft path={row.fact?.path ?? row.target ?? undefined} />
           ) : row.output.trim() ? (
             <CodeBlock text={row.output} error={row.state === "failed"} />
           ) : (

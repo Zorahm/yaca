@@ -45,6 +45,20 @@
   --moss: #79b98c;
   --rust: #d98b73;
 
+  /* Подсветка синтаксиса (§6.3). Приглушённая и тёплая: она работает и на
+     голой бумаге, и на подложках диффа, и не должна соперничать с киноварью.
+     Раскладка по имена́м классов — в syntax.css. */
+  --syntax-keyword: #ff8a6e;
+  --syntax-type: #ddaa55;
+  --syntax-string: #a3c58a;
+  --syntax-number: #7fb8c9;
+  --syntax-function: #e8cf8b;
+  --syntax-operator: #a89d8c;
+  --syntax-comment: #776d5e;
+  --syntax-tag: #ff8a6e;
+  --syntax-property: #c9b8a0;
+  --syntax-invalid: #e5624a;
+
   /* --- типографика ---------------------------------------------------- */
 
   /* Unbounded звучит там, где не работают: домашний экран, заголовок сессии,
@@ -99,6 +113,19 @@
      своей подложке в 14%, и на ней #2c6e49 давал 3.94 при нужных 4.5. */
   --moss: #255c3f;
   --rust: #8a3f2a;
+
+  /* Те же десять ролей подсветки, но темнее: бумага светлая, и тёмный тон
+     обязан держать 4.5:1 даже под подложкой диффа. */
+  --syntax-keyword: #b3301a;
+  --syntax-type: #8a6410;
+  --syntax-string: #2f6b3a;
+  --syntax-number: #1e6178;
+  --syntax-function: #8a5a10;
+  --syntax-operator: #5c5347;
+  --syntax-comment: #857a6b;
+  --syntax-tag: #b3301a;
+  --syntax-property: #6b5f52;
+  --syntax-invalid: #b3301a;
 }
 
 /* Компактный режим и номера строк — пропсы прототипа (§2). */

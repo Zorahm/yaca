@@ -64,7 +64,7 @@ function blocks(text: string): ReactNode[] {
         body.push(lines[i]);
         i += 1;
       }
-      out.push(<CodeBlock key={out.length} text={body.join("\n")} />);
+      out.push(<CodeBlock key={out.length} text={body.join("\n")} info={fence[1]} />);
       continue;
     }
 

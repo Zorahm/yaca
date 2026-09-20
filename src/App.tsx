@@ -63,6 +63,7 @@ import "./ui/tokens.css";
 import "./ui/app.css";
 import "./ui/feed.css";
 import "./ui/diff.css";
+import "./ui/syntax.css";
 import "./ui/home.css";
 import "./ui/panel/panel.css";
 import "./ui/sidebar/sidebar.css";

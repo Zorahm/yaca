@@ -9,15 +9,20 @@
  * не раскрытие (§16.34). Длинный дифф рисуется окном (§12), а не режется:
  * скролл у самого блока, и за его краями строк в разметке просто нет.
  *
- * Чего здесь нет — подсветки синтаксиса. §6.3 называет её тем, что надо
- * добавить сверх прототипа; половина подсветки хуже её отсутствия, а целая —
- * это отдельный разбор языка в воркере (§12).
+ * Синтаксис подсвечивается построчно (§6.3): грамматика выбирается по
+ * расширению файла и подгружается лениво из бандла (`languages.ts`), пока не
+ * приехала — строка рендерится обычным текстом. Подсветка не режет строку на
+ * разные высоты: окно §12 по-прежнему считает по токену `--diff-line`.
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 
 import type { DiffLine, FileDiff, Span } from "../core/client";
 import { t, tp } from "../i18n";
+import { runsOf } from "./codeText";
+import { utf16Spans, between, plainLine } from "./highlight";
+import { languageOf } from "./languages";
+import { useHighlight, type LineHighlighter } from "./useHighlight";
 import { windowOf } from "./window";
 
 /**
@@ -33,14 +38,22 @@ export function Diff({
   diff,
   soft = false,
   gaps = false,
+  path,
 }: {
   diff: FileDiff;
   /** В строке действия подложка мягче, чем в панели (§2). */
   soft?: boolean;
   /** Свёрнутые промежутки «⋯ N строк» между ханками — панель файла (§6.4). */
   gaps?: boolean;
+  /** Путь файла: из него выбирается грамматика подсветки (§6.3). */
+  path?: string;
 }) {
-  const items = useMemo(() => rows(diff, gaps), [diff, gaps]);
+  const language = useMemo(() => (path === undefined ? null : languageOf(path)), [path]);
+  const highlight = useHighlight(language);
+  const items = useMemo(
+    () => rows(diff, gaps, highlight),
+    [diff, gaps, highlight],
+  );
 
   const box = useRef<HTMLDivElement>(null);
   const [view, setView] = useState({ scrollTop: 0, height: 0, row: 0 });
@@ -89,8 +102,15 @@ export function Diff({
  * Плоским — потому что окно считает по индексу, и вложенность ханков ему
  * мешала бы; одинаковой высоты — потому что заголовок ханка и промежуток
  * лежат на той же сетке, что строки (§6.3).
+ *
+ * Грамматика резолвится один раз на весь дифф, а не на строку: у hook'а одна
+ * подписка, и строки не перерисовывают друг друга наперегонки.
  */
-function rows(diff: FileDiff, gaps: boolean): ReactElement[] {
+function rows(
+  diff: FileDiff,
+  gaps: boolean,
+  highlight: LineHighlighter | null,
+): ReactElement[] {
   const out: ReactElement[] = [];
 
   for (const [index, hunk] of diff.hunks.entries()) {
@@ -112,7 +132,7 @@ function rows(diff: FileDiff, gaps: boolean): ReactElement[] {
       </div>,
     );
     for (const [at, line] of hunk.lines.entries()) {
-      out.push(<Line key={`h${index}l${at}`} line={line} />);
+      out.push(<Line key={`h${index}l${at}`} line={line} highlight={highlight} />);
     }
   }
 
@@ -126,7 +146,14 @@ function gapBefore(hunks: FileDiff["hunks"], index: number): number {
   return hunks[index].oldStart - (before.oldStart + before.oldLines);
 }
 
-function Line({ line }: { line: DiffLine }) {
+function Line({
+  line,
+  highlight,
+}: {
+  line: DiffLine;
+  /** Пока грамматика не приехала — `null`, и строка рендерится без подсветки. */
+  highlight: LineHighlighter | null;
+}) {
   const kind =
     line.kind === "add" ? "diff-add" : line.kind === "del" ? "diff-del" : "diff-ctx";
   const sign = line.kind === "add" ? "+" : line.kind === "del" ? "−" : " ";
@@ -137,33 +164,42 @@ function Line({ line }: { line: DiffLine }) {
     <div className={`diff-line ${kind}`}>
       <span className="diff-gutter">{number ?? ""}</span>
       <span className="diff-sign">{sign}</span>
-      <span className="diff-text">{words(line.text, line.spans)}</span>
+      <span className="diff-text">{styled(line.text, line.spans, highlight)}</span>
     </div>
   );
 }
 
 /**
- * Пословная подсветка внутри изменённой строки (§6.3).
+ * Текст строки: синтаксическая подсветка Lezer (§6.3) под пословной.
  *
- * Диапазоны ядро считает в символах, а не в байтах, поэтому строку режем
- * массивом кодовых точек: `slice` по индексам сломал бы суррогатные пары.
+ * Пословные диапазоны ядра считаются в кодточках, а не в байт-единицах:
+ * их границы переводятся в UTF-16, чтобы сходиться с диапазонами Lezer —
+ * иначе суррогатная пара разрезала бы и слово, и токен.
  */
-function words(text: string, spans: Span[]): ReactNode {
-  if (spans.length === 0) return text;
+function styled(text: string, spans: Span[], highlight: LineHighlighter | null): ReactNode {
+  const pieces = highlight === null ? plainLine(text) : highlight(text);
+  const bounds = utf16Spans(text, spans);
 
-  const chars = Array.from(text);
+  if (bounds.length === 0) return runsOf(text, pieces);
+
   const out: ReactNode[] = [];
   let at = 0;
-
-  for (const [index, span] of spans.entries()) {
-    if (span.start > at) out.push(chars.slice(at, span.start).join(""));
+  for (const [index, bound] of bounds.entries()) {
+    if (bound.from > at) {
+      out.push(runsOf(text.slice(at, bound.from), between(pieces, at, bound.from)));
+    }
     out.push(
       <span className="word" key={index}>
-        {chars.slice(span.start, span.end).join("")}
+        {runsOf(
+          text.slice(bound.from, bound.to),
+          between(pieces, bound.from, bound.to),
+        )}
       </span>,
     );
-    at = span.end;
+    at = bound.to;
   }
-  if (at < chars.length) out.push(chars.slice(at).join(""));
+  if (at < text.length) {
+    out.push(runsOf(text.slice(at), between(pieces, at, text.length)));
+  }
   return out;
 }

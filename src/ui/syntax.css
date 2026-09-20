@@ -1,0 +1,46 @@
+/*
+ * Syntax highlighting (§6.3): the classes that Lezer assigns (see
+ * src/ui/highlight.ts) translated into theme tokens.
+ *
+ * Few colors, all muted: highlighting must stay readable on top of the diff's
+ * line backgrounds (moss/rust at 14%), not outshine them. The --syntax-*
+ * tokens themselves are defined for both themes in tokens.css; only the
+ * class-to-token layout lives here, so a theme switch never touches code.
+ */
+
+.sy-comment,
+.sy-invalid {
+  color: var(--syntax-comment);
+}
+
+.sy-keyword {
+  color: var(--syntax-keyword);
+}
+
+.sy-type {
+  color: var(--syntax-type);
+}
+
+.sy-string {
+  color: var(--syntax-string);
+}
+
+.sy-number {
+  color: var(--syntax-number);
+}
+
+.sy-function {
+  color: var(--syntax-function);
+}
+
+.sy-operator {
+  color: var(--syntax-operator);
+}
+
+.sy-tag {
+  color: var(--syntax-tag);
+}
+
+.sy-property {
+  color: var(--syntax-property);
+}

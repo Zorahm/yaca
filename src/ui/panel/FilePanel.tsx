@@ -57,7 +57,7 @@ export function FilePanel({
 
       <div className="panel-file-diff">
         {diff ? (
-          <Diff diff={diff} gaps />
+          <Diff diff={diff} gaps path={path} />
         ) : (
           <div className="panel-empty">{t("file.no_diff")}</div>
         )}
