@@ -1,0 +1,36 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Rust
+/target
+
+# Данные проекта: журнал сессий, теневой репозиторий
+.yaca/
+# То же под прежним именем, пока его не перенесли (crates/yaca-core/src/legacy.rs)
+.edoc/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Local tooling (owner rules: .claude stays out; .superpowers is the run scratchpad)
+.claude/
+.superpowers/

@@ -1,0 +1,36 @@
+[package]
+name = "yaca-desktop"
+description = "Yaca — оболочка приложения"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# Не `yaca`: так зовётся бинарник `yaca-cli`, и в общем `target/debug` они
+# затирали друг друга — собранная оболочка молча подменяла CLI. Имя должно
+# отличаться и по регистру тоже: на Windows файлы регистронезависимы.
+[[bin]]
+name = "yaca-desktop"
+path = "src/main.rs"
+
+[lib]
+# Суффикс `_lib` — соглашение самого Tauri; `main.rs` зовёт `yaca_lib::run`.
+name = "yaca_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+yaca-core.workspace = true
+
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2", features = [] }
+# Выбор папки проекта в чипе §9.1. Своего диалога у вебвью нет.
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tokio.workspace = true
+tokio-util.workspace = true
+# `Startup` уезжает в вебвью, как и типы ядра, и разойтись с ним не должен.
+ts-rs.workspace = true

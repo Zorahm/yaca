@@ -1,0 +1,672 @@
+/*
+ * Лента §4 и её блоки §5.
+ */
+
+.feed {
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+}
+
+.feed-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  /* §1: лента центрируется, при более широком окне растут поля, а не строка. */
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 18px 8px;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Лейбл над сообщением (§5). */
+.label {
+  font: 400 10.5px var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.label-you {
+  color: var(--ink-muted);
+}
+
+.label-agent {
+  color: var(--vermilion-ink);
+  text-transform: none;
+}
+
+/* Кнопка возврата вниз со счётчиком новых блоков (§4). */
+.feed-jump {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 5;
+}
+
+/* --- §5.1 сообщение человека -------------------------------------------- */
+
+.human {
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--paper-raised);
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.55;
+  text-wrap: pretty;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.attachment {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--paper-sunken);
+  font: 400 12px var(--mono);
+  color: var(--ink-muted);
+}
+
+/* --- §5.2 текст агента --------------------------------------------------- */
+
+.agent {
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.6;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.agent p {
+  margin: 0 0 10px;
+}
+
+.agent p:last-child {
+  margin-bottom: 0;
+}
+
+.agent h1,
+.agent h2,
+.agent h3 {
+  margin: 14px 0 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.agent ul,
+.agent ol {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+
+.agent li {
+  margin-bottom: 3px;
+}
+
+.agent blockquote {
+  margin: 0 0 10px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line-strong);
+  color: var(--ink-muted);
+}
+
+/* Инлайн-код: моноширинный 12.5 цветом акцента (§5.1, §5.2). */
+.code-inline {
+  font: 400 12.5px var(--mono);
+  color: var(--vermilion-ink);
+  overflow-wrap: anywhere;
+}
+
+/* --- §5.3 рассуждение ---------------------------------------------------- */
+
+.reason-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 400 11.5px var(--mono);
+  color: var(--ink-muted);
+  text-align: left;
+}
+
+.reason-head:hover {
+  color: var(--ink);
+}
+
+.reason-body {
+  margin-top: 6px;
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+/* --- §5.4 группа действий ------------------------------------------------ */
+
+/* Свёрнутая группа — строка в потоке ленты, а не карточка (§16.16). */
+.group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+  text-align: left;
+}
+
+.group-head:hover {
+  color: var(--ink);
+}
+
+.group-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.group-failed {
+  color: var(--rust);
+}
+
+.caret {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+.counts {
+  font: 400 12.5px var(--mono);
+  white-space: nowrap;
+}
+
+.count-add {
+  color: var(--moss);
+}
+
+.count-del {
+  color: var(--rust);
+}
+
+/* Раскрытая группа получает рамку (§16.16). Своего скролла у неё нет (§5.4):
+   она растёт на все строки, а скроллится лента. */
+.group-list {
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--paper-raised);
+  overflow: hidden;
+}
+
+
+.group-more {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 22px;
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+.group-more:hover {
+  color: var(--ink);
+}
+
+/* --- §5.5 строка действия ------------------------------------------------ */
+
+.row {
+  border-top: 1px solid var(--line);
+}
+
+.row:first-child {
+  border-top: none;
+}
+
+.row-open {
+  background: var(--paper);
+}
+
+.row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: var(--h-row);
+  padding: 0 16px;
+  text-align: left;
+}
+
+.row-caption {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Имя файла внутри подписи — весом 600 цветом --ink (§5.4). */
+.row-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* §1.1: имя файла открывает панель. Курсор и подчёркивание по наведению
+   держатся на самой подписи строки, а не на имени. */
+.row-name-open {
+  cursor: pointer;
+}
+
+.row-head:hover .row-name-open {
+  text-decoration: underline;
+}
+
+/* §5.4.1: описания нет — видна сама команда, моноширинным. */
+.mono-target {
+  font: 400 12.5px var(--mono);
+  color: var(--ink-muted);
+}
+
+/* Глагол неудачи красится, вся строка — нет (§5.4). */
+.row-verb-fail {
+  color: var(--rust);
+}
+
+/* Сработавший инвариант — акцентом, не danger: делать нечего (§5.9). */
+.row-verb-refused {
+  color: var(--vermilion-ink);
+}
+
+.row-dim {
+  color: var(--ink-muted);
+}
+
+.row-dot {
+  display: inline-flex;
+  align-items: center;
+  color: var(--vermilion);
+  font-size: 9px;
+}
+
+/* --- §5.5.1 раскрытая строка --------------------------------------------- */
+
+.row-body {
+  padding: 0 0 12px;
+}
+
+.row-target {
+  padding: 0 16px 10px;
+  font: 400 12.5px var(--mono);
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px 0;
+}
+
+/* Блок вывода команды (§5.5.1). */
+.output {
+  margin: 0 16px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--paper-sunken);
+  color: var(--ink);
+  font: 400 11.5px/19px var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 380px;
+  overflow: auto;
+  user-select: text;
+}
+
+.output-error {
+  color: var(--rust);
+}
+
+/* Действие над блоком — в углу блока, а не строкой под ним (§5.5.1). Выходит
+   по наведению, как кнопки на заголовке ханка в §6.3, и остаётся видимым под
+   клавиатурой: `opacity`, а не `display`, иначе Tab в него не зайдёт (§14). */
+.code-wrap {
+  position: relative;
+}
+
+.block-act {
+  position: absolute;
+  top: 6px;
+  /* Блок отбит от края ленты на 16, плюс место под свой скроллбар. */
+  right: 28px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--paper-raised);
+  color: var(--ink-muted);
+  opacity: 0;
+}
+
+.code-wrap:hover .block-act,
+.block-act:focus-visible {
+  opacity: 1;
+}
+
+.block-act:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+/* --- §5.6 список задач --------------------------------------------------- */
+
+.todos {
+  padding: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--paper-raised);
+}
+
+.todo {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 16px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.todo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  font-size: 11px;
+}
+
+.todo-done .todo-mark {
+  color: var(--moss);
+}
+.todo-done .todo-text {
+  color: var(--ink-muted);
+  text-decoration: line-through;
+}
+.todo-now .todo-mark {
+  color: var(--vermilion-ink);
+}
+.todo-next .todo-mark {
+  color: var(--ink-muted);
+}
+
+/* --- §5.7 запрос разрешения ---------------------------------------------- */
+
+.ask {
+  padding: 16px 18px;
+  border: 1px solid var(--vermilion-ink);
+  border-radius: var(--radius-m);
+  background: var(--paper-raised);
+}
+
+.ask-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.ask-question {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.ask-position {
+  font: 400 11px var(--mono);
+  color: var(--ink-muted);
+}
+
+.ask-target {
+  margin-top: 4px;
+  font-size: 13.5px;
+  color: var(--ink-muted);
+}
+
+/* Третий ярус: место, где человек замечает `&& rm -rf` (§5.7). */
+.ask-detail {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  background: var(--paper-sunken);
+  font: 400 12.5px var(--mono);
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.ask-note {
+  margin-top: 4px;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.ask-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.ask-gap {
+  flex: 1;
+}
+
+/* Цифра и клавиши — чипы внутри кнопки (§5.7). */
+.keycap {
+  padding: 1px 5px;
+  border-radius: var(--radius-s);
+  background: var(--paper-sunken);
+  font: 400 11px var(--mono);
+  color: var(--ink-muted);
+}
+
+.btn-accent .keycap {
+  background: color-mix(in srgb, var(--on-vermilion) 18%, transparent);
+  color: var(--on-vermilion);
+}
+
+.ask-scopes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.ask-scope-title {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+.ask-deny {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ask-deny input {
+  flex: 1;
+  height: var(--h-button);
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  background: var(--paper-sunken);
+  font-size: 13px;
+  user-select: text;
+}
+
+/* --- §5.8 чекпоинт, §5.11 сжатие, разделители ---------------------------- */
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 400 11px var(--mono);
+  color: var(--ink-muted);
+}
+
+/* Линия идёт между причиной и действием (§5.8), поэтому она — элемент,
+   а не псевдоэлемент в конце строки. */
+.divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+/* Левая половина разделителя §5.8 ведёт в панель §1.1: она кнопка, но
+   выглядит той же строкой — подчёркивать её нечем, разделитель и так тонкий. */
+.divider-open {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: inherit;
+  color: inherit;
+}
+
+.divider-open:hover {
+  color: var(--ink-muted);
+}
+
+.divider-action {
+  color: var(--ink-muted);
+  font: 400 11px var(--mono);
+}
+
+.divider-action:hover {
+  color: var(--vermilion-ink);
+}
+
+.divider-dot {
+  display: inline-flex;
+  align-items: center;
+  color: var(--vermilion);
+  font-size: 8px;
+}
+
+.summary-box {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  background: var(--paper-sunken);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.summary-box textarea {
+  width: 100%;
+  min-height: 160px;
+  resize: vertical;
+  font: 400 13px/1.55 var(--sans);
+  user-select: text;
+}
+
+/* Подтверждение отката: список файлов до того, как что-то произошло (§5.8). */
+.confirm {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--vermilion-ink);
+  border-radius: var(--radius-m);
+  background: var(--paper-raised);
+}
+
+.confirm-title {
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.confirm-list {
+  max-height: 240px;
+  overflow: auto;
+  margin: 10px 0;
+  font: 400 12.5px/20px var(--mono);
+}
+
+.confirm-file {
+  display: flex;
+  gap: 8px;
+  color: var(--ink);
+}
+
+.confirm-what {
+  color: var(--ink-muted);
+}
+
+/* --- §5.10 ошибка -------------------------------------------------------- */
+
+.error {
+  padding: 12px 14px;
+  border: 1px solid var(--rust);
+  border-radius: var(--radius-m);
+  background: var(--paper-raised);
+}
+
+.error-title {
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.error-detail {
+  margin-top: 6px;
+  font: 400 12.5px var(--mono);
+  color: var(--rust);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.error-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* --- план из `exit_plan_mode` (§7.1) ------------------------------------- */
+
+.plan {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--paper-raised);
+}

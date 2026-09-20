@@ -1,0 +1,42 @@
+[package]
+name = "yaca-core"
+description = "Безголовое ядро Yaca: агентный цикл, тулы, поток событий"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+blake3.workspace = true
+encoding_rs.workspace = true
+futures-util.workspace = true
+globset.workspace = true
+htmd.workspace = true
+ignore.workspace = true
+keyring.workspace = true
+regex.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+similar.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+ts-rs.workspace = true
+uuid.workspace = true
+
+# Killing a background command must reach the whole tree it started (§6.5),
+# and `Child::kill` only reaches the direct child.
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+# cmd.exe writes its output in the machine's OEM codepage, not UTF-8, and the
+# feed must not show mojibake for what a command printed (§0).
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "fs", "time", "io-util", "net", "process"] }

@@ -1,0 +1,224 @@
+/*
+ * Токены §2.
+ *
+ * Значения больше не из прототипа: они из дизайн-системы ZorahM — тёплая
+ * бумага, плотная типографика, один громкий акцент (киноварь).
+ *
+ * Имена — системные: paper / ink / vermilion. Двадцать восемь цветов
+ * прототипа сведены к десяти, потому что разницы между --text-agent,
+ * --text-strong и --text-body не видел никто, а выбирать между ними
+ * приходилось при каждом новом элементе.
+ *
+ * Тем две. Ночь — по умолчанию, Бумага — под `data-theme="light"`.
+ * Переключателя пока нет: он приедет с окном настроек §10 вместе с
+ * остальным внешним видом (README, «Чего нет»).
+ */
+
+:root {
+  /* Ночь. Скроллбары и системные контролы вебвью должны знать тему. */
+  color-scheme: dark;
+
+  /* --- цвет ----------------------------------------------------------- */
+
+  --paper: #16130f;
+  --paper-raised: #211d18;
+  --paper-sunken: #0d0b09;
+
+  --line: #3a332a;
+  --line-strong: #857a6b;
+
+  --ink: #f2ece2;
+  --ink-muted: #a89d8c;
+
+  /* Киноварь — только заливка: одна главная кнопка на экран, активная метка,
+     точка работающего действия. Как цвет текста она не проходит 4.5:1, для
+     текста есть --vermilion-ink. */
+  --vermilion: #ff5a3c;
+  --vermilion-hover: #ff7455;
+  --on-vermilion: #16130f;
+  --vermilion-ink: #ff7a61;
+
+  /* Сверх системы: ей хватает одного акцента, а диффу нужна пара «+/−».
+     Киноварью её не выразить — §2 запрещает кодировать смысл акцентом, — и
+     обе глуше киновари, чтобы «Разрешить» и «Не удалось» не звучали
+     одинаково громко. */
+  --moss: #79b98c;
+  --rust: #d98b73;
+
+  /* --- типографика ---------------------------------------------------- */
+
+  /* Unbounded звучит там, где не работают: домашний экран, заголовок сессии,
+     шапки панелей. В ленте его нет — там читают. */
+  --display: Unbounded, "Arial Black", system-ui, sans-serif;
+  --sans: Onest, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+
+  /* --- геометрия ------------------------------------------------------ */
+
+  /* Было шесть радиусов: 4, 6, 7, 8, 9, 10. Разницу между 6 и 7 не видит
+     никто, а помнить её приходилось при каждой новой кнопке. */
+  --radius-s: 4px;
+  --radius-m: 10px;
+  --radius-pill: 999px;
+
+  --h-top: 48px;
+  --h-bar: 44px;
+  --h-row: 42px;
+  --h-row-button: 26px;
+  --h-small-button: 28px;
+  --h-button: 32px;
+  /* Потолок содержимого раскрытой строки: дальше блок скроллится сам (§5.5.1). */
+  --h-action-content: 380px;
+
+  /* Высота строки диффа: 24, в компактном режиме 20 (§6.3). */
+  --diff-line: 24px;
+  /* Ширина жёлоба: 52 с номерами, 14 без (§2, пропс showLineNumbers). */
+  --gutter: 52px;
+}
+
+/* Бумага. Те же имена, другие значения: компоненты о теме не знают. */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --paper: #f4efe6;
+  --paper-raised: #fbf8f2;
+  --paper-sunken: #e9e1d3;
+
+  --line: #d9cfbf;
+  --line-strong: #8a7f70;
+
+  --ink: #1a1611;
+  --ink-muted: #5c5347;
+
+  --vermilion: #ff4d2e;
+  --vermilion-hover: #ff3d1b;
+  --on-vermilion: #1a1611;
+  --vermilion-ink: #b3301a;
+
+  /* Темнее системного зелёного: знак `+` лежит не на чистой бумаге, а на
+     своей подложке в 14%, и на ней #2c6e49 давал 3.94 при нужных 4.5. */
+  --moss: #255c3f;
+  --rust: #8a3f2a;
+}
+
+/* Компактный режим и номера строк — пропсы прототипа (§2). */
+:root[data-compact="on"] {
+  --diff-line: 20px;
+}
+:root[data-line-numbers="off"] {
+  --gutter: 14px;
+}
+
+/* --- сброс ------------------------------------------------------------ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 13.5px/1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  /* Окно приложения, а не документ: выделять интерфейс мышью незачем,
+     текст ленты выделяется своим правилом ниже. */
+  user-select: none;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+}
+
+/* §14: видимый фокус на всех интерактивных элементах. Кольцо — сплошное 2px
+   с отступом 2px, как просит система: на любой из трёх бумаг оно ≥3:1. */
+:focus-visible {
+  outline: 2px solid var(--vermilion-ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-s);
+}
+
+/* --- скроллбар (§2) ---------------------------------------------------- */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 6px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-muted);
+}
+
+/* --- движение (§2) ----------------------------------------------------- */
+
+@keyframes yacaPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes yacaSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* §2: больше в интерфейсе анимации нет и не нужно. */
+.pulse {
+  animation: yacaPulse 1.2s ease-in-out infinite;
+}
+
+.pulse-slow {
+  animation: yacaPulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse,
+  .pulse-slow {
+    animation: none;
+    opacity: 0.7;
+  }
+  .spin {
+    animation: none;
+  }
+}

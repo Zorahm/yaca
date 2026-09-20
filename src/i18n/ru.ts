@@ -1,0 +1,340 @@
+/**
+ * Русские строки интерфейса.
+ *
+ * Этот словарь — источник ключей: `en` обязан покрыть его целиком, иначе не
+ * соберётся. Порядок разделов — порядок `docs/ui.md`.
+ *
+ * Числительные лежат группами `…one/few/many` и достаются через `tp()` (§14).
+ * Технические термины не переводятся насильно: `diff`, `commit`, `LSP`
+ * остаются собой.
+ */
+
+export const ru = {
+  // --- §1 левый сайдбар ----------------------------------------------------
+  "side.new": "Новый чат",
+  "side.new_here": "Новый чат в проекте",
+  "side.toggle": "Боковая панель",
+  "side.add_project": "Добавить проект",
+  "side.forget": "Убрать проект",
+  "side.forget_busy": "Сначала закройте чаты этого проекта",
+  "side.no_projects": "Проектов пока нет",
+  "side.open": "Открыт",
+  "side.waiting": "Ждёт ответа",
+  "side.close_chat": "Закрыть чат",
+
+  // --- §3 верхняя панель ---------------------------------------------------
+  "top.menu": "Меню приложения",
+  "top.sessions": "Сессии",
+  "top.search": "Поиск по сессии",
+  "top.back": "Назад",
+  "top.forward": "Вперёд",
+  "top.processes": "Процессы",
+  "top.checkpoints": "Чекпоинты",
+  "top.session_menu": "Меню сессии",
+  "top.untitled": "Новая сессия",
+  "top.rename_hint": "Двойной клик — переименовать",
+
+  // --- §4 лента ------------------------------------------------------------
+  "feed.you": "Вы",
+  "feed.agent": "Yaca",
+  "feed.jump": "К новым",
+  "feed.copy": "Копировать",
+  "feed.copied": "Скопировано",
+
+  // --- §5.3 рассуждение ----------------------------------------------------
+  "reason.title": "рассуждение",
+  "reason.live": "рассуждает…",
+
+  // --- §5.4 шапка-итог группы действий -------------------------------------
+  // Первая категория несёт существительное, дальше оно уже сказано:
+  // «Создано 7 файлов, изменён 1, выполнено 9 команд».
+  "group.created.with.one": "создан {n} файл",
+  "group.created.with.few": "создано {n} файла",
+  "group.created.with.many": "создано {n} файлов",
+  "group.created.bare.one": "создан {n}",
+  "group.created.bare.few": "создано {n}",
+  "group.created.bare.many": "создано {n}",
+  "group.modified.with.one": "изменён {n} файл",
+  "group.modified.with.few": "изменено {n} файла",
+  "group.modified.with.many": "изменено {n} файлов",
+  "group.modified.bare.one": "изменён {n}",
+  "group.modified.bare.few": "изменено {n}",
+  "group.modified.bare.many": "изменено {n}",
+  "group.deleted.with.one": "удалён {n} файл",
+  "group.deleted.with.few": "удалено {n} файла",
+  "group.deleted.with.many": "удалено {n} файлов",
+  "group.deleted.bare.one": "удалён {n}",
+  "group.deleted.bare.few": "удалено {n}",
+  "group.deleted.bare.many": "удалено {n}",
+  "group.commands.one": "выполнена {n} команда",
+  "group.commands.few": "выполнено {n} команды",
+  "group.commands.many": "выполнено {n} команд",
+  "group.tools.one": "вызван {n} инструмент",
+  "group.tools.few": "вызвано {n} инструмента",
+  "group.tools.many": "вызвано {n} инструментов",
+  "group.failed.one": "{n} с ошибкой",
+  "group.failed.few": "{n} с ошибкой",
+  "group.failed.many": "{n} с ошибкой",
+  "group.expand": "Показать действия",
+  "group.collapse": "Свернуть действия",
+
+  // --- §5.5 подписи, которые пишет интерфейс -------------------------------
+  "act.created": "Создан {name}",
+  "act.modified": "Изменён {name}",
+  "act.deleted": "Удалён {name}",
+  "act.deleted_dir": "Удалён каталог {name}",
+  "act.moved": "Перемещён {from} → {to}",
+  "act.creating": "Создаю {name}",
+  "act.modifying": "Изменяю {name}",
+  "act.deleting": "Удаляю {name}",
+  "act.deleting_dir": "Удаляю каталог {name}",
+  "act.moving": "Перемещаю {from} → {to}",
+  "act.edit_failed": "Не удалось изменить {name}",
+  "act.failed": "Не удалось выполнить действие",
+  "act.rejected": "Правка отклонена · {reason}",
+  "act.denied": "Отклонено вами",
+  "act.stopped": "Остановлено вами",
+  "act.denied_why": "Отклонено вами · {reason}",
+  "act.cancelled": "Отменено",
+  "act.applied": "Применено к рабочему дереву",
+  "act.restored": "Откачено к {time}",
+  "act.running": "Выполняю",
+  "act.done": "Выполнено",
+
+  // --- §5.5.1 раскрытая строка ---------------------------------------------
+  "row.diff_truncated": "Дифф обрезан ядром",
+  "row.no_output": "Вывод пуст",
+  "row.open_file": "Открыть файл целиком",
+  "row.files.one": "{n} файл",
+  "row.files.few": "{n} файла",
+  "row.files.many": "{n} файлов",
+
+  // --- §5.7 запрос разрешения ----------------------------------------------
+  "ask.command": "Разрешить Yaca выполнить команду?",
+  "ask.delete_file": "Разрешить Yaca удалить файл?",
+  "ask.delete_dir": "Разрешить Yaca удалить каталог?",
+  "ask.files.one": "{n} файл внутри",
+  "ask.files.few": "{n} файла внутри",
+  "ask.files.many": "{n} файлов внутри",
+  "ask.files_more.one": "больше {n} файла внутри",
+  "ask.files_more.few": "больше {n} файлов внутри",
+  "ask.files_more.many": "больше {n} файлов внутри",
+  "ask.move_file": "Разрешить Yaca переместить файл?",
+  "ask.edit_file": "Разрешить Yaca отредактировать файл?",
+  "ask.fetch_url": "Разрешить Yaca загрузить страницу?",
+  "ask.mcp_write": "Разрешить Yaca изменить данные через {target}?",
+  "ask.deny": "Отклонить",
+  "ask.deny_more": "Отклонить…",
+  "ask.deny_once": "Только сейчас",
+  "ask.always": "Разрешать всегда",
+  "ask.allow": "Разрешить",
+  "ask.position": "{position} из {total}",
+  "ask.deny_placeholder": "Почему нельзя — агент это прочитает",
+  "ask.allow_scope_title": "Разрешать всегда:",
+  "ask.deny_scope_title": "Отклонять всегда:",
+  "ask.scope.tool": "все вызовы {name}",
+  "ask.scope.directory": "всё в {path}",
+  "ask.scope.directory_root": "всё в корне проекта",
+  "ask.scope.command_prefix": "команды, начинающиеся с {prefix}",
+  "ask.scope.domain": "всё с {host}",
+  "ask.size": "{size}",
+
+  // --- §5.8 чекпоинт -------------------------------------------------------
+  "ckpt.empty": "Точек отката пока нет",
+  "ckpt.open_panel": "Показать все точки",
+  "ckpt.message": "перед сообщением",
+  "ckpt.command": "перед {command}",
+  "ckpt.rollback": "перед откатом",
+  "ckpt.restore_here": "Откатить сюда",
+  "ckpt.confirm_title": "Откатить рабочее дерево к {time}?",
+  "ckpt.confirm_nothing": "С этой точки ничего не изменилось — откатывать нечего.",
+  "ckpt.confirm_yes": "Откатить",
+  "ckpt.confirm_no": "Отмена",
+  "ckpt.will_create": "будет создан",
+  "ckpt.will_modify": "будет изменён",
+  "ckpt.will_delete": "будет удалён",
+  "ckpt.restored.one": "Откачено к {time} · {n} файл",
+  "ckpt.restored.few": "Откачено к {time} · {n} файла",
+  "ckpt.restored.many": "Откачено к {time} · {n} файлов",
+
+  // --- §5.10, §11 ошибки ---------------------------------------------------
+  "err.retry": "Повторить",
+  "err.change_model": "Сменить модель",
+  "err.retry_in": "Повтор через {seconds} с · попытка {attempt} из {of}",
+  "err.stopped": "Остановлено",
+  "err.send_failed": "Не удалось отправить команду ядру",
+
+  // --- §5.11 сжатие истории ------------------------------------------------
+  "compact.divider": "история сжата · освобождено ~{tokens} токенов",
+  "compact.summary_title": "Сводка",
+  "compact.edit": "Править сводку",
+  "compact.save": "Сохранить сводку",
+  "compact.cancel": "Отмена",
+  "compact.edited": "сводка переписана",
+
+  // --- §6.1 полоса изменений -----------------------------------------------
+
+  // --- §6.2 состояния файла ------------------------------------------------
+  "file.modified": "изменён",
+  "file.created": "новый файл",
+  "file.deleted": "удалён",
+  "file.moved": "перемещён",
+
+  // --- §6.4 панель файла ----------------------------------------------------
+  "file.no_diff": "Диффа нет — в ленте для файла не было правок",
+  "file.gap.one": "{n} строка",
+  "file.gap.few": "{n} строки",
+  "file.gap.many": "{n} строк",
+
+  // --- §6.1.1 полосы уведомлений -------------------------------------------
+  "notice.context_full": "Контекст почти заполнен · сожмётся автоматически",
+  "notice.compact": "Сжать",
+  "notice.dismiss": "Убрать",
+
+  // --- §6.5 панель процессов --------------------------------------------------
+  "proc.empty": "Фоновых команд нет",
+  "proc.watch": "Показать вывод",
+  "proc.state_running": "работает",
+  "proc.state_exited": "код {code}",
+  "proc.state_stopped": "остановлен",
+  "proc.stop": "Остановить",
+  "proc.dropped.one": "вытеснена {n} строка",
+  "proc.dropped.few": "вытеснено {n} строки",
+  "proc.dropped.many": "вытеснено {n} строк",
+
+  // --- §9 панель сессий -------------------------------------------------------
+  "sess.search_placeholder": "Поиск по сообщениям и файлам",
+  "sess.empty": "Сессий пока нет",
+  "sess.load_failed": "Не удалось загрузить сессии",
+  "sess.today": "Сегодня",
+  "sess.yesterday": "Вчера",
+  "sess.open": "Открыть сессию",
+  "sess.current": "Открыта сейчас",
+  "sess.rename": "Переименовать",
+  "sess.duplicate": "Дублировать",
+  "sess.exported": "Сохранено",
+  "sess.export": "Экспорт в Markdown",
+  "sess.delete": "Удалить",
+  "sess.delete_confirm": "Удалить навсегда?",
+
+  // Длительности для «времени работы» процессов (§6.5). Ядро отдаёт
+  // миллисекунды, часы считает интерфейс.
+  "dur.h": "{n} ч",
+  "dur.m": "{n} мин",
+  "dur.s": "{n} с",
+
+  // --- §7 композер ---------------------------------------------------------
+  "composer.placeholder": "Спросить или поручить Yaca…",
+  "composer.placeholder_home": "Опишите задачу или задайте вопрос",
+  "composer.send": "Отправить",
+  "composer.stop": "Остановить",
+  "composer.attach": "Приложить файлы",
+  "composer.detach": "Убрать",
+  "composer.queued": "в очереди",
+  "composer.queued_cancel": "отменить",
+  "composer.model_unloaded": "не загружена",
+  "composer.no_model": "модель не выбрана",
+  "slash.checkpoints": "Точки отката",
+  "slash.clear": "Новый разговор",
+  "slash.compact": "Сжать историю",
+  "slash.model": "Выбрать модель",
+
+  "mode.title": "Режим",
+  "mode.plan": "План",
+  "mode.manual": "Ручной",
+  "mode.auto": "Авто",
+  "mode.edits": "Правки",
+  "mode.plan_note": "Читать и планировать, ничего не менять",
+  "mode.manual_note": "Ничего без спроса",
+  "mode.auto_note": "Всё кроме выполнения команд",
+  "mode.edits_note": "Применять правки, спрашивать остальное",
+  "mode.bypass": "Обход разрешений",
+  "mode.bypass_on": "Включить",
+  "mode.bypass_off": "Выключить",
+  "mode.bypass_confirm":
+    "Разрешения будут обходиться до перезапуска. Инварианты остаются.",
+  "effort.low": "Low",
+  "effort.medium": "Medium",
+  "effort.high": "High",
+  "effort.extra": "Extra",
+  "effort.max": "Max",
+  "ring.idle": "Простой",
+  "ring.busy": "Работает",
+  "ring.waiting": "Ждёт решения",
+  "ring.error": "Ошибка",
+  "ring.tooltip": "{used}/{max} · ${cost}",
+
+  // --- §5.6 список задач ---------------------------------------------------
+  "todo.title": "Задачи",
+
+  // --- §9.1 домашний экран -------------------------------------------------
+  "home.greeting": "С чего начнём?",
+  "home.greeting_named": "С чего начнём, {name}?",
+  "home.pick_project": "Выберите папку",
+  "home.pick_title": "Папка проекта",
+
+  // --- §10 провайдеры: панель до окна настроек (§16) -------------------------
+  "prov.title": "Провайдеры",
+  "prov.home_button": "Настроить провайдера",
+  "prov.add": "Добавить провайдера",
+  "prov.edit_row": "Настроить",
+  "prov.delete": "Удалить",
+  "prov.delete_confirm": "Удалить навсегда?",
+  "prov.models_count.one": "{n} модель",
+  "prov.models_count.few": "{n} модели",
+  "prov.models_count.many": "{n} моделей",
+
+  "prov.form_new": "Новый провайдер",
+  "prov.form_name": "Название",
+  "prov.form_id": "id",
+  "prov.form_id_hint":
+    "id — имя ключа в кейчейне, поэтому у существующего провайдера он закрыт",
+  "prov.form_protocol": "Протокол",
+  "prov.form_base_url": "Базовый URL",
+  "prov.form_base_url_hint":
+    "Путь протокола добавится сам: /v1/chat/completions у openai, /v1/messages у anthropic. Для OpenRouter это https://openrouter.ai/api",
+  "prov.form_headers": "Свои заголовки",
+  "prov.form_headers_hint":
+    "Добавляются к заголовкам протокола и перебивают их — включая authorization. {key} в значении получит ключ из кейчейна; сам ключ в файл не пишется никогда. Пустое значение убирает заголовок протокола.",
+  "prov.form_header_name": "Имя",
+  "prov.form_header_value": "Значение",
+  "prov.form_add_header": "Добавить заголовок",
+  "prov.form_remove_header": "Убрать заголовок",
+
+  "prov.form_key_title": "Ключ",
+  "prov.form_key_hint":
+    "Уезжает в системный кейчейн под именем провайдера — в providers.json его нет",
+  "prov.key_save": "Сохранить ключ",
+  "prov.key_forget": "Забыть ключ",
+  "prov.key_source_keychain": "ключ в системном кейчейне",
+  "prov.key_source_environment": "ключ в переменной окружения",
+  "prov.key_source_none": "ключа нет",
+  "prov.key_source_unknown": "источник станет виден, когда провайдер сохранён",
+  "prov.key_not_needed": "Ключ не нужен: {key} не встречается ни в одном заголовке",
+
+  "prov.form_models": "Модели",
+  "prov.form_models_hint":
+    "Список приходит от самого провайдера: адрес, ключ — и «Опросить». Что он ответил, тем и разговариваем; цена — долларов за миллион токенов, ноль значит «бесплатно или неизвестно».",
+  "prov.form_model_context": "Контекст, токенов",
+  "prov.form_model_output": "Макс. вывод, токенов",
+  "prov.form_model_effort": "поддерживает усилие",
+  "prov.models_ask": "Опросить",
+  "prov.models_asking": "Спрашиваем…",
+  "prov.models_none": "Моделей нет",
+  "prov.models_price": "$ / 1M вход и выход",
+  "prov.models_effort": "усилие",
+
+  "prov.form_save": "Сохранить провайдера",
+  "prov.form_cancel": "Отмена",
+
+  "prov.error_id": "Укажите id",
+  "prov.error_name": "Укажите название",
+  "prov.error_url": "Укажите базовый URL",
+  "prov.error_header_name": "Заголовок {n} без имени",
+  "prov.error_header_dup": "Заголовок {name} указан дважды",
+
+  // --- общее ---------------------------------------------------------------
+  "common.open_project": "Открыть проект",
+  "common.close": "Закрыть",
+  "common.seconds": "{n} с",
+} as const;

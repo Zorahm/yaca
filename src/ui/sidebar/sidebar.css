@@ -1,0 +1,389 @@
+/*
+ * Left sidebar: a column of the frame §1, not a drawer §1.1.
+ *
+ * Colours are the drawer's — background `--paper-raised`, border `--line` — so the
+ * left edge of the window reads as one surface with the top bar above it. Only
+ * the side of the border changes: it stands to the right of its own column
+ * instead of the left of a sheet lying over the feed.
+ *
+ * Width is fixed at 272 px. The feed keeps its own 760 px measure (§1) and
+ * centres in what is left, so a narrower window moves the feed instead of
+ * squeezing the list into two words per row.
+ *
+ * Two levels of row: the project, and the sessions folded out under it. The
+ * indent is what tells them apart at a glance; the project row is heavier by
+ * weight, not by size, because a sidebar of shouting headers reads as a menu
+ * rather than a list.
+ */
+
+.side {
+  display: flex;
+  flex-direction: column;
+  width: 272px;
+  height: 100%;
+  background: var(--paper-raised);
+  border-right: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.side-head {
+  flex: none;
+  padding: 8px;
+}
+
+.side-foot {
+  flex: none;
+  padding: 8px;
+  border-top: 1px solid var(--line);
+}
+
+/* One row shape for everything that is not a session: the same height as a
+   small button (§2), an icon in the gutter, the label in the text column. */
+.side-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: var(--h-small-button);
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-m);
+  color: var(--ink);
+  font-size: 13px;
+  text-align: left;
+}
+
+/* Наведение — один шаг вглубь, выбранное — два (см. `.sess-current`). Так
+   наведённая строка никогда не путается с текущей, и ни той, ни другой не
+   нужен цветной кант. */
+.side-row:hover:not(:disabled) {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* An open drawer §1.1 is a state of its trigger, and the trigger is a row. */
+.side-row[aria-pressed="true"] {
+  border-color: var(--line-strong);
+  background: var(--paper-sunken);
+  color: var(--ink);
+}
+
+.side-row:disabled {
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+
+.side-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--ink-muted);
+}
+
+.side-row:hover:not(:disabled) .side-icon,
+.side-row[aria-pressed="true"] .side-icon {
+  color: var(--ink-muted);
+}
+
+/* The first row of the window. Outlined, not accented: the accent marks where
+   attention is wanted now (§2), and a button that is always there is not it.
+   The column is already `--paper-raised`, so the outline is what carries it. */
+.side-new {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.side-new:hover:not(:disabled) {
+  background: var(--paper);
+}
+
+.side-new .side-icon {
+  color: var(--ink-muted);
+}
+
+.side-search {
+  display: block;
+  width: 100%;
+  height: var(--h-small-button);
+  margin-top: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  background: var(--paper-sunken);
+  font-size: 12.5px;
+  color: var(--ink);
+  user-select: text;
+}
+
+.side-search::placeholder {
+  color: var(--ink-muted);
+}
+
+.side-search:focus {
+  border-color: var(--vermilion-ink);
+  outline: none;
+}
+
+/* Only the list scrolls: the rows around it are the frame of the column and
+   have nowhere to go. */
+.side-scroll {
+  flex: 1;
+  min-height: 0;
+  padding-bottom: 8px;
+  overflow-y: auto;
+}
+
+.side-empty {
+  padding: 14px;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
+
+.side-error {
+  margin: 8px 14px;
+  color: var(--rust);
+  font: 400 11.5px var(--mono);
+  user-select: text;
+}
+
+/* --- проект ---------------------------------------------------------------- */
+
+.side-group {
+  padding-top: 2px;
+}
+
+.side-project {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+}
+
+.side-project-main {
+  min-width: 0;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.side-project-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* How many chats of this project are open. Kept on the folded row too: state
+   that disappears when folded is state the interface lies about (§0). */
+.side-project-live {
+  flex: none;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--paper-sunken);
+  font: 400 10.5px var(--mono);
+  color: var(--ink-muted);
+}
+
+.side-project-act {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-s);
+  color: var(--ink-muted);
+}
+
+/* Значок внутри строки наводится на любой из трёх бумаг: на самой колонке, на
+   наведённой строке и на текущей. Ступенькой бумаги это не выразить — под
+   `paper-sunken` ступеней больше нет, — поэтому подложка тут `line`: он
+   светлее всех трёх в Ночи и темнее всех трёх в Бумаге. */
+.side-project-act:hover:not(:disabled) {
+  background: var(--line);
+  color: var(--ink);
+}
+
+/* Dropping a project is rarer than starting a chat in it, and irreversible in
+   the small way that matters — the list is what the window knows. It comes out
+   on hover; the plus beside it stays. */
+.side-project-drop {
+  opacity: 0;
+}
+
+.side-project:hover .side-project-drop,
+.side-project:focus-within .side-project-drop {
+  opacity: 1;
+}
+
+.side-project-drop:disabled {
+  opacity: 0;
+  cursor: not-allowed;
+}
+
+.side-project:hover .side-project-drop:disabled,
+.side-project:focus-within .side-project-drop:disabled {
+  opacity: 0.3;
+}
+
+/* --- §9 сессии ------------------------------------------------------------- */
+
+.side-day {
+  padding: 8px 14px 4px 18px;
+  font: 400 10.5px var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+}
+
+.sess {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 0 6px 0 14px;
+  padding: 4px 6px 5px 8px;
+  border-radius: var(--radius-m);
+}
+
+.sess:hover {
+  background: var(--paper);
+}
+
+/* The chat the window is showing. Depth and weight, not a coloured bar down
+   the left edge: the accent is spent on action and state (the dot), and a rail
+   beside every selected row is the cheapest trick in the book.
+
+   Two steps of paper where hover takes one, so hovering a neighbour never
+   looks like the current row; the heavier title is the second cue, because
+   §14 does not let a state rest on colour alone. `aria-current` in the markup
+   says the same to everything that cannot see. */
+.sess-current {
+  background: var(--paper-sunken);
+}
+
+.sess-current .sess-title {
+  font-weight: 500;
+}
+
+.sess-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+/* A slot, filled only for a chat that is open — rows would step left and
+   right without it. Green is «the agent is working» (§2), amber is a question
+   waiting for an answer (§5.7), grey is open and idle. */
+.sess-live {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 50%;
+}
+
+.sess-live-open {
+  background: var(--ink-muted);
+}
+
+.sess-live-busy {
+  background: var(--moss);
+}
+
+.sess-live-waiting {
+  background: var(--vermilion);
+}
+
+.sess-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.sess-title {
+  display: block;
+  font-size: 13px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sess-meta {
+  display: block;
+  font: 400 10.5px var(--mono);
+  color: var(--ink-muted);
+}
+
+.sess-excerpt {
+  display: block;
+  font: 400 11px var(--mono);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sess-rename {
+  display: block;
+  width: 100%;
+  height: var(--h-row-button);
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  background: var(--paper-sunken);
+  font-size: 13px;
+  user-select: text;
+}
+
+/* Closing a chat stops the session and leaves the journal, so it stands out
+   of the hover group and stays visible while the chat is open — the way the
+   cross of a tab does. */
+.sess-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-s);
+  color: var(--ink-muted);
+}
+
+.sess-close:hover,
+.sess-more:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+/* One trigger where four buttons used to stand. Four of them on a 272 px row
+   were the row: they lay over the title behind a gradient that had to fake the
+   row's own ground. A single `⋮` needs neither.
+
+   Comes out on hover and on focus — `opacity`, not `display`, so the keyboard
+   still walks in (§14); the right click on the row opens the same menu. */
+.sess-more {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-s);
+  color: var(--ink-muted);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+/* An open row already ends with its cross; the trigger stops short of it. */
+.sess-open .sess-more {
+  right: 28px;
+}
+
+.sess:hover .sess-more,
+.sess:focus-within .sess-more,
+.sess-more[data-state="open"] {
+  opacity: 1;
+  pointer-events: auto;
+}

@@ -1,0 +1,490 @@
+/*
+ * Каркас §1, шапка §3, полосы уведомлений §6.1.1, композер §7.
+ */
+
+/* Окно целиком: слева колонка сайдбара, справа всё остальное. Колонка
+   `auto` — ширину назначает себе сам сайдбар; спрятанный не занимает ничего,
+   и сетка становится однополосной, какой её описывает §1. */
+.shell {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Без этого лента с длинной строкой кода раздувает колонку `1fr` и уезжает
+   за край окна: у грид-элемента `min-width` по умолчанию `auto`. */
+.shell > .app,
+.shell > .home {
+  min-width: 0;
+}
+
+.app {
+  display: grid;
+  /* §1: 48px 1fr auto auto. Ряды `auto`, поэтому появление полосы не дёргает
+     высоту ленты. */
+  grid-template-rows: var(--h-top) 1fr auto auto;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* --- §3 верхняя панель -------------------------------------------------- */
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--h-top);
+  padding: 0 10px;
+  background: var(--paper-raised);
+  border-bottom: 1px solid var(--line);
+}
+
+.top-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-m);
+  color: var(--ink-muted);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.top-icon:hover {
+  color: var(--ink);
+}
+
+.top-icon[aria-pressed="true"] {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.top-icon:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.top-title {
+  margin-left: 6px;
+  font: 600 13.5px var(--display);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top-project {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--paper-sunken);
+  font-size: 12px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.top-gap {
+  flex: 1;
+  min-width: 12px;
+}
+
+.top-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--vermilion);
+}
+
+.top-icon-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* --- §6.1.1 полосы уведомлений ------------------------------------------ */
+
+.bars {
+  display: flex;
+  /* §1: порядок снизу вверх фиксирован. */
+  flex-direction: column;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--h-bar);
+  padding: 10px 18px;
+  background: var(--paper-raised);
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+}
+
+.bar-counts {
+  font: 400 12.5px var(--mono);
+  white-space: nowrap;
+}
+
+.bar-note {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bar-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--vermilion-ink);
+}
+
+.bar-close {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-muted);
+  padding: 0 2px;
+}
+
+.bar-close:hover {
+  color: var(--ink);
+}
+
+/* --- кнопки ------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--h-button);
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-m);
+  background: var(--paper-raised);
+  color: var(--ink);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background: var(--paper-sunken);
+  color: var(--ink);
+}
+
+.btn-accent {
+  background: var(--vermilion);
+  border-color: var(--vermilion);
+  color: var(--on-vermilion);
+  font-weight: 500;
+}
+
+.btn-accent:hover {
+  background: var(--vermilion-hover);
+  border-color: var(--vermilion-hover);
+  color: var(--on-vermilion);
+}
+
+.btn-danger:hover {
+  border-color: var(--rust);
+  color: var(--rust);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-small {
+  height: var(--h-small-button);
+  padding: 0 10px;
+  border-radius: var(--radius-m);
+  font-size: 12.5px;
+}
+
+.btn-row {
+  height: var(--h-row-button);
+  padding: 0 8px;
+  border-radius: var(--radius-m);
+  border-color: var(--line-strong);
+  font-size: 12px;
+}
+
+/* --- §6.2 бейдж состояния файла ----------------------------------------- */
+
+.badge {
+  padding: 1px 6px;
+  border: 1px solid;
+  border-radius: var(--radius-s);
+  font: 400 10.5px var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.badge-modified {
+  border-color: color-mix(in srgb, var(--ink-muted) 40%, transparent);
+  color: var(--ink-muted);
+}
+.badge-created {
+  border-color: color-mix(in srgb, var(--vermilion-ink) 40%, transparent);
+  color: var(--vermilion-ink);
+}
+.badge-rejected {
+  border-color: color-mix(in srgb, var(--rust) 40%, transparent);
+  color: var(--rust);
+}
+
+/* --- §7 композер -------------------------------------------------------- */
+
+.composer-wrap {
+  padding: 10px 18px 14px;
+  background: var(--paper);
+}
+
+.composer {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 10px 12px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-m);
+  background: var(--paper-raised);
+}
+
+.composer:focus-within {
+  border-color: var(--vermilion-ink);
+}
+
+.composer textarea {
+  display: block;
+  width: 100%;
+  max-height: 264px;
+  resize: none;
+  font: 400 13.5px/1.5 var(--sans);
+  color: var(--ink);
+  user-select: text;
+}
+
+.composer textarea::placeholder {
+  color: var(--ink-muted);
+}
+
+/* Отправлять некуда, пока не выбран проект (§9.1). */
+.composer textarea:disabled {
+  color: var(--ink-muted);
+  cursor: default;
+}
+
+.composer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.composer-gap {
+  flex: 1;
+}
+
+.queued {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+/* Крестик на чипе приложенного файла (§7.2). */
+.attachment-drop {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  color: var(--ink-muted);
+  vertical-align: -1px;
+}
+
+.attachment-drop:hover {
+  color: var(--rust);
+}
+
+/* Чип режима — текстом без рамки (§7.1). */
+.chip {
+  padding: 2px 4px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+.chip:hover {
+  color: var(--ink);
+}
+
+.chip-danger {
+  color: var(--rust);
+}
+
+.chip-strong {
+  color: var(--ink);
+}
+
+/* `＋` вложения (§7.1): тот же чип, но иконкой. */
+.chip-icon {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 3px;
+}
+
+.send {
+  display: grid;
+  place-items: center;
+  width: var(--h-small-button);
+  height: var(--h-small-button);
+  border-radius: var(--radius-m);
+  background: var(--vermilion);
+  color: var(--on-vermilion);
+  font-size: 14px;
+}
+
+.send:hover {
+  background: var(--vermilion-hover);
+}
+
+.send:disabled {
+  background: var(--paper-sunken);
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+
+.send-stop {
+  background: var(--paper-sunken);
+  color: var(--ink);
+}
+
+.send-stop:hover {
+  color: var(--rust);
+}
+
+/* Кольцо состояния (§7.1). */
+.ring {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.spin {
+  transform-origin: 50% 50%;
+  animation: yacaSpin 1.4s linear infinite;
+}
+
+/* Меню (режим, модель, усилие). */
+.menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 260px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-m);
+  background: var(--paper-raised);
+}
+
+.menu-anchor {
+  position: relative;
+}
+
+.menu-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: var(--radius-m);
+  font-size: 13px;
+  color: var(--ink);
+  text-align: left;
+}
+
+.menu-item:hover {
+  background: var(--paper-sunken);
+  color: var(--ink);
+}
+
+/* Меню слэш-команд §7.3: над полем, по его ширине, а не по ширине чипа. */
+.menu-slash {
+  right: auto;
+  left: 0;
+  width: 100%;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+/* Подсвеченная строка — та, которую возьмут `⇥` и `⏎` (§13, §7.3). */
+.menu-item[aria-selected="true"] {
+  background: var(--paper-sunken);
+  color: var(--ink);
+}
+
+.menu-note {
+  flex: 1;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* Список, у которого каждая строка с пояснением-фразой, шире обычного меню:
+   260 px хватало названию, но не подписи под ним. Ширину задаёт самая длинная
+   подпись «Применять правки, спрашивать остальное» — 246 px текста плюс
+   паддинги, цифра и галка активной строки. Меньше — и подпись снова
+   переносится, а перенос здесь и был тем, от чего уходили. */
+.menu-notes {
+  min-width: 340px;
+}
+
+/* Пояснение под названием, а не справа от него (§8). Справа оно отъедает
+   ширину у самого списка и рвётся на две ломаные строки, из-за чего меню
+   читается по диагонали вместо того, чтобы читаться сверху вниз. Колонкой
+   идут только списки, где пояснение — фраза; там, где справа стоит действие
+   («Обход разрешений — Включить»), строка остаётся строкой. */
+.menu-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menu-text .menu-note {
+  flex: none;
+}
+
+.menu-mark {
+  display: inline-flex;
+  align-items: center;
+  color: var(--vermilion-ink);
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 5px 6px;
+  background: var(--line);
+}
+
+/* Меню на Radix (§9: строка сессии) ставит себя само, поэтому статические
+   `bottom`/`right` из `.menu` ему мешают. Всё остальное — тот же вид: одно
+   меню в окне выглядит одинаково, откуда бы его ни открыли. */
+.menu-pop {
+  position: static;
+  min-width: 200px;
+}
+
+.menu-item-danger {
+  color: var(--rust);
+}
+
+/* --- заставка до открытия проекта --------------------------------------- */
+
