@@ -7,7 +7,7 @@ use serde_json::Value;
 use super::{get, parse};
 use crate::error::ProviderError;
 use crate::provider::registry::ProviderSpec;
-use crate::usage::{unknown_model, ModelInfo};
+use crate::usage::{ContextSource, unknown_model, ModelInfo};
 
 /// Pages to walk before giving up on a provider that always says `has_more`.
 const MAX_PAGES: usize = 20;
@@ -80,6 +80,8 @@ fn anthropic_model(m: &AnthropicModel) -> ModelInfo {
     }
     if let Some(context) = m.max_input_tokens {
         info.context_max = context;
+        // Stated, not guessed: see `super::local` for why the tag matters.
+        info.context_source = ContextSource::ProviderReported;
     }
     if let Some(output) = m.max_tokens {
         info.max_output = output;

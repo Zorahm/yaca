@@ -134,6 +134,7 @@ fn модель_не_из_списка_дает_ошибку() {
         },
         supports_effort: false,
         supports_thinking: false,
+        context_source: crate::usage::ContextSource::DefaultGuess,
     }];
 
     // Модель другого провайдера не подменяется молча, а отвергается.

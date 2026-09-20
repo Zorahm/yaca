@@ -102,6 +102,7 @@ describe("drafts and specs", () => {
         pricing: { input: 0, output: 0 },
         supportsEffort: false,
         supportsThinking: false,
+        contextSource: "default_guess",
       },
     ],
   };

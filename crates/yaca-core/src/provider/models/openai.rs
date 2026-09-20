@@ -8,7 +8,7 @@ use serde::Deserialize;
 use super::{get, parse};
 use crate::error::ProviderError;
 use crate::provider::registry::ProviderSpec;
-use crate::usage::{unknown_model, ModelInfo, Pricing};
+use crate::usage::{ContextSource, unknown_model, ModelInfo, Pricing};
 
 
 /// Chat Completions' `/v1/models`.
@@ -115,6 +115,9 @@ fn openai_model(m: &OpenAiModel) -> ModelInfo {
         .or_else(|| m.top_provider.as_ref()?.context_length)
     {
         info.context_max = context;
+        // Stated, not guessed: the probe (see `super::local`) reads this tag
+        // first and skips models the list already spoke for.
+        info.context_source = ContextSource::ProviderReported;
     }
     if let Some(output) = m.top_provider.as_ref().and_then(|t| t.max_completion_tokens) {
         info.max_output = output;

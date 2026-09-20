@@ -38,6 +38,7 @@ export const demoModels: ModelInfo[] = [
     pricing: { input: 5, output: 25 },
     supportsEffort: true,
     supportsThinking: true,
+    contextSource: "provider_reported",
   },
   {
     id: "claude-sonnet-5",
@@ -48,6 +49,7 @@ export const demoModels: ModelInfo[] = [
     pricing: { input: 2, output: 10 },
     supportsEffort: true,
     supportsThinking: true,
+    contextSource: "provider_reported",
   },
 ];
 

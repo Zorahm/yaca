@@ -10,7 +10,7 @@ use yaca_core::provider::models::{discover, residency};
 use yaca_core::provider::registry::{Protocol, ProviderSpec};
 
 mod common;
-use common::wire::{serve, serve_all};
+use common::wire::{json_response, serve, serve_all};
 
 fn spec(base: impl Into<String>, protocol: Protocol) -> ProviderSpec {
     ProviderSpec {
@@ -156,4 +156,105 @@ async fn anthropic_is_not_asked_about_residency() {
         .await
         .unwrap();
     assert!(residency.is_empty());
+}
+
+// The local servers' own endpoints (§10, `provider::models::local`). Ollama
+// and LM Studio say nothing about context on the OpenAI shape; a loopback
+// model list without it gets probed, and this is what the probes see.
+
+#[tokio::test]
+async fn lm_studio_window_is_detected_for_the_whole_list_with_one_probe() {
+    let (base, seen) = serve_all(vec![
+        json(r#"{"object":"list","data":[{"id":"qwen/qwen3-30b"},{"id":"gpt-oss-20b"}]}"#),
+        json(
+            r#"{"object":"list","data":[
+                {"id":"qwen/qwen3-30b","max_context_length":262144,
+                 "loaded_instances":[{"config":{"context_length":65536}}]},
+                {"id":"gpt-oss-20b"}]}"#,
+        ),
+    ])
+    .await;
+    let models = discover(&spec(base, Protocol::OpenAi), None).await.unwrap();
+
+    // The list is ordered by id; the allocation, not the maximum, is what a
+    // live session has to fit into.
+    assert_eq!(models[1].context_max, 65_536);
+    assert_eq!(models[1].context_source, yaca_core::usage::ContextSource::DetectedAllocated);
+    // No fields of its own: the guess stays a guess, visibly.
+    assert_eq!(models[0].context_source, yaca_core::usage::ContextSource::DefaultGuess);
+    assert_eq!(models[0].context_max, 128_000);
+
+    let seen = seen.await.unwrap();
+    assert!(seen[0].headers.contains("GET /v1/models"));
+    assert!(seen[1].headers.contains("GET /api/v1/models"));
+    assert_eq!(seen.len(), 2, "one probe answers for everyone");
+}
+
+#[tokio::test]
+async fn an_idle_lm_studio_answers_with_the_architectural_maximum() {
+    // Nothing loaded: the architectural maximum is all LM Studio says, and it
+    // is read as such rather than as what a running session sees.
+    let (base, _seen) = serve_all(vec![
+        json(r#"{"object":"list","data":[{"id":"qwen/qwen3-30b"}]}"#),
+        json(
+            r#"{"object":"list","data":[
+                {"id":"qwen/qwen3-30b","max_context_length":131072}]}"#,
+        ),
+    ])
+    .await;
+    let models = discover(&spec(base, Protocol::OpenAi), None).await.unwrap();
+    assert_eq!(models[0].context_max, 131_072);
+    assert_eq!(models[0].context_source, yaca_core::usage::ContextSource::DetectedMaximum);
+}
+
+#[tokio::test]
+async fn ollama_answers_with_what_it_loaded_and_what_it_is_built_of() {
+    // One model in memory with the exponent of a per-request `num_ctx`; one
+    // not loaded, asked about individually by `/api/show`. The bare OpenAI
+    // list names both nowhere.
+    let (base, seen) = serve_all(vec![
+        json(r#"{"object":"list","data":[{"id":"qwen3-coder:30b"},{"id":"llama3.3:70b"}]}"#),
+        json_response("404 Not Found", r#"{"error":{"message":"no such path"}}"#),
+        json(
+            r#"{"models":[{"name":"qwen3-coder:30b","context_length":65536}]}"#,
+        ),
+        json(r#"{"model_info":{"llama.context_length":131072}}"#),
+    ])
+    .await;
+    let models = discover(&spec(base, Protocol::OpenAi), None).await.unwrap();
+
+    assert_eq!(models[0].context_max, 131_072, "architectural maximum");
+    assert_eq!(models[0].context_source, yaca_core::usage::ContextSource::DetectedMaximum);
+    assert_eq!(models[1].context_max, 65_536, "allocated wins over maximum");
+    assert_eq!(models[1].context_source, yaca_core::usage::ContextSource::DetectedAllocated);
+
+    let seen = seen.await.unwrap();
+    assert!(seen[2].headers.contains("GET /api/ps"));
+    assert!(seen[3].headers.contains("POST /api/show"));
+    // The model asked about is the one not in `/api/ps`.
+    assert_eq!(seen[3].body["model"], "llama3.3:70b");
+}
+
+#[tokio::test]
+async fn a_local_server_that_says_nothing_keeps_the_openai_default() {
+    // The 404s are what a loopback server that keeps neither probe endpoint
+    // answers. The fallback window is the OpenAI shape's documented 128k —
+    // `unknown_model`'s, left visibly a guess by the context source.
+    let (base, seen) = serve_all(vec![
+        json(r#"{"object":"list","data":[{"id":"qwen3-coder:30b"}]}"#),
+        json_response("404 Not Found", r#"{"error":{"message":"no such path"}}"#),
+        json_response("404 Not Found", r#"{"error":{"message":"no such path"}}"#),
+    ])
+    .await;
+    let models = discover(&spec(base, Protocol::OpenAi), None)
+        .await
+        .unwrap();
+    let m = &models[0];
+    assert_eq!(m.context_source, yaca_core::usage::ContextSource::DefaultGuess);
+    assert_eq!(m.context_max, 128_000);
+
+    let seen = seen.await.unwrap();
+    // No third endpoint to be tried: `/api/ps` refusing means this is not an
+    // Ollama at all, and `/api/show` goes unasked.
+    assert_eq!(seen.len(), 3);
 }

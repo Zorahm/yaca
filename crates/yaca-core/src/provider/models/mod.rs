@@ -32,6 +32,7 @@ use crate::error::ProviderError;
 use crate::usage::ModelInfo;
 
 mod anthropic;
+mod local;
 mod openai;
 
 use anthropic::anthropic;
@@ -51,6 +52,11 @@ pub async fn discover(
         Protocol::Anthropic => anthropic(&client, spec, key).await?,
         Protocol::OpenAi => openai(&client, spec, key).await?,
     };
+    // Ollama and LM Studio say nothing about context on the OpenAI shape, and
+    // their own endpoints do; the probe only fires for a loopback address.
+    // Auto-compaction reads the same number (§5.11), so whatever is here is
+    // what it compacts by.
+    local::probe(spec, key, &mut models).await;
     for m in &mut models {
         m.provider_id = spec.id.clone();
     }

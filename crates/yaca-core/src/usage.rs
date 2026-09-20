@@ -73,6 +73,31 @@ impl Pricing {
     }
 }
 
+/// Откуда взялось окно контекста.
+///
+/// Способ получения, а не само число: разница между «сервер ответил»,
+/// «ядро спросило у локального сервера то, что OpenAI-форма умалчивает», и
+/// «число придумано умолчанием» — это и есть видимость отката, о которой
+/// §10 просит. Старый `providers.json` поля не знает — `default`, чтобы
+/// записанное в нём догадкой оставаться и догадкой считалось.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum ContextSource {
+    /// Сервер ничего не сказал из названного в `provider::models` — стоит
+    /// `unknown_model`'s 128 000, и это догадка, а не факт.
+    #[default]
+    DefaultGuess,
+    /// Провайдер ответил числом в собственном списке моделей.
+    ProviderReported,
+    /// Локальный сервер ответил, сколько реально выделил загруженной модели
+    /// (`provider::models::local`).
+    DetectedAllocated,
+    /// Локальный сервер ответил архитектурным максимумом модели: то, что
+    /// свежая загрузка получит, но не обязательно то, под чем сессия работает.
+    DetectedMaximum,
+}
+
 /// Модель, доступная в переключателе (§7.1).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -98,6 +123,10 @@ pub struct ModelInfo {
     /// отказа: недосланное рассуждение стоит глубины, лишнее — это 400.
     #[serde(default)]
     pub supports_thinking: bool,
+    /// How `context_max` came to be. A fallback stays visible: see
+    /// [`ContextSource`].
+    #[serde(default)]
+    pub context_source: ContextSource,
 }
 
 /// Прайс-лист Anthropic, доллары за миллион токенов.
@@ -155,6 +184,8 @@ pub fn catalog() -> Vec<ModelInfo> {
         }),
         supports_effort: true,
         supports_thinking: true,
+        // Written down, not answered — but a stated constant, not a guess.
+        context_source: ContextSource::ProviderReported,
     };
     vec![
         m("claude-opus-5", "Opus 5", 1_000_000, 128_000),
@@ -192,6 +223,7 @@ pub fn unknown_model(id: &str) -> ModelInfo {
         }),
         supports_effort: false,
         supports_thinking: false,
+        context_source: ContextSource::DefaultGuess,
     }
 }
 
