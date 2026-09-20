@@ -20,7 +20,8 @@
     "@tauri-apps/plugin-opener": "^2",
     "radix-ui": "^1.6.7",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "virtua": "0.52.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

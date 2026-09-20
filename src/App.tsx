@@ -16,7 +16,7 @@
  * каркаса, и стоит рядом с лентой, а не поверх неё.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   addProject as rememberProject,
@@ -39,7 +39,7 @@ import {
 import { touchedFiles, visible } from "./core/feed";
 import { relativeTo } from "./ui/format";
 import { t } from "./i18n";
-import { Feed, type FeedActions } from "./ui/Feed";
+import { Feed, type FeedActions, type FeedJump } from "./ui/Feed";
 import { Notices } from "./ui/Bars";
 import { Composer, MODES, type ComposerActions } from "./ui/Composer";
 import { Home } from "./ui/Home";
@@ -83,6 +83,11 @@ export default function App() {
   const failed = useCallback((e: unknown) => setError(String(e)), []);
   const chats = useChats(failed);
   const active = chats.active;
+
+  // Ручной скачок по ленте идёт через её окно: блок далеко от видимой области
+  // не размечен, и `getElementById` на нём мёртв. Скачки тут (стрелки шапки §3) —
+  // это и возврат по чекпоинтам, поэтому ручка одна и та же для обоих путей.
+  const feedJump = useRef<FeedJump>(null);
 
   /**
    * Слэш-команды §7.3 того проекта, в котором сейчас пишут.
@@ -193,7 +198,7 @@ export default function App() {
       const key = humanKeys[index];
       if (!active || !key) return;
       chats.patch(active.id, { at: index });
-      document.getElementById(key)?.scrollIntoView({ block: "start" });
+      feedJump.current?.jumpTo(key);
     },
     [active, chats, humanKeys],
   );
@@ -425,7 +430,7 @@ export default function App() {
           <ProvidersPanel onClose={closeProviders} />
         )}
 
-        <Feed feed={active.feed} actions={feedActions} />
+        <Feed feed={active.feed} actions={feedActions} ref={feedJump} />
 
         <div className="bars">
           <Notices feed={active.feed} onCompact={() => send(commands.compact())} />
