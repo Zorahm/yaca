@@ -26,6 +26,8 @@
 //! silent: the model's window stays tagged [`ContextSource::DefaultGuess`],
 //! which the switcher's ring can show as a guess rather than a fact, and what
 //! the probe failed to read is said in the log.
+//!
+//! Log and panic text in this module is English, like the rest of the file.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -78,7 +80,7 @@ pub(super) async fn probe(spec: &ProviderSpec, key: Option<&str>, models: &mut [
         .build()
         // Invariant: the builder only rejects TLS options, and this client
         // sets none — no custom certificates, no identity.
-        .expect("клиент для опроса локального сервера");
+        .expect("client for probing the local server");
 
     // LM Studio first: one request there answers for the whole list, where
     // Ollama needs one per model. The path is LM Studio's own; Ollama answers
@@ -97,7 +99,7 @@ pub(super) async fn probe(spec: &ProviderSpec, key: Option<&str>, models: &mut [
         .count();
     if remaining > 0 {
         tracing::warn!(
-            "провайдер «{}»: у {} моделей окно контекста не прочитано — осталась догадка",
+            "provider «{}»: {} models left with an unread context window — the guess stays",
             spec.id,
             remaining
         );
@@ -213,7 +215,7 @@ async fn lm_studio(
 /// copy's figure is the one a session must fit into, and it wins.
 fn lm_studio_windows(answer: &Value) -> HashMap<String, Window> {
     let Some(data) = answer.get("data").and_then(Value::as_array) else {
-        tracing::warn!("{LM_STUDIO_MODELS} ответил не тем списком, который читает Yaca");
+        tracing::warn!("{LM_STUDIO_MODELS} answered with something other than the list Yaca reads");
         return HashMap::new();
     };
 
@@ -318,7 +320,7 @@ async fn ollama(
 /// it (`ContextLength int`, tagged `context_length`), and it is read there.
 fn ollama_allocated(answer: &Value) -> HashMap<String, Window> {
     let Some(loaded) = answer.get("models").and_then(Value::as_array) else {
-        tracing::warn!("{OLLAMA_PS} ответил не тем списком, который читает Yaca");
+        tracing::warn!("{OLLAMA_PS} answered with something other than the list Yaca reads");
         return HashMap::new();
     };
 

@@ -24,9 +24,16 @@ use tokio_util::sync::CancellationToken;
 /// `src-tauri` is already Russian — command errors included.
 const TITLE: &str = "Yaca";
 
-/// Toast body. `target` of a request is short by construction — a file name,
-/// the first word of a command or a domain (§5.7) — exactly one toast line.
-const BODY: &str = "Агент запрашивает разрешение";
+/// Toast body up to the target, separator included: the target glues right
+/// after it — «Агент запрашивает разрешение: git commit». `target` of a
+/// request is short by construction — a file name, the first word of a
+/// command or a domain (§5.7) — exactly one toast line.
+const BODY: &str = "Агент запрашивает разрешение: ";
+
+/// The toast's full text: the sentence and the target after the separator.
+fn toast_body(target: &str) -> String {
+    format!("{BODY}{target}")
+}
 
 /// Watcher of a single chat: subscribed to the same broadcast stream as the
 /// bridge — a second subscriber, not a fork inside the bridge, which is
@@ -88,7 +95,7 @@ fn focused(app: &AppHandle) -> bool {
 /// notification daemon must not press down the asynchronous runtime pool.
 fn push(app: &AppHandle, target: &str) {
     let app = app.clone();
-    let body = format!("{BODY}{target}");
+    let body = toast_body(target);
     // Identifier from `tauri.conf.json`: on Windows the NSIS and WiX
     // installers stamp it onto the Start-menu shortcut, and a toast under
     // the same AppUserModelID wears the app icon instead of the process
@@ -205,5 +212,15 @@ mod tests {
             unattended(false, &permission("git commit")).unwrap().target,
             "git commit"
         );
+    }
+
+    /// The body reads as a sentence and then the target: the separator keeps
+    /// them from gluing into one word.
+    #[test]
+    fn toast_body_separates_sentence_and_target() {
+        let body = toast_body("src/main.rs");
+        assert!(body.starts_with("Агент запрашивает разрешение"));
+        assert!(body.ends_with("src/main.rs"));
+        assert!(body.contains(": "), "no separator between the parts: {body}");
     }
 }
