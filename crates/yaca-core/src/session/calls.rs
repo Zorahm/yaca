@@ -204,6 +204,7 @@ impl Worker {
             events: self.shared.events.clone(),
             progress: Progress::new(call_id.clone(), self.shared.events.clone()),
             cancel: cancel.clone(),
+            respect_robots: self.shared.respect_robots,
         };
 
         let started = std::time::Instant::now();

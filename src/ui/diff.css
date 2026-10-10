@@ -27,7 +27,7 @@
   grid-template-columns: var(--gutter) 16px 1fr;
   height: var(--diff-line);
   line-height: var(--diff-line);
-  font: 400 12.5px var(--mono);
+  font: 400 12px var(--mono);
   white-space: pre;
 }
 
@@ -48,22 +48,22 @@
   padding-right: 12px;
 }
 
-/* Подложки разводятся из moss и rust, а не своими токенами: иначе тема
+/* Подложки разводятся из --green и --red-ink, а не своими токенами: иначе тема
    переключается в двух местах и однажды разъедется. Цвет несёт знак, текст
    остаётся --ink — на подложке в 14% он читается лучше собственного тона,
    который приходилось подбирать под каждый фон. */
 .diff-add {
-  background: color-mix(in srgb, var(--moss) 14%, transparent);
+  background: color-mix(in srgb, var(--green) 14%, transparent);
 }
 .diff-add .diff-sign {
-  color: var(--moss);
+  color: var(--green);
 }
 
 .diff-del {
-  background: color-mix(in srgb, var(--rust) 14%, transparent);
+  background: color-mix(in srgb, var(--red-ink) 14%, transparent);
 }
 .diff-del .diff-sign {
-  color: var(--rust);
+  color: var(--red-ink);
 }
 
 .diff-add .diff-text,
@@ -77,23 +77,23 @@
 
 /* Внутри строки действия фон мягче (§2). */
 .diff-soft .diff-add {
-  background: color-mix(in srgb, var(--moss) 9%, transparent);
+  background: color-mix(in srgb, var(--green) 9%, transparent);
 }
 .diff-soft .diff-del {
-  background: color-mix(in srgb, var(--rust) 9%, transparent);
+  background: color-mix(in srgb, var(--red-ink) 9%, transparent);
 }
 
 /* Пословная подсветка — чуть плотнее фона строки (§6.3). */
 .word {
-  border-radius: 2px;
+  border-radius: var(--radius-s);
 }
 
 .diff-add .word {
-  background: color-mix(in srgb, var(--moss) 26%, transparent);
+  background: color-mix(in srgb, var(--green) 26%, transparent);
 }
 
 .diff-del .word {
-  background: color-mix(in srgb, var(--rust) 26%, transparent);
+  background: color-mix(in srgb, var(--red-ink) 26%, transparent);
 }
 
 /* Заголовок ханка: номера скрыты (§6.3). Высота — та же, что у строки: окно

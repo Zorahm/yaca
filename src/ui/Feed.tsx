@@ -42,6 +42,7 @@ import {
 } from "./Blocks";
 import { CodeBlock } from "./CodeBlock";
 import { Permission } from "./Permission";
+import { RouteSign } from "./RouteSign";
 import { timeOf } from "./format";
 import { tp } from "../i18n";
 import { shouldHold, shouldStick, type ScrollState } from "./feedScroll";
@@ -66,6 +67,8 @@ export type FeedActions = {
   editSummary: (text: string) => void;
   openFile: (path: string) => void;
   retry: () => void;
+  /** §5.1: send a message of this conversation once more, as it was. */
+  resend: (text: string, attachments: string[]) => void;
 };
 
 export function Feed({
@@ -179,7 +182,13 @@ export function Feed({
         aria-live="polite"
       >
         {blocks.map((block, index) => (
-          <div className="block feed-item" id={block.key} key={block.key}>
+          <div
+            className={startsAgent(blocks, index) ? "block feed-item feed-turn" : "block feed-item"}
+            data-kind={block.kind}
+            id={block.key}
+            key={block.key}
+          >
+            <RouteSign block={block} live={index === count - 1 && busy} />
             {startsAgent(blocks, index) && (
               <div className="label label-agent">{t("feed.agent")}</div>
             )}
@@ -234,7 +243,13 @@ function Block({
 }) {
   switch (block.kind) {
     case "human":
-      return <HumanMessage text={block.text} attachments={block.attachments} />;
+      return (
+        <HumanMessage
+          text={block.text}
+          attachments={block.attachments}
+          onResend={actions.resend}
+        />
+      );
 
     case "agent":
       return <AgentText text={block.text} />;

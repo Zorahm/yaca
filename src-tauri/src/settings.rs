@@ -1,22 +1,25 @@
 //! Settings that outlive any one project (§10).
 //!
 //! Not `.yaca/settings.json`. That file lives inside a project and the core
-//! reads it; this one answers a question asked before any project is known —
-//! which projects the window knows about — so it lives in the OS config
-//! directory instead. §10 puts the provider list, appearance and keyboard at
-//! this level too, and they land here when they arrive.
+//! reads it; this one answers questions asked before any project is known —
+//! which projects the window knows about, what the window looks like — so it
+//! lives in the OS config directory instead. The provider list is at this
+//! level too, in its own file, because the core reads that one (§10).
 //!
 //! A file that does not parse is dropped rather than fatal, and that is the
 //! opposite of what the core does with project settings. The core stops a
 //! session on a broken `.yaca/settings.json` because a typo there silently
 //! cancels a permission rule the human believes is in force. Nothing here is
-//! load-bearing: losing this file costs a list of remembered paths.
+//! load-bearing: losing this file costs a list of remembered paths and a
+//! theme, and both are one click to set again.
 
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+use crate::prefs::Preferences;
 
 const FILE: &str = "settings.json";
 
@@ -31,6 +34,8 @@ pub struct AppSettings {
     /// they were working in.
     #[serde(skip_serializing_if = "Option::is_none")]
     last_project: Option<PathBuf>,
+    /// Theme, density, language, notifications (§10).
+    prefs: Preferences,
 }
 
 impl AppSettings {
@@ -71,6 +76,14 @@ impl AppSettings {
     /// forgetting a project is a window action, not a change to the disk.
     pub fn forget_project(&mut self, path: &Path) {
         self.projects.retain(|known| known != path);
+    }
+
+    pub fn prefs(&self) -> &Preferences {
+        &self.prefs
+    }
+
+    pub fn set_prefs(&mut self, prefs: Preferences) {
+        self.prefs = prefs;
     }
 
     /// Written through a temporary file: a half-written settings file is a
@@ -174,6 +187,33 @@ mod tests {
         settings.forget_project(&two);
 
         assert_eq!(settings.projects(), vec![one.as_path()]);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Preferences survive a save, and a file written before they existed
+    /// loads as the defaults rather than as everything switched off.
+    #[test]
+    fn preferences_survive_a_save_and_an_older_file() {
+        use crate::prefs::Theme;
+
+        let dir = temp_dir();
+        let mut settings = AppSettings::load(&dir);
+        assert_eq!(settings.prefs(), &Preferences::default());
+
+        let prefs = Preferences {
+            theme: Theme::Night,
+            notifications: false,
+            ..Preferences::default()
+        };
+        settings.set_prefs(prefs.clone());
+        settings.save(&dir).unwrap();
+
+        assert_eq!(AppSettings::load(&dir).prefs(), &prefs);
+
+        // A file from before the field: the list survives, the look defaults.
+        fs::write(dir.join(FILE), r#"{ "projects": [] }"#).unwrap();
+        assert_eq!(AppSettings::load(&dir).prefs(), &Preferences::default());
+
         fs::remove_dir_all(&dir).unwrap();
     }
 

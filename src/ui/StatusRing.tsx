@@ -30,10 +30,12 @@ export function StatusRing({
 
   const color =
     state === "error"
-      ? "var(--rust)"
+      ? "var(--red-ink)"
       : state === "idle"
         ? "var(--line-strong)"
-        : "var(--vermilion-ink)";
+        : state === "waiting"
+          ? "var(--red-ink)"
+          : "var(--ink)";
 
   const label =
     state === "busy"
@@ -82,7 +84,7 @@ export function StatusRing({
           cy="8"
           r={R}
           fill="none"
-          stroke="var(--vermilion-ink)"
+          stroke="var(--ink)"
           strokeWidth="1.5"
           strokeLinecap="round"
           strokeDasharray={`${CIRCUMFERENCE / 4} ${CIRCUMFERENCE}`}
@@ -96,7 +98,7 @@ export function StatusRing({
           cy="8"
           r={R}
           fill="none"
-          stroke="var(--vermilion-ink)"
+          stroke="var(--red-ink)"
           strokeWidth="1.5"
         />
       )}

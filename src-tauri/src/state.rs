@@ -17,6 +17,8 @@ use yaca_core::id::SessionId;
 use yaca_core::SessionHandle;
 use tokio_util::sync::CancellationToken;
 
+use crate::prefs::Preferences;
+
 /// A live chat: the core session and the bridge pumping its events out.
 struct Chat {
     handle: Arc<SessionHandle>,
@@ -31,11 +33,26 @@ struct Chat {
 #[derive(Default)]
 pub struct AppState {
     chats: Mutex<HashMap<SessionId, Chat>>,
+    /// Preferences as they are right now (§10).
+    ///
+    /// A copy of what is on disk, kept because the toast watcher asks about
+    /// notifications on every event and reading a file there would put the
+    /// disk in the path of a permission request. The file stays the truth;
+    /// this is refreshed by the same command that writes it.
+    prefs: Mutex<Preferences>,
 }
 
 impl AppState {
     pub fn new() -> Self {
         AppState::default()
+    }
+
+    pub fn prefs(&self) -> Preferences {
+        self.prefs.lock().unwrap().clone()
+    }
+
+    pub fn set_prefs(&self, prefs: Preferences) {
+        *self.prefs.lock().unwrap() = prefs;
     }
 
     pub fn chat(&self, id: &SessionId) -> Option<Arc<SessionHandle>> {

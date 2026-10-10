@@ -9,6 +9,21 @@ use yaca_core::usage::ModelInfo;
 
 use crate::config_dir;
 
+/// Канал «список провайдеров изменился».
+///
+/// Правят их в окне настроек §10, а показывает их переключатель моделей §7.1
+/// в главном окне. Без этого канала список там остался бы прежним до
+/// перезапуска — то есть окно врало бы про состояние (§0).
+pub const PROVIDERS_CHANNEL: &str = "yaca://providers";
+
+/// Говорит окнам, что список изменился. Ошибка рассылки не роняет запись:
+/// на диске уже правда, а недоехавшее событие — это устаревший список, а не
+/// потерянная настройка.
+fn announce(app: &tauri::AppHandle) {
+    use tauri::Emitter;
+    let _ = app.emit(PROVIDERS_CHANNEL, ());
+}
+
 /// Список провайдеров (§10).
 #[tauri::command]
 pub fn providers() -> Result<Providers, String> {
@@ -17,20 +32,22 @@ pub fn providers() -> Result<Providers, String> {
 
 /// Добавляет провайдера или заменяет одноимённого.
 #[tauri::command]
-pub fn save_provider(spec: ProviderSpec) -> Result<Providers, String> {
+pub fn save_provider(app: tauri::AppHandle, spec: ProviderSpec) -> Result<Providers, String> {
     let dir = config_dir()?;
     let mut providers = Providers::load(&dir).map_err(|e| e.to_string())?;
     providers.put(spec);
     providers.save(&dir).map_err(|e| e.to_string())?;
+    announce(&app);
     Ok(providers)
 }
 
 #[tauri::command]
-pub fn delete_provider(id: String) -> Result<Providers, String> {
+pub fn delete_provider(app: tauri::AppHandle, id: String) -> Result<Providers, String> {
     let dir = config_dir()?;
     let mut providers = Providers::load(&dir).map_err(|e| e.to_string())?;
     providers.remove(&id).map_err(|e| e.to_string())?;
     providers.save(&dir).map_err(|e| e.to_string())?;
+    announce(&app);
     Ok(providers)
 }
 
@@ -83,6 +100,21 @@ pub fn api_key_source(provider: String) -> Result<&'static str, String> {
         KeySource::Environment => "environment",
         KeySource::None => "none",
     })
+}
+
+/// Откуда взялся ключ веб-поиска (§10).
+///
+/// Отдельная команда, а не `api_key_source("tavily")`: Tavily не провайдер,
+/// в реестре его нет, и общая команда ответила бы «нет в списке» про ключ,
+/// который преспокойно лежит в кейчейне. Записывается и забывается он теми же
+/// `set_api_key` и `forget_api_key` — хранилище одно на всех.
+#[tauri::command]
+pub fn search_key_source() -> &'static str {
+    match secrets::key_source(secrets::TAVILY_ITEM) {
+        KeySource::Keychain => "keychain",
+        KeySource::Environment => "environment",
+        KeySource::None => "none",
+    }
 }
 
 /// Модели всех провайдеров (§7.1).

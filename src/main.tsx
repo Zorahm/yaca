@@ -3,17 +3,18 @@ import ReactDOM from "react-dom/client";
 
 import App from "./App";
 import { adoptStorage } from "./core/legacy";
-import { locale } from "./i18n";
-
-// §14: скринридер должен знать, на каком языке читает. Язык выбирается в
-// разработке один раз, но разметка о нём знать обязана.
-document.documentElement.lang = locale;
+import { bootPrefs } from "./ui/prefs";
 
 // До первого чтения: композер берёт черновик при монтировании (§7.4).
 adoptStorage();
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+// Настройки приложения §10 прикладываются до первого кадра: язык выбирает
+// словарь, тема и акцент — токены. Окно, нарисованное в Ночи и тут же
+// перекрашенное в Бумагу, моргало бы на каждом запуске.
+void bootPrefs().then((prefs) => {
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      <App prefs={prefs} />
+    </React.StrictMode>,
+  );
+});

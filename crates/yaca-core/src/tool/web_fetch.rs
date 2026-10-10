@@ -17,6 +17,7 @@ use serde_json::{json, Value};
 
 use super::net;
 use super::page;
+use super::robots;
 use super::{Narration, Tool, ToolCtx, ToolOutput};
 use crate::error::ToolError;
 use crate::intent::Intent;
@@ -101,6 +102,13 @@ impl Tool for WebFetch {
 
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let start = parse(&input)?;
+
+        // До первого запроса за страницей: `robots.txt` — это про то, куда
+        // ходить, и спрашивать его после того, как сходил, поздно (§10).
+        if ctx.respect_robots {
+            robots::check(ctx, &start).await?;
+        }
+
         let (url, response) = follow(ctx, start).await?;
 
         let status = response.status();
@@ -180,6 +188,12 @@ async fn follow(ctx: &ToolCtx, start: Url) -> Result<(Url, reqwest::Response), T
                 ToolError::failed(format!("HTTP {} без Location", response.status().as_u16()))
             })?;
 
+        // Редирект внутри хоста ведёт на другой путь, а правила пишутся по
+        // путям: разрешённый адрес мог бы увести на запрещённый.
+        if ctx.respect_robots && host(&next) == host(&start) {
+            robots::check(ctx, &next).await?;
+        }
+
         if host(&next) != host(&start) {
             return Err(ToolError::Rejected(format!(
                 "редирект с {} на другой хост: {next}. Разрешение выдано на {}. \
@@ -205,6 +219,7 @@ mod tests {
     use crate::testutil::TempDir;
     use crate::tool::tests_support::{ctx_for, ctx_with_events};
     use crate::tool::net::MAX_BODY_BYTES;
+    use std::sync::{Arc, Mutex};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
@@ -223,27 +238,62 @@ mod tests {
         out
     }
 
-    /// A server that answers a fixed list of canned responses, one per request.
+    /// The requests a test server was sent, whole and unparsed.
+    type Requests = Arc<Mutex<Vec<String>>>;
+
+    /// A server that answers a fixed list of canned responses, one per request
+    /// for a page, and keeps what it was asked.
     ///
     /// A real socket rather than a mocked client: a mock would only prove the
-    /// mock redirects the way the test thinks it does.
-    async fn serve(responses: Vec<String>) -> String {
+    /// mock redirects the way the test thinks it does — and it would say
+    /// nothing about the headers that actually leave the process.
+    ///
+    /// `robots` is answered out of band and does not eat an entry of the list:
+    /// every fetch asks for `/robots.txt` first now (§10), and threading that
+    /// through the canned list would make every test about robots. `None` is
+    /// the common case — a host with no such file, answering 404.
+    async fn serve_robots(robots: Option<String>, responses: Vec<String>) -> (String, Requests) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
+        let seen: Requests = Arc::new(Mutex::new(Vec::new()));
+        let recorder = seen.clone();
+        let missing = response("404 Not Found", &[], "");
 
         tokio::spawn(async move {
-            for body in responses {
+            let mut next = responses.into_iter();
+            loop {
                 let Ok((mut socket, _)) = listener.accept().await else {
                     return;
                 };
                 let mut buf = [0u8; 4096];
-                let _ = socket.read(&mut buf).await;
+                let read = socket.read(&mut buf).await.unwrap_or(0);
+                let request = String::from_utf8_lossy(&buf[..read]).into_owned();
+                recorder.lock().unwrap().push(request.clone());
+
+                let body = if request.starts_with("GET /robots.txt") {
+                    robots.clone().unwrap_or_else(|| missing.clone())
+                } else {
+                    match next.next() {
+                        Some(body) => body,
+                        None => return,
+                    }
+                };
                 let _ = socket.write_all(body.as_bytes()).await;
                 let _ = socket.shutdown().await;
             }
         });
 
-        format!("http://{addr}")
+        (format!("http://{addr}"), seen)
+    }
+
+    /// The same for a host that keeps no `robots.txt`.
+    async fn serve_seen(responses: Vec<String>) -> (String, Requests) {
+        serve_robots(None, responses).await
+    }
+
+    /// And the same again, for the tests that only care about the answer.
+    async fn serve(responses: Vec<String>) -> String {
+        serve_seen(responses).await.0
     }
 
     fn html(body: &str) -> String {
@@ -252,6 +302,155 @@ mod tests {
             &[("Content-Type", "text/html; charset=utf-8")],
             body,
         )
+    }
+
+    fn robots(body: &str) -> String {
+        response("200 OK", &[("Content-Type", "text/plain")], body)
+    }
+
+    /// Запрет из `robots.txt` — не сбой, а сработавшая граница: `Rejected`,
+    /// как у редиректа на чужой хост. И страницу никто не трогает.
+    #[tokio::test]
+    async fn a_disallowed_path_is_refused_before_the_page_is_asked_for() {
+        let (base, seen) = serve_robots(
+            Some(robots("User-agent: *
+Disallow: /private
+")),
+            vec![html("<p>секрет</p>")],
+        )
+        .await;
+        let dir = TempDir::new();
+        let (ctx, _ws) = ctx_for(&dir);
+
+        let err = WebFetch
+            .run(&ctx, json!({ "url": format!("{base}/private/page") }))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, ToolError::Rejected(_)), "{err:?}");
+        assert!(err.to_string().contains("/private"), "{err}");
+
+        let requests = seen.lock().unwrap();
+        assert_eq!(requests.len(), 1, "за страницей ходить было нельзя");
+        assert!(requests[0].contains("GET /robots.txt"), "{:?}", requests[0]);
+    }
+
+    /// Путь, которого запрет не касается, забирается как обычно.
+    #[tokio::test]
+    async fn an_allowed_path_goes_through_with_robots_in_place() {
+        let (base, seen) = serve_robots(
+            Some(robots("User-agent: *
+Disallow: /private
+")),
+            vec![html("<p>Открыто.</p>")],
+        )
+        .await;
+        let dir = TempDir::new();
+        let (ctx, _ws) = ctx_for(&dir);
+
+        let out = WebFetch
+            .run(&ctx, json!({ "url": format!("{base}/public") }))
+            .await
+            .unwrap();
+
+        assert!(out.text.contains("Открыто."));
+        assert_eq!(seen.lock().unwrap().len(), 2);
+    }
+
+    /// Выключатель §10 выключает: запрет читается, но не применяется.
+    #[tokio::test]
+    async fn the_setting_turns_the_whole_check_off() {
+        let (base, seen) = serve_seen(vec![html("<p>секрет</p>")]).await;
+        let dir = TempDir::new();
+        let (mut ctx, _ws) = ctx_for(&dir);
+        ctx.respect_robots = false;
+
+        let out = WebFetch
+            .run(&ctx, json!({ "url": format!("{base}/private/page") }))
+            .await
+            .unwrap();
+
+        assert!(out.text.contains("секрет"));
+        // Ни одного лишнего запроса: выключено — значит, `robots.txt` даже
+        // не спрашивают.
+        let requests = seen.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].contains("GET /private/page"), "{:?}", requests[0]);
+    }
+
+    /// Не ответивший `robots.txt` разрешает, а не запрещает: человек только
+    /// что сам разрешил этот домен, и упавший на секунду сервер не должен
+    /// закрывать страницу молча.
+    #[tokio::test]
+    async fn an_unreachable_robots_file_allows_rather_than_blocks() {
+        let (base, _seen) = serve_robots(
+            Some(response("503 Service Unavailable", &[], "увы")),
+            vec![html("<p>Страница.</p>")],
+        )
+        .await;
+        let dir = TempDir::new();
+        let (ctx, _ws) = ctx_for(&dir);
+
+        let out = WebFetch
+            .run(&ctx, json!({ "url": format!("{base}/page") }))
+            .await
+            .unwrap();
+
+        assert!(out.text.contains("Страница."));
+    }
+
+    /// Файл читается один раз на хост: без кэша каждая страница стоила бы
+    /// двух запросов.
+    #[tokio::test]
+    async fn robots_is_read_once_per_host() {
+        let (base, seen) = serve_robots(
+            Some(robots("User-agent: *
+Disallow: /private
+")),
+            vec![html("<p>Раз.</p>"), html("<p>Два.</p>")],
+        )
+        .await;
+        let dir = TempDir::new();
+        let (ctx, _ws) = ctx_for(&dir);
+
+        for path in ["one", "two"] {
+            WebFetch
+                .run(&ctx, json!({ "url": format!("{base}/{path}") }))
+                .await
+                .unwrap();
+        }
+
+        let requests = seen.lock().unwrap();
+        let asked = requests
+            .iter()
+            .filter(|r| r.contains("GET /robots.txt"))
+            .count();
+        assert_eq!(asked, 1, "{requests:?}");
+    }
+
+    /// The request goes out under Yaca's own name, not a browser's: what is
+    /// knocking is visible in the site's logs, and a 403 earned honestly is
+    /// better than a page fetched under a false name.
+    #[tokio::test]
+    async fn the_request_names_yaca_in_its_user_agent() {
+        let (base, seen) = serve_seen(vec![html("<p>Текст.</p>")]).await;
+        let dir = TempDir::new();
+        let (ctx, _ws) = ctx_for(&dir);
+
+        WebFetch
+            .run(&ctx, json!({ "url": format!("{base}/page") }))
+            .await
+            .unwrap();
+
+        let request = seen.lock().unwrap().first().cloned().unwrap();
+        let lowered = request.to_lowercase();
+        assert!(
+            lowered.contains("user-agent: yacatraveler/"),
+            "нет заголовка или не то имя:
+{request}"
+        );
+        // Не браузер: строка Mozilla открыла бы больше дверей, но соврав.
+        assert!(!lowered.contains("mozilla"), "{request}");
     }
 
     #[tokio::test]

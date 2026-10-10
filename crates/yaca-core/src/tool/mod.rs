@@ -20,6 +20,7 @@ pub(crate) mod net;
 pub mod glob;
 pub mod grep;
 pub(crate) mod page;
+pub(crate) mod robots;
 pub mod read_file;
 pub mod todo_write;
 pub mod web_fetch;
@@ -101,6 +102,12 @@ pub struct ToolCtx {
     pub events: EventSink,
     pub progress: Progress,
     pub cancel: CancellationToken,
+    /// Соблюдать ли `Disallow` из `robots.txt` (§10).
+    ///
+    /// Уровень приложения, а не проекта: это про то, как Yaca ведёт себя в
+    /// сети, и решает это человек за всю программу. Приезжает полем
+    /// [`crate::SessionConfig`] — той же дорогой, что режим и усилие.
+    pub respect_robots: bool,
 }
 
 impl ToolCtx {
@@ -388,6 +395,7 @@ pub(crate) mod tests_support {
             ws: ws.clone(),
             events,
             cancel: tokio_util::sync::CancellationToken::new(),
+            respect_robots: true,
         };
         (ctx, ws)
     }

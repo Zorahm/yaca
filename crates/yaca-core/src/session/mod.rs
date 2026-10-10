@@ -85,6 +85,13 @@ pub struct SessionConfig {
     /// Needs [`SessionConfig::journal`]: a session with nothing written down
     /// has nothing to come back to.
     pub resume: Option<SessionId>,
+    /// Соблюдать ли `Disallow` из `robots.txt` при загрузке страницы (§10).
+    ///
+    /// Настройка приложения, и потому приезжает сюда, а не читается из
+    /// `.yaca/settings.json`: проект не решает, как Yaca ведёт себя в сети.
+    /// Умолчание — соблюдать; `yaca-cli` его и получает, ничего не зная о
+    /// настройках окна.
+    pub respect_robots: bool,
 }
 
 impl SessionConfig {
@@ -99,6 +106,7 @@ impl SessionConfig {
             effort: Effort::default(),
             journal: true,
             resume: None,
+            respect_robots: true,
         }
     }
 
@@ -218,6 +226,9 @@ struct Shared {
     /// `.yaca/settings.json` as it was when the session opened. Read for what
     /// the core decides on its own — which model summarizes history (§5.11).
     settings: Settings,
+    /// Соблюдать ли `robots.txt` (§10). Из [`SessionConfig`], а не из файла
+    /// проекта: настройка приложения.
+    respect_robots: bool,
 }
 
 impl Shared {
@@ -300,11 +311,15 @@ pub fn spawn(
 
     let events = EventSink::new(event_tx.clone());
     let broker = Broker::new(ws.root());
-    // Standing rules from the project (§5.7). "Always allow" never writes
-    // here — a rule granted in a hurry does not outlive the hurry — so
-    // whatever is in the file was put there on purpose.
+    // Standing rules from the project (§5.7, §10). Neither "Always allow" nor
+    // "Always deny" writes here — a rule granted in a hurry does not outlive
+    // the hurry — so whatever is in the file was put there on purpose, through
+    // the settings window.
     for rule in &settings.permissions.rules {
         broker.grant(rule.clone());
+    }
+    for deny in &settings.permissions.denies {
+        broker.refuse(deny.scope.clone(), deny.reason.clone());
     }
 
     let shared = Arc::new(Shared {
@@ -319,6 +334,7 @@ pub fn spawn(
             ))
         })?,
         broker,
+        respect_robots: config.respect_robots,
         models: config.models.clone(),
         ws: ws.clone(),
         recorder,

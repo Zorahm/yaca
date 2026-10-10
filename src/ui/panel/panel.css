@@ -3,9 +3,11 @@
  * провайдеры §10.
  *
  * Radix держит поведение, здесь только внешний вид из токенов §2. Панель
- * ложится справа поверх ленты: 55% окна, минимум 560 px, фон --paper-raised,
- * граница слева --line, тень. Анимации нет: §2 просит больше движения только
- * для пульса и вращения.
+ * ложится справа поверх ленты: 55% окна, минимум 560 px. Это тот же лист,
+ * что и окно, — фон --paper, а не более светлая плашка: светлее листа в окне
+ * только то, что на нём лежит (поле, кнопка, меню). От ленты панель отделяют
+ * граница слева, тень и приглушённая лента под ней: лента в это время inert
+ * (§14), и вид должен говорить то же. Анимации нет.
  */
 
 .panel {
@@ -18,8 +20,20 @@
   flex-direction: column;
   width: 55%;
   min-width: 560px;
-  background: var(--paper-raised);
-  border-left: 1px solid var(--line);
+  background: var(--paper);
+  border-left: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-panel);
+}
+
+/* Everything under an open panel. None of it can be used while the panel is
+   up, and a thin wash of ink says so. It covers the whole window, sidebar
+   included; the top bar is lifted above it in app.css because its buttons
+   still work. */
+.panel-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
 }
 
 /* Radix в modal ставит body pointer-events: none, и клик мимо панели тонет
@@ -45,8 +59,7 @@
 .panel-title {
   flex: 1;
   min-width: 0;
-  font: 600 13.5px var(--display);
-  letter-spacing: -0.01em;
+  font: 700 14px var(--display);
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
@@ -74,7 +87,7 @@
 
 .panel-error {
   margin: 12px 18px;
-  color: var(--rust);
+  color: var(--red-ink);
   font: 400 12.5px var(--mono);
   user-select: text;
 }
@@ -89,7 +102,7 @@
   padding: 8px 18px;
   border-bottom: 1px solid var(--line);
   /* Липкая шапка §6.4: дифф скроллится в своей области под ней, шапка стоит. */
-  background: var(--paper-raised);
+  background: var(--paper);
 }
 
 .panel-file-moved {
@@ -97,7 +110,7 @@
   align-items: center;
   gap: 4px;
   min-width: 0;
-  font: 400 11px var(--mono);
+  font: 400 11.5px var(--mono);
   color: var(--ink-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -149,24 +162,23 @@
   text-align: left;
 }
 
-/* Наведение — один шаг вглубь, выбранное — два. Кант киноварью слева отсюда
-   убран: акцент тратится на действие и состояние, а рельс вдоль каждой
-   выбранной строки — самый дешёвый приём из всех. */
+/* Те же два шага, что у строки действия в ленте: наведение — лёгкая тень
+   чернил, выбранное — светлая плашка и вес. Цветного канта слева нет. */
 .proc:hover {
-  background: var(--paper);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
 }
 
 .proc[aria-pressed="true"] {
-  background: var(--paper-sunken);
+  background: var(--paper-raised);
 }
 
 .proc[aria-pressed="true"] .proc-cmd {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .proc-num {
   flex: none;
-  font: 400 11px var(--mono);
+  font: 400 11.5px var(--mono);
   color: var(--ink-muted);
 }
 
@@ -180,27 +192,30 @@
   text-overflow: ellipsis;
 }
 
+/* Состояние — слово, а не измерение, и набрано обычным шрифтом. Красным
+   оно становится только у упавшей команды (§2): работающая — чернильная с
+   пульсом, завершённая — серая. */
 .proc-state {
   flex: none;
-  font: 400 11px var(--mono);
+  font-size: 11.5px;
   color: var(--ink-muted);
 }
 
 .proc-state-run {
-  color: var(--vermilion-ink);
+  color: var(--ink);
 }
 
 .proc-state-ok {
-  color: var(--moss);
+  color: var(--ink-muted);
 }
 
 .proc-state-fail {
-  color: var(--rust);
+  color: var(--red-ink);
 }
 
 .proc-time {
   flex: none;
-  font: 400 11px var(--mono);
+  font: 400 11.5px var(--mono);
   color: var(--ink-muted);
 }
 
@@ -222,8 +237,8 @@
 }
 
 .proc-dropped {
-  font: 400 11px var(--mono);
-  color: var(--rust);
+  font: 400 11.5px var(--mono);
+  color: var(--ink-muted);
 }
 
 .proc-output-text {
@@ -239,300 +254,6 @@
   overflow-wrap: anywhere;
   overflow: auto;
   user-select: text;
-}
-
-/* --- §10 панель провайдеров (промежуточный шаг до окна настроек) ---------- */
-
-/* На домашнем экране §9.1 верхней панели нет — панель занимает всю высоту. */
-.panel-cover {
-  top: 0;
-}
-
-.prov-note {
-  margin: 12px 18px 0;
-  padding: 8px 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-m);
-  background: var(--paper-raised);
-  font-size: 12.5px;
-  color: var(--ink-muted);
-}
-
-.prov-toolbar {
-  display: flex;
-  padding: 12px 18px 4px;
-}
-
-.prov {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 18px;
-}
-
-.prov:hover {
-  background: var(--paper);
-}
-
-.prov-main {
-  flex: 1;
-  min-width: 0;
-  text-align: left;
-}
-
-.prov-name {
-  display: block;
-  font-size: 13.5px;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.prov-meta {
-  display: block;
-  font: 400 11px var(--mono);
-  color: var(--ink-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.prov-actions {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 4px;
-}
-
-/* --- форма провайдера ------------------------------------------------------ */
-
-.prov-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 14px 18px 18px;
-}
-
-.prov-form-head {
-  font: 600 15px var(--display);
-  letter-spacing: -0.01em;
-  color: var(--ink);
-}
-
-.prov-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  align-items: end;
-}
-
-.prov-field {
-  display: block;
-  min-width: 0;
-}
-
-.prov-label {
-  display: block;
-  margin-bottom: 4px;
-  font: 400 10.5px var(--mono);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-muted);
-}
-
-.prov-input {
-  width: 100%;
-  height: var(--h-small-button);
-  padding: 0 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-s);
-  background: var(--paper-sunken);
-  font-size: 12.5px;
-  color: var(--ink);
-  user-select: text;
-}
-
-.prov-input:focus {
-  border-color: var(--vermilion-ink);
-  outline: none;
-}
-
-.prov-input-mono {
-  font-family: var(--mono);
-}
-
-/* Форма провода выбирается двумя кнопками (§10). Правил у них не было вовсе, и
-   без заливки два слова читались одним: `anthropicopenai`. Выбранное — залито
-   киноварью: активная метка, наряду с главной кнопкой и знаком, — то, на что
-   заливку и тратят. Имена протоколов моноширинные: это имена формы провода, а
-   не подписи, и в списке провайдеров они стоят тем же шрифтом. */
-.segments {
-  display: flex;
-  gap: 4px;
-}
-
-.segment {
-  display: inline-flex;
-  align-items: center;
-  height: var(--h-small-button);
-  padding: 0 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-pill);
-  color: var(--ink-muted);
-  font: 400 12.5px var(--mono);
-  white-space: nowrap;
-}
-
-.segment:hover {
-  background: var(--paper-sunken);
-  color: var(--ink);
-}
-
-.segment[aria-pressed="true"] {
-  background: var(--vermilion);
-  border-color: var(--vermilion);
-  color: var(--on-vermilion);
-}
-
-/* id существующего провайдера закрыт: он же имя ключа в кейчейне. */
-.prov-input[readonly] {
-  color: var(--ink-muted);
-}
-
-.prov-hint {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--ink-muted);
-}
-
-.prov-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.prov-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.prov-key-input {
-  flex: 1;
-  min-width: 0;
-}
-
-.prov-source {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font: 400 11.5px var(--mono);
-  color: var(--ink-muted);
-}
-
-.prov-source-ok {
-  color: var(--moss);
-}
-
-.prov-source-warn {
-  color: var(--rust);
-}
-
-.prov-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.prov-headers-grid {
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr) 52px 26px;
-  gap: 6px;
-  align-items: center;
-}
-
-.prov-headers-head {
-  font: 400 10.5px var(--mono);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-muted);
-}
-
-/* Значение заголовка уезжает в открытый JSON, ключ — нет: место, где стоит
-   {key}, помечено им самим (§0). */
-.prov-key-mark {
-  font: 500 11px var(--mono);
-  color: var(--vermilion-ink);
-  text-align: center;
-}
-
-/* Список моделей §10: строки не правятся — их прислал провайдер. */
-.prov-models-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.prov-models-note {
-  font-size: 12px;
-  color: var(--ink-muted);
-}
-
-.prov-model-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 72px 72px 110px 56px;
-  gap: 8px;
-  align-items: baseline;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  background: var(--paper-raised);
-}
-
-.prov-model-name {
-  font-size: 12.5px;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.prov-model-id {
-  font: 400 11.5px var(--mono);
-  color: var(--ink-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.prov-model-num {
-  font: 400 11.5px var(--mono);
-  color: var(--ink-muted);
-  text-align: right;
-  white-space: nowrap;
-}
-
-.prov-model-flag {
-  font: 400 11px var(--mono);
-  color: var(--vermilion-ink);
-  text-align: right;
-  white-space: nowrap;
-}
-
-.prov-problems {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font: 400 12.5px var(--mono);
-  color: var(--rust);
-  user-select: text;
-}
-
-.prov-form-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
 }
 
 /* --- панель чекпоинтов §1.1 --------------------------------------------- */
@@ -554,11 +275,11 @@
 }
 
 .ckpt-row:hover {
-  background: var(--paper);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
 }
 
 .ckpt-row[aria-expanded="true"] {
-  background: var(--paper-sunken);
+  background: var(--paper-raised);
 }
 
 .ckpt-row[aria-expanded="true"] .ckpt-time {
@@ -569,7 +290,7 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  color: var(--vermilion);
+  color: var(--ink-muted);
 }
 
 .ckpt-time {
@@ -581,7 +302,7 @@
 .ckpt-reason {
   flex: 1;
   min-width: 0;
-  font: 400 12px var(--mono);
+  font-size: 12.5px;
   color: var(--ink-muted);
   white-space: nowrap;
   overflow: hidden;

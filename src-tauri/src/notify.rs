@@ -50,7 +50,10 @@ pub async fn watch(app: AppHandle, mut events: Receiver<AgentEvent>, stop: Cance
 
             received = events.recv() => match received {
                 Ok(event) => {
-                    let request = unattended(focused(&app), &event);
+                    // Both asked at event time rather than tracked: the
+                    // setting can be switched in the other window mid-turn,
+                    // and a copy taken at subscribe time would be stale.
+                    let request = unattended(enabled(&app), focused(&app), &event);
                     if let Some(request) = request {
                         push(&app, &request.target);
                     }
@@ -65,20 +68,25 @@ pub async fn watch(app: AppHandle, mut events: Receiver<AgentEvent>, stop: Cance
     }
 }
 
-/// Decides whether an event warrants a notification: a pure function of two
-/// pieces of data — window focus and the kind of event. Separated from
-/// delivery so the test argues with it, not with the OS.
+/// Decides whether an event warrants a notification: a pure function of three
+/// pieces of data — the setting (§10), window focus and the kind of event.
+/// Separated from delivery so the test argues with it, not with the OS.
 ///
 /// `Some` carries the request itself: its `target` is what the human reads
 /// on the toast.
-fn unattended(focused: bool, event: &AgentEvent) -> Option<&PermissionRequest> {
-    if focused {
+fn unattended(enabled: bool, focused: bool, event: &AgentEvent) -> Option<&PermissionRequest> {
+    if !enabled || focused {
         return None;
     }
     match event {
         AgentEvent::PermissionRequested { request } => Some(request),
         _ => None,
     }
+}
+
+/// Whether the human asked for toasts at all (§10).
+fn enabled(app: &AppHandle) -> bool {
+    app.state::<crate::state::AppState>().prefs().notifications
 }
 
 /// Whether the main window is focused. The window answers for itself; not
@@ -170,14 +178,14 @@ mod tests {
     /// Window minimized or unfocused — a permission request makes noise.
     #[test]
     fn unfocused_request_notifies() {
-        assert!(unattended(false, &permission("cargo test")).is_some());
+        assert!(unattended(true, false, &permission("cargo test")).is_some());
     }
 
     /// The window is being watched — the inline block is seen on its own,
     /// a toast would be a duplicate.
     #[test]
     fn focused_request_stays_silent() {
-        assert!(unattended(true, &permission("cargo test")).is_none());
+        assert!(unattended(true, true, &permission("cargo test")).is_none());
     }
 
     /// Only a permission request: other events require no noise even
@@ -201,15 +209,22 @@ mod tests {
             },
         ];
         for event in &events {
-            assert!(unattended(false, event).is_none(), "{event:?}");
+            assert!(unattended(true, false, event).is_none(), "{event:?}");
         }
+    }
+
+    /// Switched off in §10 — silent even unfocused. The inline block in the
+    /// feed still waits; only the toast goes away.
+    #[test]
+    fn a_switched_off_setting_silences_an_unfocused_request() {
+        assert!(unattended(false, false, &permission("cargo test")).is_none());
     }
 
     /// The toast carries what the human will read — the request target.
     #[test]
     fn toast_carries_request_target() {
         assert_eq!(
-            unattended(false, &permission("git commit")).unwrap().target,
+            unattended(true, false, &permission("git commit")).unwrap().target,
             "git commit"
         );
     }

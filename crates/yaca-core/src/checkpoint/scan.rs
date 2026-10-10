@@ -32,7 +32,7 @@ use super::store::Store;
 /// take from it. A project that dropped `.yaca` would be snapshotting its own
 /// snapshots, and one that dropped `.git` would keep a second copy of every
 /// file it has.
-const EXCLUDED_DIRS: &[&str] = &[
+pub(crate) const EXCLUDED_DIRS: &[&str] = &[
     // Yaca's own data, the shadow store included: snapshotting the snapshots
     // is the one certain way to make the store grow without bound. Under the
     // old name too: a folder whose move failed is used where it is
@@ -60,6 +60,16 @@ const EXCLUDED_DIRS: &[&str] = &[
     ".parcel-cache",
     ".gradle",
 ];
+
+/// The built-in list, for anyone who has to show it.
+///
+/// The settings window (§10) draws these beside the project's own additions:
+/// a human who cannot see that `target` is already excluded adds it again, and
+/// a second copy of the list in the window would be a second thing to keep in
+/// step with this one.
+pub fn excluded_dirs() -> &'static [&'static str] {
+    EXCLUDED_DIRS
+}
 
 /// Files above this are not tracked, and therefore never deleted by a rollback:
 /// a rollback that removed what it had not saved would be worse than no

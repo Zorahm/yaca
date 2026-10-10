@@ -6,7 +6,16 @@
  * живут отдельно: там своё состояние.
  */
 
-import { Brain, CaretDown, CaretRight, Check, Circle } from "@phosphor-icons/react";
+import {
+  ArrowClockwise,
+  Brain,
+  CaretDown,
+  CaretRight,
+  Check,
+  Circle,
+  Copy,
+  PencilSimple,
+} from "@phosphor-icons/react";
 import { useState } from "react";
 
 import type { FeedBlock } from "../core/feed";
@@ -15,8 +24,29 @@ import { t, type Key } from "../i18n";
 import { reasonText, willDo } from "./checkpoint";
 import { timeOf, tokens } from "./format";
 import { Markdown } from "./Markdown";
+import { useCopy } from "./useCopy";
 
-export function HumanMessage({ text, attachments }: { text: string; attachments: string[] }) {
+/**
+ * §5.1. The message stands at the right edge of the column as a slip of
+ * lighter paper, with its actions under it: copy, send again, edit.
+ *
+ * Edit is drawn disabled and says why in its title. The core has no command
+ * that forks a conversation at a message, and a live button that does nothing
+ * would lie about that (§0); a disabled one with a reason does not. It is
+ * listed in README under what is missing.
+ */
+export function HumanMessage({
+  text,
+  attachments,
+  onResend,
+}: {
+  text: string;
+  attachments: string[];
+  onResend: (text: string, attachments: string[]) => void;
+}) {
+  const { copied, copy } = useCopy();
+  const copyLabel = t(copied ? "feed.copied" : "feed.copy");
+
   return (
     <>
       <div className="label label-you">{t("feed.you")}</div>
@@ -31,6 +61,34 @@ export function HumanMessage({ text, attachments }: { text: string; attachments:
           </div>
         )}
         {text}
+      </div>
+      {/* Icons without captions, so each needs a name (§14); `title` gives the
+          same to the mouse. */}
+      <div className="human-acts">
+        <button
+          className="human-act"
+          aria-label={copyLabel}
+          title={copyLabel}
+          onClick={() => copy(text)}
+        >
+          {copied ? <Check size={13} weight="bold" /> : <Copy size={13} />}
+        </button>
+        <button
+          className="human-act"
+          aria-label={t("feed.resend")}
+          title={t("feed.resend")}
+          onClick={() => onResend(text, attachments)}
+        >
+          <ArrowClockwise size={13} />
+        </button>
+        <button
+          className="human-act"
+          aria-label={t("feed.edit_missing")}
+          title={t("feed.edit_missing")}
+          disabled
+        >
+          <PencilSimple size={13} />
+        </button>
       </div>
     </>
   );

@@ -42,6 +42,11 @@ import type { Span } from "./bindings/Span";
 import type { Protocol } from "./bindings/Protocol";
 import type { ProviderSpec } from "./bindings/ProviderSpec";
 import type { Providers } from "./bindings/Providers";
+import type { Language } from "./bindings/Language";
+import type { Preferences } from "./bindings/Preferences";
+import type { Theme } from "./bindings/Theme";
+import type { Refusal } from "./bindings/Refusal";
+import type { Settings } from "./bindings/Settings";
 import type { Startup } from "./bindings/Startup";
 import type { TodoItem } from "./bindings/TodoItem";
 import type { ToolMeta } from "./bindings/ToolMeta";
@@ -49,6 +54,11 @@ import type { UsageSnapshot } from "./bindings/UsageSnapshot";
 
 export type {
   AgentEvent,
+  Language,
+  Preferences,
+  Theme,
+  Refusal,
+  Settings,
   CheckpointChange,
   CheckpointId,
   CheckpointSummary,
@@ -370,6 +380,7 @@ export const providers = {
       const at = demoRegistry.list.findIndex((p) => p.id === spec.id);
       if (at === -1) demoRegistry.list.push(spec);
       else demoRegistry.list[at] = spec;
+      demoProvidersHandler?.();
       return Promise.resolve(demoProviders());
     }
     return invoke<Providers>("save_provider", { spec });
@@ -380,6 +391,7 @@ export const providers = {
         return Promise.reject("предустановленный провайдер не удаляется");
       }
       demoRegistry.list = demoRegistry.list.filter((p) => p.id !== id);
+      demoProvidersHandler?.();
       return Promise.resolve(demoProviders());
     }
     return invoke<Providers>("delete_provider", { id });
@@ -566,3 +578,160 @@ export const commands = {
   compact: (): Command => ({ type: "compact" }),
   editSummary: (text: string): Command => ({ type: "editSummary", text }),
 };
+
+// --- настройки §10 ----------------------------------------------------------
+
+/** Канал настроек приложения. Одно имя на оба окна: см. `prefs.rs`. */
+const PREFS_CHANNEL = "yaca://preferences";
+
+/** Канал «список провайдеров изменился» — см. `providers.rs`. */
+const PROVIDERS_CHANNEL = "yaca://providers";
+
+/**
+ * Подписка на правку провайдеров в соседнем окне.
+ *
+ * Полезной нагрузки нет: список перечитывается целиком. Слать его событием
+ * значило бы завести второй путь, которым он попадает в окно, и первое же
+ * расхождение между путями стало бы разницей в переключателе моделей.
+ */
+export function onProviders(handler: () => void): Promise<UnlistenFn> {
+  if (!inTauri) {
+    demoProvidersHandler = handler;
+    return Promise.resolve(() => {
+      if (demoProvidersHandler === handler) demoProvidersHandler = null;
+    });
+  }
+  return listen<null>(PROVIDERS_CHANNEL, () => handler());
+}
+
+let demoProvidersHandler: (() => void) | null = null;
+
+/**
+ * Умолчания настроек приложения — те же, что в `prefs.rs`.
+ *
+ * Нужны стенду и первому кадру: окно рисуется до того, как оболочка ответит,
+ * и рисовать его нечем было бы. Значения повторены здесь не от хорошей жизни —
+ * ts-rs переносит типы, но не `impl Default`, — поэтому они обязаны совпадать
+ * с Rust, и тест `prefs.test.ts` за этим следит.
+ */
+export const DEFAULT_PREFS: Preferences = {
+  theme: "paper",
+  lineNumbers: true,
+  compact: false,
+  language: "system",
+  notifications: true,
+  respectRobots: true,
+};
+
+/** В стенде оболочки нет, и настройки живут в памяти страницы. */
+let demoPrefs: Preferences = { ...DEFAULT_PREFS };
+let demoPrefsHandler: ((prefs: Preferences) => void) | null = null;
+
+export function preferences(): Promise<Preferences> {
+  return inTauri ? invoke<Preferences>("preferences") : Promise.resolve({ ...demoPrefs });
+}
+
+/** Пишет настройки и рассылает их по окнам — обоим (§0). */
+export function setPreferences(prefs: Preferences): Promise<void> {
+  if (!inTauri) {
+    demoPrefs = { ...prefs };
+    demoPrefsHandler?.({ ...prefs });
+    return Promise.resolve();
+  }
+  return invoke<void>("set_preferences", { prefs });
+}
+
+/** Подписка на чужую правку настроек: второе окно меняет вид этого. */
+export function onPreferences(
+  handler: (prefs: Preferences) => void,
+): Promise<UnlistenFn> {
+  if (!inTauri) {
+    demoPrefsHandler = handler;
+    return Promise.resolve(() => {
+      if (demoPrefsHandler === handler) demoPrefsHandler = null;
+    });
+  }
+  return listen<Preferences>(PREFS_CHANNEL, (e) => handler(e.payload));
+}
+
+/**
+ * Открывает окно настроек (§10), или поднимает уже открытое.
+ *
+ * В стенде второго окна взять негде, и вместо него открывается та же страница
+ * настроек в этой вкладке: кнопка, ведущая туда же, куда ведёт в приложении,
+ * честнее погашенной.
+ */
+export function openSettings(): Promise<void> {
+  if (!inTauri) {
+    window.location.href = "/settings.html";
+    return Promise.resolve();
+  }
+  return invoke<void>("open_settings");
+}
+
+/** Пустые настройки проекта — форма, с которой начинается несохранённый файл. */
+export function emptySettings(): Settings {
+  return {
+    mode: null,
+    provider: null,
+    model: null,
+    compactModel: null,
+    permissions: { rules: [], denies: [] },
+    shadow: { exclude: [] },
+  };
+}
+
+/** В стенде настройки проекта живут в памяти страницы, как и список проектов. */
+let demoSettings: Settings = emptySettings();
+
+/** Настройки проекта (§10). Битый файл приезжает отказом, а не пустотой. */
+export function projectSettings(project: string): Promise<Settings> {
+  if (!inTauri) return Promise.resolve(structuredClone(demoSettings));
+  return invoke<Settings>("project_settings", { project });
+}
+
+/** Пишет `.yaca/settings.json` целиком. */
+export function saveProjectSettings(project: string, settings: Settings): Promise<void> {
+  if (!inTauri) {
+    demoSettings = structuredClone(settings);
+    return Promise.resolve();
+  }
+  return invoke<void>("save_project_settings", { project, settings });
+}
+
+/**
+ * Каталоги, в которые снимок §5.8 не заходит никогда.
+ *
+ * Спрашиваются у ядра, а не записаны здесь: список его, и копия во фронтенде
+ * разошлась бы с ним на первом же добавлении.
+ */
+export function shadowExcludedDirs(): Promise<string[]> {
+  if (!inTauri) return Promise.resolve([".yaca", ".git", "node_modules", "target"]);
+  return invoke<string[]>("shadow_excluded_dirs");
+}
+
+/** Какой файл инструкций у проекта в силе (§10), или `null`. */
+export function projectInstructions(project: string): Promise<string | null> {
+  if (!inTauri) return Promise.resolve("CLAUDE.md");
+  return invoke<string | null>("project_instructions", { project });
+}
+
+/** Ключ веб-поиска лежит в кейчейне под этим именем — см. `secrets.rs`. */
+export const SEARCH_KEY_ITEM = "tavily";
+
+/**
+ * Откуда взялся ключ веб-поиска (§10).
+ *
+ * Своя команда, не `apiKeySource`: Tavily не провайдер, и общая ответила бы
+ * «нет в списке» про ключ, который лежит в кейчейне.
+ */
+export function searchKeySource(): Promise<KeySource> {
+  if (!inTauri) return Promise.resolve("none");
+  return invoke<KeySource>("search_key_source");
+}
+
+/** Отказ без причины: `null`, а не пустая строка — так пишет ядро. */
+export function refusal(scope: ScopeKey, reason: string): Refusal {
+  const trimmed = reason.trim();
+  return { scope, reason: trimmed === "" ? null : trimmed };
+}
