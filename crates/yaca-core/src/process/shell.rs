@@ -119,6 +119,9 @@ pub fn spawn(command: &str, cwd: &Path) -> std::io::Result<Spawned> {
 /// it — so there is nothing here to quote.
 ///
 /// * Progress bars are off: with no console they arrive as XML on stderr.
+/// * No colour. PowerShell 7 paints its errors with escape sequences, and the
+///   feed would show `[31;1m` where the message starts. 5.1 has no `$PSStyle`
+///   and nothing to turn off.
 /// * Output is UTF-8. Left alone it is the machine's OEM codepage, and the
 ///   feed would show mojibake for every message in Russian (§0).
 /// * The command comes out of the environment and is removed from it before
@@ -127,6 +130,7 @@ pub fn spawn(command: &str, cwd: &Path) -> std::io::Result<Spawned> {
 ///   `At line:1` counted in the command itself.
 #[cfg(windows)]
 const BOOT: &str = "$ProgressPreference='SilentlyContinue';\
+if($PSStyle){$PSStyle.OutputRendering='PlainText'};\
 [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false);\
 $OutputEncoding=[Console]::OutputEncoding;\
 $c=$env:YACA_COMMAND;Remove-Item Env:YACA_COMMAND;\
@@ -261,11 +265,23 @@ mod tests {
     async fn a_cmdlet_that_fails_last_fails_the_command() {
         let (code, out) = run("Get-Item no-such-file-here").await;
         assert_eq!(code, Some(1));
-        // Plain text, with the line counted in the command and not in what
-        // we wrap it in.
+        // Plain text, whichever PowerShell it is: 5.1 would send XML if the
+        // command arrived encoded, and 7 paints its errors unless told not to.
         assert!(out.contains("no-such-file-here"), "{out}");
         assert!(!out.contains("CLIXML"), "{out}");
-        assert!(out.contains(":1 "), "{out}");
+        assert!(!out.contains('\u{1b}'), "{out:?}");
+    }
+
+    #[tokio::test]
+    async fn chaining_works_the_way_the_prompt_says_it_does() {
+        // The system prompt tells the model which of the two it may write.
+        let chained = match powershell() {
+            PowerShell::Core => "Write-Output a && Write-Output b",
+            PowerShell::Windows => "Write-Output a; if ($?) { Write-Output b }",
+        };
+        let (code, out) = run(chained).await;
+        assert_eq!(code, Some(0), "{out}");
+        assert_eq!(out.split_whitespace().collect::<Vec<_>>(), vec!["a", "b"]);
     }
 
     #[tokio::test]
