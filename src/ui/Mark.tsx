@@ -5,7 +5,7 @@
  * paint time, so it follows the theme, and it stays sharp at whatever size the
  * screen hands it.
  *
- * The filled square is the one vermilion fill the home screen gets — the mark
+ * The filled square is the one solid ink fill the home screen gets — the mark
  * is a знак, and the system spends the accent on знак, one button, and the
  * active label.
  *
@@ -31,7 +31,7 @@ export function Mark({ size = BOX }: { size?: number }) {
         width={BOX - 1}
         height={BOX - 1}
         rx="9.5"
-        fill="var(--vermilion)"
+        fill="var(--ink)"
       />
       <text
         // Mirrored by the transform, not by a mirrored glyph: the font stays
@@ -43,8 +43,8 @@ export function Mark({ size = BOX }: { size?: number }) {
         dominantBaseline="central"
         fontFamily="var(--display)"
         fontSize="22"
-        fontWeight="600"
-        fill="var(--on-vermilion)"
+        fontWeight="700"
+        fill="var(--paper)"
       >
         C
       </text>

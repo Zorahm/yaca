@@ -20,6 +20,7 @@ pub(crate) mod net;
 pub mod glob;
 pub mod grep;
 pub(crate) mod page;
+pub(crate) mod robots;
 pub mod read_file;
 pub mod read_image;
 pub mod task;
@@ -110,6 +111,12 @@ pub struct ToolCtx {
     pub agents: Option<Subagents>,
     /// Whether the model that made the call can be shown an image.
     pub vision: bool,
+    /// Соблюдать ли `Disallow` из `robots.txt` (§10).
+    ///
+    /// Уровень приложения, а не проекта: это про то, как Yaca ведёт себя в
+    /// сети, и решает это человек за всю программу. Приезжает полем
+    /// [`crate::SessionConfig`] — той же дорогой, что режим и усилие.
+    pub respect_robots: bool,
 }
 
 impl ToolCtx {
@@ -424,6 +431,7 @@ pub(crate) mod tests_support {
             cancel: tokio_util::sync::CancellationToken::new(),
             agents: None,
             vision: true,
+            respect_robots: true,
         };
         (ctx, ws)
     }

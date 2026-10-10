@@ -3,8 +3,15 @@
 //! Two things live here that the policy table cannot express. First, the wait:
 //! §5.7 says there is no timeout, so a pending question blocks its own tool
 //! call and nothing else — the composer keeps working, and `Esc` still stops
-//! the turn. Second, the session rules set by "Always allow" and "Always deny",
-//! which are deliberately in memory only.
+//! the turn. Second, the standing rules.
+//!
+//! The broker itself holds those rules in memory and nothing else: it neither
+//! reads nor writes a file. Two roads lead into it. "Always allow" and
+//! "Always deny" in the feed reach only this table and die with the session —
+//! a rule granted in a hurry does not outlive the hurry (§5.7). What was put
+//! in `.yaca/settings.json` through the settings window (§10) is poured in at
+//! spawn, before the first question. Which road a rule came by does not change
+//! how it is applied.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -12,7 +19,7 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::oneshot;
 
-use super::{PermissionAnswer, PermissionNeed, ScopeKey};
+use super::{PermissionAnswer, PermissionNeed, Refusal, ScopeKey};
 use crate::id::RequestId;
 
 #[derive(Debug, Default)]
@@ -23,14 +30,6 @@ struct Inner {
     rules: Vec<ScopeKey>,
     /// Rules set through "Always deny". Session-lived, like the grants.
     refusals: Vec<Refusal>,
-}
-
-/// A standing "no" and the note that goes to the agent with every call it
-/// refuses.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Refusal {
-    pub scope: ScopeKey,
-    pub reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

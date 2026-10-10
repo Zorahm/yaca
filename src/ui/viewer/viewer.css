@@ -184,14 +184,14 @@
   width: 18px;
   height: 18px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border-radius: 50%;
   background: var(--paper-raised);
   color: var(--ink-muted);
 }
 
 .tile-drop:hover {
-  border-color: var(--rust);
-  color: var(--rust);
+  border-color: var(--red-ink);
+  color: var(--red-ink);
 }
 
 /* --- картинка в раскрытой строке `ReadImage` ----------------------------- */

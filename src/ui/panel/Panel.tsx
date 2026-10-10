@@ -25,22 +25,20 @@ export function Panel({
   onOpenChange,
   title,
   children,
-  className,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Заголовок и доступное имя панели (§14): путь у файла, слово у списков. */
   title: ReactNode;
   children: ReactNode;
-  /** Модификатор каркаса: на домашнем экране (§9.1) верхней панели нет,
-      и панель `panel-cover` занимает всю высоту окна. */
-  className?: string;
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange} modal={true}>
       <Dialog.Portal>
+        {/* The wash over everything the open panel makes inert (§14). */}
+        <Dialog.Overlay className="panel-scrim" />
         <Dialog.Content
-          className={className === undefined ? "panel" : `panel ${className}`}
+          className="panel"
           aria-describedby={undefined}
           onInteractOutside={(event) => {
             const target = event.target;

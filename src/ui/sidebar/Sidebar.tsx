@@ -38,13 +38,12 @@ export function Sidebar({
   activeId,
   current,
   reload,
-  providersOpen,
   onNewChat,
   onOpenSession,
   onCloseChat,
   onAddProject,
   onForgetProject,
-  onOpenProviders,
+  onOpenSettings,
 }: {
   /** Projects the window knows about (§9.1), freshest first. */
   projects: string[];
@@ -55,13 +54,13 @@ export function Sidebar({
   current: string | null;
   /** Changes when the store could have — reopen, rename, finished turn. */
   reload: string;
-  providersOpen: boolean;
   onNewChat: (project: string) => void;
   onOpenSession: (project: string, id: SessionId) => void;
   onCloseChat: (id: SessionId) => void;
   onAddProject: () => void;
   onForgetProject: (project: string) => void;
-  onOpenProviders: () => void;
+  /** Кнопка подвала ведёт в окно настроек §10, не в панель. */
+  onOpenSettings: () => void;
 }) {
   const [typed, setTyped] = useState("");
   const [query, setQuery] = useState("");
@@ -147,18 +146,13 @@ export function Sidebar({
           {t("side.add_project")}
         </button>
 
-        {/* Trigger of drawer §1.1: the attribute is what makes a second click
-            close the panel instead of reopening it (§1.1). */}
-        <button
-          className="side-row"
-          data-panel-trigger
-          aria-pressed={providersOpen}
-          onClick={onOpenProviders}
-        >
+        {/* Окно §10, а не панель: настройки переживают разговор, и их
+            открывают, не закрывая ленту. */}
+        <button className="side-row" onClick={onOpenSettings}>
           <span className="side-icon" aria-hidden="true">
             <Gear size={15} />
           </span>
-          {t("prov.title")}
+          {t("set.title")}
         </button>
       </div>
     </nav>

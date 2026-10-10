@@ -1,24 +1,104 @@
 /*
- * Токены §2.
+ * Tokens §2, redesign trial: the proof.
  *
- * Значения больше не из прототипа: они из дизайн-системы ZorahM — тёплая
- * бумага, плотная типографика, один громкий акцент (киноварь).
+ * The window is a galley proof: warm paper, black type, and one red pencil.
+ * Red is not decoration and not the brand; it is the corrector's mark, and it
+ * goes only where your eye is needed — a request waiting for an answer, a
+ * failure, a removed line. The main button is ink, not red, so that pressing
+ * it never looks like an alarm. Green exists for one job: added lines.
  *
- * Имена — системные: paper / ink / vermilion. Двадцать восемь цветов
- * прототипа сведены к десяти, потому что разницы между --text-agent,
- * --text-strong и --text-body не видел никто, а выбирать между ними
- * приходилось при каждом новом элементе.
+ * Names: paper / ink / red / green. Nothing else carries meaning by hue;
+ * everything else is weight, size and position.
  *
- * Тем две. Ночь — по умолчанию, Бумага — под `data-theme="light"`.
- * Переключателя пока нет: он приедет с окном настроек §10 вместе с
- * остальным внешним видом (README, «Чего нет»).
+ * Two editions. Paper is the default; Night lives under `data-theme="dark"`.
+ * Everything a person chooses stands as an attribute on `<html>` and changes
+ * without a reload: `data-theme`, `data-compact`, `data-line-numbers`. They
+ * are set by `src/ui/prefs.ts` from the application's preferences (§10).
  */
 
 :root {
-  /* Ночь. Скроллбары и системные контролы вебвью должны знать тему. */
-  color-scheme: dark;
+  /* Scrollbars and native controls of the webview need to know the edition. */
+  color-scheme: light;
 
-  /* --- цвет ----------------------------------------------------------- */
+  /* --- colour --------------------------------------------------------- */
+
+  --paper: #f3eee2;
+  --paper-raised: #fbf8f1;
+  --paper-sunken: #e8e1d2;
+
+  --line: #d6ccba;
+  --line-strong: #857a69;
+
+  --ink: #1b1a17;
+  --ink-muted: #5e564a;
+
+  /* The red pencil. `--red` is a fill for small marks, `--red-ink` the same
+     pencil as text or a rule: the fill alone does not reach 4.5:1 as text. */
+  --red: #c8321f;
+  --red-ink: #ab2917;
+
+  --green: #2f6b45;
+
+  /* The side column is the same paper one step darker; the open chat is the
+     lighter slip lying on it. */
+  --rail-fill: #e8e1d2;
+  --rail-fill-deep: #dcd3c0;
+  --rail-line: #cdc2ad;
+  --on-rail-muted: #5e564a;
+
+  /* Syntax (§6.3). Two tones and weight, like a set page: ink, a sepia for
+     literals, grey for what can be skipped. Class mapping lives in
+     syntax.css. */
+  --syntax-keyword: #1b1a17;
+  --syntax-type: #5e564a;
+  --syntax-string: #7a4a14;
+  --syntax-number: #7a4a14;
+  --syntax-function: #1b1a17;
+  --syntax-operator: #5e564a;
+  --syntax-comment: #645c4e;
+  --syntax-tag: #1b1a17;
+  --syntax-property: #5e564a;
+
+  /* --- type ----------------------------------------------------------- */
+
+  /* One sans for every voice. `--display` stays as a name because headers ask
+     for it; it is the same family, heavier. */
+  --sans: Onest, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --display: var(--sans);
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+
+  /* --- geometry ------------------------------------------------------- */
+
+  /* Two radii: 3 for what is set into the page, 6 for what can be pressed. */
+  --radius-s: 3px;
+  --radius-m: 6px;
+
+  --h-top: 44px;
+  --h-bar: 40px;
+  --h-row: 32px;
+  --h-row-button: 24px;
+  --h-small-button: 28px;
+  --h-button: 30px;
+  /* Ceiling of an opened row's content: past it the block scrolls (§5.5.1). */
+  --h-action-content: 380px;
+
+  /* Diff line height: 22, compact 20 (§6.3). */
+  --diff-line: 22px;
+  /* Gutter width: 52 with numbers, 14 without (§2, showLineNumbers). */
+  --gutter: 52px;
+
+  /* The margin rule runs down the left of the feed (see feed.css). */
+  --route-x: 30px;
+  --route-gutter: 56px;
+
+  --shadow-pop: 0 8px 24px -6px rgb(27 26 23 / 0.22), 0 1px 2px rgb(27 26 23 / 0.12);
+  /* The edge of a slide-over panel, thrown onto the feed to its left. */
+  --shadow-panel: -18px 0 36px -22px rgb(27 26 23 / 0.45);
+}
+
+/* Night. Same names, other values: components do not know the edition. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
 
   --paper: #16130f;
   --paper-raised: #211d18;
@@ -30,105 +110,31 @@
   --ink: #f2ece2;
   --ink-muted: #a89d8c;
 
-  /* Киноварь — только заливка: одна главная кнопка на экран, активная метка,
-     точка работающего действия. Как цвет текста она не проходит 4.5:1, для
-     текста есть --vermilion-ink. */
-  --vermilion: #ff5a3c;
-  --vermilion-hover: #ff7455;
-  --on-vermilion: #16130f;
-  --vermilion-ink: #ff7a61;
+  --red: #ff5a3c;
+  --red-ink: #ff7a61;
 
-  /* Сверх системы: ей хватает одного акцента, а диффу нужна пара «+/−».
-     Киноварью её не выразить — §2 запрещает кодировать смысл акцентом, — и
-     обе глуше киновари, чтобы «Разрешить» и «Не удалось» не звучали
-     одинаково громко. */
-  --moss: #79b98c;
-  --rust: #d98b73;
+  --green: #79b98c;
 
-  /* Подсветка синтаксиса (§6.3). Приглушённая и тёплая: она работает и на
-     голой бумаге, и на подложках диффа, и не должна соперничать с киноварью.
-     Раскладка по имена́м классов — в syntax.css. */
-  --syntax-keyword: #ff8a6e;
-  --syntax-type: #ddaa55;
-  --syntax-string: #a3c58a;
-  --syntax-number: #7fb8c9;
-  --syntax-function: #e8cf8b;
+  --rail-fill: #1b1814;
+  --rail-fill-deep: #2a251f;
+  --rail-line: #3a332a;
+  --on-rail-muted: #a89d8c;
+
+  --syntax-keyword: #f2ece2;
+  --syntax-type: #a89d8c;
+  --syntax-string: #d9b27c;
+  --syntax-number: #d9b27c;
+  --syntax-function: #f2ece2;
   --syntax-operator: #a89d8c;
-  --syntax-comment: #776d5e;
-  --syntax-tag: #ff8a6e;
-  --syntax-property: #c9b8a0;
-  --syntax-invalid: #e5624a;
+  --syntax-comment: #9a8f7d;
+  --syntax-tag: #f2ece2;
+  --syntax-property: #a89d8c;
 
-  /* --- типографика ---------------------------------------------------- */
-
-  /* Unbounded звучит там, где не работают: домашний экран, заголовок сессии,
-     шапки панелей. В ленте его нет — там читают. */
-  --display: Unbounded, "Arial Black", system-ui, sans-serif;
-  --sans: Onest, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
-
-  /* --- геометрия ------------------------------------------------------ */
-
-  /* Было шесть радиусов: 4, 6, 7, 8, 9, 10. Разницу между 6 и 7 не видит
-     никто, а помнить её приходилось при каждой новой кнопке. */
-  --radius-s: 4px;
-  --radius-m: 10px;
-  --radius-pill: 999px;
-
-  --h-top: 48px;
-  --h-bar: 44px;
-  --h-row: 42px;
-  --h-row-button: 26px;
-  --h-small-button: 28px;
-  --h-button: 32px;
-  /* Потолок содержимого раскрытой строки: дальше блок скроллится сам (§5.5.1). */
-  --h-action-content: 380px;
-
-  /* Высота строки диффа: 24, в компактном режиме 20 (§6.3). */
-  --diff-line: 24px;
-  /* Ширина жёлоба: 52 с номерами, 14 без (§2, пропс showLineNumbers). */
-  --gutter: 52px;
+  --shadow-pop: 0 10px 28px -6px rgb(0 0 0 / 0.6), 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-panel: -18px 0 36px -18px rgb(0 0 0 / 0.75);
 }
 
-/* Бумага. Те же имена, другие значения: компоненты о теме не знают. */
-:root[data-theme="light"] {
-  color-scheme: light;
-
-  --paper: #f4efe6;
-  --paper-raised: #fbf8f2;
-  --paper-sunken: #e9e1d3;
-
-  --line: #d9cfbf;
-  --line-strong: #8a7f70;
-
-  --ink: #1a1611;
-  --ink-muted: #5c5347;
-
-  --vermilion: #ff4d2e;
-  --vermilion-hover: #ff3d1b;
-  --on-vermilion: #1a1611;
-  --vermilion-ink: #b3301a;
-
-  /* Темнее системного зелёного: знак `+` лежит не на чистой бумаге, а на
-     своей подложке в 14%, и на ней #2c6e49 давал 3.94 при нужных 4.5. */
-  --moss: #255c3f;
-  --rust: #8a3f2a;
-
-  /* Те же десять ролей подсветки, но темнее: бумага светлая, и тёмный тон
-     обязан держать 4.5:1 даже под подложкой диффа. */
-  --syntax-keyword: #b3301a;
-  --syntax-type: #8a6410;
-  --syntax-string: #2f6b3a;
-  --syntax-number: #1e6178;
-  --syntax-function: #8a5a10;
-  --syntax-operator: #5c5347;
-  --syntax-comment: #857a6b;
-  --syntax-tag: #b3301a;
-  --syntax-property: #6b5f52;
-  --syntax-invalid: #b3301a;
-}
-
-/* Компактный режим и номера строк — пропсы прототипа (§2). */
+/* Compact mode and line numbers are prototype props (§2). */
 :root[data-compact="on"] {
   --diff-line: 20px;
 }
@@ -136,7 +142,7 @@
   --gutter: 14px;
 }
 
-/* --- сброс ------------------------------------------------------------ */
+/* --- reset ------------------------------------------------------------ */
 
 *,
 *::before,
@@ -155,11 +161,18 @@ body {
   background: var(--paper);
   color: var(--ink);
   font: 400 13.5px/1.55 var(--sans);
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
-  /* Окно приложения, а не документ: выделять интерфейс мышью незачем,
-     текст ленты выделяется своим правилом ниже. */
+  caret-color: var(--ink);
+  /* An application window, not a document: there is no reason to select the
+     chrome. Feed text opts back in with its own rule. */
   user-select: none;
   overflow: hidden;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--ink) 16%, transparent);
+  color: var(--ink);
 }
 
 button {
@@ -179,15 +192,15 @@ textarea {
   border: none;
 }
 
-/* §14: видимый фокус на всех интерактивных элементах. Кольцо — сплошное 2px
-   с отступом 2px, как просит система: на любой из трёх бумаг оно ≥3:1. */
+/* §14: a visible focus ring on everything interactive. Ink, not red: red is
+   reserved for what needs your eye, and focus is merely where you are. */
 :focus-visible {
-  outline: 2px solid var(--vermilion-ink);
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
   border-radius: var(--radius-s);
 }
 
-/* --- скроллбар (§2) ---------------------------------------------------- */
+/* --- scrollbar (§2) ---------------------------------------------------- */
 
 * {
   scrollbar-width: thin;
@@ -205,14 +218,18 @@ textarea {
 
 *::-webkit-scrollbar-thumb {
   background: var(--line-strong);
-  border-radius: 6px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-m);
+  background-clip: padding-box;
 }
 
 *::-webkit-scrollbar-thumb:hover {
   background: var(--ink-muted);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
-/* --- движение (§2) ----------------------------------------------------- */
+/* --- motion (§2) ------------------------------------------------------- */
 
 @keyframes yacaPulse {
   0%,
@@ -230,7 +247,18 @@ textarea {
   }
 }
 
-/* §2: больше в интерфейсе анимации нет и не нужно. */
+/* A ring going out from the mark that is live right now. */
+@keyframes yacaRing {
+  from {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
 .pulse {
   animation: yacaPulse 1.2s ease-in-out infinite;
 }
@@ -247,5 +275,14 @@ textarea {
   }
   .spin {
     animation: none;
+  }
+}
+
+/* A narrow window cannot afford the full margin: the rule moves to the edge
+   and the marks keep their place on it. */
+@media (max-width: 900px) {
+  :root {
+    --route-x: 10px;
+    --route-gutter: 30px;
   }
 }

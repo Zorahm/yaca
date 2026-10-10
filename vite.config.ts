@@ -8,6 +8,17 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react()],
 
+  // Окон два (§10), и у каждого своя точка входа. Бандл один и тот же:
+  // токены, словари и клиент ядра в окне настроек те же самые.
+  build: {
+    rollupOptions: {
+      input: {
+        main: "index.html",
+        settings: "settings.html",
+      },
+    },
+  },
+
   // Редьюсер ленты и словари — чистые функции, им не нужен ни браузер, ни
   // окно: они проверяются так же, как ядро проверяется без вебвью.
   test: {

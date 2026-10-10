@@ -1,12 +1,10 @@
 /*
  * Left sidebar: a column of the frame §1, not a drawer §1.1.
  *
- * Colours are the drawer's — background `--paper-raised`, border `--line` — so the
- * left edge of the window reads as one surface with the top bar above it. Only
- * the side of the border changes: it stands to the right of its own column
- * instead of the left of a sheet lying over the feed.
+ * The column is the same paper one step darker (`--rail-fill`), with a
+ * `--rail-line` border to the right of it.
  *
- * Width is fixed at 272 px. The feed keeps its own 760 px measure (§1) and
+ * Width is fixed at 272 px. The feed keeps its own 856 px measure (§1) and
  * centres in what is left, so a narrower window moves the feed instead of
  * squeezing the list into two words per row.
  *
@@ -21,8 +19,8 @@
   flex-direction: column;
   width: 272px;
   height: 100%;
-  background: var(--paper-raised);
-  border-right: 1px solid var(--line);
+  background: var(--rail-fill);
+  border-right: 1px solid var(--rail-line);
   overflow: hidden;
 }
 
@@ -34,7 +32,7 @@
 .side-foot {
   flex: none;
   padding: 8px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--rail-line);
 }
 
 /* One row shape for everything that is not a session: the same height as a
@@ -57,47 +55,48 @@
    наведённая строка никогда не путается с текущей, и ни той, ни другой не
    нужен цветной кант. */
 .side-row:hover:not(:disabled) {
-  background: var(--paper);
+  background: var(--rail-fill-deep);
   color: var(--ink);
 }
 
 /* An open drawer §1.1 is a state of its trigger, and the trigger is a row. */
 .side-row[aria-pressed="true"] {
-  border-color: var(--line-strong);
-  background: var(--paper-sunken);
+  border-color: var(--on-rail-muted);
+  background: var(--paper-raised);
   color: var(--ink);
 }
 
 .side-row:disabled {
-  color: var(--ink-muted);
+  color: var(--on-rail-muted);
   cursor: not-allowed;
 }
 
 .side-icon {
   display: inline-flex;
   flex: none;
-  color: var(--ink-muted);
+  color: var(--on-rail-muted);
 }
 
 .side-row:hover:not(:disabled) .side-icon,
 .side-row[aria-pressed="true"] .side-icon {
-  color: var(--ink-muted);
+  color: var(--on-rail-muted);
 }
 
 /* The first row of the window. Outlined, not accented: the accent marks where
    attention is wanted now (§2), and a button that is always there is not it.
-   The column is already `--paper-raised`, so the outline is what carries it. */
+   The button is a lighter slip on the darker column; the outline finishes it. */
 .side-new {
-  border-color: var(--line-strong);
+  border-color: var(--on-rail-muted);
+  background: var(--paper-raised);
   color: var(--ink);
 }
 
 .side-new:hover:not(:disabled) {
-  background: var(--paper);
+  background: var(--rail-fill-deep);
 }
 
 .side-new .side-icon {
-  color: var(--ink-muted);
+  color: var(--on-rail-muted);
 }
 
 .side-search {
@@ -106,20 +105,20 @@
   height: var(--h-small-button);
   margin-top: 6px;
   padding: 0 10px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--rail-line);
   border-radius: var(--radius-s);
-  background: var(--paper-sunken);
+  background: var(--paper-raised);
   font-size: 12.5px;
   color: var(--ink);
   user-select: text;
 }
 
 .side-search::placeholder {
-  color: var(--ink-muted);
+  color: var(--on-rail-muted);
 }
 
 .side-search:focus {
-  border-color: var(--vermilion-ink);
+  border-color: var(--ink);
   outline: none;
 }
 
@@ -134,13 +133,13 @@
 
 .side-empty {
   padding: 14px;
-  color: var(--ink-muted);
+  color: var(--on-rail-muted);
   font-size: 12.5px;
 }
 
 .side-error {
   margin: 8px 14px;
-  color: var(--rust);
+  color: var(--red-ink);
   font: 400 11.5px var(--mono);
   user-select: text;
 }
@@ -177,10 +176,10 @@
 .side-project-live {
   flex: none;
   padding: 0 5px;
-  border-radius: var(--radius-pill);
-  background: var(--paper-sunken);
+  border-radius: var(--radius-s);
+  background: var(--rail-fill-deep);
   font: 400 10.5px var(--mono);
-  color: var(--ink-muted);
+  color: var(--on-rail-muted);
 }
 
 .side-project-act {
@@ -190,7 +189,7 @@
   width: 22px;
   height: 22px;
   border-radius: var(--radius-s);
-  color: var(--ink-muted);
+  color: var(--on-rail-muted);
 }
 
 /* Значок внутри строки наводится на любой из трёх бумаг: на самой колонке, на
@@ -198,7 +197,7 @@
    `paper-sunken` ступеней больше нет, — поэтому подложка тут `line`: он
    светлее всех трёх в Ночи и темнее всех трёх в Бумаге. */
 .side-project-act:hover:not(:disabled) {
-  background: var(--line);
+  background: var(--rail-fill-deep);
   color: var(--ink);
 }
 
@@ -228,10 +227,9 @@
 
 .side-day {
   padding: 8px 14px 4px 18px;
-  font: 400 10.5px var(--mono);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-muted);
+  font: 600 11.5px/1.6 var(--sans);
+  letter-spacing: 0;
+  color: var(--on-rail-muted);
 }
 
 .sess {
@@ -244,7 +242,7 @@
 }
 
 .sess:hover {
-  background: var(--paper);
+  background: var(--rail-fill-deep);
 }
 
 /* The chat the window is showing. Depth and weight, not a coloured bar down
@@ -256,11 +254,12 @@
    §14 does not let a state rest on colour alone. `aria-current` in the markup
    says the same to everything that cannot see. */
 .sess-current {
-  background: var(--paper-sunken);
+  background: var(--rail-fill-deep);
+  box-shadow: inset 0 0 0 1px var(--rail-line);
 }
 
 .sess-current .sess-title {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .sess-main {
@@ -273,7 +272,7 @@
 }
 
 /* A slot, filled only for a chat that is open — rows would step left and
-   right without it. Green is «the agent is working» (§2), amber is a question
+   right without it. A pulsing ink dot is «the agent is working», red is a question
    waiting for an answer (§5.7), grey is open and idle. */
 .sess-live {
   flex: none;
@@ -284,15 +283,16 @@
 }
 
 .sess-live-open {
-  background: var(--ink-muted);
+  border: 1.5px solid var(--on-rail-muted);
 }
 
 .sess-live-busy {
-  background: var(--moss);
+  background: var(--ink);
+  animation: yacaPulse 1.2s ease-in-out infinite;
 }
 
 .sess-live-waiting {
-  background: var(--vermilion);
+  background: var(--red);
 }
 
 .sess-text {
@@ -312,13 +312,13 @@
 .sess-meta {
   display: block;
   font: 400 10.5px var(--mono);
-  color: var(--ink-muted);
+  color: var(--on-rail-muted);
 }
 
 .sess-excerpt {
   display: block;
-  font: 400 11px var(--mono);
-  color: var(--ink-muted);
+  font-size: 11.5px;
+  color: var(--on-rail-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -329,9 +329,9 @@
   width: 100%;
   height: var(--h-row-button);
   padding: 0 8px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--on-rail-muted);
   border-radius: var(--radius-s);
-  background: var(--paper-sunken);
+  background: var(--paper-raised);
   font-size: 13px;
   user-select: text;
 }
@@ -346,12 +346,12 @@
   width: 20px;
   height: 20px;
   border-radius: var(--radius-s);
-  color: var(--ink-muted);
+  color: var(--on-rail-muted);
 }
 
 .sess-close:hover,
 .sess-more:hover {
-  background: var(--line);
+  background: var(--rail-line);
   color: var(--ink);
 }
 
@@ -370,7 +370,7 @@
   width: 20px;
   height: 20px;
   border-radius: var(--radius-s);
-  color: var(--ink-muted);
+  color: var(--on-rail-muted);
   opacity: 0;
   pointer-events: none;
   transform: translateY(-50%);
@@ -386,4 +386,10 @@
 .sess-more[data-state="open"] {
   opacity: 1;
   pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sess-live-busy {
+    animation: none;
+  }
 }

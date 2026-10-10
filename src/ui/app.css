@@ -17,11 +17,15 @@
 .shell > .app,
 .shell > .home {
   min-width: 0;
+  /* Pinned to the `1fr` track. Auto-placed, the window took the sidebar's
+     `auto` track as soon as the sidebar was hidden and shrank to the width of
+     its narrowest content. */
+  grid-column: 2;
 }
 
 .app {
   display: grid;
-  /* §1: 48px 1fr auto auto. Ряды `auto`, поэтому появление полосы не дёргает
+  /* §1: 44px 1fr auto auto. Ряды `auto`, поэтому появление полосы не дёргает
      высоту ленты. */
   grid-template-rows: var(--h-top) 1fr auto auto;
   height: 100%;
@@ -36,8 +40,12 @@
   gap: 6px;
   height: var(--h-top);
   padding: 0 10px;
-  background: var(--paper-raised);
+  background: var(--paper);
   border-bottom: 1px solid var(--line);
+  /* Above the wash of an open panel (panel.css): the bar's buttons keep
+     working while a panel is up, so the bar must not look dimmed. */
+  position: relative;
+  z-index: 31;
 }
 
 .top-icon {
@@ -58,6 +66,7 @@
 
 .top-icon[aria-pressed="true"] {
   border-color: var(--line-strong);
+  background: var(--paper-raised);
   color: var(--ink);
 }
 
@@ -68,8 +77,8 @@
 
 .top-title {
   margin-left: 6px;
-  font: 600 13.5px var(--display);
-  letter-spacing: -0.01em;
+  font: 700 14px var(--display);
+  letter-spacing: 0;
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
@@ -77,10 +86,12 @@
 }
 
 .top-project {
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  background: var(--paper-sunken);
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--paper-raised);
   font-size: 12px;
+  line-height: 18px;
   color: var(--ink-muted);
   white-space: nowrap;
 }
@@ -97,7 +108,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--vermilion);
+  background: var(--ink);
 }
 
 .top-icon-wrap {
@@ -141,7 +152,7 @@
 .bar-icon {
   display: inline-flex;
   align-items: center;
-  color: var(--vermilion-ink);
+  color: var(--ink-muted);
 }
 
 .bar-close {
@@ -177,21 +188,23 @@
 }
 
 .btn-accent {
-  background: var(--vermilion);
-  border-color: var(--vermilion);
-  color: var(--on-vermilion);
-  font-weight: 500;
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+  font-weight: 600;
 }
 
 .btn-accent:hover {
-  background: var(--vermilion-hover);
-  border-color: var(--vermilion-hover);
-  color: var(--on-vermilion);
+  background: color-mix(in srgb, var(--ink) 84%, var(--paper));
+  border-color: color-mix(in srgb, var(--ink) 84%, var(--paper));
+  color: var(--paper);
 }
 
+/* A destructive action is named by its label. Red is kept for what already
+   went wrong or waits for an answer, not for what the pointer is over. */
 .btn-danger:hover {
-  border-color: var(--rust);
-  color: var(--rust);
+  border-color: var(--ink);
+  color: var(--ink);
 }
 
 .btn:disabled,
@@ -215,15 +228,46 @@
   font-size: 12px;
 }
 
+/* --- переключатель из нескольких (§7.1, §10) ---------------------------- */
+/* Выбранный — заливкой акцента: он и есть «активная метка» §2. */
+
+.segments {
+  display: flex;
+  gap: 4px;
+}
+
+.segment {
+  display: inline-flex;
+  align-items: center;
+  height: var(--h-small-button);
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  color: var(--ink-muted);
+  /* Sans: a segment names a choice (a theme, a mode), and most are words. */
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.segment:hover {
+  background: var(--paper-sunken);
+  color: var(--ink);
+}
+
+.segment[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
 /* --- §6.2 бейдж состояния файла ----------------------------------------- */
 
 .badge {
   padding: 1px 6px;
   border: 1px solid;
   border-radius: var(--radius-s);
-  font: 400 10.5px var(--mono);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 11.5px;
+  line-height: 1.5;
   white-space: nowrap;
 }
 
@@ -232,23 +276,23 @@
   color: var(--ink-muted);
 }
 .badge-created {
-  border-color: color-mix(in srgb, var(--vermilion-ink) 40%, transparent);
-  color: var(--vermilion-ink);
+  border-color: color-mix(in srgb, var(--green) 40%, transparent);
+  color: var(--green);
 }
 .badge-rejected {
-  border-color: color-mix(in srgb, var(--rust) 40%, transparent);
-  color: var(--rust);
+  border-color: color-mix(in srgb, var(--red-ink) 40%, transparent);
+  color: var(--red-ink);
 }
 
 /* --- §7 композер -------------------------------------------------------- */
 
 .composer-wrap {
-  padding: 10px 18px 14px;
+  padding: 8px 18px 14px;
   background: var(--paper);
 }
 
 .composer {
-  max-width: 760px;
+  max-width: 820px;
   margin: 0 auto;
   padding: 10px 12px 8px;
   border: 1px solid var(--line-strong);
@@ -257,7 +301,7 @@
 }
 
 .composer:focus-within {
-  border-color: var(--vermilion-ink);
+  border-color: var(--ink);
 }
 
 .composer textarea {
@@ -313,7 +357,7 @@
 }
 
 .chip-danger {
-  color: var(--rust);
+  color: var(--red-ink);
 }
 
 .chip-strong {
@@ -333,13 +377,13 @@
   width: var(--h-small-button);
   height: var(--h-small-button);
   border-radius: var(--radius-m);
-  background: var(--vermilion);
-  color: var(--on-vermilion);
+  background: var(--ink);
+  color: var(--paper);
   font-size: 14px;
 }
 
 .send:hover {
-  background: var(--vermilion-hover);
+  background: color-mix(in srgb, var(--ink) 84%, var(--paper));
 }
 
 .send:disabled {
@@ -354,7 +398,7 @@
 }
 
 .send-stop:hover {
-  color: var(--rust);
+  background: var(--rail-fill-deep);
 }
 
 /* Кольцо состояния (§7.1). */
@@ -380,6 +424,7 @@
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-m);
   background: var(--paper-raised);
+  box-shadow: var(--shadow-pop);
 }
 
 .menu-anchor {
@@ -429,7 +474,12 @@
    подпись «Применять правки, спрашивать остальное» — 246 px текста плюс
    паддинги, цифра и галка активной строки. Меньше — и подпись снова
    переносится, а перенос здесь и был тем, от чего уходили. */
+/* Its only user is the mode chip, the first thing in the composer row: the
+   menu opens from the chip's left edge. Hung from the right edge, as `.menu`
+   does by default, it ran under the sidebar. */
 .menu-notes {
+  right: auto;
+  left: 0;
   min-width: 340px;
 }
 
@@ -453,7 +503,7 @@
 .menu-mark {
   display: inline-flex;
   align-items: center;
-  color: var(--vermilion-ink);
+  color: var(--ink);
 }
 
 .menu-sep {
@@ -471,7 +521,7 @@
 }
 
 .menu-item-danger {
-  color: var(--rust);
+  color: var(--ink);
 }
 
 /* --- заставка до открытия проекта --------------------------------------- */

@@ -80,16 +80,19 @@ export function Permission({
         return;
       }
 
-      if (event.key === "1" || event.key === "Escape") {
+      // One refusal button, and it opens the step: `1` does what the button
+      // does. `Esc` is not on the button — it refuses at once, the way it stops
+      // everything else in the window (§13).
+      if (event.key === "Escape") {
         event.preventDefault();
         deny(null);
-      } else if (event.key === "2") {
+      } else if (event.key === "1") {
         event.preventDefault();
         setStep("deny");
-      } else if (event.key === "3" || (event.ctrlKey && event.shiftKey && event.key === "Enter")) {
+      } else if (event.key === "2" || (event.ctrlKey && event.shiftKey && event.key === "Enter")) {
         event.preventDefault();
         setStep("allowScope");
-      } else if (event.key === "4" || (event.ctrlKey && event.key === "Enter")) {
+      } else if (event.key === "3" || (event.ctrlKey && event.key === "Enter")) {
         event.preventDefault();
         allow();
       }
@@ -168,26 +171,24 @@ export function Permission({
 
       {step === "row" && (
         <div className="ask-actions">
-          <button className="btn" onClick={() => deny(null)}>
+          {/* Refusal on the left, consents on the right, and only the consent
+              group wraps as a whole, at any window width. */}
+          <button className="btn" onClick={() => setStep("deny")}>
             {t("ask.deny")}
             <span className="keycap">1</span>
-            <span className="keycap">Esc</span>
           </button>
-          <button className="btn" onClick={() => setStep("deny")}>
-            {t("ask.deny_more")}
-            <span className="keycap">2</span>
-          </button>
-          <div className="ask-gap" />
-          <button className="btn" onClick={() => setStep("allowScope")}>
-            {t("ask.always")}
-            <span className="keycap">3</span>
-            <span className="keycap">⌃⇧⏎</span>
-          </button>
-          <button className="btn btn-accent" onClick={allow}>
-            {t("ask.allow")}
-            <span className="keycap">4</span>
-            <span className="keycap">⌃⏎</span>
-          </button>
+          <div className="ask-group ask-group-allow">
+            <button className="btn" onClick={() => setStep("allowScope")}>
+              {t("ask.always")}
+              <span className="keycap">2</span>
+              <span className="keycap">⌃⇧⏎</span>
+            </button>
+            <button className="btn btn-accent" onClick={allow}>
+              {t("ask.allow")}
+              <span className="keycap">3</span>
+              <span className="keycap">⌃⏎</span>
+            </button>
+          </div>
         </div>
       )}
     </div>

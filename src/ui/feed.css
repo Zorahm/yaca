@@ -1,28 +1,85 @@
 /*
- * Лента §4 и её блоки §5.
+ * The feed §4 and its blocks §5, redesign trial: the proof.
+ *
+ * The feed is set like a galley: one column of text and a ruled margin to its
+ * left where the marks go. Hierarchy is carried by type, not by boxes — what a
+ * person asked is set heavier and a step larger, what the agent did is a line
+ * of report with a small mark beside it. The marks are grey. Red appears in
+ * the margin only where your eye is needed.
  */
 
 /*
- * Обёртка вокруг окна ленты: она стоит грид-ячеёкой §1, а кнопка возврата
- * привязана к видимому окну, не к контенту — поэтому к обёртке, не к полосе.
+ * The wrapper is the grid cell of §1; the jump button is pinned to the visible
+ * window, not to the content, hence to the wrapper and not to the strip.
  */
 .feed-wrap {
   position: relative;
   min-height: 0;
 }
 
-/* Само окно ленты рисует VList: `overflow-y: auto` назначается библиотекой
-   вместе с её внутренними стилями, так что своего правила окну не надо. */
+/* The feed window itself is drawn by VList, which assigns `overflow-y: auto`
+   along with its own inline styles, so the window needs no rule here. */
 
-/* Элемент ленты, был обёрточный `.feed-inner`: центрирование §1, поля и
-   межблочный ритм (бывший `gap: 22px`) теперь часть высоты каждого блока —
-   элементы виртуального списка позиционируются по очереди, расстояние между
-   ними внутрь контейнера не спрячешь. */
+/* One feed item. Centring (§1), margins and the rhythm between blocks are part
+   of each item's height: a virtual list positions items one after another and
+   has nowhere to keep a gap. Rhythm is per kind — blocks of one agent turn sit
+   tight, a new human message opens a wide interval. */
 .feed-item {
-  max-width: 760px;
+  --pad-top: 7px;
+  --pad-bottom: 7px;
+  position: relative;
+  max-width: 856px;
   margin: 0 auto;
-  padding: 20px 18px 22px;
+  padding: var(--pad-top) 18px var(--pad-bottom) calc(18px + var(--route-gutter));
   min-width: 0;
+}
+
+.feed-item[data-kind="human"] {
+  --pad-top: 30px;
+  --pad-bottom: 10px;
+}
+
+.feed-turn {
+  --pad-top: 10px;
+}
+
+.feed-item[data-kind="permission"],
+.feed-item[data-kind="error"] {
+  --pad-top: 12px;
+  --pad-bottom: 12px;
+}
+
+.feed-item[data-kind="checkpoint"] {
+  --pad-top: 12px;
+  --pad-bottom: 2px;
+}
+
+/* The margin rule. Items abut, so the hairline is continuous. */
+.feed-item::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(18px + var(--route-x));
+  width: 1px;
+  background: color-mix(in srgb, var(--line-strong) 40%, var(--line));
+}
+
+/* A mark in the margin. It sits on the rule, with paper under it so the
+   rule stops at its edge. Centred on the first text line of the block. */
+.feed-item > .route-sign {
+  position: absolute;
+  top: calc(var(--pad-top) + 1px);
+  left: calc(18px + var(--route-x) - 9px);
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+}
+
+.feed-item > .route-sign {
+  background: var(--paper);
 }
 
 .block {
@@ -32,45 +89,150 @@
   min-width: 0;
 }
 
-/* Лейбл над сообщением (§5). */
-.label {
-  font: 400 10.5px var(--mono);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
+/* --- signs --------------------------------------------------------------- */
 
-.label-you {
+.sign {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
   color: var(--ink-muted);
 }
 
-.label-agent {
-  color: var(--vermilion-ink);
-  text-transform: none;
+/* Every mark is grey except the person's own and the two that need an
+   eye: a failure and an open request. */
+.sign-human {
+  color: var(--ink);
 }
 
-/* Кнопка возврата вниз со счётчиком новых блоков (§4). */
+
+.sign-failed {
+  color: var(--red-ink);
+}
+
+.sign-ask {
+  color: var(--red);
+}
+
+/* Refused, denied or stopped: the sign stays, the ink is thinned. */
+.sign-refused {
+  opacity: 0.45;
+}
+
+/* Live right now. */
+.sign-live::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  animation: yacaRing 1.5s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  pointer-events: none;
+}
+
+.row .sign-live::after {
+  inset: -2px;
+}
+
+/* A group whose sign is not a cross but which holds a failure. */
+.sign-flag {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--paper);
+  border-radius: 50%;
+  background: var(--red-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sign-live::after {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+/* --- speaker labels (§5, §14) -------------------------------------------- */
+
+/* Who is speaking is said by weight and by the mark in the margin, so the
+   label is not drawn. It stays in the markup for a screen reader, which sees
+   neither (§14). */
+.label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Jump-to-bottom with the count of new blocks (§4). */
 .feed-jump {
   position: absolute;
   left: 50%;
   bottom: 14px;
   transform: translateX(-50%);
   z-index: 5;
+  box-shadow: var(--shadow-pop);
 }
 
-/* --- §5.1 сообщение человека -------------------------------------------- */
+/* --- §5.1 human message -------------------------------------------------- */
+
+/* A slip of lighter paper at the right edge of the column: what a person
+   said stands opposite what the agent did. Heavier and a step larger than
+   the agent's text, so a long session can be scanned by what was asked. */
+.feed-item[data-kind="human"] {
+  align-items: flex-end;
+}
 
 .human {
-  padding: 11px 13px;
+  padding: 9px 13px;
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
   background: var(--paper-raised);
   color: var(--ink);
-  font-size: 13.5px;
-  line-height: 1.55;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.5;
+  max-width: 68ch;
   text-wrap: pretty;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
+}
+
+/* Actions of the message (§5.1): under the slip, at its right edge. They come
+   out on hover and stay reachable by keyboard — `opacity`, not `display`, or
+   Tab would never get in (§14). */
+.human-acts {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+}
+
+.feed-item[data-kind="human"]:hover .human-acts,
+.human-acts:focus-within {
+  opacity: 1;
+}
+
+.human-act {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-s);
+  color: var(--ink-muted);
+}
+
+.human-act:hover:not(:disabled) {
+  background: var(--paper-sunken);
+  color: var(--ink);
+}
+
+.human-act:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .attachments {
@@ -79,15 +241,16 @@
   /* Плитки картинок и чипы файлов стоят в одном ряду — по нижнему краю. */
   align-items: flex-end;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
-/* --- §5.2 текст агента --------------------------------------------------- */
+/* --- §5.2 agent text ----------------------------------------------------- */
 
 .agent {
   color: var(--ink);
   font-size: 13.5px;
   line-height: 1.6;
+  max-width: 74ch;
   text-wrap: pretty;
   overflow-wrap: anywhere;
   user-select: text;
@@ -104,10 +267,11 @@
 .agent h1,
 .agent h2,
 .agent h3 {
-  margin: 14px 0 6px;
-  font-size: 13.5px;
-  font-weight: 600;
+  margin: 18px 0 6px;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--ink);
+  text-wrap: balance;
 }
 
 .agent ul,
@@ -120,27 +284,39 @@
   margin-bottom: 3px;
 }
 
+.agent a {
+  color: var(--ink);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
 .agent blockquote {
   margin: 0 0 10px;
-  padding-left: 10px;
-  border-left: 2px solid var(--line-strong);
+  padding-left: 12px;
+  border-left: 1px solid var(--line-strong);
   color: var(--ink-muted);
 }
 
-/* Инлайн-код: моноширинный 12.5 цветом акцента (§5.1, §5.2). */
+/* Inline code (§5.1, §5.2): black on a sunken patch. It used to wear the
+   accent, which made every identifier look like a call to action. */
 .code-inline {
+  padding: 1px 4px;
+  border-radius: var(--radius-s);
+  background: var(--paper-sunken);
   font: 400 12.5px var(--mono);
-  color: var(--vermilion-ink);
+  color: var(--ink);
   overflow-wrap: anywhere;
 }
 
-/* --- §5.3 рассуждение ---------------------------------------------------- */
+/* --- §5.3 reasoning ------------------------------------------------------ */
 
 .reason-head {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font: 400 11.5px var(--mono);
+  font-size: 12.5px;
+  line-height: 21px;
   color: var(--ink-muted);
   text-align: left;
 }
@@ -150,7 +326,8 @@
 }
 
 .reason-body {
-  margin-top: 6px;
+  margin-top: 4px;
+  max-width: 74ch;
   color: var(--ink-muted);
   font-size: 13px;
   font-style: italic;
@@ -159,16 +336,16 @@
   user-select: text;
 }
 
-/* --- §5.4 группа действий ------------------------------------------------ */
+/* --- §5.4 action group --------------------------------------------------- */
 
-/* Свёрнутая группа — строка в потоке ленты, а не карточка (§16.16). */
+/* A folded group is a line in the flow of the feed, not a card (§16.16). */
 .group-head {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
   font-size: 13.5px;
-  line-height: 1.55;
+  line-height: 21px;
   color: var(--ink-muted);
   text-align: left;
 }
@@ -183,7 +360,7 @@
 }
 
 .group-failed {
-  color: var(--rust);
+  color: var(--red-ink);
 }
 
 .caret {
@@ -193,29 +370,27 @@
   font-size: 11px;
 }
 
+/* Totals stand flush against the right margin, in figures that line up. */
 .counts {
-  font: 400 12.5px var(--mono);
+  font: 500 12px var(--mono);
   white-space: nowrap;
 }
 
 .count-add {
-  color: var(--moss);
+  color: var(--green);
 }
 
 .count-del {
-  color: var(--rust);
+  color: var(--red-ink);
 }
 
-/* Раскрытая группа получает рамку (§16.16). Своего скролла у неё нет (§5.4):
-   она растёт на все строки, а скроллится лента. */
+/* An opened group is a ruled list, not a box: two hairlines and rows between.
+   It has no scroll of its own (§5.4): it grows, the feed scrolls. */
 .group-list {
-  margin-top: 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  background: var(--paper-raised);
-  overflow: hidden;
+  margin-top: 6px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
-
 
 .group-more {
   position: absolute;
@@ -231,7 +406,7 @@
   color: var(--ink);
 }
 
-/* --- §5.5 строка действия ------------------------------------------------ */
+/* --- §5.5 action row ----------------------------------------------------- */
 
 .row {
   border-top: 1px solid var(--line);
@@ -242,59 +417,65 @@
 }
 
 .row-open {
-  background: var(--paper);
+  background: var(--paper-raised);
 }
 
 .row-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   width: 100%;
   height: var(--h-row);
-  padding: 0 16px;
+  padding: 0 8px 0 5px;
   text-align: left;
+}
+
+.row-head:hover {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
 }
 
 .row-caption {
   flex: 1;
   min-width: 0;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Имя файла внутри подписи — весом 600 цветом --ink (§5.4). */
+/* The file name inside a caption is set heavier (§5.4). */
 .row-name {
   font-weight: 600;
   color: var(--ink);
 }
 
-/* §1.1: имя файла открывает панель. Курсор и подчёркивание по наведению
-   держатся на самой подписи строки, а не на имени. */
+/* §1.1: the file name opens the panel. Cursor and underline on hover live on
+   the caption of the row, not on the name. */
 .row-name-open {
   cursor: pointer;
 }
 
 .row-head:hover .row-name-open {
   text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
-/* §5.4.1: описания нет — видна сама команда, моноширинным. */
+/* §5.4.1: no description — the command itself, in mono. */
 .mono-target {
   font: 400 12.5px var(--mono);
   color: var(--ink-muted);
 }
 
-/* Глагол неудачи красится, вся строка — нет (§5.4). */
+/* The verb of a failure is coloured, the row is not (§5.4). */
 .row-verb-fail {
-  color: var(--rust);
+  color: var(--red-ink);
 }
 
-/* Сработавший инвариант — акцентом, не danger: делать нечего (§5.9). */
+/* A tripped invariant is not a failure: nothing to fix (§5.9). */
 .row-verb-refused {
-  color: var(--vermilion-ink);
+  color: var(--ink-muted);
 }
 
 .row-dim {
@@ -304,18 +485,19 @@
 .row-dot {
   display: inline-flex;
   align-items: center;
-  color: var(--vermilion);
-  font-size: 9px;
+  color: var(--ink-muted);
 }
 
-/* --- §5.5.1 раскрытая строка --------------------------------------------- */
+/* --- §5.5.1 opened row --------------------------------------------------- */
 
+/* Everything inside an opened row hangs from the caption's left edge, past
+   the sign column: 5 + 14 + 9. */
 .row-body {
-  padding: 0 0 12px;
+  padding: 2px 0 10px;
 }
 
 .row-target {
-  padding: 0 16px 10px;
+  padding: 0 8px 8px 28px;
   font: 400 12.5px var(--mono);
   color: var(--ink-muted);
   overflow-wrap: anywhere;
@@ -325,12 +507,16 @@
 .row-actions {
   display: flex;
   gap: 6px;
-  padding: 10px 16px 0;
+  padding: 8px 8px 0 28px;
 }
 
-/* Блок вывода команды (§5.5.1). */
+.row-body .diff {
+  margin: 0 8px 0 28px;
+}
+
+/* Command output (§5.5.1). */
 .output {
-  margin: 0 16px;
+  margin: 0 8px 0 28px;
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius-s);
@@ -344,13 +530,17 @@
   user-select: text;
 }
 
-.output-error {
-  color: var(--rust);
+.plan .output {
+  margin: 0;
 }
 
-/* Действие над блоком — в углу блока, а не строкой под ним (§5.5.1). Выходит
-   по наведению, как кнопки на заголовке ханка в §6.3, и остаётся видимым под
-   клавиатурой: `opacity`, а не `display`, иначе Tab в него не зайдёт (§14). */
+.output-error {
+  color: var(--red-ink);
+}
+
+/* An action over a block sits in the block's corner, not on a line under it
+   (§5.5.1). It comes out on hover and stays reachable by keyboard: `opacity`,
+   not `display`, or Tab would never get in (§14). */
 .code-wrap {
   position: relative;
 }
@@ -358,8 +548,8 @@
 .block-act {
   position: absolute;
   top: 6px;
-  /* Блок отбит от края ленты на 16, плюс место под свой скроллбар. */
-  right: 28px;
+  /* Past the block's own scrollbar. */
+  right: 22px;
   display: grid;
   place-items: center;
   width: 22px;
@@ -381,21 +571,22 @@
   border-color: var(--line-strong);
 }
 
-/* --- §5.6 список задач --------------------------------------------------- */
+/* --- §5.6 task list ------------------------------------------------------ */
 
+/* A plain list on the route. The card is gone: three lines of text do not
+   need a box to be a list. */
 .todos {
-  padding: 8px 0;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  background: var(--paper-raised);
+  display: flex;
+  flex-direction: column;
 }
 
 .todo {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 5px 16px;
+  gap: 9px;
+  padding: 1px 0;
   font-size: 13.5px;
+  line-height: 21px;
   color: var(--ink);
 }
 
@@ -408,24 +599,30 @@
 }
 
 .todo-done .todo-mark {
-  color: var(--moss);
+  color: var(--ink-muted);
 }
 .todo-done .todo-text {
   color: var(--ink-muted);
   text-decoration: line-through;
+  text-decoration-thickness: 1px;
 }
 .todo-now .todo-mark {
-  color: var(--vermilion-ink);
+  color: var(--ink);
+}
+.todo-now .todo-text {
+  font-weight: 600;
 }
 .todo-next .todo-mark {
   color: var(--ink-muted);
 }
 
-/* --- §5.7 запрос разрешения ---------------------------------------------- */
+/* --- §5.7 permission request --------------------------------------------- */
 
+/* Ruled in red pencil, like the rollback confirmation below: both wait on a
+   decision. One of the few blocks drawn as a box; the rest is type on paper. */
 .ask {
-  padding: 16px 18px;
-  border: 1px solid var(--vermilion-ink);
+  padding: 14px 16px;
+  border: 1px solid var(--red-ink);
   border-radius: var(--radius-m);
   background: var(--paper-raised);
 }
@@ -440,28 +637,30 @@
   flex: 1;
   font-size: 15px;
   font-weight: 600;
+  line-height: 1.4;
   color: var(--ink);
+  text-wrap: balance;
 }
 
 .ask-position {
-  font: 400 11px var(--mono);
+  font: 500 11.5px var(--mono);
   color: var(--ink-muted);
 }
 
 .ask-target {
-  margin-top: 4px;
-  font-size: 13.5px;
+  margin-top: 2px;
+  font-size: 13px;
   color: var(--ink-muted);
 }
 
-/* Третий ярус: место, где человек замечает `&& rm -rf` (§5.7). */
+/* The third tier: where a person notices `&& rm -rf` (§5.7). */
 .ask-detail {
-  margin-top: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--line-strong);
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
   border-radius: var(--radius-s);
-  background: var(--paper-sunken);
-  font: 400 12.5px var(--mono);
+  background: var(--paper-raised);
+  font: 500 12.5px/1.6 var(--mono);
   color: var(--ink);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -469,7 +668,8 @@
 }
 
 .ask-note {
-  margin-top: 4px;
+  margin-top: 2px;
+  font-weight: 400;
   color: var(--ink-muted);
   overflow-wrap: anywhere;
 }
@@ -477,26 +677,35 @@
 .ask-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 14px;
 }
 
-.ask-gap {
-  flex: 1;
+.ask-group {
+  display: flex;
+  gap: 8px;
 }
 
-/* Цифра и клавиши — чипы внутри кнопки (§5.7). */
+/* Consents keep to the right edge, on the first row or on their own. */
+.ask-group-allow {
+  margin-left: auto;
+}
+
+/* The digit and the keys are chips inside the button (§5.7). */
 .keycap {
-  padding: 1px 5px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
   border-radius: var(--radius-s);
-  background: var(--paper-sunken);
-  font: 400 11px var(--mono);
+  background: var(--paper);
+  font: 400 10.5px/15px var(--mono);
   color: var(--ink-muted);
 }
 
 .btn-accent .keycap {
-  background: color-mix(in srgb, var(--on-vermilion) 18%, transparent);
-  color: var(--on-vermilion);
+  border-color: color-mix(in srgb, var(--paper) 45%, transparent);
+  background: transparent;
+  color: var(--paper);
 }
 
 .ask-scopes {
@@ -520,26 +729,31 @@
 .ask-deny input {
   flex: 1;
   height: var(--h-button);
-  padding: 0 12px;
+  padding: 0 10px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-s);
-  background: var(--paper-sunken);
+  background: var(--paper-raised);
   font-size: 13px;
   user-select: text;
 }
 
-/* --- §5.8 чекпоинт, §5.11 сжатие, разделители ---------------------------- */
+.ask-deny input::placeholder {
+  color: var(--ink-muted);
+}
+
+/* --- §5.8 checkpoint, §5.11 compaction, dividers ------------------------- */
 
 .divider {
   display: flex;
   align-items: center;
   gap: 10px;
-  font: 400 11px var(--mono);
+  font-size: 11.5px;
+  line-height: 21px;
   color: var(--ink-muted);
 }
 
-/* Линия идёт между причиной и действием (§5.8), поэтому она — элемент,
-   а не псевдоэлемент в конце строки. */
+/* The rule runs between the reason and the action (§5.8), so it is an
+   element, not a pseudo-element at the end of the line. */
 .divider-line {
   flex: 1;
   height: 1px;
@@ -553,42 +767,42 @@
   background: var(--line);
 }
 
-/* Левая половина разделителя §5.8 ведёт в панель §1.1: она кнопка, но
-   выглядит той же строкой — подчёркивать её нечем, разделитель и так тонкий. */
+/* The left half of the divider §5.8 leads to the panel §1.1: a button that
+   looks like the same line. */
 .divider-open {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   font: inherit;
   color: inherit;
 }
 
 .divider-open:hover {
-  color: var(--ink-muted);
+  color: var(--ink);
 }
 
 .divider-action {
   color: var(--ink-muted);
-  font: 400 11px var(--mono);
+  font-size: 11.5px;
 }
 
 .divider-action:hover {
-  color: var(--vermilion-ink);
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
+/* The margin mark already marks the point; a second dot here would stutter. */
 .divider-dot {
-  display: inline-flex;
-  align-items: center;
-  color: var(--vermilion);
-  font-size: 8px;
+  display: none;
 }
 
 .summary-box {
   margin-top: 8px;
   padding: 12px 14px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius-s);
-  background: var(--paper-sunken);
+  background: var(--paper-raised);
   color: var(--ink);
   font-size: 13px;
   line-height: 1.55;
@@ -604,17 +818,19 @@
   user-select: text;
 }
 
-/* Подтверждение отката: список файлов до того, как что-то произошло (§5.8). */
+/* Rollback confirmation: the list of files before anything happens (§5.8).
+   It waits on a decision, so it is drawn like the permission request. */
 .confirm {
   margin-top: 8px;
   padding: 12px 14px;
-  border: 1px solid var(--vermilion-ink);
+  border: 1px solid var(--red-ink);
   border-radius: var(--radius-m);
   background: var(--paper-raised);
 }
 
 .confirm-title {
   font-size: 13.5px;
+  font-weight: 600;
   color: var(--ink);
 }
 
@@ -635,24 +851,27 @@
   color: var(--ink-muted);
 }
 
-/* --- §5.10 ошибка -------------------------------------------------------- */
+/* --- §5.10 error --------------------------------------------------------- */
 
+/* A failure is red type and a red cross in the margin, not a second red
+   box: the box belongs to the request that waits for an answer. */
 .error {
   padding: 12px 14px;
-  border: 1px solid var(--rust);
+  border: 1px solid var(--line);
   border-radius: var(--radius-m);
   background: var(--paper-raised);
 }
 
 .error-title {
   font-size: 13.5px;
-  color: var(--ink);
+  font-weight: 600;
+  color: var(--red-ink);
 }
 
 .error-detail {
   margin-top: 6px;
-  font: 400 12.5px var(--mono);
-  color: var(--rust);
+  font: 400 12.5px/1.6 var(--mono);
+  color: var(--ink);
   overflow-wrap: anywhere;
   user-select: text;
 }
@@ -663,11 +882,8 @@
   margin-top: 12px;
 }
 
-/* --- план из `exit_plan_mode` (§7.1) ------------------------------------- */
+/* --- the plan from `exit_plan_mode` (§7.1) ------------------------------- */
 
 .plan {
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  background: var(--paper-raised);
+  min-width: 0;
 }

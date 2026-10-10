@@ -21,7 +21,17 @@ pub(crate) const MAX_BODY_BYTES: usize = 5 * 1024 * 1024;
 /// An honest user agent. A browser string would get through more front doors,
 /// but a 403 that shows up in the feed is better than a page fetched under a
 /// false name.
-const USER_AGENT: &str = concat!("Yaca/", env!("CARGO_PKG_VERSION"));
+///
+/// `YacaTraveler` rather than `Yaca`: the name on the wire says what is
+/// knocking — the part of Yaca that walks the web — and it is distinct enough
+/// to be matched by a `robots.txt` rule or a WAF allowlist without catching
+/// anything else. The version rides along as convention asks, so a site
+/// looking at its logs can tell builds apart.
+///
+/// The token is named on its own because `robots.txt` matches it rather than
+/// the whole header (RFC 9309), and [`super::robots`] needs exactly that half.
+pub(crate) const PRODUCT_TOKEN: &str = "YacaTraveler";
+const USER_AGENT: &str = concat!("YacaTraveler/", env!("CARGO_PKG_VERSION"));
 
 /// What the model is told before content from the web. English, like the
 /// system prompt: this is an instruction to the model, not feed copy.

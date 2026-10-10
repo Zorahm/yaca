@@ -19,8 +19,12 @@ describe("словари", () => {
   });
 
   it("не оставляют кириллицу в английском", () => {
+    // Кроме имени самого языка: переключатель §10 называет каждый язык на нём
+    // самом — «Русский», а не «Russian». Это не забытый перевод, а
+    // единственный способ найти свой язык в интерфейсе, которого не читаешь.
+    const endonyms = new Set(["notices.language_ru"]);
     const russian = Object.entries(en)
-      .filter(([, value]) => /[А-Яа-яЁё]/.test(value))
+      .filter(([key, value]) => !endonyms.has(key) && /[А-Яа-яЁё]/.test(value))
       .map(([key]) => key);
     expect(russian).toEqual([]);
   });

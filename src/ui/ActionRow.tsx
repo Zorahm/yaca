@@ -9,7 +9,7 @@
  * тем же раскрытием в дифф и вывод, — а под ними отчёт, который он вернул.
  */
 
-import { CaretDown, CaretRight, Circle } from "@phosphor-icons/react";
+import { CaretDown, CaretRight } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import type { ActionRow } from "../core/feed";
@@ -18,6 +18,7 @@ import { caption, rowCounts, rowFiles } from "./captions";
 import { CodeBlock } from "./CodeBlock";
 import { Diff } from "./Diff";
 import { plainPath } from "./format";
+import { RowSign } from "./RouteSign";
 import { Thumb } from "./Thumb";
 
 export function ActionRowView({
@@ -40,7 +41,7 @@ export function ActionRowView({
         aria-expanded={open}
         onClick={() => setOverride(!open)}
       >
-        {running && <span className="row-dot pulse"><Circle size={7} weight="fill" /></span>}
+        <RowSign row={row} />
         {/* §1.1: клик по имени файла открывает панель файла, клик мимо имени —
             раскрывает строку. Имена у тулов без факта не кликабельны. */}
         <span className="row-caption">{caption(row, onOpenFile)}</span>

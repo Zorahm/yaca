@@ -43,7 +43,7 @@ export function Home({
   error,
   onStart,
   onPickProject,
-  onOpenProviders,
+  onOpenSettings,
 }: {
   models: ModelInfo[];
   /** Слэш-команды проекта §7.3 — тот же композер, то же меню. */
@@ -61,8 +61,8 @@ export function Home({
   ) => void;
   /** Диалог выбора папки принадлежит окну — проект живёт там. */
   onPickProject: () => void;
-  /** Кнопка «Настроить провайдера»: панель §1.1 держит App, не этот экран. */
-  onOpenProviders: () => void;
+  /** Кнопка «Настроить провайдера» ведёт в окно настроек §10. */
+  onOpenSettings: () => void;
 }) {
   const [name, setName] = useState<string | null>(null);
   const [startup, setStartup] = useState<Startup | null>(null);
@@ -162,12 +162,11 @@ export function Home({
               onPick={onPickProject}
               disabled={!hasFileDialogs}
             />
-            {/* Триггер панели §1.1: атрибут нужен, чтобы клик по открытой
-                панели закрыл её, а не открыл заново (§1.1). */}
+            {/* До первого сообщения настроить провайдера бывает нужно, а
+                разговору эта кнопка не принадлежит (§9.1). Ведёт в окно §10. */}
             <button
               className="chip-context"
-              onClick={onOpenProviders}
-              data-panel-trigger={true}
+              onClick={onOpenSettings}
               title={t("prov.title")}
             >
               <span className="chip-icon" aria-hidden="true">

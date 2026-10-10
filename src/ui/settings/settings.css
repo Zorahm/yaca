@@ -1,0 +1,695 @@
+/*
+ * Окно настроек §10.
+ *
+ * Две колонки: навигация 208 и колонка содержимого. Окно своё (`window.rs`),
+ * поэтому верхней панели §3 здесь нет — разделы называют себя сами.
+ *
+ * Навигация разрезана на две группы, приложение и проект. §10 перечисляет
+ * разделы одним списком, но в нём смешаны два уровня правды: провайдеры и
+ * внешний вид — общие, режим и правила — этого проекта. Плоским списком
+ * человек менял бы «Режим» и не знал, где именно.
+ *
+ * Форм в окне четыре: строка настройки, строка списка, пункт навигации и
+ * контролы §2. Новый раздел новой формы не заводит.
+ */
+
+.settings {
+  display: flex;
+  height: 100vh;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+/* --- навигация ---------------------------------------------------------- */
+
+.set-nav {
+  flex: none;
+  width: 208px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 10px;
+  /* The same darker column the session window has on its left (§2). */
+  background: var(--rail-fill);
+  border-right: 1px solid var(--rail-line);
+  overflow-y: auto;
+}
+
+.set-group {
+  padding: 0 10px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+/* Вторая группа отбивается воздухом: два уровня правды видно до чтения. */
+.set-nav-item + .set-group {
+  margin-top: 20px;
+}
+
+/* Чип проекта — тот же, что в шапке §3 и на домашнем экране §9.1: раздел
+   проекта обязан сказать, какого именно. `rtl` обрезает путь слева: в
+   `D:\очень\длинный\путь\Kod` важен хвост. */
+.set-project {
+  margin: 0 8px 10px;
+  padding: 3px 8px;
+  border-radius: var(--radius-s);
+  background: var(--rail-fill-deep);
+  font: 400 11.5px var(--mono);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+
+.set-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px 0 12px;
+  border-radius: var(--radius-m);
+  font-size: 13px;
+  color: var(--ink-muted);
+  text-align: left;
+}
+
+.set-nav-item:hover {
+  color: var(--ink);
+}
+
+.set-nav-item[aria-current="page"] {
+  background: var(--rail-fill-deep);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Метка «вы здесь» — чернильная и узкая: семь громких строк в колонке
+   перекричали бы главную кнопку раздела (§2). */
+.set-nav-item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 8px;
+  width: 3px;
+  height: 14px;
+  border-radius: var(--radius-s);
+  background: var(--ink);
+}
+
+.set-nav-icon {
+  flex: none;
+  display: inline-flex;
+}
+
+/* --- колонка содержимого ------------------------------------------------ */
+
+.set-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.set-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 22px 24px 24px;
+  overflow-y: auto;
+}
+
+.set-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.set-title {
+  margin: 0;
+  font: 600 15px var(--display);
+  color: var(--ink);
+}
+
+.set-lede {
+  margin: 5px 0 0;
+  max-width: 62ch;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--ink-muted);
+}
+
+/* --- строка настройки --------------------------------------------------- */
+
+/* Список утверждений о приложении, а не девять карточек: рамка вокруг каждой
+   настройки обещала бы независимость, которой между ними нет. */
+.set-rows {
+  border-top: 1px solid var(--line);
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 44px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.set-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.set-row-name {
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.set-row-hint {
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--ink-muted);
+}
+
+.set-row-control {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 320px;
+}
+
+/* Раздел, идущий сразу за списком строк, отбивается воздухом: иначе он
+   прилипает к последнему разделителю и читается его продолжением. */
+.set-rows + .prov-section {
+  margin-top: 18px;
+}
+
+/* --- выключатель -------------------------------------------------------- */
+
+.switch {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  width: 34px;
+  height: 20px;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-m);
+  background: var(--paper-sunken);
+}
+
+.switch::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-s);
+  background: var(--ink-muted);
+}
+
+.switch[aria-checked="true"] {
+  justify-content: flex-end;
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
+.switch[aria-checked="true"]::after {
+  background: var(--paper);
+}
+
+/* --- списки разделов ---------------------------------------------------- */
+
+.set-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.set-subhead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-top: 15px;
+}
+
+.set-subhead-sep {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.set-subname {
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.set-subhint {
+  display: block;
+  max-width: 62ch;
+  margin-top: 3px;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--ink-muted);
+}
+
+.set-empty {
+  padding: 10px 0;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--ink-muted);
+}
+
+.set-foot-note {
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--ink-muted);
+}
+
+/* Ошибка раздела — строка на месте, а не тост: она про то, что на экране. */
+.set-error {
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  border: 1px solid var(--red-ink);
+  border-radius: var(--radius-m);
+  font-size: 12.5px;
+  color: var(--red-ink);
+  user-select: text;
+}
+
+/* --- правила §5.7 ------------------------------------------------------- */
+
+.rule {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 34px;
+  padding: 4px 8px 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--paper-raised);
+}
+
+.rule-kind {
+  flex: none;
+  width: 92px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+/* Отказ помечен красным: §2 отдаёт его под «сбой, удаление, отказ», и это
+   ровно его работа. Разрешения не красятся — зелёный сказал бы «всё хорошо»
+   про ту половину списка, которая как раз и рискованная. */
+.rule-deny .rule-kind {
+  color: var(--red-ink);
+}
+
+.rule-value {
+  flex: 1;
+  min-width: 0;
+  font: 400 12px var(--mono);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.rule-reason {
+  flex: none;
+  max-width: 45%;
+  font-size: 12px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rule-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rule-add .prov-input {
+  flex: 1;
+  min-width: 140px;
+}
+
+/* --- чипы исключений теневого хранилища §10 ----------------------------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--paper-raised);
+  font: 400 11.5px var(--mono);
+  color: var(--ink);
+}
+
+/* `.git` и `.yaca` не обсуждаются: проект, выкинувший их из списка, снимал бы
+   снимки со своих снимков (§10). Показаны, но без крестика. */
+.chip-fixed {
+  padding-right: 10px;
+  color: var(--ink-muted);
+}
+
+/* --- провайдеры §10 ----------------------------------------------------- */
+
+.prov-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prov {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 0 12px 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--paper-raised);
+}
+
+.prov:hover {
+  border-color: var(--line-strong);
+}
+
+/* Залитый — провайдер ответил списком моделей, пустой — его не спрашивали.
+   Не красным: неопрошенный не сломан (§10, «настроен — значит, ответил»). */
+.prov-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 50%;
+}
+
+.prov-dot-on {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
+.prov-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+}
+
+.prov-name {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prov-meta {
+  font: 400 11.5px var(--mono);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Форма протокола — меткой справа, а не в строке меты: её одну нельзя
+   угадать по адресу, и §10 на этом настаивает. */
+.prov-proto {
+  flex: none;
+  font: 400 11.5px var(--mono);
+  color: var(--ink-muted);
+}
+
+.prov-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.prov-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--ink-muted);
+}
+
+.prov-note .prov-dot {
+  margin-top: 5px;
+}
+
+/* --- форма провайдера --------------------------------------------------- */
+
+.prov-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.prov-form-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 600 15px var(--display);
+  color: var(--ink);
+}
+
+.prov-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 9px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+.prov-back:hover {
+  color: var(--ink);
+}
+
+.prov-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: end;
+}
+
+.prov-field {
+  display: block;
+  min-width: 0;
+}
+
+.prov-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.prov-input {
+  width: 100%;
+  height: var(--h-small-button);
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  background: var(--paper-sunken);
+  font-size: 12.5px;
+  color: var(--ink);
+  user-select: text;
+}
+
+.prov-input:focus {
+  border-color: var(--ink);
+  outline: none;
+}
+
+.prov-input-mono {
+  font-family: var(--mono);
+}
+
+/* id существующего провайдера закрыт: он же имя ключа в кейчейне. */
+.prov-input[readonly] {
+  color: var(--ink-muted);
+}
+
+.prov-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--ink-muted);
+}
+
+.prov-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Ключ прибит к таблице заголовков: он и есть значение заголовка — весь смысл
+   `{key}` в том, что они связаны (§10). */
+.prov-key {
+  margin-top: 2px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.prov-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prov-key-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.prov-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.prov-source-ok {
+  color: var(--ink);
+}
+
+.prov-source-warn {
+  color: var(--red-ink);
+}
+
+.prov-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prov-headers-grid {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) 52px 26px;
+  gap: 6px;
+  align-items: center;
+}
+
+.prov-headers-head {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+/* Значение заголовка уезжает в открытый JSON, ключ — нет: место, где стоит
+   {key}, помечено им самим (§0). */
+.prov-key-mark {
+  font: 500 11.5px var(--mono);
+  color: var(--ink-muted);
+  text-align: center;
+}
+
+/* Список моделей §10: строки не правятся — их прислал провайдер. */
+.prov-models-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.prov-models-note {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.prov-model-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 72px 72px 110px 56px;
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--paper-raised);
+}
+
+.prov-model-name {
+  font-size: 12.5px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prov-model-id {
+  font: 400 11.5px var(--mono);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prov-model-num {
+  font: 400 11.5px var(--mono);
+  color: var(--ink-muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.prov-model-flag {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.prov-problems {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font: 400 12.5px var(--mono);
+  color: var(--red-ink);
+  user-select: text;
+}
+
+/* Подвал прибит к низу колонки: длинный список моделей не должен утаскивать
+   «Сохранить» под сгиб. */
+.prov-form-foot {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+}
+

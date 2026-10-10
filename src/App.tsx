@@ -26,6 +26,8 @@ import {
   forgetProject as dropProject,
   hasFileDialogs,
   models as fetchModels,
+  onProviders,
+  openSettings,
   projectCommands,
   projects as listProjects,
   sessions,
@@ -33,6 +35,7 @@ import {
   type Effort,
   type ModelInfo,
   type PermissionAnswer,
+  type Preferences,
   type ProcessId,
   type SlashCommand,
 } from "./core/client";
@@ -49,19 +52,13 @@ import { Pictures } from "./ui/viewer/Viewer";
 import { TopBar } from "./ui/TopBar";
 import { Sidebar } from "./ui/sidebar/Sidebar";
 import { ProcessesPanel } from "./ui/panel/ProcessesPanel";
+import { usePreferences } from "./ui/prefs";
 import { FilePanel } from "./ui/panel/FilePanel";
 import { CheckpointsPanel } from "./ui/panel/CheckpointsPanel";
-import { ProvidersPanel } from "./ui/panel/ProvidersPanel";
 import { useChats } from "./ui/chats";
 import { useShortcuts } from "./ui/keyboard";
 
-import "@fontsource/unbounded/600.css";
-import "@fontsource/onest/400.css";
-import "@fontsource/onest/500.css";
-import "@fontsource/onest/600.css";
-import "@fontsource/jetbrains-mono/400.css";
-import "@fontsource/jetbrains-mono/500.css";
-import "@fontsource/jetbrains-mono/600.css";
+import "./ui/fonts";
 import "./ui/tokens.css";
 import "./ui/app.css";
 import "./ui/feed.css";
@@ -73,9 +70,14 @@ import "./ui/viewer/viewer.css";
 import "./ui/sidebar/sidebar.css";
 
 /** Панель §1.1. Сессии уехали в свою колонку — сайдбар, а не панель. */
-type PanelKind = "checkpoints" | "file" | "processes" | "providers";
+type PanelKind = "checkpoints" | "file" | "processes";
 
-export default function App() {
+export default function App({ prefs }: { prefs: Preferences }) {
+  // Настройки приложения §10 живут в оболочке и меняются в соседнем окне:
+  // подписка ставит атрибуты на <html> и перерисовывает дерево, когда там
+  // выбрали другую тему или язык.
+  usePreferences(prefs);
+
   const [error, setError] = useState<string | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [projects, setProjects] = useState<string[]>([]);
@@ -131,9 +133,16 @@ export default function App() {
 
   useEffect(refreshProviders, [refreshProviders]);
 
-  const closeProviders = useCallback(() => {
-    setPanel(null);
-    refreshProviders();
+  // Провайдеров правят в окне настроек §10, и переключатель моделей §7.1
+  // обязан это увидеть: список, оставшийся прежним после «Опросить», — это
+  // окно, врущее про состояние (§0).
+  useEffect(() => {
+    let live = true;
+    const off = onProviders(() => live && refreshProviders());
+    return () => {
+      live = false;
+      void off.then((stop) => stop());
+    };
   }, [refreshProviders]);
 
   const togglePanel = useCallback(
@@ -246,6 +255,13 @@ export default function App() {
       const last = [...visible(active.feed)].reverse().find((b) => b.kind === "human");
       if (last && last.kind === "human") send(commands.send(last.text));
     },
+    // The same path the composer takes, queue included: a message sent
+    // again while the agent is busy waits its turn like any other.
+    resend: (text, attachments) => {
+      if (!active) return;
+      if (active.feed.state?.busy) chats.patch(active.id, { queued: text });
+      send(commands.send(text, attachments));
+    },
   };
 
   const composerActions: ComposerActions = {
@@ -340,13 +356,12 @@ export default function App() {
       // Перечитать списки есть смысл, когда они могли измениться: открыли или
       // закрыли чат, закончился ход и сменился заголовок.
       reload={chats.chats.map((chat) => `${chat.id}:${chat.title}`).join("|")}
-      providersOpen={panel === "providers"}
       onNewChat={newChat}
       onOpenSession={(project, id) => void chats.resume(project, id).catch(failed)}
       onCloseChat={(id) => void chats.close(id).catch(failed)}
       onAddProject={() => void addProject()}
       onForgetProject={(project) => void forgetProject(project)}
-      onOpenProviders={() => togglePanel("providers")}
+      onOpenSettings={() => void openSettings()}
     />
   );
 
@@ -373,13 +388,8 @@ export default function App() {
             void chats.start(path, text, startup, attachments).catch(failed)
           }
           onPickProject={() => void addProject()}
-          onOpenProviders={() => togglePanel("providers")}
+          onOpenSettings={() => void openSettings()}
         />
-
-        {/* На домашнем экране верхней панели нет — панель на всю высоту. */}
-        {panel === "providers" && (
-          <ProvidersPanel withoutTopBar onClose={closeProviders} />
-        )}
       </div>
       </Pictures>
     );
@@ -436,10 +446,6 @@ export default function App() {
             onRestore={feedActions.restoreCheckpoint}
             onCancel={feedActions.cancelPreview}
           />
-        )}
-
-        {panel === "providers" && (
-          <ProvidersPanel onClose={closeProviders} />
         )}
 
         <Feed feed={active.feed} actions={feedActions} ref={feedJump} />

@@ -445,3 +445,92 @@ async fn manual_mode_asks_once_and_then_writes() {
         "one answer is enough: there is no second button"
     );
 }
+
+/// A refusal written into `.yaca/settings.json` by the settings window (§10)
+/// is in force from the first call of the session: the tool is refused, the
+/// reason reaches the agent, and no question is put to the human.
+#[tokio::test]
+async fn a_standing_refusal_from_the_project_file_needs_no_question() {
+    let dir = TempProject::new();
+    let victim = dir.write("junk.rs", "dead code\n");
+    dir.write(
+        ".yaca/settings.json",
+        r#"{
+          "permissions": {
+            "denies": [
+              {
+                "scope": { "type": "directory", "path": "." },
+                "reason": "удалять здесь нечего, просто перечитай"
+              }
+            ]
+          }
+        }"#,
+    );
+
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(delete("t1", "junk.rs")),
+        Turn::Events(script_text("Понял.")),
+    ]));
+    // Auto, so that nothing but the refusal could be stopping the call:
+    // in Auto a deletion goes through without asking (§8).
+    let handle = session(&dir, provider, Mode::Auto);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "снеси мёртвый файл").await;
+    let events = until(&mut rx, is_turn_over).await;
+
+    assert!(
+        !events
+            .iter()
+            .any(|e| matches!(e, AgentEvent::PermissionRequested { .. })),
+        "a standing refusal answers the question instead of asking it"
+    );
+    assert!(
+        events.iter().any(|e| matches!(
+            e,
+            AgentEvent::ToolCallDenied {
+                reason: Some(_),
+                ..
+            }
+        )),
+        "the refusal keeps its reason: {:?}",
+        events.iter().map(AgentEvent::kind).collect::<Vec<_>>()
+    );
+    assert!(victim.exists(), "the file the refusal protects is still there");
+}
+
+/// A refusal outranks a grant covering the same call, and it is consulted
+/// before the mode — so the two lists in the settings window mean what they
+/// say: "запрещено всегда" wins.
+#[tokio::test]
+async fn a_refusal_outranks_a_grant_of_the_same_scope() {
+    let dir = TempProject::new();
+    let victim = dir.write("junk.rs", "dead code\n");
+    dir.write(
+        ".yaca/settings.json",
+        r#"{
+          "permissions": {
+            "rules": [{ "type": "directory", "path": "." }],
+            "denies": [{ "scope": { "type": "directory", "path": "." } }]
+          }
+        }"#,
+    );
+
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(delete("t1", "junk.rs")),
+        Turn::Events(script_text("Понял.")),
+    ]));
+    let handle = session(&dir, provider, Mode::Manual);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "снеси мёртвый файл").await;
+    let events = until(&mut rx, is_turn_over).await;
+
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, AgentEvent::ToolCallDenied { .. })),
+        "the grant must not undo the refusal"
+    );
+    assert!(victim.exists());
+}

@@ -125,6 +125,35 @@ impl<'de> Deserialize<'de> for ScopeKey {
     }
 }
 
+/// A standing "no" and the note that goes to the agent with every call it
+/// refuses (§5.7, §10).
+///
+/// Next to [`ScopeKey`] rather than inside the broker because it is no longer
+/// only a session thing: `.yaca/settings.json` keeps a list of these, and the
+/// settings window reads them. One shape for both, so the file and the broker
+/// cannot disagree about what a refusal is.
+///
+/// The reason is optional and travels with the refusal: the agent is told
+/// *why* it may not do this, which is the difference between a rule and a
+/// wall it keeps walking into.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct Refusal {
+    pub scope: ScopeKey,
+    /// Written as `null` when there is none, like every other optional field
+    /// of the settings file. `skip_serializing_if` would read better by hand
+    /// but ts-rs cannot parse that attribute, and a build warning is a worse
+    /// price than a null.
+    pub reason: Option<String>,
+}
+
+impl Refusal {
+    pub fn new(scope: ScopeKey, reason: Option<String>) -> Self {
+        Refusal { scope, reason }
+    }
+}
+
 /// Files inside a directory, counted for the question about it (§5.7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]

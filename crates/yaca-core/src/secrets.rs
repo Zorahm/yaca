@@ -65,15 +65,22 @@ pub fn key_source(provider: &str) -> KeySource {
     api_key(provider).1
 }
 
+/// The name the search key is stored under.
+///
+/// One spelling, not three: the tool reads it, the settings window writes it
+/// and asks where it came from, and a literal `"tavily"` in each of those
+/// would be three places to keep in step.
+pub const TAVILY_ITEM: &str = "tavily";
+
 /// The key Tavily's search API goes out with (§10).
 ///
 /// Tavily is not a model provider, but the store is keyed by an arbitrary
 /// item name and `yaca key set --provider <name>` works with any of them.
 /// The alias exists so a search tool reads an intent, not the plumbing:
-/// `api_key("tavily")` in `tool/web_search.rs` would look like a provider
+/// `api_key(TAVILY_ITEM)` in `tool/web_search.rs` would look like a provider
 /// lookup and send a reader hunting through the provider registry.
 pub fn tavily_key() -> Option<String> {
-    api_key("tavily").0
+    api_key(TAVILY_ITEM).0
 }
 
 /// Puts the key in the platform's store, replacing whatever was there.

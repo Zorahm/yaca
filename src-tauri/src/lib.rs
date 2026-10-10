@@ -7,10 +7,13 @@
 
 mod bridge;
 mod notify;
+mod prefs;
 mod profile;
+mod project;
 mod providers;
 mod settings;
 mod state;
+mod window;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -21,7 +24,7 @@ use yaca_core::provider::registry::{self, Providers};
 use yaca_core::slash::{self, SlashCommand};
 use yaca_core::store::{SearchHit, SessionMeta, SessionStore};
 use yaca_core::{Command, Effort, Mode, SessionConfig, SessionHandle};
-use tauri::State;
+use tauri::{Manager, State};
 
 use settings::AppSettings;
 use state::AppState;
@@ -170,6 +173,9 @@ async fn open_project(
 
     // Настройки проекта — основа, выбранное в окне поверх них (§10).
     let mut config = SessionConfig::open(root.as_path()).map_err(|e| e.to_string())?;
+    // А это — уровень приложения, и в файле проекта его нет: ядру он приезжает
+    // полем конфига, как режим и усилие.
+    config.respect_robots = state.prefs().respect_robots;
     if let Some(id) = resume {
         config.resume_session(SessionId::from(id));
     }
@@ -411,6 +417,15 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::new())
+        // Preferences before the first window draws anything: the shell holds
+        // them (§10) and the toast watcher asks about them on every event.
+        .setup(|app| {
+            if let Ok(dir) = config_dir() {
+                app.state::<AppState>()
+                    .set_prefs(AppSettings::load(&dir).prefs().clone());
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             projects,
             add_project,
@@ -441,8 +456,16 @@ pub fn run() {
             providers::set_api_key,
             providers::forget_api_key,
             providers::api_key_source,
+            providers::search_key_source,
             providers::models,
             providers::model_residency,
+            prefs::preferences,
+            prefs::set_preferences,
+            project::project_settings,
+            project::save_project_settings,
+            project::project_instructions,
+            project::shadow_excluded_dirs,
+            window::open_settings,
         ])
         .run(context)
         .expect("не удалось запустить приложение");

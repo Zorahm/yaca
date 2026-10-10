@@ -8,11 +8,12 @@
 //! the provider list belong to the application rather than to one project, and
 //! a field nothing reads is a setting that lies about having an effect.
 //!
-//! The core reads this file and never writes it. §5.7 is explicit that a rule
-//! granted in a hurry does not outlive the hurry: "Always allow" is
-//! session-lived, and a rule reaches `settings.json` through the settings
-//! screen and nowhere else. Until that screen exists the file is written by
-//! hand, which works — it is plain JSON with every field optional.
+//! The core reads this file and never writes it on its own. §5.7 is explicit
+//! that a rule granted in a hurry does not outlive the hurry: "Always allow"
+//! and "Always deny" are session-lived, and a rule reaches `settings.json`
+//! through the settings window (§10) and nowhere else. [`Settings::save`] is
+//! what that window calls, so the shape of the file is written down once.
+//! Editing it by hand still works — plain JSON with every field optional.
 //!
 //! A file that does not parse stops the session. Falling back to defaults would
 //! be safe in the narrow sense — fewer rules, less trust — but it would leave a
@@ -21,15 +22,17 @@
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::error::CoreError;
 use crate::intent::Mode;
-use crate::permission::ScopeKey;
+use crate::permission::{Refusal, ScopeKey};
 
 /// Where the file sits under the project root.
 pub const FILE: &str = "settings.json";
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
     /// The mode a session starts in (§8, §10). Absent means Manual — Yaca runs
@@ -50,15 +53,28 @@ pub struct Settings {
     pub shadow: ShadowSettings,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PermissionSettings {
     /// Standing rules, in the same shape "Always allow" offers (§5.7). These
     /// are the ones that survive a restart.
     pub rules: Vec<ScopeKey>,
+    /// Standing refusals, in the shape "Always deny" offers. Kept apart from
+    /// `rules` rather than folded into one list with a sign: a refusal carries
+    /// a reason and a grant does not, and the two lists answer different
+    /// questions — "what happens without me" and "what never happens".
+    ///
+    /// A refusal outranks a grant that covers the same call, and it is
+    /// consulted before the mode, so bypass means "stop asking me", not "do
+    /// what I said no to". That order lives in
+    /// [`crate::permission::broker::Broker::standing`]; the file only decides
+    /// which rules are in play.
+    pub denies: Vec<Refusal>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ShadowSettings {
     /// Directory names the snapshot walk does not enter, on top of the
@@ -91,8 +107,9 @@ impl Settings {
 
     /// Writes the file, creating `.yaca/` if needed.
     ///
-    /// Nothing in the core calls this: the settings screen will. It lives here
-    /// so that the screen does not have to know the shape of the file twice.
+    /// Nothing in the core calls this — the settings window does (§10). It
+    /// lives here so that the window does not have to know the shape of the
+    /// file a second time.
     pub fn save(&self, root: &Path) -> Result<(), CoreError> {
         let dir = crate::project::dir(root);
         std::fs::create_dir_all(&dir)
@@ -165,6 +182,15 @@ mod tests {
                     },
                     ScopeKey::Directory { path: "src".into() },
                 ],
+                denies: vec![
+                    Refusal::new(
+                        ScopeKey::CommandPrefix {
+                            prefix: "git commit".into(),
+                        },
+                        Some("коммит я делаю сам".into()),
+                    ),
+                    Refusal::new(ScopeKey::Directory { path: ".yaca".into() }, None),
+                ],
             },
             shadow: ShadowSettings {
                 exclude: vec!["fixtures".into()],
@@ -174,6 +200,52 @@ mod tests {
         written.save(dir.path()).unwrap();
 
         assert_eq!(Settings::load(dir.path()).unwrap(), written);
+    }
+
+    /// A refusal with no reason survives the round trip, and one written by
+    /// hand without the key at all parses too — the file is edited both ways.
+    #[test]
+    fn a_refusal_without_a_reason_round_trips() {
+        let dir = TempDir::new();
+        let written = Settings {
+            permissions: PermissionSettings {
+                // The canonical tool name: reading a `ScopeKey::Tool` runs it
+                // through the legacy rename table, so a file naming the old
+                // spelling comes back as the new one.
+                denies: vec![Refusal::new(
+                    ScopeKey::Tool {
+                        name: "WebFetch".into(),
+                    },
+                    None,
+                )],
+                ..PermissionSettings::default()
+            },
+            ..Settings::default()
+        };
+        written.save(dir.path()).unwrap();
+        assert_eq!(Settings::load(dir.path()).unwrap(), written);
+
+        // And the same refusal written by hand, with no `reason` key at all.
+        dir.write(
+            ".yaca/settings.json",
+            r#"{ "permissions": { "denies": [{ "scope": { "type": "tool", "name": "WebFetch" } }] } }"#,
+        );
+        assert_eq!(Settings::load(dir.path()).unwrap(), written);
+    }
+
+    /// A file written before refusals existed loads with none of them, rather
+    /// than refusing to parse.
+    #[test]
+    fn a_file_without_denies_still_loads() {
+        let dir = TempDir::new();
+        dir.write(
+            ".yaca/settings.json",
+            r#"{ "permissions": { "rules": [{ "type": "directory", "path": "src" }] } }"#,
+        );
+
+        let settings = Settings::load(dir.path()).unwrap();
+        assert_eq!(settings.permissions.rules.len(), 1);
+        assert!(settings.permissions.denies.is_empty());
     }
 
     #[test]
