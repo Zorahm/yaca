@@ -4,6 +4,9 @@
  * Раскрытие происходит внутри группы: строка растёт вниз, соседние остаются на
  * местах. Раскрыта по умолчанию только выполняющаяся — список из пятнадцати
  * действий читается как список, а не как простыня.
+ *
+ * У строки `Task` в раскрытии сперва идут строки подагента — те же самые, с
+ * тем же раскрытием в дифф и вывод, — а под ними отчёт, который он вернул.
  */
 
 import { CaretDown, CaretRight, Circle } from "@phosphor-icons/react";
@@ -15,6 +18,7 @@ import { caption, rowCounts, rowFiles } from "./captions";
 import { CodeBlock } from "./CodeBlock";
 import { Diff } from "./Diff";
 import { plainPath } from "./format";
+import { Thumb } from "./Thumb";
 
 export function ActionRowView({
   row,
@@ -55,12 +59,30 @@ export function ActionRowView({
           {/* Первая строка тела — полный путь или полная команда (§5.5.1). */}
           {row.target && <div className="row-target">{plainPath(row.target)}</div>}
 
+          {/* То, на что модель посмотрела, человек видит тоже: «прочитал
+              скриншот» без скриншота — отчёт, который нечем проверить. */}
+          {row.tool === "ReadImage" && row.target && row.state === "done" && (
+            <Thumb path={row.target} />
+          )}
+
+          {row.children.length > 0 && (
+            <div className="group-list">
+              {row.children.map((child) => (
+                <ActionRowView key={child.callId} row={child} onOpenFile={onOpenFile} />
+              ))}
+            </div>
+          )}
+
           {row.diff ? (
             <Diff diff={row.diff} soft path={row.fact?.path ?? row.target ?? undefined} />
           ) : row.output.trim() ? (
             <CodeBlock text={row.output} error={row.state === "failed"} />
           ) : (
-            <div className="row-target row-dim">{t("row.no_output")}</div>
+            // Пока подагент работает, отчёта нет, но и «вывода нет» — неправда:
+            // его строки выше и есть то, что происходит.
+            row.children.length === 0 && (
+              <div className="row-target row-dim">{t("row.no_output")}</div>
+            )
           )}
 
           {/* Причина, по которой действие не состоялось, — целиком: в подписи

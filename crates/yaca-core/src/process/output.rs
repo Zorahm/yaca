@@ -82,7 +82,8 @@ impl Utf8Stream {
 
 /// Output that is not UTF-8, read the way the platform meant it.
 ///
-/// `cmd.exe` and older Windows tools write in the machine's OEM codepage —
+/// Older Windows tools, and `cmd` when a command calls it, write in the
+/// machine's OEM codepage —
 /// `ломалось` comes out as eight cp866 bytes — and showing that as `��������`
 /// would be the feed lying about what the command printed (§0). Prefixing the
 /// command with `chcp 65001` was tried and dropped: it changes the line the
@@ -328,7 +329,7 @@ mod tests {
         assert_eq!(stream.flush(), "");
     }
 
-    /// cmd.exe writes Russian in the OEM codepage, not UTF-8, and the feed
+    /// Older Windows tools write Russian in the OEM codepage, not UTF-8, and the feed
     /// has to show what the command printed rather than eight `�`.
     #[cfg(windows)]
     #[test]

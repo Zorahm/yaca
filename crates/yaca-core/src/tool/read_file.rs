@@ -83,6 +83,15 @@ impl Tool for ReadFile {
             .as_str()
             .ok_or_else(|| ToolError::failed("не задан path"))?;
 
+        // An image read as text is two megabytes of noise in the window, and
+        // "binary file" would leave the model with nowhere to go next.
+        if ctx.ws.resolve_new(raw_path).is_ok_and(|abs| crate::picture::is_picture(&abs)) {
+            return Err(ToolError::failed_with(
+                format!("{raw_path} — изображение, а не текст"),
+                "This file is an image. Look at it with ReadImage.",
+            ));
+        }
+
         // Чтение уходит на блокирующий исполнитель: большой файл на сетевом
         // диске иначе останавливает всю сессию — вместе с каналом событий и
         // отменой, — а в пачке §5.4 держит соседние чтения, которые должны
@@ -254,6 +263,19 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("двоичный"));
+    }
+
+    #[tokio::test]
+    async fn an_image_is_sent_to_the_tool_that_can_show_it() {
+        let dir = TempDir::new();
+        std::fs::write(dir.path().join("shot.png"), crate::picture::tests::png(8, 8)).unwrap();
+        let (ctx, _ws) = ctx_for(&dir);
+
+        let err = ReadFile
+            .run(&ctx, json!({ "path": "shot.png" }))
+            .await
+            .unwrap_err();
+        assert!(err.for_model().contains("ReadImage"), "{}", err.for_model());
     }
 
     #[tokio::test]

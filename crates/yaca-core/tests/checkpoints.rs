@@ -25,13 +25,12 @@ use common::{ask, calls, is_turn_over, session, until, until_within, TempProject
 /// A line written through the shell, so the change comes from a real command
 /// and not from the core pretending to be one.
 ///
-/// `echo x> f` on cmd, which keeps a space before `>` as part of the text — and
-/// where a digit touching `>` would be read as a stream number instead. The
-/// trailing newline differs by platform, so tests look for the word, not for
-/// the exact bytes.
+/// Not `echo x > f` on Windows: Windows PowerShell's `>` writes UTF-16, and
+/// the test reads the file back as text. The trailing newline differs by
+/// platform, so tests look for the word, not for the exact bytes.
 fn write_through_shell(path: &str, line: &str) -> String {
     if cfg!(windows) {
-        format!("echo {line}> {path}")
+        format!("Set-Content -Path {path} -Value {line}")
     } else {
         format!("echo {line} > {path}")
     }

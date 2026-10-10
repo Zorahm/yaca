@@ -211,6 +211,7 @@ export const en: Record<Key, string> = {
   "composer.stop": "Stop",
   "composer.attach": "Attach files",
   "composer.detach": "Remove",
+  "attachment.gone": "{path} — the file is gone",
   "composer.queued": "queued",
   "composer.queued_cancel": "cancel",
   "composer.model_unloaded": "not loaded",
@@ -314,5 +315,17 @@ export const en: Record<Key, string> = {
 
   "common.open_project": "Open a project",
   "common.close": "Close",
+
+  "viewer.open": "Open {name}",
+  "viewer.loading": "Loading…",
+  "viewer.failed": "Cannot open the image: the file is gone or is not an image",
+  "viewer.prev": "Previous",
+  "viewer.next": "Next",
+  "viewer.count": "{at} of {of}",
+  "viewer.zoom_in": "Zoom in",
+  "viewer.zoom_out": "Zoom out",
+  "viewer.fit": "Fit to window",
+  "viewer.actual": "Actual size",
+  "viewer.rotate": "Rotate",
   "common.seconds": "{n}s",
 };

@@ -116,6 +116,12 @@ fn wire_block(block: &ContentBlock) -> serde_json::Value {
             "content": content,
             "is_error": is_error,
         }),
+        ContentBlock::Image {
+            media_type, data, ..
+        } => json!({
+            "type": "image",
+            "source": { "type": "base64", "media_type": media_type, "data": &**data },
+        }),
     }
 }
 
@@ -170,6 +176,23 @@ mod tests {
             body["messages"][2]["content"][0]["cache_control"]["type"],
             "ephemeral"
         );
+    }
+
+    #[test]
+    fn an_image_goes_as_a_base64_source() {
+        let block = ContentBlock::Image {
+            media_type: "image/png".into(),
+            data: "AAAA".into(),
+            width: 2,
+            height: 2,
+        };
+        let wire = wire_block(&block);
+        assert_eq!(wire["type"], "image");
+        assert_eq!(wire["source"]["type"], "base64");
+        assert_eq!(wire["source"]["media_type"], "image/png");
+        assert_eq!(wire["source"]["data"], "AAAA");
+        // The size is ours, for weighing the window; the API has no such field.
+        assert!(wire.get("width").is_none());
     }
 
     #[test]

@@ -31,6 +31,7 @@ import {
 import { t } from "../i18n";
 import { Composer, type ComposerActions, type ComposerSettings } from "./Composer";
 import { relativeTo } from "./format";
+import { imageActions } from "./images";
 import { ProjectChip } from "./ContextChips";
 import { Mark } from "./Mark";
 
@@ -135,6 +136,7 @@ export function Home({
           return picked.map((path) => relativeTo(project, path));
         }
       : undefined,
+    ...imageActions(project),
     // §7.3: `/compact` и `/clear` — про идущий разговор, а его здесь ещё нет.
     // Проектные команды работают: их разворачивает ядро, и первое сообщение
     // заводит сессию уже развёрнутым.

@@ -127,6 +127,19 @@ pub struct ModelInfo {
     /// [`ContextSource`].
     #[serde(default)]
     pub context_source: ContextSource,
+    /// Whether the model can be shown an image.
+    ///
+    /// Silence is a yes here, the opposite of the two flags above, because
+    /// the costs are the other way round. A model wrongly taken to see
+    /// refuses one request, which is sent again without the images
+    /// (`session::vision`); a model wrongly taken to be blind is never shown
+    /// a screenshot it could have read, and nothing says why.
+    #[serde(default = "yes")]
+    pub supports_images: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 /// Прайс-лист Anthropic, доллары за миллион токенов.
@@ -186,6 +199,7 @@ pub fn catalog() -> Vec<ModelInfo> {
         supports_thinking: true,
         // Written down, not answered — but a stated constant, not a guess.
         context_source: ContextSource::ProviderReported,
+        supports_images: true,
     };
     vec![
         m("claude-opus-5", "Opus 5", 1_000_000, 128_000),
@@ -224,6 +238,7 @@ pub fn unknown_model(id: &str) -> ModelInfo {
         supports_effort: false,
         supports_thinking: false,
         context_source: ContextSource::DefaultGuess,
+        supports_images: true,
     }
 }
 

@@ -211,6 +211,11 @@ fn transcript(messages: &[Message]) -> String {
                 // Thinking is the model's scratch paper, and a signature means
                 // nothing to a different model. Neither belongs in a summary.
                 ContentBlock::Thinking { .. } | ContentBlock::RedactedThinking { .. } => {}
+                // The summarizer reads text and may be a model that sees
+                // nothing; the line naming the image stands right before it.
+                ContentBlock::Image { width, height, .. } => {
+                    out.push_str(&format!("(an image, {width}×{height})\n\n"));
+                }
             }
         }
     }
@@ -248,6 +253,10 @@ pub fn freed(context_used: u32, plan: &Plan, summary_chars: usize) -> u32 {
     (context_used as f64 * share.max(0.0)) as u32
 }
 
+/// What `weight` counts for one token of an image, so that it comes out in
+/// the same unit as text. The same figure the worker divides by.
+const IMAGE_CHARS_PER_TOKEN: usize = 3;
+
 /// Characters, not bytes: the summary is measured in characters too, and in a
 /// Russian conversation the two differ by a factor of two.
 pub(super) fn weight(messages: &[Message]) -> usize {
@@ -260,6 +269,12 @@ pub(super) fn weight(messages: &[Message]) -> usize {
             ContentBlock::RedactedThinking { data } => data.chars().count(),
             ContentBlock::ToolUse { input, .. } => input.to_string().chars().count(),
             ContentBlock::ToolResult { content, .. } => content.chars().count(),
+            // Not its base64: an image costs by its pixels, and a megabyte of
+            // base64 counted as text would compact the conversation the
+            // moment a screenshot entered it.
+            ContentBlock::Image { width, height, .. } => {
+                crate::picture::tokens(*width, *height) as usize * IMAGE_CHARS_PER_TOKEN
+            }
         })
         .sum()
 }
@@ -277,220 +292,4 @@ fn clip(text: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn human(text: &str) -> Message {
-        Message::user_text(text)
-    }
-
-    fn agent(text: &str) -> Message {
-        Message::assistant(vec![ContentBlock::Text { text: text.into() }])
-    }
-
-    fn call(id: &str) -> Message {
-        Message::assistant(vec![ContentBlock::ToolUse {
-            id: id.into(),
-            name: "Read".into(),
-            input: serde_json::json!({ "path": "a.rs" }),
-        }])
-    }
-
-    fn result(id: &str) -> Message {
-        Message::tool_results(vec![ContentBlock::ToolResult {
-            tool_use_id: id.into(),
-            content: "fn main() {}".into(),
-            is_error: false,
-        }])
-    }
-
-    fn conversation() -> Vec<Message> {
-        vec![
-            human("раз"),
-            call("c1"),
-            result("c1"),
-            agent("ответ раз"),
-            human("два"),
-            agent("ответ два"),
-            human("три"),
-            agent("ответ три"),
-            human("четыре"),
-            agent("ответ четыре"),
-        ]
-    }
-
-    #[test]
-    fn the_summary_is_recognised_when_a_session_is_reopened() {
-        let history = rebuilt("сделали то-то", vec![human("три")]);
-        assert!(is_summary(history.first()));
-        assert!(!is_summary(Some(&human("обычное сообщение"))));
-        assert!(!is_summary(None));
-    }
-
-    #[test]
-    fn a_short_conversation_is_not_worth_compacting() {
-        assert!(plan(&[human("раз"), agent("ответ")]).is_none());
-    }
-
-    #[test]
-    fn the_cut_lands_on_something_the_human_said() {
-        let history = conversation();
-        let at = cut(&history).unwrap();
-        // Anywhere else and a tool call loses the result that answers it,
-        // which the API rejects the whole conversation for.
-        assert!(is_human_turn(&history[at]), "срез на {at}");
-        assert_eq!(at, 6, "две последние пары остаются как есть");
-    }
-
-    #[test]
-    fn the_tail_is_kept_word_for_word() {
-        let plan = plan(&conversation()).unwrap();
-        assert_eq!(plan.tail.len(), 4);
-        assert_eq!(plan.tail[0], human("три"));
-    }
-
-    #[test]
-    fn the_transcript_carries_both_sides_and_the_calls() {
-        let plan = plan(&conversation()).unwrap();
-        assert!(plan.transcript.contains("Human: раз"));
-        assert!(plan.transcript.contains("Agent: ответ раз"));
-        assert!(plan.transcript.contains("Agent used Read"));
-        assert!(plan.transcript.contains("(result) fn main() {}"));
-    }
-
-    #[test]
-    fn a_huge_tool_result_does_not_ride_along_whole() {
-        let mut history = conversation();
-        history[2] = Message::tool_results(vec![ContentBlock::ToolResult {
-            tool_use_id: "c1".into(),
-            content: "строка\n".repeat(10_000),
-            is_error: false,
-        }]);
-        let plan = plan(&history).unwrap();
-        assert!(plan.transcript.contains("обрезано"));
-        assert!(plan.transcript.chars().count() < 2_000);
-    }
-
-    #[test]
-    fn the_rebuilt_history_opens_with_the_summary_and_then_the_tail() {
-        let plan = plan(&conversation()).unwrap();
-        let history = rebuilt("сделали то-то", plan.tail);
-
-        assert_eq!(history.len(), 5);
-        assert_eq!(history[0].role, Role::User);
-        let ContentBlock::Text { text } = &history[0].content[0] else {
-            panic!("не текст");
-        };
-        // The model has to read it as its own memory, not as a new request.
-        assert!(text.starts_with(SUMMARY_HEADER));
-        assert!(text.contains("сделали то-то"));
-        assert_eq!(history[1], human("три"));
-    }
-
-    /// One human message and then a long run of calls — what an agent working
-    /// through a task looks like, and what the cut by turns cannot touch.
-    fn long_turn(steps: usize, result: &str) -> Vec<Message> {
-        let mut history = vec![human("почини все тесты")];
-        for i in 0..steps {
-            let id = format!("c{i}");
-            history.push(call(&id));
-            history.push(Message::tool_results(vec![ContentBlock::ToolResult {
-                tool_use_id: id,
-                content: result.into(),
-                is_error: false,
-            }]));
-        }
-        history
-    }
-
-    /// Every call in `messages` has its result there too.
-    fn whole(messages: &[Message]) -> bool {
-        let ids = |want_use: bool| -> Vec<String> {
-            messages
-                .iter()
-                .flat_map(|m| &m.content)
-                .filter_map(|b| match b {
-                    ContentBlock::ToolUse { id, .. } if want_use => Some(id.clone()),
-                    ContentBlock::ToolResult { tool_use_id, .. } if !want_use => {
-                        Some(tool_use_id.clone())
-                    }
-                    _ => None,
-                })
-                .collect()
-        };
-        ids(true) == ids(false)
-    }
-
-    #[test]
-    fn a_long_turn_is_cut_between_its_steps() {
-        let history = long_turn(6, "fn main() {}");
-        let plan = plan(&history).expect("a long turn must be compactable");
-
-        // The last two steps, each a call with its result, word for word.
-        assert_eq!(plan.tail.len(), 4);
-        assert_eq!(plan.tail[0].role, Role::Assistant);
-        assert!(whole(&plan.tail));
-        // The request that started it all goes to the summarizer.
-        assert!(plan.transcript.contains("Human: почини все тесты"));
-    }
-
-    #[test]
-    fn a_turn_too_short_to_cut_inside_is_left_alone() {
-        // Two steps kept and two summarized is the least worth doing.
-        assert!(plan(&long_turn(3, "x")).is_none());
-        assert!(plan(&long_turn(4, "x")).is_some());
-    }
-
-    #[test]
-    fn heavy_recent_turns_are_cut_inside_rather_than_kept_whole() {
-        let mut history = conversation();
-        history.extend(long_turn(6, &"вывод сборки ".repeat(500))[1..].iter().cloned());
-        let at_turns = cut_by_turns(&history).unwrap();
-
-        let plan = plan(&history).unwrap();
-        // Keeping the last two turns whole would keep nearly everything.
-        assert!(history.len() - plan.tail.len() > at_turns);
-        assert_eq!(plan.tail.len(), 4);
-        assert!(whole(&plan.tail));
-    }
-
-    #[test]
-    fn light_recent_turns_are_still_kept_whole() {
-        let mut history = conversation();
-        history.push(human("пять"));
-        history.push(agent("ответ пять"));
-        let plan = plan(&history).unwrap();
-        // A cut by turns frees most of it, so the turns stay whole.
-        assert!(matches!(&plan.tail[0].content[0], ContentBlock::Text { text } if text == "четыре"));
-    }
-
-    #[test]
-    fn the_summarizer_keeps_short_requests_in_the_humans_words() {
-        // Cut inside a turn, the request the agent is still working on goes
-        // into the summary, and a paraphrase of it is where drift starts.
-        assert!(SYSTEM.contains("in their own words"));
-    }
-
-    #[test]
-    fn what_was_freed_is_proportional_to_what_went_away() {
-        let plan = Plan {
-            transcript: String::new(),
-            tail: Vec::new(),
-            dropped_chars: 900,
-            total_chars: 1000,
-        };
-        // Nine tenths of the conversation left, minus what the summary costs.
-        assert_eq!(freed(100_000, &plan, 100), 80_000);
-    }
-
-    #[test]
-    fn a_summary_longer_than_what_it_replaced_frees_nothing() {
-        let plan = Plan {
-            transcript: String::new(),
-            tail: Vec::new(),
-            dropped_chars: 100,
-            total_chars: 1000,
-        };
-        assert_eq!(freed(100_000, &plan, 5_000), 0);
-    }
-}
+mod tests;

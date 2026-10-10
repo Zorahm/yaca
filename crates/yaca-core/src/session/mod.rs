@@ -7,11 +7,13 @@
 //!
 //! Разрезана по швам самого цикла: здесь устройство сессии и диспетчер, в
 //! [`turn`] — ход агента от сообщения до остановки, в [`calls`] — выполнение
-//! тулов вместе с разрешениями, в [`checkpoints`] — снимки рабочего дерева
+//! тулов, в [`asking`] — вопрос о разрешении перед ним, в [`checkpoints`] — снимки рабочего дерева
 //! и откат, в [`compaction`] — сжатие истории по ходу работы, в [`inbox`] —
-//! очередь работника и сообщения, вливающиеся в идущий ход (§7.4).
+//! очередь работника и сообщения, вливающиеся в идущий ход (§7.4), в
+//! [`subagent`] — разговор, который тул `Task` ведёт внутри хода.
 
 pub mod accumulator;
+mod asking;
 pub mod binding;
 mod calls;
 mod checkpoints;
@@ -20,7 +22,10 @@ mod compaction;
 mod inbox;
 pub mod log;
 pub mod prompt;
+pub(crate) mod retry;
+pub mod subagent;
 mod turn;
+mod vision;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -42,6 +47,7 @@ use crate::provider::registry::ANTHROPIC_ID;
 use crate::provider::Provider;
 use crate::settings::Settings;
 use crate::store::{Recorder, SessionMeta, SessionStore};
+use subagent::Ledger;
 use crate::tool::ToolRegistry;
 use crate::usage::{catalog, ModelInfo, UsageMeter, DEFAULT_MODEL};
 use crate::workspace::Workspace;
@@ -218,6 +224,12 @@ struct Shared {
     /// `.yaca/settings.json` as it was when the session opened. Read for what
     /// the core decides on its own — which model summarizes history (§5.11).
     settings: Settings,
+    /// What subagents spent and the worker has not counted yet.
+    ledger: Arc<Ledger>,
+    /// Held by a call that may not run beside another (`calls`).
+    lane: tokio::sync::Mutex<()>,
+    /// Models that turned an image down in this session (`vision`).
+    blind: Mutex<std::collections::HashSet<String>>,
 }
 
 impl Shared {
@@ -323,6 +335,9 @@ pub fn spawn(
         ws: ws.clone(),
         recorder,
         settings,
+        ledger: Arc::default(),
+        lane: tokio::sync::Mutex::new(()),
+        blind: Mutex::default(),
         state: Mutex::new(SessionState {
             project_root: ws.root().to_string_lossy().to_string(),
             provider: config.provider.clone(),
@@ -339,10 +354,10 @@ pub fn spawn(
     tokio::spawn(dispatch(cmd_rx, work_tx, shared.clone()));
     tokio::spawn(
         turn::Worker {
-            instructions: crate::instructions::load(&ws),
+            instructions: crate::instructions::load(&ws).map(Arc::new),
             ws,
             provider,
-            registry: ToolRegistry::standard(),
+            registry: Arc::new(ToolRegistry::standard()),
             // A resumed session opens compacted if that is how it was left,
             // which is why the summary marker is looked for rather than
             // assumed absent.

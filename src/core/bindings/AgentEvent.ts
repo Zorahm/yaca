@@ -39,7 +39,13 @@ target: string | null,
 /**
  * Аргументы вызова. Нужны для §5.7 (подробность запроса разрешения).
  */
-input: unknown, } | { "type": "toolCallProgress", callId: CallId, chunk: string, } | { "type": "toolCallFinished", callId: CallId, meta: ToolMeta, } | { "type": "toolCallFailed", callId: CallId, message: string, } | { "type": "toolCallRejected", callId: CallId, reason: string, } | { "type": "toolCallDenied", callId: CallId, reason: string | null, 
+input: unknown, 
+/**
+ * The `Task` row this call belongs under: it was made by a subagent,
+ * not by the agent. `None` for the agent's own calls, and absent
+ * from journals written before subagents existed.
+ */
+parent: CallId | null, } | { "type": "toolCallProgress", callId: CallId, chunk: string, } | { "type": "toolCallFinished", callId: CallId, meta: ToolMeta, } | { "type": "toolCallFailed", callId: CallId, message: string, } | { "type": "toolCallRejected", callId: CallId, reason: string, } | { "type": "toolCallDenied", callId: CallId, reason: string | null, 
 /**
  * Вызов уже работал, и человек его остановил, — а не отказал в
  * разрешении до запуска. Род исхода тот же, решение человека, но

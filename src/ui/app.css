@@ -301,18 +301,6 @@
 }
 
 /* Крестик на чипе приложенного файла (§7.2). */
-.attachment-drop {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 6px;
-  color: var(--ink-muted);
-  vertical-align: -1px;
-}
-
-.attachment-drop:hover {
-  color: var(--rust);
-}
-
 /* Чип режима — текстом без рамки (§7.1). */
 .chip {
   padding: 2px 4px;

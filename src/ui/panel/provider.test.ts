@@ -103,6 +103,7 @@ describe("drafts and specs", () => {
         supportsEffort: false,
         supportsThinking: false,
         contextSource: "default_guess",
+        supportsImages: true,
       },
     ],
   };

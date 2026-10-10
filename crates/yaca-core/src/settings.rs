@@ -43,6 +43,9 @@ pub struct Settings {
     /// The model that summarizes history (§5.11, §10). Absent means the
     /// session's own model.
     pub compact_model: Option<String>,
+    /// The model subagents run on (§10). Absent means the session's own model.
+    /// Served by the session's provider, like the one above.
+    pub subagent_model: Option<String>,
     pub permissions: PermissionSettings,
     pub shadow: ShadowSettings,
 }
@@ -107,6 +110,11 @@ impl Settings {
     /// Which model summarizes history, given the session's own model (§5.11).
     pub fn compact_model_or<'a>(&'a self, session_model: &'a str) -> &'a str {
         self.compact_model.as_deref().unwrap_or(session_model)
+    }
+
+    /// Which model a subagent runs on, given the session's own model.
+    pub fn subagent_model_or<'a>(&'a self, session_model: &'a str) -> &'a str {
+        self.subagent_model.as_deref().unwrap_or(session_model)
     }
 }
 

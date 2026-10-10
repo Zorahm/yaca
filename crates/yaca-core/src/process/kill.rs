@@ -1,6 +1,6 @@
 //! Ending a command means ending everything it started.
 //!
-//! `Child::kill` reaches the shell and stops there. `cmd /C npm test` would
+//! `Child::kill` reaches the shell and stops there. `powershell -Command npm test` would
 //! leave node running, the panel would go on showing a process that is gone
 //! while the one doing the work stayed — and "Stop" (§6.5) would be a button
 //! that sometimes works, which §0 calls an interface lying about state.

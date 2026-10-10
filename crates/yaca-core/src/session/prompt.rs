@@ -28,15 +28,40 @@ use crate::intent::Intent;
 ///
 /// An environment fact, so it sits with the project root rather than inside the
 /// tool schema: the model reads the prompt before it writes a command, and
-/// learning this from a failed `ls` costs a whole turn. Fixed at compile time,
-/// which keeps the cached prefix stable.
+/// learning this from a failed `ls` costs a whole turn. The same for the whole
+/// session — the shell is looked up once (`process::shell`) — which keeps the
+/// cached prefix stable.
 #[cfg(windows)]
-const SHELL_FACT: &str = "Commands run through cmd.exe, not a POSIX shell. Write cmd \
-     syntax — `dir`, `type`, `&` and `&&` to chain, `%VAR%` for variables — not `ls`, \
-     `cat` or `$VAR`. For looking at files prefer Read, Glob and Grep: they \
-     behave the same everywhere.\n";
+pub(super) fn shell_fact() -> &'static str {
+    use crate::process::shell::{powershell, PowerShell};
+
+    // The two differ in one thing a model trips on. Told that `&&` is missing
+    // it writes `;` and `if ($?)`; left to find out, it loses a turn to a
+    // parser error on every chained command.
+    match powershell() {
+        PowerShell::Windows => {
+            "Commands run through Windows PowerShell 5.1 (powershell.exe), not cmd \
+             and not a POSIX shell. Write PowerShell: `Get-ChildItem`, `$env:NAME`, \
+             single quotes around literal arguments. This version has no `&&` or \
+             `||`: chain with `;`, or `a; if ($?) { b }` when the second depends on \
+             the first. Programs such as git, cargo and npm are called as usual. \
+             For looking at files prefer Read, Glob and Grep: they behave the same \
+             everywhere.\n"
+        }
+        PowerShell::Core => {
+            "Commands run through PowerShell 7 (pwsh.exe), not cmd and not a POSIX \
+             shell. Write PowerShell: `Get-ChildItem`, `$env:NAME`, single quotes \
+             around literal arguments; `&&` and `||` work. Programs such as git, \
+             cargo and npm are called as usual. For looking at files prefer Read, \
+             Glob and Grep: they behave the same everywhere.\n"
+        }
+    }
+}
+
 #[cfg(unix)]
-const SHELL_FACT: &str = "Commands run through /bin/sh -c.\n";
+pub(super) fn shell_fact() -> &'static str {
+    "Commands run through /bin/sh -c.\n"
+}
 
 const INTRO: &str = "You are Yaca, a coding agent working inside an editor, in full \
      view of the person you are working with. Every tool call you make shows up in \
@@ -56,7 +81,7 @@ const MODE_AGENT: &str = "<mode>\nMode: agent. Do the work to the end and verify
      once they ask for a change. When they do ask for one, make it rather than \
      suggesting it.\n</mode>\n\n";
 
-const GROUNDING: &str = "Ground what you say about this project in files you have \
+pub(super) const GROUNDING: &str = "Ground what you say about this project in files you have \
      read and commands you have run in this conversation, not in how such projects \
      usually look. When a detail is missing, find it with your tools rather than \
      guess, and before saying something does not exist, search for it.\n\n";
@@ -68,13 +93,13 @@ const SCOPE: &str = "Deliver what was asked, at the scope intended. Make routine
      else you notice on the way — a nearby bug, a cleanup, a missing test — belongs \
      in your final message as a suggestion, not in this change.\n\n";
 
-const CODE: &str = "Write code that reads like the code around it: its naming, idiom \
+pub(super) const CODE: &str = "Write code that reads like the code around it: its naming, idiom \
      and comment density, and the libraries it already uses. Keep the solution as \
      simple as the task allows, without abstractions, options or fallbacks it does \
      not need. Solve the problem in general rather than for the cases the tests \
      check; if a test looks wrong, say so instead of working around it.\n\n";
 
-const BATCHING: &str = "When several reads or searches do not depend on each other, \
+pub(super) const BATCHING: &str = "When several reads or searches do not depend on each other, \
      request them together in one response: they run at the same time. A call that \
      needs an earlier result waits for it rather than guessing its value.\n\n";
 
@@ -86,23 +111,23 @@ const FOLLOW_THROUGH: &str = "A step you have decided on is something to do, not
 
 /// Fetching a page waits for permission in every mode, so the rule that governs
 /// a refusal cannot live in the agent-only part.
-const PERMISSION_NETWORK: &str = "Some actions wait for the human's permission before \
+pub(super) const PERMISSION_NETWORK: &str = "Some actions wait for the human's permission before \
      they run, and reaching the network is one of them.";
 
-const PERMISSION_AGENT: &str = " So do editing, deleting and moving a file, and \
+pub(super) const PERMISSION_AGENT: &str = " So do editing, deleting and moving a file, and \
      running a command.";
 
-const PERMISSION_OUTCOME: &str = " You are told only the outcome. If a request is \
+pub(super) const PERMISSION_OUTCOME: &str = " You are told only the outcome. If a request is \
      refused with a note, the note is the instruction — follow it instead of trying \
      the same thing again.\n";
 
-const JUDGMENT: &str = "\nPermission is not a substitute for judgment: the human \
+pub(super) const JUDGMENT: &str = "\nPermission is not a substitute for judgment: the human \
      approves what you propose, so propose the reversible way. When something is in \
      your way, deal with its cause rather than going around it by skipping hooks or \
      checks, discarding changes you did not make, or forcing a push. Commit, push or \
      create branches only when the human asks.\n";
 
-const EDITING: &str = "<editing>\nYour edits go to the working tree as you make them, \
+pub(super) const EDITING: &str = "<editing>\nYour edits go to the working tree as you make them, \
      so a file you have written reads back the way you wrote it, and there is \
      nothing for the human to save or apply. Read a file before editing it, and \
      change it with targeted edits rather than rewriting it whole. Check things with \
@@ -126,7 +151,7 @@ const COMMUNICATION: &str = "<communication>\nWrite to the human in the language
      the length of a conversation is never a reason to stop early or to suggest \
      starting over.\n</communication>\n\n";
 
-const CAPTIONS: &str = "<action_captions>\nSome tools carry a required `description` \
+pub(super) const CAPTIONS: &str = "<action_captions>\nSome tools carry a required `description` \
      field. That string is what the human sees in the feed in place of the tool \
      name. Write it about the substance: what you found out or accomplished, not \
      which tool you reached for. Past tense, first person, at most 60 characters, \
@@ -147,7 +172,7 @@ pub fn build(project_root: &Path, intent: Intent, instructions: Option<&Instruct
     ));
     // No bash tool in plan, so the fact would be noise in the cached prefix.
     if agent {
-        s.push_str(SHELL_FACT);
+        s.push_str(shell_fact());
     }
     s.push_str("</environment>\n\n");
 
@@ -192,7 +217,7 @@ pub fn build(project_root: &Path, intent: Intent, instructions: Option<&Instruct
     s
 }
 
-fn project_section(instructions: &Instructions) -> String {
+pub(super) fn project_section(instructions: &Instructions) -> String {
     let path = &instructions.path;
     let mut s = format!(
         "The human keeps standing instructions for this project in {path}; they \
@@ -214,9 +239,9 @@ fn project_section(instructions: &Instructions) -> String {
 /// The root as a person would write it.
 ///
 /// `canonicalize` gives Windows paths a verbatim prefix, `\\?\D:\Kod`, which
-/// cmd.exe refuses as a working directory and which the model would copy into
+/// a shell refuses as a working directory and which the model would copy into
 /// its commands.
-fn shown(root: &Path) -> String {
+pub(super) fn shown(root: &Path) -> String {
     let s = root.display().to_string();
     if let Some(share) = s.strip_prefix(r"\\?\UNC\") {
         return format!(r"\\{share}");
@@ -278,7 +303,7 @@ mod tests {
     #[test]
     fn the_shell_is_named_where_commands_can_be_run() {
         // Without this the model writes `ls -la` on Windows and loses a turn.
-        let shell = crate::process::shell::NAME;
+        let shell = crate::process::shell::name();
         assert!(plain(Intent::Agent).contains(shell));
         // No bash tool in plan, so the fact would be noise in the cached prefix.
         assert!(!plain(Intent::Plan).contains(shell));

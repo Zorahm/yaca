@@ -76,16 +76,10 @@
 .attachments {
   display: flex;
   flex-wrap: wrap;
+  /* Плитки картинок и чипы файлов стоят в одном ряду — по нижнему краю. */
+  align-items: flex-end;
   gap: 6px;
   margin-bottom: 8px;
-}
-
-.attachment {
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  background: var(--paper-sunken);
-  font: 400 12px var(--mono);
-  color: var(--ink-muted);
 }
 
 /* --- §5.2 текст агента --------------------------------------------------- */

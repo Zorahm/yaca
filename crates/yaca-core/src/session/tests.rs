@@ -389,6 +389,9 @@ async fn режим_plan_не_отдаёт_модели_пишущих_туло�
             "Glob",
             "Grep",
             "Read",
+            "ReadImage",
+            // The mode binds a subagent as it binds the agent.
+            "Task",
             "TodoWrite",
             "WebFetch",
             "WebSearch"

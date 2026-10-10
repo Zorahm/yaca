@@ -92,6 +92,9 @@ fn anthropic_model(m: &AnthropicModel) -> ModelInfo {
     info.supports_effort = supported(&m.capabilities, &["effort"]).unwrap_or(false);
     info.supports_thinking =
         supported(&m.capabilities, &["thinking", "types", "adaptive"]).unwrap_or(false);
+    // The other way round: only a stated "no" turns images off (see
+    // `ModelInfo::supports_images`).
+    info.supports_images = supported(&m.capabilities, &["image_input"]).unwrap_or(true);
     info
 }
 

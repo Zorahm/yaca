@@ -39,6 +39,7 @@ export const demoModels: ModelInfo[] = [
     supportsEffort: true,
     supportsThinking: true,
     contextSource: "provider_reported",
+    supportsImages: true,
   },
   {
     id: "claude-sonnet-5",
@@ -50,6 +51,7 @@ export const demoModels: ModelInfo[] = [
     supportsEffort: true,
     supportsThinking: true,
     contextSource: "provider_reported",
+    supportsImages: true,
   },
 ];
 
@@ -73,6 +75,7 @@ function call(
     description,
     target,
     input: {},
+    parent: null,
   };
 }
 

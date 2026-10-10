@@ -323,6 +323,48 @@ fn project_commands(project: String) -> Result<Vec<SlashCommand>, String> {
     Ok(slash::load(&project_path(&project)?))
 }
 
+/// What an attachment is, and its thumbnail if it is an image (§7.2).
+///
+/// The page gets pixels, not access: it cannot read the disk, and opening
+/// the disk to it for thumbnails would open it to everything else on the
+/// page. A path from the feed is written from the project root, so the root
+/// comes along.
+#[tauri::command]
+async fn attachment_look(
+    project: String,
+    path: String,
+) -> Result<yaca_core::picture::AttachmentLook, String> {
+    let root = project_path(&project)?;
+    tauri::async_runtime::spawn_blocking(move || yaca_core::picture::look(&root.join(path)))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// The image whole, for the viewer: the preview is too small to look into.
+#[tauri::command]
+async fn image_full(project: String, path: String) -> Result<String, String> {
+    let root = project_path(&project)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        yaca_core::picture::original(&root.join(path)).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Keeps an image pasted into the composer and returns its path from the
+/// project root — the form every other attachment has (§7.2).
+#[tauri::command]
+async fn stash_image(project: String, data: String) -> Result<String, String> {
+    let root = project_path(&project)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = yaca_core::picture::stash_encoded(&root, &data).map_err(|e| e.to_string())?;
+        let shown = path.strip_prefix(&root).unwrap_or(&path);
+        Ok(shown.to_string_lossy().replace('\\', "/"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 async fn send_command(
     state: State<'_, AppState>,
@@ -392,6 +434,9 @@ pub fn run() {
             export_session,
             session_feed,
             project_commands,
+            attachment_look,
+            image_full,
+            stash_image,
             providers::discover_models,
             providers::set_api_key,
             providers::forget_api_key,

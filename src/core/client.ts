@@ -7,6 +7,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
 
@@ -14,6 +15,7 @@ import { demoModels, demoScript, demoState, inTauri } from "./demo";
 import { OPENAI_PROVIDER_ID, isPreset, needsKey } from "./provider";
 
 import type { AgentEvent } from "./bindings/AgentEvent";
+import type { AttachmentLook } from "./bindings/AttachmentLook";
 import type { CheckpointChange } from "./bindings/CheckpointChange";
 import type { CheckpointId } from "./bindings/CheckpointId";
 import type { CheckpointSummary } from "./bindings/CheckpointSummary";
@@ -48,6 +50,7 @@ import type { ToolMeta } from "./bindings/ToolMeta";
 import type { UsageSnapshot } from "./bindings/UsageSnapshot";
 
 export type {
+  AttachmentLook,
   AgentEvent,
   CheckpointChange,
   CheckpointId,
@@ -190,6 +193,63 @@ export function chooseFiles(root: string, title: string): Promise<string[]> {
   return open({ directory: false, multiple: true, defaultPath: root, title }).then(
     (picked) => (Array.isArray(picked) ? picked : picked === null ? [] : [picked]),
   );
+}
+
+/**
+ * Что лежит по пути вложения — и миниатюра, если это картинка.
+ *
+ * Путь тот, что записан в ленте: от корня проекта либо абсолютный, если файл
+ * лежит снаружи. Смотрит ядро — вебвью диска не видит. В стенде смотреть
+ * некому, и всё, кроме пути с косой чертой на конце, считается файлом.
+ */
+export function attachmentLook(project: string, path: string): Promise<AttachmentLook> {
+  if (!inTauri) {
+    return Promise.resolve({ kind: /[\\/]$/.test(path) ? "folder" : "file", preview: null });
+  }
+  return invoke<AttachmentLook>("attachment_look", { project, path });
+}
+
+/**
+ * Картинка целиком, `data:`-адресом, — для просмотрщика. Миниатюры хватает
+ * узнать картинку, но не рассмотреть её.
+ */
+export function imageFull(project: string, path: string): Promise<string> {
+  if (!inTauri) return Promise.reject("в стенде картинку прочитать некому");
+  return invoke<string>("image_full", { project, path });
+}
+
+/**
+ * Сохранить вставленную картинку (base64 без префикса) и вернуть её путь от
+ * корня проекта. У вставленного файла пути нет, а всё дальше — чип, журнал,
+ * карточка открытой заново сессии — говорит путями.
+ */
+export function stashImage(project: string, data: string): Promise<string> {
+  if (!inTauri) return Promise.reject("в стенде вставленное сохранить некуда");
+  return invoke<string>("stash_image", { project, data });
+}
+
+/**
+ * Файлы, брошенные в окно. Возвращает отписку.
+ *
+ * Оболочка перехватывает перетаскивание сама и отдаёт пути, а не содержимое:
+ * событие `drop` до страницы не доходит, зато и читать файл странице незачем.
+ */
+export function onFilesDropped(listener: (paths: string[]) => void): () => void {
+  if (!inTauri) return () => {};
+  let off: (() => void) | null = null;
+  let gone = false;
+  void getCurrentWebview()
+    .onDragDropEvent((event) => {
+      if (event.payload.type === "drop") listener(event.payload.paths);
+    })
+    .then((unlisten) => {
+      if (gone) unlisten();
+      else off = unlisten;
+    });
+  return () => {
+    gone = true;
+    off?.();
+  };
 }
 
 /** Имя для приветствия §9.1. Взято у ОС; не нашлось — обращения не будет. */

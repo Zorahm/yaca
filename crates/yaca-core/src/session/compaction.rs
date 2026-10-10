@@ -156,7 +156,7 @@ impl Worker {
         }
     }
 
-    fn context_max(&self) -> u32 {
+    pub(super) fn context_max(&self) -> u32 {
         let model = self.shared.state.lock().unwrap().model.clone();
         self.shared.model_info(&model).context_max
     }

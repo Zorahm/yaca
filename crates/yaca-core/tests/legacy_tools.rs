@@ -114,6 +114,7 @@ fn session_store_replays_events_with_canonical_tool_names() {
         description: Some("Read file".into()),
         target: Some("src/a.rs".into()),
         input: serde_json::json!({}),
+        parent: None,
     };
     let event2 = AgentEvent::PermissionRequested {
         request: PermissionRequest {

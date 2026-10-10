@@ -81,6 +81,9 @@ struct OpenAiModel {
     /// OpenRouter: what the model actually accepts.
     #[serde(default)]
     supported_parameters: Option<Vec<String>>,
+    /// OpenRouter: `input_modalities` under it says whether the model sees.
+    #[serde(default)]
+    architecture: Option<serde_json::Value>,
     /// A local server (Unsloth studio): is the model in memory right now.
     /// Live state, so it is read by [`residency`] and never into `ModelInfo`.
     #[serde(default)]
@@ -136,6 +139,16 @@ fn openai_model(m: &OpenAiModel) -> ModelInfo {
     // Thinking blocks are never sent back in this shape (see `super::openai`),
     // so there is no point asking any model here for them.
     info.supports_thinking = false;
+    // OpenRouter lists what a model takes in. A list without "image" is a
+    // stated no; no list at all — the bare shape — says nothing, and nothing
+    // leaves images on (see `ModelInfo::supports_images`).
+    if let Some(inputs) = m
+        .architecture
+        .as_ref()
+        .and_then(|a| a["input_modalities"].as_array())
+    {
+        info.supports_images = inputs.iter().any(|i| i == "image");
+    }
     info
 }
 

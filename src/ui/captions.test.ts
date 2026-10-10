@@ -26,6 +26,7 @@ function row(patch: Partial<ActionRow>): ActionRow {
     output: "",
     fact: null,
     diff: null,
+    children: [],
     ...patch,
   };
 }
@@ -79,5 +80,25 @@ describe("the question about deleting a directory", () => {
 
   it("says when the count stopped short", () => {
     expect(markup({ files: 10000, more: true })).toContain(tp("ask.files_more", 10000));
+  });
+});
+
+describe("шапка группы с подагентом", () => {
+  it("считает то, что подагент сделал с проектом", () => {
+    const created = { path: "a.txt", kind: "created" as const, movedFrom: null, added: 3, removed: 0 };
+    const task = row({
+      tool: "Task",
+      target: null,
+      meta: null,
+      children: [
+        row({ callId: "w1", tool: "Write", target: "a.txt", fact: created }),
+        row({ callId: "b1", tool: "Bash", target: "npm test", meta: null }),
+      ],
+    });
+
+    const head = summary([task]);
+    // Файл создан, команда выполнена — кем, шапке всё равно: она про проект.
+    expect(head.parts).toHaveLength(3);
+    expect(head.added).toBe(3);
   });
 });

@@ -101,7 +101,10 @@ fn wire_messages(req: &ProviderRequest) -> Value {
 /// обязаны идти сразу за вызовом. Поэтому они выкладываются первыми, а текст
 /// человека — после них, даже если в блоках он стоял раньше.
 fn push_user(out: &mut Vec<Value>, msg: &Message) {
-    let mut text = String::new();
+    // Text and images in the order they came: the line naming an image
+    // stands right before it.
+    let mut parts: Vec<Value> = Vec::new();
+    let mut pictured = false;
 
     for block in &msg.content {
         match block {
@@ -124,20 +127,36 @@ fn push_user(out: &mut Vec<Value>, msg: &Message) {
                     "content": content,
                 }));
             }
-            ContentBlock::Text { text: t } => {
-                if !text.is_empty() {
-                    text.push('\n');
-                }
-                text.push_str(t);
+            ContentBlock::Text { text } => parts.push(json!({ "type": "text", "text": text })),
+            // A `tool` message carries text only, which is why an image a
+            // tool read arrives as a block of its own and lands here, in the
+            // user message after the results.
+            ContentBlock::Image {
+                media_type, data, ..
+            } => {
+                pictured = true;
+                parts.push(json!({
+                    "type": "image_url",
+                    "image_url": { "url": format!("data:{media_type};base64,{data}") },
+                }));
             }
             // Рассуждение и вызов тула в сообщении человека не появляются.
             _ => {}
         }
     }
 
-    if !text.is_empty() {
-        out.push(json!({ "role": "user", "content": text }));
+    if parts.is_empty() {
+        return;
     }
+    // Plain text stays a string: that is the form every server in this shape
+    // takes, and the list of parts is one only those with vision do.
+    let content = if pictured {
+        Value::Array(parts)
+    } else {
+        let lines: Vec<&str> = parts.iter().filter_map(|p| p["text"].as_str()).collect();
+        Value::String(lines.join("\n"))
+    };
+    out.push(json!({ "role": "user", "content": content }));
 }
 
 fn push_assistant(out: &mut Vec<Value>, msg: &Message) {
@@ -163,7 +182,7 @@ fn push_assistant(out: &mut Vec<Value>, msg: &Message) {
             })),
             // Рассуждению в этой форме места нет — см. шапку модуля.
             ContentBlock::Thinking { .. } | ContentBlock::RedactedThinking { .. } => {}
-            ContentBlock::ToolResult { .. } => {}
+            ContentBlock::ToolResult { .. } | ContentBlock::Image { .. } => {}
         }
     }
 
@@ -258,6 +277,39 @@ mod tests {
         // Текст человека — после результата, а не перед ним.
         assert_eq!(body["messages"][2]["role"], "user");
         assert_eq!(body["messages"][2]["content"], "спасибо");
+    }
+
+    #[test]
+    fn an_image_a_tool_read_follows_its_result_in_a_user_message() {
+        let mut r = req();
+        r.messages = vec![Message {
+            role: Role::User,
+            content: vec![
+                ContentBlock::ToolResult {
+                    tool_use_id: "call_1".into(),
+                    content: "shot.png, 2×2".into(),
+                    is_error: false,
+                },
+                ContentBlock::Text {
+                    text: "Image: shot.png".into(),
+                },
+                ContentBlock::Image {
+                    media_type: "image/png".into(),
+                    data: "AAAA".into(),
+                    width: 2,
+                    height: 2,
+                },
+            ],
+        }];
+        let body = build_body(&r, MaxField::default());
+
+        assert_eq!(body["messages"][1]["role"], "tool");
+        assert_eq!(body["messages"][1]["content"], "shot.png, 2×2");
+        let parts = &body["messages"][2]["content"];
+        assert_eq!(body["messages"][2]["role"], "user");
+        assert_eq!(parts[0]["text"], "Image: shot.png");
+        assert_eq!(parts[1]["type"], "image_url");
+        assert_eq!(parts[1]["image_url"]["url"], "data:image/png;base64,AAAA");
     }
 
     #[test]

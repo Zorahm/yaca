@@ -26,4 +26,14 @@ supportsThinking: boolean,
  * How `context_max` came to be. A fallback stays visible: see
  * [`ContextSource`].
  */
-contextSource: ContextSource, };
+contextSource: ContextSource, 
+/**
+ * Whether the model can be shown an image.
+ *
+ * Silence is a yes here, the opposite of the two flags above, because
+ * the costs are the other way round. A model wrongly taken to see
+ * refuses one request, which is sent again without the images
+ * (`session::vision`); a model wrongly taken to be blind is never shown
+ * a screenshot it could have read, and nothing says why.
+ */
+supportsImages: boolean, };

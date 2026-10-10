@@ -355,7 +355,7 @@ mod tests {
     /// that hides which shell is actually under test.
     fn two_bursts() -> &'static str {
         if cfg!(windows) {
-            "echo one& ping -n 3 127.0.0.1 >nul& echo two"
+            "echo one; Start-Sleep -Milliseconds 400; echo two"
         } else {
             "echo one; sleep 0.4; echo two"
         }
@@ -363,7 +363,7 @@ mod tests {
 
     fn sleeps() -> &'static str {
         if cfg!(windows) {
-            "ping -n 20 127.0.0.1 >nul"
+            "Start-Sleep -Seconds 20"
         } else {
             "sleep 20"
         }
@@ -427,7 +427,7 @@ mod tests {
         let (ctx, _ws) = ctx_for(&dir);
 
         let err = Bash
-            .run(&ctx, json!({ "command": "echo broken& exit 3" }))
+            .run(&ctx, json!({ "command": "echo broken; exit 3" }))
             .await
             .unwrap_err();
 

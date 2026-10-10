@@ -43,6 +43,9 @@ import { Feed, type FeedActions, type FeedJump } from "./ui/Feed";
 import { Notices } from "./ui/Bars";
 import { Composer, MODES, type ComposerActions } from "./ui/Composer";
 import { Home } from "./ui/Home";
+import { imageActions } from "./ui/images";
+import { galleryOf } from "./ui/viewer/gallery";
+import { Pictures } from "./ui/viewer/Viewer";
 import { TopBar } from "./ui/TopBar";
 import { Sidebar } from "./ui/sidebar/Sidebar";
 import { ProcessesPanel } from "./ui/panel/ProcessesPanel";
@@ -66,6 +69,7 @@ import "./ui/diff.css";
 import "./ui/syntax.css";
 import "./ui/home.css";
 import "./ui/panel/panel.css";
+import "./ui/viewer/viewer.css";
 import "./ui/sidebar/sidebar.css";
 
 /** Панель §1.1. Сессии уехали в свою колонку — сайдбар, а не панель. */
@@ -98,6 +102,9 @@ export default function App() {
    * не подпиской: файлы проекта живут вне потока `AgentEvent`.
    */
   const project = active?.project ?? draft;
+  // Картинки разговора по порядку — по ним листает просмотрщик.
+  const activeFeed = active?.feed ?? null;
+  const gallery = useMemo(() => galleryOf(activeFeed), [activeFeed]);
   const refreshCommands = useCallback(() => {
     if (project === null) return setSlashCommands([]);
     void projectCommands(project).then(setSlashCommands, failed);
@@ -269,6 +276,7 @@ export default function App() {
           return picked.map((path) => relativeTo(root, path));
         }
       : undefined,
+    ...imageActions(active?.feed.state?.projectRoot ?? null),
     refreshCommands,
   };
 
@@ -348,6 +356,7 @@ export default function App() {
 
   if (active === null || state === null) {
     return (
+      <Pictures root={project} gallery={gallery}>
       <div className="shell">
         {/* На домашнем экране сайдбар не прячется: прячет его кнопка шапки
             §3, а шапки здесь нет. Прятать тут и нечего — кроме сайдбара на
@@ -372,6 +381,7 @@ export default function App() {
           <ProvidersPanel withoutTopBar onClose={closeProviders} />
         )}
       </div>
+      </Pictures>
     );
   }
 
@@ -380,6 +390,7 @@ export default function App() {
   ).length;
 
   return (
+    <Pictures root={project} gallery={gallery}>
     <div className="shell">
       {sidebarOpen && sidebar}
 
@@ -462,5 +473,6 @@ export default function App() {
         />
       </div>
     </div>
+    </Pictures>
   );
 }

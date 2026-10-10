@@ -3,8 +3,8 @@
 //! Работник владеет историей единолично — она никому не отдана под мьютекс, —
 //! и потому же живёт отдельной задачей от диспетчера.
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
 
 use futures_util::StreamExt;
 use tokio::sync::mpsc;
@@ -14,7 +14,8 @@ use crate::error::ProviderError;
 use crate::event::{AgentEvent, StopReason, TsMillis};
 use crate::id::TurnId;
 use crate::instructions::Instructions;
-use crate::message::Message;
+use crate::message::{ContentBlock, Message, Role};
+use crate::picture;
 use crate::provider::{Provider, ProviderRequest, ProviderStream};
 use crate::slash;
 use crate::usage::UsageMeter;
@@ -23,6 +24,7 @@ use crate::workspace::Workspace;
 use crate::checkpoint::CheckpointReason;
 
 use super::accumulator::Accumulator;
+use super::calls::Caller;
 use super::binding::{self, Fingerprint};
 use super::inbox::Inbox;
 use super::{checkpoints, compact, prompt, Job, Shared, ToolRegistry};
@@ -30,16 +32,15 @@ use super::{checkpoints, compact, prompt, Job, Shared, ToolRegistry};
 /// Потолок на один ответ. Стриминг снимает вопрос таймаутов, но окно
 /// контекста конечно, и давать модели все 128k на реплику незачем.
 const MAX_OUTPUT_TOKENS: u32 = 64_000;
-const MAX_ATTEMPTS: u32 = 5;
 
 pub(super) struct Worker {
     pub(super) ws: Arc<Workspace>,
     pub(super) provider: Arc<dyn Provider>,
-    pub(super) registry: ToolRegistry,
+    pub(super) registry: Arc<ToolRegistry>,
     /// The project's `AGENTS.md`, read once when the session starts. The
     /// system prompt is the cached prefix of every request, and a file read per
     /// message would move that prefix on every edit.
-    pub(super) instructions: Option<Instructions>,
+    pub(super) instructions: Option<Arc<Instructions>>,
     pub(super) history: Vec<Message>,
     /// What the reasoning in `history` was produced under (`binding`).
     /// `None` until the first request, or for a session recorded before
@@ -76,11 +77,6 @@ impl Worker {
 
             self.set_busy(false);
         }
-    }
-
-    /// Какие тулы вообще существуют в текущем режиме (§7.1).
-    pub(super) fn intent(&self) -> crate::intent::Intent {
-        self.shared.state.lock().unwrap().mode.intent()
     }
 
     fn set_busy(&self, busy: bool) {
@@ -190,7 +186,11 @@ impl Worker {
                 return;
             }
 
-            let results = self.run_batch(&turn_id, &done.calls, &cancel).await;
+            let results = self
+                .caller()
+                .run_batch(&turn_id, &done.calls, &cancel)
+                .await;
+            self.settle_subagents();
             // Все результаты одним сообщением: разложить их по нескольким —
             // тихо отучить модель звать тулы параллельно.
             let mut message = Message::tool_results(results);
@@ -238,7 +238,7 @@ impl Worker {
         if let Some(recorder) = &self.shared.recorder {
             recorder.prompt(turn_id, &text);
         }
-        self.user_message(text, attachments)
+        self.user_message(text, attachments).await
     }
 
     /// Into the history, and into the file the history is reopened from (§9).
@@ -253,7 +253,7 @@ impl Worker {
         self.history.push(message);
     }
 
-    fn user_message(&self, text: String, attachments: Vec<String>) -> Message {
+    async fn user_message(&self, text: String, attachments: Vec<String>) -> Message {
         // §7.3: what the human typed is a name, and what the model gets is the
         // prompt the project keeps under it — the same split the attachments
         // below make. The feed and the journal keep the typed line, so a
@@ -265,25 +265,62 @@ impl Worker {
         }
 
         let mut head = String::from("Человек приложил файлы:\n");
+        let mut pictures = Vec::new();
         for raw in &attachments {
-            match self.ws.resolve_existing(raw) {
-                Ok(path) => {
-                    // §7.2: приложенный файл считается прочитанным.
-                    self.ws.mark_read(&path);
-                    head.push_str(&format!("- {}\n", self.ws.display(&path)));
+            let Some(path) = self.attached(raw) else {
+                head.push_str(&format!("- {raw} (не найден)\n"));
+                continue;
+            };
+            let name = self.ws.display(&path);
+            if !picture::is_picture(&path) {
+                // §7.2: приложенный файл считается прочитанным.
+                self.ws.mark_read(&path);
+                head.push_str(&format!("- {name}\n"));
+                continue;
+            }
+            // An attached image is the image itself, not a path to go and
+            // open: the human put it in front of the model by attaching it.
+            match tokio::task::spawn_blocking(move || picture::load(&path)).await {
+                Ok(Ok(picture)) => {
+                    head.push_str(&format!("- {name} (изображение, показано ниже)\n"));
+                    pictures.push((name, picture));
                 }
-                Err(_) => head.push_str(&format!("- {raw} (не найден)\n")),
+                Ok(Err(err)) => head.push_str(&format!("- {name} ({err})\n")),
+                Err(_) => head.push_str(&format!("- {name} (изображение не прочитано)\n")),
             }
         }
         head.push('\n');
-        Message::user_text(head + &text)
+
+        let mut content = vec![ContentBlock::Text { text: head + &text }];
+        for (name, picture) in pictures {
+            content.extend(ContentBlock::picture(&name, picture));
+        }
+        Message {
+            role: Role::User,
+            content,
+        }
+    }
+
+    /// Where an attachment is.
+    ///
+    /// Inside the project for a file, as for everything the agent reads
+    /// (§8). An image may be anywhere: a screenshot lives on the desktop or
+    /// in a temp folder, and the human pointing at it is the permission. The
+    /// boundary is still held for what the agent reads on its own —
+    /// `ReadImage` stays inside the project.
+    fn attached(&self, raw: &str) -> Option<PathBuf> {
+        if let Ok(path) = self.ws.resolve_existing(raw) {
+            return Some(path);
+        }
+        let path = Path::new(raw);
+        (path.is_absolute() && picture::is_picture(path)).then(|| path.to_path_buf())
     }
 
     fn build_request(&mut self, turn_id: &TurnId) -> ProviderRequest {
         let state = self.shared.state.lock().unwrap().clone();
         let info = self.shared.model_info(&state.model);
         let intent = state.mode.intent();
-        let system = prompt::build(self.ws.root(), intent, self.instructions.as_ref());
+        let system = prompt::build(self.ws.root(), intent, self.instructions.as_deref());
         let tools = self.registry.schemas(intent);
         // Before the history is copied: a prefix that moved takes the
         // reasoning bound to the old one with it.
@@ -291,7 +328,7 @@ impl Worker {
         ProviderRequest {
             model: state.model,
             system,
-            messages: self.history.clone(),
+            messages: self.shared.shown_to(&info, &self.history),
             tools,
             max_tokens: self.answer_room(),
             // Старые модели не знают ни `effort`, ни адаптивного рассуждения;
@@ -315,27 +352,38 @@ impl Worker {
         request: ProviderRequest,
         cancel: &CancellationToken,
     ) -> Result<ProviderStream, ProviderError> {
-        let mut attempt = 1;
-        loop {
-            match self.provider.stream(request.clone()).await {
-                Ok(stream) => return Ok(stream),
-                Err(err) if err.is_retryable() && attempt < MAX_ATTEMPTS => {
-                    let delay = backoff(attempt, retry_after(&err));
-                    self.emit(AgentEvent::RetryScheduled {
-                        attempt: attempt + 1,
-                        of: MAX_ATTEMPTS,
-                        delay_ms: delay.as_millis() as u32,
-                        reason: err.to_string(),
-                    });
-                    tokio::select! {
-                        _ = tokio::time::sleep(delay) => {}
-                        _ = cancel.cancelled() => return Err(err),
-                    }
-                    attempt += 1;
-                }
-                Err(err) => return Err(err),
-            }
+        self.shared.open(self.provider.as_ref(), request, cancel).await
+    }
+
+    /// The agent as the one making calls (`calls`).
+    fn caller(&self) -> Caller {
+        Caller {
+            shared: self.shared.clone(),
+            registry: self.registry.clone(),
+            ws: self.ws.clone(),
+            provider: self.provider.clone(),
+            instructions: self.instructions.clone(),
+            under: None,
         }
+    }
+
+    /// Counts what the subagents of the last batch spent.
+    ///
+    /// Here and not where it was spent: the meter is the worker's alone, and
+    /// the calls of a batch run side by side on a shared borrow of it. Aside
+    /// from the ring, like the summarizer: a subagent's window is not the
+    /// agent's, and the ring shows the agent's.
+    fn settle_subagents(&mut self) {
+        let spent = self.shared.ledger.take();
+        if spent.is_empty() {
+            return;
+        }
+        for (counts, pricing) in spent {
+            self.usage.record_aside(counts, pricing);
+        }
+        self.emit(AgentEvent::UsageUpdated {
+            usage: self.usage.snapshot(self.context_max()),
+        });
     }
 
     fn fail_turn(&self, turn_id: TurnId, err: ProviderError) {
@@ -351,20 +399,4 @@ impl Worker {
             stop_reason: StopReason::Failed,
         });
     }
-}
-
-fn retry_after(err: &ProviderError) -> Option<Duration> {
-    match err {
-        ProviderError::Http { retry_after_s, .. } => retry_after_s.map(Duration::from_secs),
-        _ => None,
-    }
-}
-
-/// Провайдер сказал, когда возвращаться, — слушаемся. Иначе удвоение
-/// с потолком: пять попыток укладываются примерно в полминуты.
-fn backoff(attempt: u32, hinted: Option<Duration>) -> Duration {
-    if let Some(d) = hinted {
-        return d.min(Duration::from_secs(60));
-    }
-    Duration::from_millis(500 * 2u64.pow(attempt.min(6) - 1)).min(Duration::from_secs(30))
 }

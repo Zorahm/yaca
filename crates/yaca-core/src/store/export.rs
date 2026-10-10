@@ -98,7 +98,7 @@ fn assistant(blocks: &[ContentBlock], results: &HashMap<&str, &ContentBlock>) ->
             }
             // Folded away in the feed (§5.3), and folded away here.
             ContentBlock::Thinking { .. } | ContentBlock::RedactedThinking { .. } => {}
-            ContentBlock::ToolResult { .. } => {}
+            ContentBlock::ToolResult { .. } | ContentBlock::Image { .. } => {}
         }
     }
     out

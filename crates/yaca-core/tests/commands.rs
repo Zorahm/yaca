@@ -22,7 +22,7 @@ use common::{ask, calls, is_turn_over, session, until, until_within, TempProject
 /// binaries, and Rust gives them no shared place below `tests/`.
 fn two_bursts() -> &'static str {
     if cfg!(windows) {
-        "echo one& ping -n 3 127.0.0.1 >nul& echo two"
+        "echo one; Start-Sleep -Milliseconds 400; echo two"
     } else {
         "echo one; sleep 0.4; echo two"
     }
@@ -30,7 +30,7 @@ fn two_bursts() -> &'static str {
 
 fn sleeps() -> &'static str {
     if cfg!(windows) {
-        "ping -n 30 127.0.0.1 >nul"
+        "Start-Sleep -Seconds 30"
     } else {
         "sleep 30"
     }
@@ -226,7 +226,7 @@ async fn a_prefix_rule_covers_the_next_command_with_the_same_first_word() {
 async fn a_non_zero_exit_is_a_failed_action() {
     let dir = TempProject::new();
     let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(runs("c1", "echo сломалось& exit 3")),
+        Turn::Events(runs("c1", "echo сломалось; exit 3")),
         Turn::Events(script_text("вижу")),
     ]));
     let handle = session(&dir, provider, Mode::Manual);

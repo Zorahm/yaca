@@ -15,6 +15,7 @@ import { t, type Key } from "../i18n";
 import { reasonText, willDo } from "./checkpoint";
 import { timeOf, tokens } from "./format";
 import { Markdown } from "./Markdown";
+import { Attachment } from "./Attachment";
 
 export function HumanMessage({ text, attachments }: { text: string; attachments: string[] }) {
   return (
@@ -24,9 +25,7 @@ export function HumanMessage({ text, attachments }: { text: string; attachments:
         {attachments.length > 0 && (
           <div className="attachments">
             {attachments.map((path) => (
-              <span className="attachment" key={path}>
-                {path}
-              </span>
+              <Attachment key={path} path={path} />
             ))}
           </div>
         )}

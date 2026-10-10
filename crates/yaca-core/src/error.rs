@@ -89,6 +89,23 @@ impl ProviderError {
         }
     }
 
+    /// The provider turned the request down for what was in it, rather than
+    /// for who sent it or how much there was.
+    ///
+    /// The statuses a model without vision answers an image with. Nothing
+    /// narrower is possible — each server words it its own way — so this only
+    /// says the request is worth one more try without its images
+    /// (`session::vision`).
+    pub fn is_unacceptable(&self) -> bool {
+        matches!(
+            self,
+            ProviderError::Http {
+                status: 400 | 415 | 422,
+                ..
+            }
+        ) && !self.is_context_overflow()
+    }
+
     pub fn code(&self) -> String {
         match self {
             ProviderError::Network(_) => "network".into(),

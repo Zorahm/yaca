@@ -42,6 +42,19 @@ impl Workspace {
         })
     }
 
+    /// The same project with nothing read yet.
+    ///
+    /// For a subagent: what it reads goes into its own conversation, and the
+    /// agent that sent it gets a report, not the file. Sharing the registry
+    /// would let that agent edit a file it has never seen, which is the one
+    /// thing read-before-edit (§8) exists to prevent.
+    pub fn fork(&self) -> Self {
+        Self {
+            root: self.root.clone(),
+            read: Mutex::new(HashMap::new()),
+        }
+    }
+
     pub fn root(&self) -> &Path {
         &self.root
     }

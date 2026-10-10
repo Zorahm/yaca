@@ -46,6 +46,12 @@
 //!   before continuing, and a session reopened from its journal has to show the
 //!   text they left, not the one the model first wrote.
 //!
+//! Subagents add no event, and one field: `parent` on
+//! [`AgentEvent::ToolCallStarted`]. A subagent's calls are rows like any
+//! other — the same diff, the same question to the human — and the field says
+//! which `Task` row they are drawn under. §15 has no place for it because the
+//! spec leaves "where do subagents go" as an open question.
+//!
 //! And the interface slice adds [`AgentEvent::UserMessage`]. §5.1 draws what
 //! the human said, and §9 reopens a session by replaying this journal: without
 //! it a reopened session is the agent talking to itself. The text is written
@@ -115,6 +121,11 @@ pub enum AgentEvent {
         /// Аргументы вызова. Нужны для §5.7 (подробность запроса разрешения).
         #[ts(type = "unknown")]
         input: serde_json::Value,
+        /// The `Task` row this call belongs under: it was made by a subagent,
+        /// not by the agent. `None` for the agent's own calls, and absent
+        /// from journals written before subagents existed.
+        #[serde(default)]
+        parent: Option<CallId>,
     },
 
     /// Дописывает вывод в раскрытую строку.

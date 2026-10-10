@@ -230,6 +230,7 @@ export const ru = {
   "composer.stop": "Остановить",
   "composer.attach": "Приложить файлы",
   "composer.detach": "Убрать",
+  "attachment.gone": "{path} — файла больше нет",
   "composer.queued": "в очереди",
   "composer.queued_cancel": "отменить",
   "composer.model_unloaded": "не загружена",
@@ -336,5 +337,18 @@ export const ru = {
   // --- общее ---------------------------------------------------------------
   "common.open_project": "Открыть проект",
   "common.close": "Закрыть",
+
+  // --- просмотрщик картинок ------------------------------------------------
+  "viewer.open": "Открыть {name}",
+  "viewer.loading": "Загружаю…",
+  "viewer.failed": "Картинку не открыть: файла нет или это не изображение",
+  "viewer.prev": "Предыдущая",
+  "viewer.next": "Следующая",
+  "viewer.count": "{at} из {of}",
+  "viewer.zoom_in": "Ближе",
+  "viewer.zoom_out": "Дальше",
+  "viewer.fit": "Целиком",
+  "viewer.actual": "Точка в точку",
+  "viewer.rotate": "Повернуть",
   "common.seconds": "{n} с",
 } as const;

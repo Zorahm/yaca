@@ -20,14 +20,15 @@
  * пробел закрывает — дальше идут аргументы.
  */
 
-import { ArrowUp, Check, Plus, Stop, X } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowUp, Check, Plus, Stop } from "@phosphor-icons/react";
+import { useEffect, useRef, useState, type ClipboardEvent } from "react";
 
 import type { Effort, Mode, ModelInfo, SlashCommand, UsageSnapshot } from "../core/client";
 import { t, type Key } from "../i18n";
 import { EffortMenu } from "./EffortMenu";
 import { ModelMenu } from "./ModelMenu";
 import { SlashMenu } from "./SlashMenu";
+import { Attachment } from "./Attachment";
 import { builtinFor, menuFor, type Builtin, type SlashItem } from "./slash";
 import { StatusRing, type RingState } from "./StatusRing";
 
@@ -74,6 +75,17 @@ export type ComposerActions = {
    * действия — нет и кнопки.
    */
   pickFiles?: () => Promise<string[]>;
+  /**
+   * Сохранить вставленную из буфера картинку (base64) и вернуть её путь.
+   * У вставленного пути нет, а вложение — это путь (§7.2). Нет действия —
+   * вставка картинки остаётся обычной вставкой, то есть ничем.
+   */
+  stashImage?: (data: string) => Promise<string>;
+  /**
+   * Подписаться на файлы, брошенные в окно; пути приходят уже от корня
+   * проекта. Возвращает отписку.
+   */
+  onDropped?: (listener: (paths: string[]) => void) => () => void;
   /**
    * Перечитать список команд проекта. Зовётся, когда строка становится
    * командой: файл, написанный минуту назад, должен быть в меню, а не только
@@ -125,6 +137,36 @@ export function Composer({
   const [slashAt, setSlashAt] = useState(0);
   /** Приложенные файлы §7.2 — чипы над полем, уезжают с сообщением. */
   const [attached, setAttached] = useState<string[]>([]);
+  /** Вложение прикладывается один раз, сколько бы раз его ни бросили. */
+  const attach = (paths: string[]) =>
+    setAttached((now) => [...now, ...paths.filter((p) => !now.includes(p))]);
+
+  const onDropped = actions.onDropped;
+  useEffect(() => {
+    if (onDropped === undefined || disabled) return;
+    return onDropped(attach);
+  }, [onDropped, disabled]);
+
+  /** Картинки из буфера — во вложения; остальное вставляется как обычно. */
+  function pasteImages(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const stash = actions.stashImage;
+    if (stash === undefined) return;
+    const images = Array.from(event.clipboardData.files).filter((f) =>
+      f.type.startsWith("image/"),
+    );
+    if (images.length === 0) return;
+    // Иначе в поле ляжет имя файла или ничего: текста в таком буфере нет.
+    event.preventDefault();
+    for (const image of images) {
+      void encoded(image)
+        .then(stash)
+        .then(
+          (path) => attach([path]),
+          // Что не сохранилось, то не приложено: чипа нет, и это видно.
+          () => {},
+        );
+    }
+  }
   const field = useRef<HTMLTextAreaElement>(null);
 
   // Что известно о выбранной модели: имя для чипа и умеет ли она усилие
@@ -233,17 +275,11 @@ export function Composer({
         {attached.length > 0 && (
           <div className="attachments">
             {attached.map((path) => (
-              <span className="attachment" key={path}>
-                {path}
-                <button
-                  className="attachment-drop"
-                  aria-label={t("composer.detach")}
-                  title={t("composer.detach")}
-                  onClick={() => setAttached((now) => now.filter((p) => p !== path))}
-                >
-                  <X size={11} weight="bold" />
-                </button>
-              </span>
+              <Attachment
+                key={path}
+                path={path}
+                onRemove={() => setAttached((now) => now.filter((p) => p !== path))}
+              />
             ))}
           </div>
         )}
@@ -260,6 +296,7 @@ export function Composer({
             disabled={disabled}
             placeholder={t("composer.placeholder")}
             onChange={(e) => setText(e.target.value)}
+            onPaste={pasteImages}
             onKeyDown={(e) => {
               // Пока открыто меню команд §7.3, стрелки, `⇥` и `⏎` принадлежат
               // ему. `⇧⇥` не трогаем: это переключатель режима §13.
@@ -476,4 +513,17 @@ function ModeMenu({
       )}
     </div>
   );
+}
+
+/** Файл как base64 без префикса `data:` — в том виде, в каком его ждёт ядро. */
+function encoded(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const url = typeof reader.result === "string" ? reader.result : "";
+      resolve(url.slice(url.indexOf(",") + 1));
+    };
+    reader.readAsDataURL(file);
+  });
 }

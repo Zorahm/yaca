@@ -4,7 +4,11 @@
 //! один в один, OpenAI-совместимые эндпоинты — нет, и именно поэтому перевод
 //! живёт в провайдере, а не здесь.
 
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
+
+use crate::picture::Picture;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -72,6 +76,71 @@ pub enum ContentBlock {
         content: String,
         is_error: bool,
     },
+    /// An image, in a message from the human's side only.
+    ///
+    /// One a tool read travels here too, after the results of its batch rather
+    /// than inside its own result: one of the two wire shapes has no place for
+    /// an image in a tool's answer, and both have one in a user message.
+    Image {
+        media_type: String,
+        /// Base64, shared: the history is copied into every request.
+        data: Arc<str>,
+        width: u32,
+        height: u32,
+    },
+}
+
+impl ContentBlock {
+    /// An image as the model is given it: a line saying which one this is,
+    /// then the pixels. Several may arrive in one message, and without the
+    /// line the model has no way to tell which path each belongs to.
+    pub fn picture(name: &str, picture: Picture) -> [ContentBlock; 2] {
+        [
+            ContentBlock::Text {
+                text: format!("Image: {name}"),
+            },
+            ContentBlock::Image {
+                media_type: picture.media_type.to_string(),
+                data: picture.data,
+                width: picture.width,
+                height: picture.height,
+            },
+        ]
+    }
+}
+
+/// What stands where an image was, for a model that cannot be shown one.
+const IMAGE_OMITTED: &str = "[An image was here. The model in use does not accept images, \
+     so it is not shown: say so if the answer depends on it.]";
+
+pub fn has_images(messages: &[Message]) -> bool {
+    messages
+        .iter()
+        .flat_map(|m| &m.content)
+        .any(|b| matches!(b, ContentBlock::Image { .. }))
+}
+
+/// The same conversation with every image replaced by a note that it was there.
+///
+/// For a model without vision. The images stay in the history itself: the
+/// human may switch to a model that sees, and then they are wanted again.
+pub fn without_images(messages: &[Message]) -> Vec<Message> {
+    messages
+        .iter()
+        .map(|message| Message {
+            role: message.role,
+            content: message
+                .content
+                .iter()
+                .map(|block| match block {
+                    ContentBlock::Image { .. } => ContentBlock::Text {
+                        text: IMAGE_OMITTED.to_string(),
+                    },
+                    other => other.clone(),
+                })
+                .collect(),
+        })
+        .collect()
 }
 
 /// Removes every thinking block, and any message left with nothing in it.
@@ -105,6 +174,39 @@ mod tests {
 
     fn text(t: &str) -> ContentBlock {
         ContentBlock::Text { text: t.into() }
+    }
+
+    fn image() -> ContentBlock {
+        ContentBlock::Image {
+            media_type: "image/png".into(),
+            data: "AAAA".into(),
+            width: 2,
+            height: 2,
+        }
+    }
+
+    #[test]
+    fn a_blind_model_gets_a_note_where_the_image_was() {
+        let history = vec![Message {
+            role: Role::User,
+            content: vec![text("look"), image()],
+        }];
+        assert!(has_images(&history));
+
+        let shown = without_images(&history);
+        assert!(!has_images(&shown));
+        // Still two blocks: the model is told something was there.
+        assert_eq!(shown[0].content.len(), 2);
+        assert!(matches!(&shown[0].content[1], ContentBlock::Text { text } if text.contains("image")));
+        // And the history keeps it for a model that can see.
+        assert!(has_images(&history));
+    }
+
+    #[test]
+    fn an_image_block_survives_the_journal() {
+        let line = serde_json::to_string(&image()).unwrap();
+        assert!(line.contains(r#""kind":"image""#), "{line}");
+        assert_eq!(serde_json::from_str::<ContentBlock>(&line).unwrap(), image());
     }
 
     #[test]

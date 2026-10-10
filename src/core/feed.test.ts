@@ -13,6 +13,7 @@ import {
   diffOf,
   emptyFeed,
   factOf,
+  flatRows,
   reduceAll,
   touchedFiles,
   visible,
@@ -44,7 +45,7 @@ const thought = (blockId: string, text: string): AgentEvent => ({
   text,
 });
 
-const started = (callId: string, tool = "Read"): AgentEvent => ({
+const started = (callId: string, tool = "Read", parent: string | null = null): AgentEvent => ({
   type: "toolCallStarted",
   turnId: "t1",
   callId,
@@ -52,6 +53,7 @@ const started = (callId: string, tool = "Read"): AgentEvent => ({
   description: "Прочитал файл",
   target: "src/a.rs",
   input: {},
+  parent,
 });
 
 const finished = (callId: string): AgentEvent => ({
@@ -326,5 +328,109 @@ describe("панели", () => {
     );
 
     expect(feed.processOutput).toEqual({ id: 4, text: "listening\n", dropped: 12 });
+  });
+});
+
+describe("подагент", () => {
+  const changed = (callId: string, path: string): AgentEvent => ({
+    type: "fileChanged",
+    callId,
+    fact: { path, kind: "created", movedFrom: null, added: 3, removed: 0 },
+    diff: { hunks: [], added: 3, removed: 0, truncated: false },
+  });
+
+  const asked = (callId: string): AgentEvent => ({
+    type: "permissionRequested",
+    request: {
+      id: "req_1",
+      callId,
+      kind: "editFile",
+      target: "notes.txt",
+      detail: "",
+      note: null,
+      sizeBytes: null,
+      files: null,
+      scopes: [],
+      position: 1,
+      total: 1,
+    },
+  });
+
+  /** Строки верхнего уровня: то, что группа рисует сама. */
+  function top(feed: Feed) {
+    return feed.blocks.flatMap((b) => (b.kind === "actions" ? b.rows : []));
+  }
+
+  it("его вызовы встают под строку Task, а не рядом с ней", () => {
+    const feed = run(
+      started("t1", "Task"),
+      started("r1", "Read", "t1"),
+      finished("r1"),
+      started("r2", "Read", "t1"),
+    );
+
+    expect(top(feed).map((r) => r.callId)).toEqual(["t1"]);
+    expect(top(feed)[0].children.map((r) => [r.callId, r.state])).toEqual([
+      ["r1", "done"],
+      ["r2", "running"],
+    ]);
+  });
+
+  it("запрос разрешения не отрывает вызов от своей строки", () => {
+    // Запрос закрывает группу (§5.4), а строка подагента к группе не
+    // прибивается: она идёт к своему Task, где бы тот ни остался.
+    const feed = run(
+      started("t1", "Task"),
+      started("w1", "Write", "t1"),
+      asked("w1"),
+      { type: "permissionResolved", requestId: "req_1" },
+      started("r1", "Read", "t1"),
+    );
+
+    expect(top(feed).map((r) => r.callId)).toEqual(["t1"]);
+    expect(top(feed)[0].children.map((r) => r.callId)).toEqual(["w1", "r1"]);
+  });
+
+  it("два подагента не путают строки друг друга", () => {
+    const feed = run(
+      started("t1", "Task"),
+      started("t2", "Task"),
+      started("a", "Read", "t2"),
+      started("b", "Read", "t1"),
+    );
+
+    const [first, second] = top(feed);
+    expect(first.children.map((r) => r.callId)).toEqual(["b"]);
+    expect(second.children.map((r) => r.callId)).toEqual(["a"]);
+  });
+
+  it("файл, созданный подагентом, виден панели файла и списку тронутых", () => {
+    const feed = run(
+      started("t1", "Task"),
+      started("w1", "Write", "t1"),
+      changed("w1", "notes.txt"),
+      finished("w1"),
+    );
+
+    expect(top(feed)[0].children[0].fact?.path).toBe("notes.txt");
+    expect(touchedFiles(feed)).toEqual(["notes.txt"]);
+    expect(factOf(feed, "notes.txt")?.kind).toBe("created");
+    expect(diffOf({ ...feed, diffs: {} }, "notes.txt")).toBeTruthy();
+  });
+
+  it("остановка хода гасит и его незавершённые вызовы", () => {
+    const feed = run(
+      started("t1", "Task"),
+      started("r1", "Read", "t1"),
+      { type: "turnCancelled", turnId: "t1" },
+    );
+
+    // Живая точка на вызове, который уже никто не выполняет, — враньё (§0).
+    expect(flatRows(top(feed)).map((r) => r.state)).toEqual(["failed", "failed"]);
+  });
+
+  it("вызов без своего Task в ленте не теряется", () => {
+    const feed = run(started("r1", "Read", "t-нет"));
+    expect(top(feed).map((r) => r.callId)).toEqual(["r1"]);
   });
 });

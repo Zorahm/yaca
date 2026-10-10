@@ -1,26 +1,39 @@
 //! Выполнение тулов: от вопроса о разрешении до строки в ленте.
 //!
 //! Разрешение спрашивается до запуска, а не вокруг него: §5.7 существует ровно
-//! затем, чтобы человек решил раньше, чем что-либо произошло.
+//! затем, чтобы человек решил раньше, чем что-либо произошло. Сам вопрос — в
+//! [`asking`](super::asking).
 //!
 //! Вызовов в одном ответе модели бывает несколько, и просит она их пачкой ровно
 //! затем, чтобы они шли разом. Кто может идти разом, решает `Tool::concurrent`;
-//! остальное — по очереди. См. [`Worker::run_batch`].
+//! остальное — по очереди. См. [`Caller::run_batch`].
+//!
+//! The one making calls is a [`Caller`], not the worker, because the agent is
+//! not the only one who makes them: a subagent's calls go down the same road —
+//! the same question to the human, the same checkpoint, the same row with its
+//! diff. A second road for them would be a second set of rules about what may
+//! touch the working tree.
+
+use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
 
 use crate::error::ToolError;
 use crate::event::{AgentEvent, ToolMeta};
-use crate::id::{CallId, RequestId, TurnId};
+use crate::id::{CallId, TurnId};
 use crate::message::ContentBlock;
-use crate::permission::broker::Standing;
-use crate::permission::policy::Verdict;
-use crate::permission::{PermissionAnswer, PermissionNeed, PermissionRequest};
-use crate::tool::{take_description, Progress, ToolCtx};
+use crate::instructions::Instructions;
+use crate::intent::Intent;
+use crate::provider::Provider;
+use crate::tool::{take_description, Progress, ToolCtx, ToolRegistry};
+use crate::usage::ModelInfo;
+use crate::workspace::Workspace;
 
 use super::accumulator::{Garbled, PendingCall};
+use super::asking::{Answer, Gate, Queue};
 use super::checkpoints;
-use super::turn::Worker;
+use super::subagent::Subagents;
+use super::Shared;
 
 /// What the model is told when the human stops a call.
 ///
@@ -32,33 +45,51 @@ const STOPPED_BY_HUMAN: &str = "The user doesn't want to proceed with this tool 
      doing and wait for the user to tell you how to proceed. Their next message may \
      explain what went wrong or how they would rather you worked — read it closely.";
 
-/// Место вызова в пачке — для счётчика `2 из 3` (§5.7).
-#[derive(Clone, Copy)]
-pub(super) struct Queue<'a> {
-    pub(super) asked: u32,
-    pub(super) rest: &'a [PendingCall],
+/// Whoever is making calls: the agent in its turn, or a subagent inside one.
+#[derive(Clone)]
+pub(super) struct Caller {
+    pub(super) shared: Arc<Shared>,
+    pub(super) registry: Arc<ToolRegistry>,
+    /// Whose registry of read files the calls check (§8). A subagent has its
+    /// own: what it read, the agent has not.
+    pub(super) ws: Arc<Workspace>,
+    pub(super) provider: Arc<dyn Provider>,
+    pub(super) instructions: Option<Arc<Instructions>>,
+    /// The `Task` row these calls are drawn under. `None` for the agent's own.
+    pub(super) under: Option<CallId>,
 }
 
-/// What happens to a call before it runs.
-enum Gate {
-    Pass,
-    Ask,
-    /// A standing refusal covers it; the note goes to the agent.
-    Refused(Option<String>),
+/// A call that has been dealt with.
+struct Ran {
+    /// What the model reads as the call's result.
+    result: ContentBlock,
+    /// Whether the human was asked about it (§5.7's counter).
+    asked: bool,
+    /// Images the call read, as blocks for the model.
+    shown: Vec<ContentBlock>,
 }
 
-enum Answer {
-    Allowed,
-    /// `standing`: the human refused every call like this one, not only this
-    /// one, and the model has to hear that.
-    Denied {
-        reason: Option<String>,
-        standing: bool,
-    },
-    Cancelled,
-}
+impl Caller {
+    /// The model these calls are made by: the session's, or the one the
+    /// project gives its subagents.
+    pub(super) fn model(&self) -> ModelInfo {
+        let session = self.shared.state.lock().unwrap().model.clone();
+        let id = match self.under {
+            Some(_) => self.shared.settings.subagent_model_or(&session),
+            None => &session,
+        };
+        self.shared.model_info(id)
+    }
 
-impl Worker {
+    /// Какие тулы вообще существуют в текущем режиме (§7.1).
+    pub(super) fn intent(&self) -> Intent {
+        self.shared.state.lock().unwrap().mode.intent()
+    }
+
+    pub(super) fn emit(&self, event: AgentEvent) {
+        self.shared.emit(event);
+    }
+
     /// Пачка вызовов из одного ответа модели (§5.4).
     ///
     /// Подряд идущие вызовы, помеченные [`Tool::concurrent`], уходят работать
@@ -79,7 +110,7 @@ impl Worker {
         calls: &[PendingCall],
         cancel: &CancellationToken,
     ) -> Vec<ContentBlock> {
-        let mut done: Vec<(usize, ContentBlock)> = Vec::with_capacity(calls.len());
+        let mut done: Vec<(usize, Ran)> = Vec::with_capacity(calls.len());
         let mut asked = 0u32;
         let mut at = 0;
 
@@ -91,10 +122,10 @@ impl Worker {
                         asked,
                         rest: &calls[index + 1..],
                     };
-                    let (result, _) = self
+                    let ran = self
                         .run_call(turn_id, calls[index].clone(), cancel, queue)
                         .await;
-                    (index, result)
+                    (index, ran)
                 });
                 // Ни один из них не спрашивает разрешения — иначе они бы сюда
                 // не попали, — поэтому `asked` не двигается.
@@ -105,23 +136,50 @@ impl Worker {
                     asked,
                     rest: &calls[at + 1..],
                 };
-                let (result, did_ask) = self
+                let ran = self
                     .run_call(turn_id, calls[at].clone(), cancel, queue)
                     .await;
-                asked += u32::from(did_ask);
-                done.push((at, result));
+                asked += u32::from(ran.asked);
+                done.push((at, ran));
                 at += 1;
             }
         }
 
         done.sort_by_key(|(index, _)| *index);
-        done.into_iter().map(|(_, result)| result).collect()
+        // Every result first, then what the calls gave the model to look at:
+        // a provider wants the results at the head of the message, and takes
+        // an image only outside them (`ContentBlock::Image`).
+        let mut results = Vec::with_capacity(done.len());
+        let mut shown = Vec::new();
+        for (_, ran) in done {
+            results.push(ran.result);
+            shown.extend(ran.shown);
+        }
+        results.extend(shown);
+        results
+    }
+
+    /// One call, from the question about it to its result.
+    async fn run_call(
+        &self,
+        turn_id: &TurnId,
+        call: PendingCall,
+        cancel: &CancellationToken,
+        queue: Queue<'_>,
+    ) -> Ran {
+        let mut shown = Vec::new();
+        let (result, asked) = self.run_one(turn_id, call, cancel, queue, &mut shown).await;
+        Ran {
+            result,
+            asked,
+            shown,
+        }
     }
 
     /// Сколько вызовов с начала списка можно пустить одновременно.
     ///
     /// Неизвестный тул — не одновременный: про него ничего не известно, а
-    /// ответит на него [`Worker::run_call`] строкой об этом.
+    /// ответит на него [`Caller::run_one`] строкой об этом.
     fn concurrent_run(&self, calls: &[PendingCall]) -> usize {
         calls
             .iter()
@@ -133,12 +191,16 @@ impl Worker {
             .count()
     }
 
-    pub(super) async fn run_call(
+    /// `shown` collects what the call gives the model to look at. An argument
+    /// rather than part of what is returned, because of the dozen ways out of
+    /// here only one has anything to show.
+    async fn run_one(
         &self,
         turn_id: &TurnId,
         call: PendingCall,
         cancel: &CancellationToken,
         queue: Queue<'_>,
+        shown: &mut Vec<ContentBlock>,
     ) -> (ContentBlock, bool) {
         let call_id = CallId::from(call.id.clone());
         let mut input = call.input;
@@ -167,7 +229,25 @@ impl Worker {
             description,
             target,
             input: input.clone(),
+            parent: self.under.clone(),
         });
+
+        // One at a time across the whole session, not only within a batch:
+        // subagents run side by side, and everything `Tool::concurrent` says
+        // about two writers in one batch holds for two writers in two
+        // conversations. Held from the question to the result, so the feed
+        // has one request block open (§5.7) and the snapshot before a command
+        // (§5.8) is of a tree nobody else is writing to.
+        let _lane = if tool.concurrent() {
+            None
+        } else {
+            tokio::select! {
+                _ = cancel.cancelled() => {
+                    return (self.stopped_by_human(&call.id, call_id, cancel), false);
+                }
+                lane = self.shared.lane.lock() => Some(lane),
+            }
+        };
 
         let mut asked_here = false;
         if let Some(need) = tool.permission(self.ws.as_ref(), &input) {
@@ -204,6 +284,13 @@ impl Worker {
             events: self.shared.events.clone(),
             progress: Progress::new(call_id.clone(), self.shared.events.clone()),
             cancel: cancel.clone(),
+            // A subagent does not send another: the agent is the one who sees
+            // the whole task and decides how to split it.
+            agents: self
+                .under
+                .is_none()
+                .then(|| Subagents::new(self.clone(), turn_id.clone(), call_id.clone())),
+            vision: self.shared.sees(&self.model()),
         };
 
         let started = std::time::Instant::now();
@@ -236,6 +323,9 @@ impl Worker {
                         ..out.meta
                     },
                 });
+                for (name, picture) in out.pictures {
+                    shown.extend(ContentBlock::picture(&name, picture));
+                }
                 (tool_result(&call.id, out.text, false), asked_here)
             }
             Err(ToolError::Rejected(reason)) => {
@@ -285,6 +375,7 @@ impl Worker {
             description,
             target: None,
             input,
+            parent: self.under.clone(),
         });
         self.emit(AgentEvent::ToolCallFailed {
             call_id,
@@ -332,100 +423,6 @@ impl Worker {
             stopped: false,
         });
         tool_result(id, text, true)
-    }
-
-    /// Нужно ли спрашивать про этот вызов прямо сейчас.
-    ///
-    /// Standing rules come before the mode, so a refusal holds under bypass
-    /// too: bypass means "stop asking me", not "do what I said no to".
-    fn gate(&self, need: &PermissionNeed) -> Gate {
-        match self.shared.broker.standing(need) {
-            Some(Standing::Refused(refusal)) => Gate::Refused(refusal.reason),
-            Some(Standing::Granted) => Gate::Pass,
-            None => match self.shared.policy().verdict(need.kind) {
-                Verdict::Allow => Gate::Pass,
-                Verdict::Ask => Gate::Ask,
-            },
-        }
-    }
-
-    /// Показывает блок §5.7 и ждёт. Таймаута нет — только отмена турна.
-    async fn ask(
-        &self,
-        call_id: &CallId,
-        need: &PermissionNeed,
-        cancel: &CancellationToken,
-        queue: Queue<'_>,
-    ) -> Answer {
-        let id = RequestId::new();
-        let rx = self.shared.broker.open(id.clone());
-
-        let position = queue.asked + 1;
-        self.emit(AgentEvent::PermissionRequested {
-            request: PermissionRequest {
-                id: id.clone(),
-                call_id: call_id.clone(),
-                kind: need.kind,
-                target: need.target.clone(),
-                detail: need.detail.clone(),
-                note: need.note.clone(),
-                size_bytes: need.size_bytes,
-                files: need.files,
-                scopes: need.scopes(self.ws.root()),
-                position,
-                total: position + self.still_to_ask(&queue),
-            },
-        });
-
-        let answer = tokio::select! {
-            _ = cancel.cancelled() => {
-                self.shared.broker.forget(&id);
-                self.emit(AgentEvent::PermissionResolved { request_id: id });
-                return Answer::Cancelled;
-            }
-            received = rx => received,
-        };
-
-        self.emit(AgentEvent::PermissionResolved { request_id: id });
-
-        match answer {
-            // Правило уже выдал диспетчер — работнику остаётся пропустить.
-            Ok(PermissionAnswer::Allow) | Ok(PermissionAnswer::AllowAlways { .. }) => {
-                Answer::Allowed
-            }
-            Ok(PermissionAnswer::Deny { reason }) => Answer::Denied {
-                reason,
-                standing: false,
-            },
-            // The rule itself was set by the dispatcher, like a grant.
-            Ok(PermissionAnswer::DenyAlways { reason, .. }) => Answer::Denied {
-                reason,
-                standing: true,
-            },
-            // Канал закрыт: вопрос отменили вместе с турном.
-            Err(_) => Answer::Cancelled,
-        }
-    }
-
-    /// Сколько ещё вызовов из этой пачки спросят разрешения. Считается
-    /// заново перед каждым вопросом: «разрешать всегда» по дороге может
-    /// снять часть очереди, и счётчик `2 из 3` обязан это учесть.
-    fn still_to_ask(&self, queue: &Queue<'_>) -> u32 {
-        queue
-            .rest
-            .iter()
-            .filter(|call| {
-                let Some(tool) = self.registry.get(&call.name, self.intent()) else {
-                    return false;
-                };
-                let mut input = call.input.clone();
-                let _ = take_description(&mut input);
-                let Some(need) = tool.permission(self.ws.as_ref(), &input) else {
-                    return false;
-                };
-                matches!(self.gate(&need), Gate::Ask)
-            })
-            .count() as u32
     }
 }
 

@@ -1,0 +1,219 @@
+/* Просмотрщик картинок: на всё окно, поверх ленты и панелей. */
+
+.viewer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: color-mix(in srgb, var(--paper-sunken) 94%, transparent);
+}
+
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 61;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+
+.viewer-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--h-top);
+  padding: 0 12px 0 16px;
+}
+
+.viewer-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font: 400 12px var(--mono);
+  color: var(--ink-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Рамка, в которой живёт картинка: сдвиг и масштаб считаются от её центра. */
+.viewer-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.viewer-dragging {
+  cursor: grabbing;
+}
+
+.viewer-image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  transform-origin: center;
+  /* Увеличенный скриншот должен остаться резким: в нём читают текст. */
+  image-rendering: auto;
+  pointer-events: none;
+}
+
+.viewer-note {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.viewer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: var(--h-bar);
+  padding: 0 12px;
+}
+
+.viewer-count {
+  min-width: 52px;
+  font: 400 12px var(--mono);
+  color: var(--ink-muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer-gap {
+  width: 16px;
+}
+
+.viewer-one {
+  font: 500 11px var(--mono);
+}
+
+/* --- плитка вложения: картинка, файл, папка (§7.2, §5.1) ---------------- */
+
+/* Размер один, каким бы ни было содержимое: ряд читается списком. */
+.tile {
+  --tile: 112px;
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  width: var(--tile);
+  height: var(--tile);
+}
+
+/* В композере плитки ниже: над полем ввода им не место для разглядывания. */
+.tile-small {
+  --tile: 72px;
+}
+
+.tile-face {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--paper-sunken);
+  color: var(--ink-muted);
+  text-align: left;
+  /* Карточка сообщения сохраняет пробелы и переносы; плитке они ни к чему. */
+  white-space: normal;
+}
+
+.tile-small .tile-face {
+  padding: 7px;
+}
+
+.tile-image {
+  padding: 0;
+  cursor: zoom-in;
+}
+
+.tile-image:hover,
+.tile-image:focus-visible {
+  border-color: var(--line-strong);
+}
+
+.tile-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Того, что приложили, на диске уже нет. */
+.tile-gone {
+  border-style: dashed;
+}
+
+.tile-name {
+  display: -webkit-box;
+  overflow: hidden;
+  font: 500 11.5px/1.3 var(--sans);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.tile-small .tile-name {
+  font-size: 10.5px;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.tile-gone .tile-name {
+  color: var(--ink-muted);
+}
+
+.tile-drop {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--paper-raised);
+  color: var(--ink-muted);
+}
+
+.tile-drop:hover {
+  border-color: var(--rust);
+  color: var(--rust);
+}
+
+/* --- картинка в раскрытой строке `ReadImage` ----------------------------- */
+
+.thumb {
+  display: block;
+  margin: 6px 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--paper-sunken);
+  cursor: zoom-in;
+}
+
+.thumb:hover,
+.thumb:focus-visible {
+  border-color: var(--line-strong);
+}
+
+.thumb img {
+  display: block;
+  max-width: min(100%, 360px);
+  max-height: 260px;
+  object-fit: contain;
+}

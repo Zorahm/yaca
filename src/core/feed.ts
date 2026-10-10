@@ -50,6 +50,12 @@ export type ActionRow = {
   /** Заполнено у файловых действий: отсюда подпись и счётчики. */
   fact: FileFact | null;
   diff: FileDiff | null;
+  /**
+   * Вызовы подагента — у строки `Task`, которая его отправила. Строки как
+   * строки: правка подагента — правка в файлах человека, и дифф ей положен тот
+   * же. Вложенность одна: подагент подагента не запускает.
+   */
+  children: ActionRow[];
 };
 
 export type FeedBlock =
@@ -149,8 +155,8 @@ function apply(feed: Feed, event: AgentEvent): void {
       appendThinking(feed, event.blockId, event.text);
       return;
 
-    case "toolCallStarted":
-      startCall(feed, {
+    case "toolCallStarted": {
+      const row: ActionRow = {
         callId: event.callId,
         tool: event.tool,
         description: event.description,
@@ -162,8 +168,21 @@ function apply(feed: Feed, event: AgentEvent): void {
         output: "",
         fact: null,
         diff: null,
-      });
+        children: [],
+      };
+      // Вызов подагента встаёт под свою строку `Task`, где бы та ни была:
+      // между ними мог пройти запрос разрешения, а он группу закрывает.
+      // Родитель, которого в ленте нет, — не повод потерять действие.
+      const parent = event.parent;
+      const nested =
+        parent != null &&
+        patchRow(feed, parent, (task) => ({
+          ...task,
+          children: [...task.children, row],
+        }));
+      if (!nested) startCall(feed, row);
       return;
+    }
 
     case "toolCallProgress":
       patchRow(feed, event.callId, (row) => ({
@@ -417,36 +436,72 @@ function startCall(feed: Feed, row: ActionRow): void {
   feed.blocks.push({ kind: "actions", key: key("acts"), rows: [row] });
 }
 
+/** Меняет строку по идентификатору; говорит, нашлась ли она. */
 function patchRow(
   feed: Feed,
   callId: string,
   change: (row: ActionRow) => ActionRow,
-): void {
+): boolean {
   for (let i = feed.blocks.length - 1; i >= 0; i -= 1) {
     const block = feed.blocks[i];
     if (block.kind !== "actions") continue;
-    const at = block.rows.findIndex((r) => r.callId === callId);
-    if (at === -1) continue;
-
-    const rows = block.rows.slice();
-    rows[at] = change(rows[at]);
+    const rows = patchIn(block.rows, callId, change);
+    if (rows === null) continue;
     feed.blocks[i] = { ...block, rows };
-    return;
+    return true;
   }
+  return false;
+}
+
+/** Список с изменённой строкой — своей или вложенной; `null`, если её тут нет. */
+function patchIn(
+  rows: ActionRow[],
+  callId: string,
+  change: (row: ActionRow) => ActionRow,
+): ActionRow[] | null {
+  for (let at = rows.length - 1; at >= 0; at -= 1) {
+    const row = rows[at];
+    let next: ActionRow | null = null;
+    if (row.callId === callId) {
+      next = change(row);
+    } else if (row.children.length > 0) {
+      const children = patchIn(row.children, callId, change);
+      if (children !== null) next = { ...row, children };
+    }
+    if (next === null) continue;
+    const out = rows.slice();
+    out[at] = next;
+    return out;
+  }
+  return null;
 }
 
 function cancelRunning(feed: Feed): void {
   for (let i = feed.blocks.length - 1; i >= 0; i -= 1) {
     const block = feed.blocks[i];
     if (block.kind !== "actions") continue;
-    if (!block.rows.some((r) => r.state === "running")) continue;
-    feed.blocks[i] = {
-      ...block,
-      rows: block.rows.map((r) =>
-        r.state === "running" ? { ...r, state: "failed", message: null } : r,
-      ),
-    };
+    if (!flatRows(block.rows).some((r) => r.state === "running")) continue;
+    feed.blocks[i] = { ...block, rows: block.rows.map(cancelled) };
   }
+}
+
+function cancelled(row: ActionRow): ActionRow {
+  return {
+    ...row,
+    ...(row.state === "running" ? { state: "failed" as const, message: null } : {}),
+    children: row.children.map(cancelled),
+  };
+}
+
+/**
+ * Строки вместе с вложенными, в порядке появления.
+ *
+ * Для всего, что считает по действиям, а не рисует их: что тронуто, сколько
+ * создано, какой дифф последний. Файл, изменённый подагентом, изменён — и в
+ * шапке группы, и в панели файла он стоит наравне с остальными.
+ */
+export function flatRows(rows: ActionRow[]): ActionRow[] {
+  return rows.flatMap((row) => [row, ...flatRows(row.children)]);
 }
 
 function closeRequest(feed: Feed, requestId: string): void {
@@ -488,7 +543,7 @@ export function touchedFiles(feed: Feed): string[] {
   const out: string[] = [];
   for (const block of feed.blocks) {
     if (block.kind !== "actions") continue;
-    for (const row of block.rows) {
+    for (const row of flatRows(block.rows)) {
       const path = row.fact?.path;
       if (path && !out.includes(path)) out.push(path);
     }
@@ -506,8 +561,9 @@ export function factOf(feed: Feed, path: string): FileFact | null {
   for (let i = feed.blocks.length - 1; i >= 0; i -= 1) {
     const block = feed.blocks[i];
     if (block.kind !== "actions") continue;
-    for (let j = block.rows.length - 1; j >= 0; j -= 1) {
-      const fact = block.rows[j].fact;
+    const rows = flatRows(block.rows);
+    for (let j = rows.length - 1; j >= 0; j -= 1) {
+      const fact = rows[j].fact;
       if (fact?.path === path) return fact;
     }
   }
@@ -520,8 +576,9 @@ export function diffOf(feed: Feed, path: string): FileDiff | null {
   for (let i = feed.blocks.length - 1; i >= 0; i -= 1) {
     const block = feed.blocks[i];
     if (block.kind !== "actions") continue;
-    for (let j = block.rows.length - 1; j >= 0; j -= 1) {
-      const row = block.rows[j];
+    const rows = flatRows(block.rows);
+    for (let j = rows.length - 1; j >= 0; j -= 1) {
+      const row = rows[j];
       if (row.fact?.path === path && row.diff) return row.diff;
     }
   }

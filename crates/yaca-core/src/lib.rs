@@ -33,6 +33,7 @@ pub mod intent;
 pub mod legacy;
 pub mod message;
 pub mod permission;
+pub mod picture;
 pub mod process;
 pub mod project;
 pub mod provider;

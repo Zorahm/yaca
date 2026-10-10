@@ -8,12 +8,14 @@ rust-version.workspace = true
 
 [dependencies]
 async-trait.workspace = true
+base64.workspace = true
 blake3.workspace = true
 encoding_rs.workspace = true
 futures-util.workspace = true
 globset.workspace = true
 htmd.workspace = true
 ignore.workspace = true
+image.workspace = true
 keyring.workspace = true
 regex.workspace = true
 reqwest.workspace = true
