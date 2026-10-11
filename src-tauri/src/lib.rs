@@ -176,6 +176,7 @@ async fn open_project(
     // А это — уровень приложения, и в файле проекта его нет: ядру он приезжает
     // полем конфига, как режим и усилие.
     config.respect_robots = state.prefs().respect_robots;
+    config.shell = state.prefs().shell;
     if let Some(id) = resume {
         config.resume_session(SessionId::from(id));
     }
@@ -329,6 +330,15 @@ fn project_commands(project: String) -> Result<Vec<SlashCommand>, String> {
     Ok(slash::load(&project_path(&project)?))
 }
 
+/// The shells there are to choose from on this machine (§10).
+///
+/// Empty where there is no choice — everywhere but Windows — and the settings
+/// window then draws no row for it.
+#[tauri::command]
+fn installed_shells() -> Vec<yaca_core::ShellChoice> {
+    yaca_core::process::shell::installed()
+}
+
 /// What an attachment is, and its thumbnail if it is an image (§7.2).
 ///
 /// The page gets pixels, not access: it cannot read the disk, and opening
@@ -450,6 +460,7 @@ pub fn run() {
             session_feed,
             project_commands,
             attachment_look,
+            installed_shells,
             image_full,
             stash_image,
             providers::discover_models,

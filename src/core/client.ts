@@ -39,6 +39,7 @@ import type { SearchHit } from "./bindings/SearchHit";
 import type { SessionId } from "./bindings/SessionId";
 import type { SessionMeta } from "./bindings/SessionMeta";
 import type { SessionState } from "./bindings/SessionState";
+import type { ShellChoice } from "./bindings/ShellChoice";
 import type { SlashCommand } from "./bindings/SlashCommand";
 import type { Span } from "./bindings/Span";
 import type { Protocol } from "./bindings/Protocol";
@@ -56,6 +57,7 @@ import type { UsageSnapshot } from "./bindings/UsageSnapshot";
 
 export type {
   AttachmentLook,
+  ShellChoice,
   AgentEvent,
   Language,
   Preferences,
@@ -681,7 +683,18 @@ export const DEFAULT_PREFS: Preferences = {
   language: "system",
   notifications: true,
   respectRobots: true,
+  shell: "auto",
 };
+
+/**
+ * Шеллы, из которых на этой машине есть что выбирать (§10), кроме «авто».
+ *
+ * Пусто везде, кроме Windows: шелл там один, и строки с выбором, которого
+ * нет, окно настроек не рисует (§0). В стенде оболочки нет — и выбирать нечего.
+ */
+export function installedShells(): Promise<ShellChoice[]> {
+  return inTauri ? invoke<ShellChoice[]>("installed_shells") : Promise.resolve([]);
+}
 
 /** В стенде оболочки нет, и настройки живут в памяти страницы. */
 let demoPrefs: Preferences = { ...DEFAULT_PREFS };

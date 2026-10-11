@@ -42,6 +42,7 @@ use crate::intent::{Effort, Mode};
 use crate::permission::broker::Broker;
 use crate::permission::policy::Policy;
 use crate::permission::PermissionAnswer;
+use crate::process::shell::{Shell, ShellChoice};
 use crate::process::Processes;
 use crate::provider::registry::ANTHROPIC_ID;
 use crate::provider::Provider;
@@ -98,6 +99,10 @@ pub struct SessionConfig {
     /// Умолчание — соблюдать; `yaca-cli` его и получает, ничего не зная о
     /// настройках окна.
     pub respect_robots: bool,
+    /// Which shell commands run through (§10). The human's choice about the
+    /// application, like the flag above, and settled for the whole session
+    /// when it opens ([`Shell`]).
+    pub shell: ShellChoice,
 }
 
 impl SessionConfig {
@@ -113,6 +118,7 @@ impl SessionConfig {
             journal: true,
             resume: None,
             respect_robots: true,
+            shell: ShellChoice::default(),
         }
     }
 
@@ -241,6 +247,8 @@ struct Shared {
     /// Соблюдать ли `robots.txt` (§10). Из [`SessionConfig`], а не из файла
     /// проекта: настройка приложения.
     respect_robots: bool,
+    /// The shell of this session's commands, named in its system prompt.
+    shell: Shell,
 }
 
 impl Shared {
@@ -347,6 +355,7 @@ pub fn spawn(
         })?,
         broker,
         respect_robots: config.respect_robots,
+        shell: Shell::resolve(config.shell),
         models: config.models.clone(),
         ws: ws.clone(),
         recorder,

@@ -45,6 +45,7 @@ use crate::id::CallId;
 use crate::intent::Intent;
 use crate::permission::PermissionNeed;
 use crate::picture::Picture;
+use crate::process::shell::Shell;
 use crate::process::Processes;
 use crate::provider::ToolSchema;
 use crate::session::subagent::Subagents;
@@ -111,6 +112,8 @@ pub struct ToolCtx {
     pub agents: Option<Subagents>,
     /// Whether the model that made the call can be shown an image.
     pub vision: bool,
+    /// The shell commands run through, as the session settled it.
+    pub shell: Shell,
     /// Соблюдать ли `Disallow` из `robots.txt` (§10).
     ///
     /// Уровень приложения, а не проекта: это про то, как Yaca ведёт себя в
@@ -431,6 +434,7 @@ pub(crate) mod tests_support {
             cancel: tokio_util::sync::CancellationToken::new(),
             agents: None,
             vision: true,
+            shell: crate::process::shell::Shell::default(),
             respect_robots: true,
         };
         (ctx, ws)

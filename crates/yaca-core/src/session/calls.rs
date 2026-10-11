@@ -291,6 +291,7 @@ impl Caller {
                 .is_none()
                 .then(|| Subagents::new(self.clone(), turn_id.clone(), call_id.clone())),
             vision: self.shared.sees(&self.model()),
+            shell: self.shared.shell,
             respect_robots: self.shared.respect_robots,
         };
 

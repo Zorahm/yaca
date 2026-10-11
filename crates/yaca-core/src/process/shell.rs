@@ -16,6 +16,9 @@
 use std::path::Path;
 use std::process::Stdio;
 
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Child;
 use tokio::sync::mpsc;
@@ -25,13 +28,28 @@ use tokio::sync::mpsc;
 #[cfg(windows)]
 pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+/// The human's choice of shell for commands (§10).
+///
+/// There is one to make only on Windows; elsewhere it is `/bin/sh` whatever
+/// this says. Spelled the way the settings file keeps it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub enum ShellChoice {
+    /// PowerShell 7 where it is installed, Windows PowerShell where it is not.
+    #[default]
+    Auto,
+    /// `pwsh.exe`, 7 and later: installed separately.
+    Pwsh,
+    /// `powershell.exe`, 5.1: ships with Windows, so it is always there.
+    WindowsPowerShell,
+}
+
 /// Which PowerShell commands run through.
 #[cfg(windows)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PowerShell {
-    /// `powershell.exe`, 5.1: ships with Windows, so it is always there.
     Windows,
-    /// `pwsh.exe`, 7 and later: installed separately.
     Core,
 }
 
@@ -45,36 +63,84 @@ impl PowerShell {
     }
 }
 
-/// The PowerShell of this machine, looked up once.
-///
-/// Once, because the system prompt names it, and the prompt is the cached
-/// prefix of every request: an edition that changed mid-session because
-/// someone installed `pwsh` would move the prefix and strand the reasoning
-/// bound to it.
+/// Whether PowerShell 7 is on this machine, looked up once.
 #[cfg(windows)]
-pub fn powershell() -> PowerShell {
-    static FOUND: std::sync::OnceLock<PowerShell> = std::sync::OnceLock::new();
+fn pwsh_installed() -> bool {
+    static FOUND: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *FOUND.get_or_init(|| {
         let path = std::env::var_os("PATH").unwrap_or_default();
-        let installed = std::env::split_paths(&path)
-            .any(|dir| dir.join(PowerShell::Core.exe()).is_file());
-        if installed {
-            PowerShell::Core
-        } else {
-            PowerShell::Windows
-        }
+        std::env::split_paths(&path).any(|dir| dir.join(PowerShell::Core.exe()).is_file())
     })
 }
 
-/// How the shell is named where a human reads it (§5.7 detail, system prompt).
-#[cfg(windows)]
-pub fn name() -> &'static str {
-    powershell().exe()
+/// The shell a session's commands run through.
+///
+/// Settled when the session opens and the same until it closes: the system
+/// prompt names it, and the prompt is the cached prefix of every request. A
+/// shell that changed mid-session — the human flipped the setting, someone
+/// installed `pwsh` — would move the prefix and strand the reasoning bound to
+/// it, besides leaving the model writing for a shell it is no longer given.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Shell {
+    #[cfg(windows)]
+    powershell: PowerShell,
 }
 
-#[cfg(unix)]
-pub fn name() -> &'static str {
-    "/bin/sh"
+impl Shell {
+    #[cfg(windows)]
+    pub fn resolve(choice: ShellChoice) -> Shell {
+        let powershell = match choice {
+            ShellChoice::WindowsPowerShell => PowerShell::Windows,
+            // Asked for by name and not there: a settings file carried over
+            // from another machine. The command still has to run, and the
+            // prompt says which shell it got.
+            ShellChoice::Auto | ShellChoice::Pwsh if pwsh_installed() => PowerShell::Core,
+            ShellChoice::Auto | ShellChoice::Pwsh => PowerShell::Windows,
+        };
+        Shell { powershell }
+    }
+
+    #[cfg(unix)]
+    pub fn resolve(_choice: ShellChoice) -> Shell {
+        Shell {}
+    }
+
+    /// How the shell is named where a human reads it (§5.7 detail, system
+    /// prompt).
+    pub fn name(self) -> &'static str {
+        #[cfg(windows)]
+        return self.powershell.exe();
+        #[cfg(unix)]
+        return "/bin/sh";
+    }
+
+    #[cfg(windows)]
+    pub fn powershell(self) -> PowerShell {
+        self.powershell
+    }
+}
+
+impl Default for Shell {
+    fn default() -> Self {
+        Shell::resolve(ShellChoice::Auto)
+    }
+}
+
+/// The shells there are to choose from on this machine, besides `Auto`.
+///
+/// Empty where there is no choice to make, and the settings window draws no
+/// row for a choice that does not exist (§0).
+pub fn installed() -> Vec<ShellChoice> {
+    #[cfg(windows)]
+    {
+        let mut found = vec![ShellChoice::WindowsPowerShell];
+        if pwsh_installed() {
+            found.insert(0, ShellChoice::Pwsh);
+        }
+        found
+    }
+    #[cfg(unix)]
+    Vec::new()
 }
 
 /// One read of a pipe. Not one line: the kernel hands over whatever it has, and
@@ -90,8 +156,8 @@ pub struct Spawned {
     pub output: mpsc::Receiver<Vec<u8>>,
 }
 
-pub fn spawn(command: &str, cwd: &Path) -> std::io::Result<Spawned> {
-    let mut cmd = tokio::process::Command::from(shell_command(command)?);
+pub fn spawn(shell: Shell, command: &str, cwd: &Path) -> std::io::Result<Spawned> {
+    let mut cmd = tokio::process::Command::from(shell_command(shell, command)?);
     cmd.current_dir(cwd)
         // No terminal is attached. Anything that stops to ask a question would
         // otherwise wait for an answer that cannot arrive.
@@ -163,7 +229,7 @@ const COMMAND_VAR: &str = "YACA_COMMAND";
 /// trouble: errors come back as XML, with line numbers counted from our
 /// preamble. An environment variable is taken literally, by both.
 #[cfg(windows)]
-fn shell_command(command: &str) -> std::io::Result<std::process::Command> {
+fn shell_command(shell: Shell, command: &str) -> std::io::Result<std::process::Command> {
     use std::os::windows::process::CommandExt;
 
     if command.encode_utf16().count() > MAX_COMMAND_CHARS {
@@ -175,7 +241,7 @@ fn shell_command(command: &str) -> std::io::Result<std::process::Command> {
         ));
     }
 
-    let mut cmd = std::process::Command::new(powershell().exe());
+    let mut cmd = std::process::Command::new(shell.powershell.exe());
     cmd.args([
         "-NoLogo",
         // The human's profile is theirs: it may print, prompt, or redefine
@@ -196,7 +262,7 @@ fn shell_command(command: &str) -> std::io::Result<std::process::Command> {
 }
 
 #[cfg(unix)]
-fn shell_command(command: &str) -> std::io::Result<std::process::Command> {
+fn shell_command(_shell: Shell, command: &str) -> std::io::Result<std::process::Command> {
     use std::os::unix::process::CommandExt;
 
     let mut cmd = std::process::Command::new("/bin/sh");
@@ -229,7 +295,7 @@ mod tests {
     /// Runs a command to the end: its exit code and everything it printed.
     async fn run(command: &str) -> (Option<i32>, String) {
         let dir = TempDir::new();
-        let mut spawned = spawn(command, dir.path()).unwrap();
+        let mut spawned = spawn(Shell::default(), command, dir.path()).unwrap();
         let mut bytes = Vec::new();
         while let Some(chunk) = spawned.output.recv().await {
             bytes.extend(chunk);
@@ -275,7 +341,7 @@ mod tests {
     #[tokio::test]
     async fn chaining_works_the_way_the_prompt_says_it_does() {
         // The system prompt tells the model which of the two it may write.
-        let chained = match powershell() {
+        let chained = match Shell::default().powershell() {
             PowerShell::Core => "Write-Output a && Write-Output b",
             PowerShell::Windows => "Write-Output a; if ($?) { Write-Output b }",
         };
@@ -315,7 +381,41 @@ mod tests {
     async fn a_command_too_long_to_carry_is_refused_before_it_starts() {
         let dir = TempDir::new();
         let long = format!("Write-Output '{}'", "x".repeat(MAX_COMMAND_CHARS));
-        let err = spawn(&long, dir.path()).err().expect("should not start");
+        let err = spawn(Shell::default(), &long, dir.path())
+            .err()
+            .expect("should not start");
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn windows_powershell_is_always_there_to_choose() {
+        assert!(installed().contains(&ShellChoice::WindowsPowerShell));
+        assert_eq!(
+            Shell::resolve(ShellChoice::WindowsPowerShell).name(),
+            "powershell.exe"
+        );
+    }
+
+    #[test]
+    fn a_shell_asked_for_and_missing_falls_back_to_one_that_runs() {
+        // A settings file carried from a machine that had PowerShell 7.
+        let got = Shell::resolve(ShellChoice::Pwsh);
+        let offered = installed().contains(&ShellChoice::Pwsh);
+        assert_eq!(got.name() == "pwsh.exe", offered);
+        // And what is chosen automatically is the same answer.
+        assert_eq!(Shell::resolve(ShellChoice::Auto), got);
+    }
+
+    #[tokio::test]
+    async fn the_chosen_shell_is_the_one_that_runs() {
+        let dir = TempDir::new();
+        let shell = Shell::resolve(ShellChoice::WindowsPowerShell);
+        let mut spawned =
+            spawn(shell, "$PSVersionTable.PSVersion.Major", dir.path()).unwrap();
+        let mut bytes = Vec::new();
+        while let Some(chunk) = spawned.output.recv().await {
+            bytes.extend(chunk);
+        }
+        assert_eq!(String::from_utf8_lossy(&bytes).trim(), "5");
     }
 }

@@ -22,6 +22,7 @@
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+use yaca_core::ShellChoice;
 
 /// Which of the two themes, or the one the OS asks for (§2).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -83,6 +84,14 @@ pub struct Preferences {
     /// effort. The core stays headless — it is handed a flag, not a settings
     /// file it has no business reading.
     pub respect_robots: bool,
+    /// Which shell the agent's commands run through (§10). Windows only:
+    /// elsewhere there is one shell and nothing to choose.
+    ///
+    /// Read by the core on the same road as the flag above
+    /// (`SessionConfig::shell`), and settled for a session when it opens: the
+    /// system prompt names the shell, so a chat that is already open keeps
+    /// the one it started with.
+    pub shell: ShellChoice,
 }
 
 impl Default for Preferences {
@@ -94,6 +103,7 @@ impl Default for Preferences {
             language: Language::default(),
             notifications: true,
             respect_robots: true,
+            shell: ShellChoice::default(),
         }
     }
 }
@@ -155,6 +165,7 @@ mod tests {
         assert!(!prefs.compact);
         assert!(prefs.notifications);
         assert!(prefs.respect_robots);
+        assert_eq!(prefs.shell, ShellChoice::Auto);
     }
 
     /// A file from a build that knew fewer fields keeps the rest as they were.

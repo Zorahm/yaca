@@ -35,6 +35,7 @@ use crate::id::{CallId, TurnId};
 use crate::instructions::Instructions;
 use crate::intent::Intent;
 use crate::message::{strip_thinking, ContentBlock, Message};
+use crate::process::shell::Shell;
 use crate::provider::ProviderRequest;
 use crate::tool::ToolRegistry;
 use crate::usage::{Pricing, TokenCounts};
@@ -133,7 +134,12 @@ impl Subagents {
 
             let request = ProviderRequest {
                 model: model.id.clone(),
-                system: system_prompt(me.ws.root(), intent, me.instructions.as_deref()),
+                system: system_prompt(
+                    me.ws.root(),
+                    intent,
+                    me.instructions.as_deref(),
+                    shared.shell,
+                ),
                 messages: shared.shown_to(&model, &history),
                 tools: me.registry.schemas(intent),
                 max_tokens: model.max_output.min(MAX_OUTPUT_TOKENS),
@@ -275,6 +281,7 @@ fn system_prompt(
     project_root: &Path,
     intent: Intent,
     instructions: Option<&Instructions>,
+    shell: Shell,
 ) -> String {
     let agent = intent == Intent::Agent;
     let mut s = String::from(INTRO);
@@ -285,7 +292,7 @@ fn system_prompt(
         prompt::shown(project_root)
     ));
     if agent {
-        s.push_str(prompt::shell_fact());
+        s.push_str(prompt::shell_fact(shell));
     }
     s.push_str("</environment>\n\n");
 
@@ -360,7 +367,7 @@ mod tests {
     }
 
     fn plain(intent: Intent) -> String {
-        system_prompt(Path::new("/p"), intent, None)
+        system_prompt(Path::new("/p"), intent, None, Shell::default())
     }
 
     #[test]
@@ -373,7 +380,7 @@ mod tests {
         // The prefix of every request the subagent makes; a clock in here
         // would void the cache between its steps.
         assert_eq!(plain(Intent::Agent), plain(Intent::Agent));
-        let with = system_prompt(Path::new("/p"), Intent::Agent, Some(&rules));
+        let with = system_prompt(Path::new("/p"), Intent::Agent, Some(&rules), Shell::default());
         assert!(with.contains("Use tabs."));
         assert!(with.trim_end().ends_with("</project_instructions>"));
         assert!(!plain(Intent::Agent).contains("project_instructions"));
@@ -385,10 +392,10 @@ mod tests {
         // it how edits work in plan would be telling it they do.
         assert!(plain(Intent::Plan).contains("Mode: plan"));
         assert!(!plain(Intent::Plan).contains("working tree"));
-        assert!(!plain(Intent::Plan).contains(crate::process::shell::name()));
+        assert!(!plain(Intent::Plan).contains(Shell::default().name()));
         assert!(plain(Intent::Agent).contains("Mode: agent"));
         assert!(plain(Intent::Agent).contains("working tree"));
-        assert!(plain(Intent::Agent).contains(crate::process::shell::name()));
+        assert!(plain(Intent::Agent).contains(Shell::default().name()));
     }
 
     #[test]

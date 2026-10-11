@@ -320,7 +320,12 @@ impl Worker {
         let state = self.shared.state.lock().unwrap().clone();
         let info = self.shared.model_info(&state.model);
         let intent = state.mode.intent();
-        let system = prompt::build(self.ws.root(), intent, self.instructions.as_deref());
+        let system = prompt::build(
+            self.ws.root(),
+            intent,
+            self.instructions.as_deref(),
+            self.shared.shell,
+        );
         let tools = self.registry.schemas(intent);
         // Before the history is copied: a prefix that moved takes the
         // reasoning bound to the old one with it.

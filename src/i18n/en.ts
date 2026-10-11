@@ -329,6 +329,12 @@ export const en: Record<Key, string> = {
 
   "tools.title": "Tools",
   "tools.lede": "How the agent behaves on the network. Enabling tools and command timeouts are waiting on the core.",
+  "tools.shell": "Shell for commands",
+  "tools.shell_hint":
+    "What the agent runs commands through. Auto takes PowerShell 7 when it is installed. An open chat keeps its shell: the choice applies from the next one.",
+  "tools.shell_auto": "Auto",
+  "tools.shell_pwsh": "PowerShell 7",
+  "tools.shell_windows": "Windows PowerShell",
   "tools.robots": "Honour robots.txt",
   "tools.robots_hint":
     "A page closed by a Disallow rule is not fetched: the agent gets a refusal and the reason. Turn it off when the site closed that way is your own — a Disallow there is often only about search engines.",

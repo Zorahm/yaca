@@ -189,7 +189,7 @@ async fn foreground(
     cwd: &Path,
     limit: Duration,
 ) -> Result<ToolOutput, ToolError> {
-    let spawned = shell::spawn(command, cwd)
+    let spawned = shell::spawn(ctx.shell, command, cwd)
         .map_err(|e| ToolError::failed(format!("не удалось запустить «{}»: {e}", head(command))))?;
     let shell::Spawned {
         mut child,
@@ -292,7 +292,7 @@ async fn foreground(
 
 /// Starts the command and leaves it in the process panel (§6.5).
 fn background(ctx: &ToolCtx, command: &str, cwd: &Path) -> Result<ToolOutput, ToolError> {
-    let spawned = shell::spawn(command, cwd)
+    let spawned = shell::spawn(ctx.shell, command, cwd)
         .map_err(|e| ToolError::failed(format!("не удалось запустить «{}»: {e}", head(command))))?;
     let shell::Spawned { child, pid, output } = spawned;
 

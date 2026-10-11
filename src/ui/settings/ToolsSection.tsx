@@ -1,7 +1,9 @@
 /**
  * Инструменты (§10).
  *
- * Сегодня в разделе две настоящие строки: `robots.txt` и ключ веб-поиска.
+ * Сегодня в разделе три настоящие строки: шелл команд, `robots.txt` и ключ
+ * веб-поиска. Шелл выбирают только там, где есть из чего: на Windows, между
+ * PowerShell 7 и Windows PowerShell. Где он один, строки нет.
  * Включение тулов, таймаут команд и деньлист §10 тоже называет, но за ними нет
  * ничего в ядре: набор тулов — фиксированный `Tools::standard()`, а таймаут
  * команды приходит от модели в `timeout_ms`. Переключатель, за которым нет
@@ -17,14 +19,24 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   forgetApiKey,
+  installedShells,
   searchKeySource,
   SEARCH_KEY_ITEM,
   setApiKey,
   type KeySource,
   type Preferences,
+  type ShellChoice,
 } from "../../core/client";
-import { t } from "../../i18n";
-import { Row, Switch } from "./Row";
+import { t, type Key } from "../../i18n";
+import { Row, Segments, Switch } from "./Row";
+
+/** Как каждый шелл назван в строке выбора. Имена собственные, но через словарь:
+    «Авто» рядом с ними — слово, и в компоненте строк не бывает (§14). */
+const SHELL_NAME: Record<ShellChoice, Key> = {
+  auto: "tools.shell_auto",
+  pwsh: "tools.shell_pwsh",
+  windowsPowerShell: "tools.shell_windows",
+};
 
 export function ToolsSection({
   prefs,
@@ -37,6 +49,12 @@ export function ToolsSection({
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Шеллы этой машины. Пока не ответили и где их нет — строки нет. */
+  const [shells, setShells] = useState<ShellChoice[]>([]);
+
+  useEffect(() => {
+    void installedShells().then(setShells, () => setShells([]));
+  }, []);
 
   const refresh = useCallback(() => {
     void searchKeySource().then(setSource, (e: unknown) => setError(String(e)));
@@ -79,6 +97,20 @@ export function ToolsSection({
       {error !== null && <div className="set-error">{error}</div>}
 
       <div className="set-rows">
+        {shells.length > 0 && (
+          <Row name={t("tools.shell")} hint={t("tools.shell_hint")}>
+            <Segments<ShellChoice>
+              label={t("tools.shell")}
+              value={prefs.shell}
+              options={(["auto", ...shells] as ShellChoice[]).map((value) => ({
+                value,
+                label: t(SHELL_NAME[value]),
+              }))}
+              onChange={(shell) => onPatch({ shell })}
+            />
+          </Row>
+        )}
+
         <Row name={t("tools.robots")} hint={t("tools.robots_hint")}>
           <Switch
             on={prefs.respectRobots}

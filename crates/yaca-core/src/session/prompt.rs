@@ -23,22 +23,23 @@ use std::path::Path;
 
 use crate::instructions::Instructions;
 use crate::intent::Intent;
+use crate::process::shell::Shell;
 
 /// Which shell the `bash` tool runs commands through.
 ///
 /// An environment fact, so it sits with the project root rather than inside the
 /// tool schema: the model reads the prompt before it writes a command, and
 /// learning this from a failed `ls` costs a whole turn. The same for the whole
-/// session — the shell is looked up once (`process::shell`) — which keeps the
-/// cached prefix stable.
+/// session — the shell is settled when it opens (`process::shell`) — which
+/// keeps the cached prefix stable.
 #[cfg(windows)]
-pub(super) fn shell_fact() -> &'static str {
-    use crate::process::shell::{powershell, PowerShell};
+pub(super) fn shell_fact(shell: Shell) -> &'static str {
+    use crate::process::shell::PowerShell;
 
     // The two differ in one thing a model trips on. Told that `&&` is missing
     // it writes `;` and `if ($?)`; left to find out, it loses a turn to a
     // parser error on every chained command.
-    match powershell() {
+    match shell.powershell() {
         PowerShell::Windows => {
             "Commands run through Windows PowerShell 5.1 (powershell.exe), not cmd \
              and not a POSIX shell. Write PowerShell: `Get-ChildItem`, `$env:NAME`, \
@@ -59,7 +60,7 @@ pub(super) fn shell_fact() -> &'static str {
 }
 
 #[cfg(unix)]
-pub(super) fn shell_fact() -> &'static str {
+pub(super) fn shell_fact(_shell: Shell) -> &'static str {
     "Commands run through /bin/sh -c.\n"
 }
 
@@ -161,7 +162,12 @@ pub(super) const CAPTIONS: &str = "<action_captions>\nSome tools carry a require
      Tools without that field are captioned by the interface from the facts — do \
      not narrate those in prose as well.\n</action_captions>\n";
 
-pub fn build(project_root: &Path, intent: Intent, instructions: Option<&Instructions>) -> String {
+pub fn build(
+    project_root: &Path,
+    intent: Intent,
+    instructions: Option<&Instructions>,
+    shell: Shell,
+) -> String {
     let agent = intent == Intent::Agent;
     let mut s = String::from(INTRO);
 
@@ -172,7 +178,7 @@ pub fn build(project_root: &Path, intent: Intent, instructions: Option<&Instruct
     ));
     // No bash tool in plan, so the fact would be noise in the cached prefix.
     if agent {
-        s.push_str(shell_fact());
+        s.push_str(shell_fact(shell));
     }
     s.push_str("</environment>\n\n");
 
@@ -257,7 +263,7 @@ mod tests {
     use super::*;
 
     fn plain(intent: Intent) -> String {
-        build(Path::new("/p"), intent, None)
+        build(Path::new("/p"), intent, None, Shell::default())
     }
 
     fn with_file(text: &str, truncated: bool) -> String {
@@ -266,7 +272,7 @@ mod tests {
             text: text.into(),
             truncated,
         };
-        build(Path::new("/p"), Intent::Agent, Some(&instructions))
+        build(Path::new("/p"), Intent::Agent, Some(&instructions), Shell::default())
     }
 
     #[test]
@@ -303,7 +309,7 @@ mod tests {
     #[test]
     fn the_shell_is_named_where_commands_can_be_run() {
         // Without this the model writes `ls -la` on Windows and loses a turn.
-        let shell = crate::process::shell::name();
+        let shell = Shell::default().name();
         assert!(plain(Intent::Agent).contains(shell));
         // No bash tool in plan, so the fact would be noise in the cached prefix.
         assert!(!plain(Intent::Plan).contains(shell));
@@ -344,6 +350,7 @@ mod tests {
                     text: "rules".into(),
                     truncated: false,
                 }),
+                Shell::default(),
             );
             for tag in [
                 "environment",

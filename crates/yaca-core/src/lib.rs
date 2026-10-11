@@ -57,6 +57,7 @@ pub use event::{AgentEvent, SessionState, StopReason};
 pub use id::CheckpointId;
 pub use intent::{Effort, Intent, Mode, TrustMode};
 pub use permission::{PermissionAnswer, PermissionKind, PermissionRequest, ScopeKey};
+pub use process::shell::ShellChoice;
 pub use process::{ProcessId, ProcessState, ProcessSummary};
 pub use provider::registry::{Protocol, ProviderSpec, Providers};
 pub use session::{spawn, SessionConfig, SessionHandle};
