@@ -24,7 +24,9 @@
 
 .set-nav {
   flex: none;
-  width: 208px;
+  /* По самой длинной строке, а не по русской: «Notifications and language»
+     в 208 px переносилось на вторую строку и рвало ровный шаг колонки. */
+  width: 244px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -76,6 +78,15 @@
   font-size: 13px;
   color: var(--ink-muted);
   text-align: left;
+  /* Пункт всегда в одну строку: высота у него задана, и вторая строка
+     вылезала бы из неё. Словарь, который ещё длиннее, обрежется многоточием. */
+  white-space: nowrap;
+}
+
+.set-nav-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .set-nav-item:hover {

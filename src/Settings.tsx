@@ -210,7 +210,7 @@ function NavItem({
       <span className="set-nav-icon" aria-hidden="true">
         {item.icon}
       </span>
-      {t(item.name)}
+      <span className="set-nav-name">{t(item.name)}</span>
     </button>
   );
 }
