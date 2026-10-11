@@ -34,6 +34,12 @@
   min-width: 0;
 }
 
+/* The last thing in the feed: room to breathe above the composer, so the
+   final line of an answer does not sit on its border. */
+.feed-end {
+  height: 28px;
+}
+
 .feed-item[data-kind="human"] {
   --pad-top: 30px;
   --pad-bottom: 10px;
