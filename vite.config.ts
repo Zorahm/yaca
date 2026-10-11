@@ -34,7 +34,10 @@ export default defineConfig(async () => ({
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
+    // По адресу, а не по имени. `localhost` сначала разрешается в `::1`, vite
+    // садится только на него, а оболочка и браузер идут на 127.0.0.1 и ждут
+    // сервер, который уже поднят. `devUrl` в `tauri.conf.json` — тот же адрес.
+    host: host || "127.0.0.1",
     hmr: host
       ? {
           protocol: "ws",
