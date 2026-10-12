@@ -169,7 +169,7 @@ fn push_hunk(out: &mut FileDiff, old_start: u32, new_start: u32, lines: Vec<Diff
 }
 
 /// Собирает текст строки и диапазоны изменившихся кусков.
-fn inline(change: &InlineChange<'_, str>) -> (String, Vec<Span>) {
+pub(super) fn inline(change: &InlineChange<'_, str>) -> (String, Vec<Span>) {
     let mut text = String::new();
     let mut spans: Vec<Span> = Vec::new();
     let mut chars = 0u32;

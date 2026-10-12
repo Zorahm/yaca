@@ -129,27 +129,40 @@ fn fill(body: &str, args: &str) -> String {
 /// on it, and a parser that accepted anchors and block scalars would be
 /// promising a format nothing here can keep.
 fn parse(name: String, text: &str) -> SlashCommand {
-    let mut description = String::new();
-    let mut body = text;
-
-    if let Some(rest) = text.strip_prefix("---") {
-        if let Some(rest) = rest.strip_prefix('\n').or_else(|| rest.strip_prefix("\r\n")) {
-            if let Some(end) = find_fence(rest) {
-                for line in rest[..end.0].lines() {
-                    if let Some(value) = line.trim().strip_prefix("description:") {
-                        description = value.trim().trim_matches('"').to_string();
-                    }
-                }
-                body = &rest[end.1..];
-            }
-        }
-    }
+    let (description, body) = match split_frontmatter(text) {
+        Some((header, body)) => (header_value(header, "description").unwrap_or_default(), body),
+        None => (String::new(), text),
+    };
 
     SlashCommand {
         name,
         description,
         body: body.trim().to_string(),
     }
+}
+
+/// Splits a file into its frontmatter block and the body after it, or `None`
+/// when there is no frontmatter — no leading `---`, or one never closed.
+///
+/// Shared with skills (`tool::skill`), whose files carry the same header.
+pub(crate) fn split_frontmatter(text: &str) -> Option<(&str, &str)> {
+    let rest = text.strip_prefix("---")?;
+    let rest = rest.strip_prefix('\n').or_else(|| rest.strip_prefix("\r\n"))?;
+    let end = find_fence(rest)?;
+    Some((&rest[..end.0], &rest[end.1..]))
+}
+
+/// The value of one `key: value` line in a frontmatter block. The last such
+/// line wins, as it always has.
+pub(crate) fn header_value(header: &str, key: &str) -> Option<String> {
+    let prefix = format!("{key}:");
+    let mut found = None;
+    for line in header.lines() {
+        if let Some(value) = line.trim().strip_prefix(&prefix) {
+            found = Some(value.trim().trim_matches('"').to_string());
+        }
+    }
+    found
 }
 
 /// Finds the closing `---`, answering where the frontmatter ends and where the

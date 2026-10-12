@@ -14,12 +14,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use tokio::sync::broadcast::Receiver;
 use yaca_core::event::{AgentEvent, StopReason};
 use yaca_core::provider::mock::MockProvider;
 use yaca_core::provider::{BlockKind, ProviderEvent};
 use yaca_core::usage::TokenCounts;
 use yaca_core::{Command, Mode, SessionConfig, SessionHandle};
-use tokio::sync::broadcast::Receiver;
 
 /// A throwaway project directory. Own implementation rather than a crate:
 /// integration tests cannot reach the unit-test helpers, and this is 20 lines.
@@ -73,6 +73,20 @@ pub fn session(dir: &TempProject, provider: Arc<MockProvider>, mode: Mode) -> Se
     let mut cfg = SessionConfig::new(dir.path());
     cfg.mode = mode;
     cfg.journal = false;
+    yaca_core::spawn(cfg, provider).unwrap()
+}
+
+/// A session over `dir`, with `extra` as its additional roots (`--add-dir`).
+pub fn session_with_roots(
+    dir: &TempProject,
+    extra: &[&TempProject],
+    provider: Arc<MockProvider>,
+    mode: Mode,
+) -> SessionHandle {
+    let mut cfg = SessionConfig::new(dir.path());
+    cfg.mode = mode;
+    cfg.journal = false;
+    cfg.additional_roots = extra.iter().map(|d| d.path().to_path_buf()).collect();
     yaca_core::spawn(cfg, provider).unwrap()
 }
 
@@ -156,4 +170,58 @@ pub fn calls(list: &[(&str, &str, serde_json::Value)]) -> Vec<ProviderEvent> {
     });
     out.push(ProviderEvent::MessageStop);
     out
+}
+
+/// The result the model read for `id` in its last request: its text, and
+/// whether the call was marked as an error.
+pub fn tool_result_of(
+    provider: &yaca_core::provider::mock::MockProvider,
+    id: &str,
+) -> (String, bool) {
+    use yaca_core::message::ContentBlock;
+
+    let sent = provider.seen.lock().unwrap().last().unwrap().clone();
+    sent.messages
+        .last()
+        .expect("запрос без сообщений")
+        .content
+        .iter()
+        .find_map(|block| match block {
+            ContentBlock::ToolResult {
+                tool_use_id,
+                content,
+                is_error,
+            } if tool_use_id == id => Some((content.clone(), *is_error)),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no result for {id}"))
+}
+
+/// A program built from `examples/`, by name. `cargo test` builds the examples
+/// of the package next to its test binaries: `target/<profile>/examples`
+/// beside `target/<profile>/deps`, where this binary is.
+pub fn fixture(name: &str) -> PathBuf {
+    let me = std::env::current_exe().unwrap();
+    let profile = me.parent().and_then(Path::parent).expect("a test binary lives in deps/");
+    let path = profile
+        .join("examples")
+        .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
+
+    // `cargo test --test <one>` builds that one target and no examples. Built
+    // here then, once per test binary; the build directory is not locked while
+    // tests run.
+    static BUILT: std::sync::Once = std::sync::Once::new();
+    if !path.exists() {
+        BUILT.call_once(|| {
+            let mut cargo = std::process::Command::new(env!("CARGO"));
+            cargo.args(["build", "--quiet", "-p", "yaca-core", "--example", name]);
+            if profile.file_name().is_some_and(|dir| dir == "release") {
+                cargo.arg("--release");
+            }
+            let status = cargo.status().expect("cargo did not start");
+            assert!(status.success(), "the example {name} did not build");
+        });
+    }
+    assert!(path.exists(), "{} is not built", path.display());
+    path
 }

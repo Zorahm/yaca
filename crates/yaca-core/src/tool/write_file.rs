@@ -9,7 +9,7 @@ use super::{FileChange, Narration, Tool, ToolCtx, ToolOutput};
 use crate::change::ChangeKind;
 use crate::error::ToolError;
 use crate::intent::Intent;
-use crate::permission::{PermissionKind, PermissionNeed};
+use crate::permission::PermissionNeed;
 use crate::workspace::Workspace;
 
 pub struct WriteFile;
@@ -55,15 +55,7 @@ impl Tool for WriteFile {
     fn permission(&self, ws: &Workspace, input: &Value) -> Option<PermissionNeed> {
         let raw = input["path"].as_str()?;
         let abs = ws.resolve_new(raw).ok()?;
-        let name = abs
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| raw.to_string());
-        Some(
-            PermissionNeed::new(PermissionKind::EditFile, self.name(), name)
-                .detail(ws.display(&abs))
-                .path(abs),
-        )
+        Some(files::edit_need(ws, self.name(), raw, abs))
     }
 
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {

@@ -146,7 +146,7 @@ async fn output_reaches_the_feed_before_the_command_ends() {
 async fn a_command_is_asked_about_even_in_auto() {
     let dir = TempProject::new();
     let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(runs("c1", "echo hi")),
+        Turn::Events(runs("c1", "echo hi > hi.txt")),
         Turn::Events(script_text("готово")),
     ]));
     // §8: the Command row of the trust matrix says "спросить" in every column.
@@ -193,8 +193,8 @@ async fn a_refused_command_never_runs() {
 async fn a_prefix_rule_covers_the_next_command_with_the_same_first_word() {
     let dir = TempProject::new();
     let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(runs("c1", "echo первый")),
-        Turn::Events(runs("c2", "echo второй")),
+        Turn::Events(runs("c1", "echo первый > a.txt")),
+        Turn::Events(runs("c2", "echo второй > b.txt")),
         Turn::Events(script_text("готово")),
     ]));
     let handle = session(&dir, provider, Mode::Manual);
@@ -217,9 +217,8 @@ async fn a_prefix_rule_covers_the_next_command_with_the_same_first_word() {
         .filter(|e| matches!(e, AgentEvent::PermissionRequested { .. }))
         .count();
     assert_eq!(asked, 1, "второй `echo` не должен был спрашивать заново");
-    assert!(progress_chunks(&events)
-        .iter()
-        .any(|c| c.contains("второй")));
+    // The second command ran under the rule, not just got past the question.
+    assert!(dir.path().join("b.txt").exists());
 }
 
 #[tokio::test]
@@ -361,4 +360,95 @@ async fn watching_a_process_that_never_existed_says_nothing() {
         !names.iter().any(|n| n.starts_with("processOutput")),
         "{names:?}"
     );
+}
+
+fn last_user_text(provider: &MockProvider, request: usize) -> String {
+    let seen = provider.seen.lock().unwrap();
+    let message = seen[request].messages.last().unwrap();
+    message
+        .content
+        .iter()
+        .filter_map(|b| match b {
+            yaca_core::message::ContentBlock::Text { text } => Some(text.clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[tokio::test]
+async fn a_background_command_that_ends_is_reported_with_the_next_message() {
+    let dir = TempProject::new();
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(background("c1", "echo up& exit 3")),
+        Turn::Events(script_text("поднял")),
+        Turn::Events(script_text("вижу")),
+    ]));
+    let handle = session(&dir, provider.clone(), Mode::Manual);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "подними сервер").await;
+    answer_and_finish(&handle, &mut rx, PermissionAnswer::Allow).await;
+
+    // The command dies while nobody is asking anything. The model is not woken
+    // for it: no request goes out until the human speaks.
+    until_within(&mut rx, Duration::from_secs(20), |e| {
+        matches!(e, AgentEvent::ProcessesUpdated { processes }
+            if processes.iter().all(|p| p.state != ProcessState::Running))
+    })
+    .await;
+    assert_eq!(provider.seen.lock().unwrap().len(), 2);
+
+    ask(&handle, "как там?").await;
+    until(&mut rx, is_turn_over).await;
+
+    let note = last_user_text(&provider, 2);
+    assert!(note.contains("exit code 3"), "{note}");
+    assert!(note.contains("echo up"), "{note}");
+    assert!(note.contains("как там?"), "{note}");
+}
+
+#[tokio::test]
+async fn the_model_stops_and_restarts_a_background_command_itself() {
+    let dir = TempProject::new();
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(background("c1", sleeps())),
+        Turn::Events(calls(&[(
+            "c2",
+            "BashRestart",
+            json!({ "id": 1, "description": "Перезапустил сервер" }),
+        )])),
+        Turn::Events(calls(&[(
+            "c3",
+            "BashKill",
+            json!({ "id": 1, "description": "Остановил сервер" }),
+        )])),
+        Turn::Events(script_text("готово")),
+    ]));
+    let handle = session(&dir, provider.clone(), Mode::Manual);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "подними и перезапусти").await;
+    // One question, for the command that was started: neither BashRestart nor
+    // BashKill asks anything.
+    let events = answer_and_finish(&handle, &mut rx, PermissionAnswer::Allow).await;
+
+    let asked = events
+        .iter()
+        .filter(|e| matches!(e, AgentEvent::PermissionRequested { .. }))
+        .count();
+    assert_eq!(asked, 1);
+    let failed = events
+        .iter()
+        .any(|e| matches!(e, AgentEvent::ToolCallFailed { .. }));
+    assert!(!failed, "{events:?}");
+
+    let rows = panel(&events);
+    assert_eq!(rows.len(), 1, "перезапуск не должен плодить строки");
+    assert_eq!(rows[0].state, ProcessState::Stopped);
+    // Stopped by the model itself, so the turn ran to its end.
+    assert!(matches!(
+        events.last(),
+        Some(AgentEvent::TurnFinished { .. })
+    ));
 }

@@ -10,9 +10,25 @@
 //! it will touch and be confirmed against them, so there has to be a way to ask
 //! what a rollback would do without doing it.
 //!
+//! [`Command::AnswerQuestion`] — the answer to an `AskUser` question. §15 has
+//! no command for it because §5.7 has no question beyond permissions; this is
+//! the same road the permission answer takes, with its own reply shape.
+//!
 //! [`Command::EditSummary`] — §5.11 lets the human rewrite the summary before
 //! the conversation continues, and what they write has to reach the history the
 //! model is given.
+//!
+//! The file panel adds one more, for §6.4: [`Command::ReadFileView`] (the whole
+//! file, for the panel). §15 has none: it draws the diff of a call. There is no
+//! command that decides a hunk — the one way back is a checkpoint.
+//!
+//! Two more came with the queue and the mention search, both beyond §15's list:
+//! [`Command::CancelQueued`] (§7.4, the chip's `отменить`) and
+//! [`Command::SearchFiles`] (§7.2, the `@` menu). Their answers are
+//! `QueueUpdated` and `FilesFound`, which are in the header of `event.rs`.
+//!
+//! MCP adds two, both beyond §15's list: [`Command::ReconnectMcpServer`] and
+//! [`Command::ApproveMcpServer`]. Their answer is `McpUpdated`.
 //!
 //! What is deliberately *not* here is the session panel of §9: listing,
 //! renaming, duplicating, exporting and deleting sessions. This channel talks
@@ -23,10 +39,11 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::id::{CheckpointId, RequestId};
+use crate::id::{CheckpointId, QueuedId, RequestId};
 use crate::intent::{Effort, Mode};
 use crate::permission::PermissionAnswer;
 use crate::process::ProcessId;
+use crate::question::QuestionReply;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -78,6 +95,15 @@ pub enum Command {
         answer: PermissionAnswer,
     },
 
+    /// Ответ на вопрос `AskUser` с вариантами. Не §15: §5.7 даёт ответ только
+    /// на разрешение. Отказ от ответа — тот же вариант `Dismissed`, а не
+    /// отдельная команда, чтобы у вопроса был один путь закрытия.
+    #[serde(rename_all = "camelCase")]
+    AnswerQuestion {
+        request_id: RequestId,
+        answer: QuestionReply,
+    },
+
     /// Обход разрешений. Включение подтверждает человек, флаг не
     /// переживает перезапуск и сбрасывается при смене проекта (§8).
     #[serde(rename_all = "camelCase")]
@@ -95,4 +121,32 @@ pub enum Command {
     /// команда за собой развела.
     #[serde(rename_all = "camelCase")]
     StopProcess { id: ProcessId },
+
+    /// The whole file for the panel, with its unchanged lines (§6.4). Answers
+    /// with `FileViewLoaded`; nothing on disk moves.
+    #[serde(rename_all = "camelCase")]
+    ReadFileView { path: String },
+
+    /// Take a message out of the queue before the turn takes it in (§7.4). A
+    /// message the turn has already taken in, or one that was never queued, is
+    /// left alone: the queue as the core reports it is the answer either way.
+    #[serde(rename_all = "camelCase")]
+    CancelQueued { id: QueuedId },
+
+    /// `@` (§7.2): the project's files matching `query`. Answers with
+    /// `FilesFound`; the walk runs off the dispatcher and nothing on disk moves.
+    #[serde(rename_all = "camelCase")]
+    SearchFiles { query: String },
+
+    /// Drop the connection to an MCP server, if there is one, and connect
+    /// again: the way back for a server that failed or went away. A name the
+    /// session does not have is ignored.
+    #[serde(rename_all = "camelCase")]
+    ReconnectMcpServer { server: String },
+
+    /// The human's "yes" to a server declared in the project's `.mcp.json`,
+    /// which is not started until they give it (`mcp::config`). Remembered for
+    /// the project until the declaration changes.
+    #[serde(rename_all = "camelCase")]
+    ApproveMcpServer { server: String },
 }

@@ -8,9 +8,42 @@ use std::path::{Path, PathBuf};
 
 use crate::change::{ChangeKind, FileDiff, FileFact};
 use crate::error::ToolError;
+use crate::permission::{invariant, unsaved, PermissionKind, PermissionNeed};
 use crate::workspace::{ReadRecord, Workspace};
 
 use super::ToolCtx;
+
+/// Где начинать поиск: там, куда его направили, а без пути — во всех корнях,
+/// основной первым. `grep`, `glob` и `@`-поиск ходят по одному списку.
+pub(crate) fn starts(ws: &Workspace, given: Option<PathBuf>) -> Vec<PathBuf> {
+    match given {
+        Some(path) => vec![path],
+        None => ws.roots().into_iter().map(Path::to_path_buf).collect(),
+    }
+}
+
+/// Вопрос о правке файла `abs` (§5.7). Один для `Write` и `Edit`.
+///
+/// Правка в дополнительном корне помечается как несохраняемая: откат её не
+/// вернёт, и человек должен узнать это до того, как она случится.
+pub(crate) fn edit_need(ws: &Workspace, tool: &str, raw: &str, abs: PathBuf) -> PermissionNeed {
+    let name = abs
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| raw.to_string());
+    let mut need = PermissionNeed::new(PermissionKind::EditFile, tool, name)
+        .detail(ws.display(&abs));
+    if let Some(lost) = unsaved::outside_checkpoint(ws, [abs.as_path()]) {
+        need = need.unsaved(lost);
+    }
+    // Git's configuration is asked about in every mode (§8): the write
+    // itself is the step a later `git status` would run. The root that holds
+    // the file decides what counts as the project's `.git`.
+    match invariant::of_path(ws.root_for(&abs), &abs) {
+        Some(found) => need.invariant(found).path(abs),
+        None => need.path(abs),
+    }
+}
 
 /// Обход дерева для читающих тулов: `grep` и `glob` ходят одинаково.
 ///

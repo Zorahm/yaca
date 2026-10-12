@@ -73,6 +73,10 @@ pub(super) async fn restore(shared: &Arc<Shared>, id: CheckpointId) {
         if let Ok(abs) = shared.ws.resolve_new(path) {
             shared.ws.forget(&abs);
         }
+        // The rollback replaced these files with an earlier state, so what
+        // they held before the session's writes describes a tree that is
+        // gone (§6.4).
+        shared.changes.forget(path);
     }
 
     if !restored.failed.is_empty() {

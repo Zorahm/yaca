@@ -118,6 +118,7 @@ fn session_store_replays_events_with_canonical_tool_names() {
     };
     let event2 = AgentEvent::PermissionRequested {
         request: PermissionRequest {
+            server: None,
             id: RequestId::from("req_1"),
             call_id: CallId::from("c2"),
             kind: PermissionKind::RunCommand,
@@ -126,6 +127,8 @@ fn session_store_replays_events_with_canonical_tool_names() {
             note: None,
             size_bytes: None,
             files: None,
+            invariant: None,
+            unsaved: None,
             scopes: vec![ScopeKey::Tool {
                 name: "bash".into(),
             }],

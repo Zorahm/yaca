@@ -9,8 +9,9 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use yaca_core::event::AgentEvent;
+use yaca_core::mcp::McpStatus;
 use yaca_core::id::SessionId;
 use yaca_core::process::ProcessState;
 use yaca_core::provider;
@@ -18,7 +19,23 @@ use yaca_core::provider::registry::{self, Providers};
 use yaca_core::secrets;
 use yaca_core::{Command, Effort, Mode, PermissionAnswer, SessionConfig};
 
+mod mcp;
 mod sessions;
+
+#[derive(Subcommand, Debug)]
+enum Cmd {
+    #[command(flatten)]
+    Session(sessions::Cmd),
+
+    /// Connect to the project's MCP servers and list them with their tools.
+    Mcp {
+        /// Approve a server declared in the project's `.mcp.json`. Such a
+        /// server is not started until it is approved, and is asked about
+        /// again when its declaration changes.
+        #[arg(long, value_name = "NAME")]
+        approve: Option<String>,
+    },
+}
 
 #[derive(Parser, Debug)]
 #[command(
@@ -27,9 +44,9 @@ mod sessions;
     args_conflicts_with_subcommands = true
 )]
 struct Args {
-    /// Sessions, search, export, key (§9, §10).
+    /// Sessions, search, export, key (§9, §10), and the MCP servers.
     #[command(subcommand)]
-    command: Option<sessions::Cmd>,
+    command: Option<Cmd>,
 
     /// What to ask or have done.
     prompt: Option<String>,
@@ -65,6 +82,12 @@ struct Args {
     #[arg(short, long, default_value = "extra")]
     effort: String,
 
+    /// Work in a git worktree of this run's own, on branch `yaca/<session>`.
+    ///
+    /// Needs a repository with a commit; what is uncommitted is not in it.
+    #[arg(long)]
+    isolate: bool,
+
     /// Print events verbatim, not in the human-readable form.
     #[arg(long)]
     jsonl: bool,
@@ -81,6 +104,12 @@ struct Args {
     /// is not recorded cannot be resumed.
     #[arg(long)]
     resume: Option<String>,
+
+    /// Another folder the session may work in, besides the project. Repeatable.
+    /// Its files are addressed by absolute path. Fixed for the session: a
+    /// resume must repeat the same `--add-dir` flags.
+    #[arg(long = "add-dir", value_name = "PATH")]
+    add_dir: Vec<PathBuf>,
 }
 
 #[tokio::main]
@@ -94,8 +123,10 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    if let Some(cmd) = args.command {
-        return sessions::run(&args.project, cmd);
+    match args.command {
+        Some(Cmd::Session(cmd)) => return sessions::run(&args.project, cmd),
+        Some(Cmd::Mcp { approve }) => return mcp::run(&args.project, approve).await,
+        None => {}
     }
     let prompt = args
         .prompt
@@ -113,11 +144,21 @@ async fn main() -> Result<()> {
     // The same `providers.json` the window reads: a gateway configured there
     // must answer from the CLI too, or the core cannot be run without the
     // interface.
-    let providers = Providers::load(&registry::config_dir()?)?;
+    let config_dir = registry::config_dir()?;
+    let providers = Providers::load(&config_dir)?;
     let mut config = SessionConfig::open(&args.project)?;
+    // The human's own MCP servers, from the same directory and for the same
+    // reason as the providers: a server set up in the window must be there
+    // from the CLI too.
+    config.mcp_servers = yaca_core::mcp::config::load_global(&config_dir)?;
+    config.lsp_servers = yaca_core::lsp::config::load_global(&config_dir)?;
+    config.lsp_autodetect = true;
+    config.mcp_approvals = Some(config_dir);
     if let Some(id) = args.resume {
         config.resume_session(SessionId::from(id));
     }
+    config.isolate = args.isolate;
+    config.additional_roots = args.add_dir;
     // Flags over the project's settings and the resumed session, the pair
     // replaced together — the same rule the window applies, from the same place.
     config.choose_model(
@@ -183,6 +224,18 @@ async fn main() -> Result<()> {
                 .send(Command::AnswerPermission {
                     request_id: request.id.clone(),
                     answer,
+                })
+                .await?;
+        }
+
+        // Nobody sits at the other end of a headless run to pick an option.
+        // The question is dismissed rather than left open, which would hang
+        // the turn: the model is told there is no answer and carries on.
+        if let AgentEvent::QuestionAsked { request } = &event {
+            handle
+                .send(Command::AnswerQuestion {
+                    request_id: request.id.clone(),
+                    answer: yaca_core::question::QuestionReply::Dismissed,
                 })
                 .await?;
         }
@@ -263,6 +316,19 @@ fn human(event: &AgentEvent) -> Option<String> {
             "\n\x1b[33m? {:?} · {} ({} из {})\x1b[0m\n  \x1b[2m{}\x1b[0m",
             request.kind, request.target, request.position, request.total, request.detail
         ),
+        AgentEvent::QuestionAsked { request } => {
+            let options: Vec<String> = request
+                .options
+                .iter()
+                .enumerate()
+                .map(|(i, o)| format!("  {}. {}", i + 1, o.label))
+                .collect();
+            format!(
+                "\n\x1b[33m? {}\x1b[0m\n\x1b[2m{}\x1b[0m",
+                request.question,
+                options.join("\n")
+            )
+        }
         AgentEvent::RetryScheduled {
             attempt,
             of,
@@ -275,6 +341,26 @@ fn human(event: &AgentEvent) -> Option<String> {
             "\x1b[2m  {} +{} −{}\x1b[0m",
             fact.path, fact.added, fact.removed
         ),
+        AgentEvent::McpUpdated { servers } => {
+            let строки: Vec<String> = servers
+                .iter()
+                .map(|s| {
+                    let что = match s.status {
+                        McpStatus::Connecting => "подключается".to_string(),
+                        McpStatus::Ready => format!("готов · {} инстр.", s.tools.len()),
+                        McpStatus::Failed => {
+                            format!("сбой: {}", s.reason.as_deref().unwrap_or("причина неизвестна"))
+                        }
+                        McpStatus::Disabled => "выключен".to_string(),
+                        McpStatus::NeedsApproval => {
+                            format!("ждёт одобрения: yaca mcp --approve {}", s.name)
+                        }
+                    };
+                    format!("  {} · {что}", s.name)
+                })
+                .collect();
+            format!("\n\x1b[2mMCP:\n{}\x1b[0m", строки.join("\n"))
+        }
         AgentEvent::ProcessesUpdated { processes } => {
             let строки: Vec<String> = processes
                 .iter()

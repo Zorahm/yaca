@@ -9,7 +9,10 @@
 //! * [`Narration::Model`] — подпись знает только модель: из `rg -n $'\x01' src/`
 //!   интерфейс не поймёт, зачем это запускали. Поле `description` обязательно.
 
+pub mod ask_user;
 pub mod bash;
+mod bash_background;
+pub mod bash_control;
 pub mod bash_output;
 pub mod delete_dir;
 pub mod delete_file;
@@ -19,10 +22,13 @@ pub(crate) mod files;
 pub(crate) mod net;
 pub mod glob;
 pub mod grep;
+pub mod lsp;
+pub mod memory;
 pub(crate) mod page;
 pub(crate) mod robots;
 pub mod read_file;
 pub mod read_image;
+pub mod skill;
 pub mod task;
 pub mod todo_write;
 pub mod web_fetch;
@@ -43,11 +49,13 @@ use crate::error::ToolError;
 use crate::event::{AgentEvent, EventSink, ToolMeta};
 use crate::id::CallId;
 use crate::intent::Intent;
+use crate::lsp::Lsp;
 use crate::permission::PermissionNeed;
 use crate::picture::Picture;
 use crate::process::shell::Shell;
 use crate::process::Processes;
 use crate::provider::ToolSchema;
+use crate::session::questions::Questions;
 use crate::session::subagent::Subagents;
 use crate::workspace::Workspace;
 
@@ -110,10 +118,16 @@ pub struct ToolCtx {
     /// What `Task` starts a subagent with. `None` for a subagent's own calls,
     /// and so one does not hand its work to another.
     pub agents: Option<Subagents>,
+    /// Asks the human a question and waits for the answer (`AskUser`). `None`
+    /// only where there is no session behind the call, which is unit tests.
+    pub questions: Option<Questions>,
     /// Whether the model that made the call can be shown an image.
     pub vision: bool,
     /// The shell commands run through, as the session settled it.
     pub shell: Shell,
+    /// The session's language servers. `None` only where there is no session
+    /// behind the call, which is unit tests.
+    pub lsp: Option<Lsp>,
     /// Соблюдать ли `Disallow` из `robots.txt` (§10).
     ///
     /// Уровень приложения, а не проекта: это про то, как Yaca ведёт себя в
@@ -201,15 +215,30 @@ impl ToolOutput {
 
 #[async_trait]
 pub trait Tool: Send + Sync {
-    fn name(&self) -> &'static str;
+    /// Not `'static`: a tool that comes from an MCP server is named by the
+    /// server, at run time.
+    fn name(&self) -> &str;
 
     /// Описание тула для модели — не подпись действия.
-    fn description(&self) -> &'static str;
+    fn description(&self) -> &str;
 
     /// Свойства JSON Schema без служебного `description`: его добавляет реестр.
     fn properties(&self) -> Value;
 
-    fn required(&self) -> &'static [&'static str];
+    fn required(&self) -> &[&str];
+
+    /// The whole input schema, for a tool that has one ready-made — an MCP
+    /// server describes its tools itself. `None` means the registry builds it
+    /// from [`Tool::properties`] and [`Tool::required`], closed to other keys.
+    fn input_schema(&self) -> Option<Value> {
+        None
+    }
+
+    /// The tool has an argument of its own called `description`, so the
+    /// caption of §5.4.1 is not taken out of its input before it runs.
+    fn keeps_description(&self) -> bool {
+        false
+    }
 
     fn narration(&self) -> Narration;
 
@@ -251,6 +280,15 @@ pub trait Tool: Send + Sync {
         None
     }
 
+    /// Whether this particular call may run in Plan (§7.1).
+    ///
+    /// A tool offered in Plan is still asked per call: Bash is offered there
+    /// only for the commands that change nothing. `Err` carries the sentence the
+    /// model reads back, in the language of the conversation.
+    fn plan_check(&self, _ws: &Workspace, _input: &Value) -> Result<(), String> {
+        Ok(())
+    }
+
     /// The snapshot this call needs taken before it runs (§5.8).
     ///
     /// `None` for file edits: the point taken before the message (§5.8) already
@@ -274,15 +312,26 @@ what was done or discovered, in past tense first person, in the conversation's l
 Focus on the substance, not the tool: 'Found existing clipboard usage' \
 rather than 'Ran rg clipboard src/'. No tool names and no command flags.";
 
+#[derive(Clone)]
 pub struct ToolRegistry {
-    tools: BTreeMap<&'static str, Arc<dyn Tool>>,
+    tools: BTreeMap<String, Arc<dyn Tool>>,
 }
 
 impl ToolRegistry {
     pub fn new(tools: Vec<Arc<dyn Tool>>) -> Self {
         ToolRegistry {
-            tools: tools.into_iter().map(|t| (t.name(), t)).collect(),
+            tools: tools.into_iter().map(|t| (t.name().to_string(), t)).collect(),
         }
+    }
+
+    /// The same registry with `more` added: the tools of the session's MCP
+    /// servers on top of the core's own. A name already taken stays with the
+    /// tool that has it — nothing a server sends may replace a built-in tool.
+    pub fn with(mut self, more: Vec<Arc<dyn Tool>>) -> Self {
+        for tool in more {
+            self.tools.entry(tool.name().to_string()).or_insert(tool);
+        }
+        self
     }
 
     /// Полный набор ядра.
@@ -296,13 +345,18 @@ impl ToolRegistry {
             Arc::new(web_search::WebSearch::default()),
             Arc::new(todo_write::TodoWrite),
             Arc::new(exit_plan_mode::ExitPlanMode),
+            Arc::new(ask_user::AskUser),
             Arc::new(write_file::WriteFile),
+            Arc::new(memory::Memory),
+            Arc::new(skill::Skill),
             Arc::new(edit_file::EditFile),
             Arc::new(delete_file::DeleteFile),
             Arc::new(delete_dir::DeleteDir),
             Arc::new(delete_file::MoveFile),
             Arc::new(bash::Bash),
             Arc::new(bash_output::BashOutput),
+            Arc::new(bash_control::BashKill),
+            Arc::new(bash_control::BashRestart),
             Arc::new(task::Task),
         ])
     }
@@ -310,10 +364,15 @@ impl ToolRegistry {
     /// What a subagent works with: everything the agent has, less what
     /// belongs to the agent alone. `Task`, because the agent is the one who
     /// splits the work; the task list and the way out of plan mode, because
-    /// §5.6 and §7.1 draw one of each and it is the agent's.
-    pub fn delegated() -> Self {
-        let mut all = Self::standard();
-        for own in ["Task", "TodoWrite", "ExitPlanMode"] {
+    /// §5.6 and §7.1 draw one of each and it is the agent's; `AskUser`, because
+    /// the agent sees the whole task and is the one who puts choices to the
+    /// human, not a worker deep inside it.
+    ///
+    /// Taken from the agent's registry rather than built anew, so a subagent
+    /// has the same MCP tools the agent has.
+    pub fn delegated(&self) -> Self {
+        let mut all = self.clone();
+        for own in ["Task", "TodoWrite", "ExitPlanMode", "AskUser"] {
             all.tools.remove(own);
         }
         all
@@ -332,6 +391,13 @@ impl ToolRegistry {
             .cloned()
     }
 
+    /// Every tool name the registry knows, in its order, whatever the mode.
+    /// Hook settings are checked against these: a name the registry does not
+    /// know would never match a call.
+    pub fn names(&self) -> impl Iterator<Item = &str> + '_ {
+        self.tools.keys().map(String::as_str)
+    }
+
     /// Схемы для запроса к модели.
     ///
     /// Порядок детерминирован (`BTreeMap`): схемы идут первым куском запроса,
@@ -341,12 +407,18 @@ impl ToolRegistry {
             .values()
             .filter(|t| intent.allows(t.intents()))
             .map(|t| {
-                let mut props = t.properties();
-                let mut required: Vec<Value> = t.required().iter().map(|s| json!(s)).collect();
+                let mut schema = t.input_schema().unwrap_or_else(|| {
+                    json!({
+                        "type": "object",
+                        "properties": t.properties(),
+                        "required": t.required(),
+                        "additionalProperties": false,
+                    })
+                });
 
                 if t.narration() == Narration::Model {
-                    if let Some(obj) = props.as_object_mut() {
-                        obj.insert(
+                    if let Some(props) = schema["properties"].as_object_mut() {
+                        props.insert(
                             "description".into(),
                             json!({
                                 "type": "string",
@@ -355,18 +427,17 @@ impl ToolRegistry {
                             }),
                         );
                     }
-                    required.push(json!("description"));
+                    // A ready-made schema may have no `required` at all.
+                    match schema["required"].as_array_mut() {
+                        Some(required) => required.push(json!("description")),
+                        None => schema["required"] = json!(["description"]),
+                    }
                 }
 
                 ToolSchema {
                     name: t.name().to_string(),
                     description: t.description().to_string(),
-                    input_schema: json!({
-                        "type": "object",
-                        "properties": props,
-                        "required": Value::Array(required),
-                        "additionalProperties": false,
-                    }),
+                    input_schema: schema,
                 }
             })
             .collect()
@@ -424,7 +495,17 @@ pub(crate) mod tests_support {
     use crate::workspace::Workspace;
 
     fn build(dir: &TempDir, tx: broadcast::Sender<AgentEvent>) -> (ToolCtx, Arc<Workspace>) {
-        let ws = Arc::new(Workspace::open(dir.path()).unwrap());
+        build_on(Arc::new(Workspace::open(dir.path()).unwrap()), tx)
+    }
+
+    /// A context over a workspace the test has already shaped, e.g. with
+    /// additional roots.
+    pub fn ctx_on(ws: Workspace) -> (ToolCtx, Arc<Workspace>) {
+        let (tx, _rx) = broadcast::channel(64);
+        build_on(Arc::new(ws), tx)
+    }
+
+    fn build_on(ws: Arc<Workspace>, tx: broadcast::Sender<AgentEvent>) -> (ToolCtx, Arc<Workspace>) {
         let events = EventSink::new(tx);
         let ctx = ToolCtx {
             processes: Processes::new(events.clone()),
@@ -433,9 +514,11 @@ pub(crate) mod tests_support {
             events,
             cancel: tokio_util::sync::CancellationToken::new(),
             agents: None,
+            questions: None,
             vision: true,
             shell: crate::process::shell::Shell::default(),
             respect_robots: true,
+            lsp: None,
         };
         (ctx, ws)
     }
@@ -454,3 +537,6 @@ pub(crate) mod tests_support {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod roots_tests;

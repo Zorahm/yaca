@@ -10,13 +10,8 @@ use std::collections::VecDeque;
 
 use tokio::sync::mpsc;
 
+use super::queue::{Queue, Queued};
 use super::Job;
-
-/// A message sent while a turn was running.
-pub(super) struct Queued {
-    pub(super) text: String,
-    pub(super) attachments: Vec<String>,
-}
 
 pub(super) struct Inbox {
     rx: mpsc::Receiver<Job>,
@@ -43,8 +38,10 @@ impl Inbox {
     /// Messages waiting at the head of the queue, taken out of it.
     ///
     /// Only the head: a message sent after a compaction was asked for waits
-    /// for the compaction, as it would have without a turn in the way.
-    pub(super) fn messages(&mut self) -> Vec<Queued> {
+    /// for the compaction, as it would have without a turn in the way. A
+    /// message cancelled in the meantime is gone from `queue` and is skipped
+    /// here, without holding up the ones behind it.
+    pub(super) fn messages(&mut self, queue: &Queue) -> Vec<Queued> {
         while let Ok(job) = self.rx.try_recv() {
             self.held.push_back(job);
         }
@@ -52,7 +49,7 @@ impl Inbox {
         let mut out = Vec::new();
         while let Some(job) = self.held.pop_front() {
             match job {
-                Job::Message { text, attachments } => out.push(Queued { text, attachments }),
+                Job::Message { id } => out.extend(queue.take(&id)),
                 other => {
                     self.held.push_front(other);
                     break;
@@ -66,12 +63,18 @@ impl Inbox {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::event::EventSink;
+    use crate::id::QueuedId;
 
-    fn message(text: &str) -> Job {
-        Job::Message {
-            text: text.into(),
-            attachments: Vec::new(),
-        }
+    fn queue() -> Queue {
+        Queue::new(EventSink::new(tokio::sync::broadcast::channel(64).0))
+    }
+
+    /// What the dispatcher does with a message: queue it, then send its job.
+    async fn send(tx: &mpsc::Sender<Job>, queue: &Queue, text: &str) -> QueuedId {
+        let id = queue.push(text.into(), Vec::new(), true);
+        tx.send(Job::Message { id: id.clone() }).await.unwrap();
+        id
     }
 
     fn texts(queued: Vec<Queued>) -> Vec<String> {
@@ -81,21 +84,38 @@ mod tests {
     #[tokio::test]
     async fn messages_at_the_head_are_taken_and_the_rest_keeps_its_order() {
         let (tx, rx) = mpsc::channel(8);
+        let queue = queue();
         let mut inbox = Inbox::new(rx);
-        for job in [message("one"), message("two"), Job::Compact, message("three")] {
-            tx.send(job).await.unwrap();
-        }
+        send(&tx, &queue, "one").await;
+        send(&tx, &queue, "two").await;
+        tx.send(Job::Compact).await.unwrap();
+        send(&tx, &queue, "three").await;
 
-        assert_eq!(texts(inbox.messages()), vec!["one", "two"]);
+        assert_eq!(texts(inbox.messages(&queue)), vec!["one", "two"]);
         // The compaction was asked for first, so it still comes first.
         assert!(matches!(inbox.next().await, Some(Job::Compact)));
-        assert!(matches!(inbox.next().await, Some(Job::Message { text, .. }) if text == "three"));
+        assert!(matches!(inbox.next().await, Some(Job::Message { .. })));
+        assert_eq!(texts(inbox.messages(&queue)), Vec::<String>::new());
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_message_is_skipped_and_holds_up_nothing() {
+        let (tx, rx) = mpsc::channel(8);
+        let queue = queue();
+        let mut inbox = Inbox::new(rx);
+        send(&tx, &queue, "one").await;
+        let two = send(&tx, &queue, "two").await;
+        send(&tx, &queue, "three").await;
+        queue.cancel(&two);
+
+        assert_eq!(texts(inbox.messages(&queue)), vec!["one", "three"]);
     }
 
     #[tokio::test]
     async fn nothing_queued_is_nothing_taken() {
         let (_tx, rx) = mpsc::channel(8);
+        let queue = queue();
         let mut inbox = Inbox::new(rx);
-        assert!(inbox.messages().is_empty());
+        assert!(inbox.messages(&queue).is_empty());
     }
 }

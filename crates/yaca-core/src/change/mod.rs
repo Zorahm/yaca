@@ -1,17 +1,25 @@
 //! A file change: what happened, and how it looks as a diff (§5.5, §6.3).
 //!
-//! There is no pending set of unaccepted edits anymore. Writing tools write to
-//! the working tree right away, and the decision is made exactly once — by the
-//! permission request before the write (§8, §16.37). What the set was started
-//! for, besides the button, is still here: the fact about the file that the
-//! action caption is written from, and the diff that expands it.
+//! Writing tools write to the working tree right away, and the decision about
+//! the write is made once, by the permission request before it (§8, §16.37).
+//! What the feed needs is still here: the fact about the file that the action
+//! caption is written from, and the diff that expands it (`diff`).
+//!
+//! The panel shows a whole file with everything the session changed in it
+//! (§6.4): `set` remembers what each file held before the first write, `view`
+//! draws the difference. Nothing there can be decided — the one way back is a
+//! checkpoint (§5.8).
 
 pub mod diff;
+pub mod set;
+pub mod view;
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use diff::{DiffLine, FileDiff, Hunk, LineKind, Span};
+pub use set::ChangeSet;
+pub use view::{FileView, ViewSegment};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]

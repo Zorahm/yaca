@@ -13,7 +13,7 @@ use super::{FileChange, Narration, Tool, ToolCtx, ToolOutput};
 use crate::change::{ChangeKind, FileFact};
 use crate::error::ToolError;
 use crate::intent::Intent;
-use crate::permission::{PermissionKind, PermissionNeed};
+use crate::permission::{invariant, unsaved, PermissionKind, PermissionNeed};
 use crate::workspace::Workspace;
 
 pub struct DeleteFile;
@@ -53,13 +53,20 @@ impl Tool for DeleteFile {
     fn permission(&self, ws: &Workspace, input: &Value) -> Option<PermissionNeed> {
         let raw = input["path"].as_str()?;
         let abs = ws.resolve_new(raw).ok()?;
-        let need = PermissionNeed::new(PermissionKind::DeleteFile, self.name(), short(&abs))
+        let mut need = PermissionNeed::new(PermissionKind::DeleteFile, self.name(), short(&abs))
             .detail(ws.display(&abs))
             .path(abs.clone());
-        Some(match std::fs::metadata(&abs) {
-            Ok(meta) => need.size_bytes(meta.len()),
-            Err(_) => need,
-        })
+        if let Ok(meta) = std::fs::metadata(&abs) {
+            need = need.size_bytes(meta.len());
+        }
+        // A file the snapshot never kept is lost for good on deletion (§5.8).
+        if let Some(lost) = unsaved::of_file(ws, &abs) {
+            need = need.unsaved(lost);
+        }
+        if let Some(found) = invariant::of_path(ws.root_for(&abs), &abs) {
+            need = need.invariant(found);
+        }
+        Some(need)
     }
 
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
@@ -125,11 +132,20 @@ impl Tool for MoveFile {
     fn permission(&self, ws: &Workspace, input: &Value) -> Option<PermissionNeed> {
         let from = ws.resolve_new(input["from"].as_str()?).ok()?;
         let to = ws.resolve_new(input["to"].as_str()?).ok()?;
-        Some(
-            PermissionNeed::new(PermissionKind::MoveFile, self.name(), short(&from))
-                .detail(format!("{} → {}", ws.display(&from), ws.display(&to)))
-                .path(from),
-        )
+        let mut need = PermissionNeed::new(PermissionKind::MoveFile, self.name(), short(&from))
+            .detail(format!("{} → {}", ws.display(&from), ws.display(&to)));
+        // Either end may be git's configuration: moving a file into `.git`
+        // writes there as surely as creating it.
+        let found = invariant::of_path(ws.root_for(&from), &from)
+            .or_else(|| invariant::of_path(ws.root_for(&to), &to));
+        if let Some(found) = found {
+            need = need.invariant(found);
+        }
+        // Either end in an additional root: that end is not in any snapshot.
+        if let Some(lost) = unsaved::outside_checkpoint(ws, [from.as_path(), to.as_path()]) {
+            need = need.unsaved(lost);
+        }
+        Some(need.path(from))
     }
 
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
@@ -172,14 +188,12 @@ impl Tool for MoveFile {
             removed: 0,
         };
 
-        Ok(ToolOutput::new(format!(
-            "Перемещён {} → {}\n",
-            from.rel, to.rel
-        ))
-        .changed(FileChange {
-            fact,
-            diff: Default::default(),
-        }))
+        Ok(
+            ToolOutput::new(format!("Перемещён {} → {}\n", from.rel, to.rel)).changed(FileChange {
+                fact,
+                diff: Default::default(),
+            }),
+        )
     }
 }
 
@@ -263,5 +277,116 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("уже существует"));
+    }
+}
+
+#[cfg(test)]
+mod guard_tests {
+    use super::*;
+    use crate::checkpoint::scan::MAX_FILE_BYTES;
+    use crate::permission::Invariant;
+    use crate::testutil::TempDir;
+
+    fn ws(dir: &TempDir) -> Workspace {
+        Workspace::open(dir.path()).unwrap()
+    }
+
+    #[test]
+    fn a_file_over_the_size_limit_is_a_question_that_names_the_loss() {
+        let dir = TempDir::new();
+        dir.write("data/dump.bin", &"x".repeat(MAX_FILE_BYTES as usize + 1));
+        let need = DeleteFile
+            .permission(&ws(&dir), &json!({ "path": "data/dump.bin" }))
+            .unwrap();
+        assert_eq!(need.unsaved.map(|u| u.files), Some(1));
+    }
+
+    #[test]
+    fn a_file_inside_build_output_is_a_question() {
+        let dir = TempDir::new();
+        dir.write("pkg/target/debug/app.rlib", "built\n");
+        let need = DeleteFile
+            .permission(&ws(&dir), &json!({ "path": "pkg/target/debug/app.rlib" }))
+            .unwrap();
+        assert!(need.unsaved.is_some());
+    }
+
+    #[test]
+    fn a_small_source_file_is_not_a_question_about_loss() {
+        let dir = TempDir::new();
+        dir.write("src/a.rs", "fn a() {}\n");
+        let need = DeleteFile
+            .permission(&ws(&dir), &json!({ "path": "src/a.rs" }))
+            .unwrap();
+        assert_eq!(need.unsaved, None);
+        assert_eq!(need.invariant, None);
+    }
+
+    #[test]
+    fn a_file_in_a_directory_the_project_excludes_is_a_question() {
+        let dir = TempDir::new();
+        dir.write(
+            ".yaca/settings.json",
+            r#"{ "shadow": { "exclude": ["fixtures"] } }"#,
+        );
+        dir.write("fixtures/golden.json", "{}\n");
+        let settings = crate::settings::Settings::load(dir.path()).unwrap();
+        let ws = Workspace::open(dir.path())
+            .unwrap()
+            .with_shadow_exclude(&settings.shadow.exclude);
+
+        let need = DeleteFile
+            .permission(&ws, &json!({ "path": "fixtures/golden.json" }))
+            .unwrap();
+        assert!(need.unsaved.is_some(), "the snapshot skips fixtures/");
+    }
+
+    #[test]
+    fn deleting_git_configuration_is_an_invariant() {
+        let dir = TempDir::new();
+        dir.write(".git/config", "[core]\n");
+        dir.write(".gitattributes", "*.rs diff=x\n");
+        dir.write("vendor/.gitmodules", "[submodule]\n");
+        let ws = ws(&dir);
+        for path in [".git/config", ".gitattributes", "vendor/.gitmodules"] {
+            let need = DeleteFile
+                .permission(&ws, &json!({ "path": path }))
+                .unwrap();
+            assert_eq!(need.invariant, Some(Invariant::GitConfig), "{path}");
+        }
+    }
+
+    #[test]
+    fn moving_a_file_into_git_is_an_invariant_on_either_end() {
+        let dir = TempDir::new();
+        dir.write("hook.sh", "#!/bin/sh\n");
+        dir.write(".git/hooks/post-commit", "x\n");
+        let ws = ws(&dir);
+
+        let into = MoveFile
+            .permission(
+                &ws,
+                &json!({ "from": "hook.sh", "to": ".git/hooks/post-commit" }),
+            )
+            .unwrap();
+        assert_eq!(into.invariant, Some(Invariant::GitConfig));
+
+        let out = MoveFile
+            .permission(
+                &ws,
+                &json!({ "from": ".git/hooks/post-commit", "to": "hook.sh" }),
+            )
+            .unwrap();
+        assert_eq!(out.invariant, Some(Invariant::GitConfig));
+    }
+
+    #[test]
+    fn an_ordinary_git_adjacent_name_is_not_an_invariant() {
+        let dir = TempDir::new();
+        dir.write(".gitignore", "target\n");
+        let need = DeleteFile
+            .permission(&ws(&dir), &json!({ "path": ".gitignore" }))
+            .unwrap();
+        assert_eq!(need.invariant, None);
     }
 }

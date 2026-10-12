@@ -13,7 +13,6 @@
 //! spawn, before the first question. Which road a rule came by does not change
 //! how it is applied.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -21,11 +20,10 @@ use tokio::sync::oneshot;
 
 use super::{PermissionAnswer, PermissionNeed, Refusal, ScopeKey};
 use crate::id::RequestId;
+use crate::pending::Pending;
 
 #[derive(Debug, Default)]
 struct Inner {
-    /// Questions currently on screen, by id.
-    waiting: HashMap<RequestId, oneshot::Sender<PermissionAnswer>>,
     /// Rules granted through "Always allow". Session-lived (§5.7).
     rules: Vec<ScopeKey>,
     /// Rules set through "Always deny". Session-lived, like the grants.
@@ -41,13 +39,21 @@ pub enum Standing {
 #[derive(Debug, Clone)]
 pub struct Broker {
     inner: Arc<Mutex<Inner>>,
+    /// Questions currently on screen. A permission needs nothing beyond its
+    /// id to judge an answer, hence the unit metadata.
+    waiting: Pending<RequestId, (), PermissionAnswer>,
+    /// The **primary** root. A relative directory rule is resolved against it
+    /// and never against an additional root; an absolute rule (an additional
+    /// root's directory) does not need it. See `PermissionNeed::covered_by`.
     root: PathBuf,
 }
 
 impl Broker {
+    /// `root` is the primary root (`Workspace::root`), on purpose.
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Broker {
             inner: Arc::new(Mutex::new(Inner::default())),
+            waiting: Pending::default(),
             root: root.into(),
         }
     }
@@ -98,34 +104,28 @@ impl Broker {
 
     /// Registers a question and hands back the channel its answer arrives on.
     pub fn open(&self, id: RequestId) -> oneshot::Receiver<PermissionAnswer> {
-        let (tx, rx) = oneshot::channel();
-        self.inner.lock().unwrap().waiting.insert(id, tx);
-        rx
+        self.waiting.open(id, ())
     }
 
     /// Delivers an answer. `false` means nobody was waiting on that id —
     /// a stale click after the turn was cancelled, which is not an error.
     pub fn answer(&self, id: &RequestId, answer: PermissionAnswer) -> bool {
-        let sender = self.inner.lock().unwrap().waiting.remove(id);
-        match sender {
-            Some(tx) => tx.send(answer).is_ok(),
-            None => false,
-        }
+        self.waiting.answer(id, answer)
     }
 
     /// Drops every pending question. The waiters see a closed channel and
     /// treat it as cancellation.
     pub fn abandon_all(&self) {
-        self.inner.lock().unwrap().waiting.clear();
+        self.waiting.abandon_all();
     }
 
     /// How many questions are on screen right now. Feeds the `2 of 3` counter.
     pub fn pending(&self) -> u32 {
-        self.inner.lock().unwrap().waiting.len() as u32
+        self.waiting.len() as u32
     }
 
     pub fn forget(&self, id: &RequestId) {
-        self.inner.lock().unwrap().waiting.remove(id);
+        self.waiting.forget(id);
     }
 }
 

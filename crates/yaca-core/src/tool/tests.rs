@@ -61,7 +61,6 @@ fn режим_plan_читает_и_планирует_но_не_пишет() {
         "Delete",
         "DeleteDir",
         "Move",
-        "Bash",
         "BashOutput",
     ] {
         assert!(
@@ -69,6 +68,9 @@ fn режим_plan_читает_и_планирует_но_не_пишет() {
             "{пишущий} утёк в plan"
         );
     }
+    // Bash is offered, and each call is judged when it arrives: a read-only
+    // command runs and a write is refused (§7.1, tool::bash::plan_check).
+    assert!(names.contains(&"Bash".to_string()));
 }
 
 #[test]
@@ -97,11 +99,11 @@ fn a_subagent_has_the_agents_tools_less_the_agents_own() {
     let names = |reg: &ToolRegistry, intent| -> Vec<String> {
         reg.schemas(intent).into_iter().map(|s| s.name).collect()
     };
-    let (all, given) = (ToolRegistry::standard(), ToolRegistry::delegated());
+    let (all, given) = (ToolRegistry::standard(), ToolRegistry::standard().delegated());
 
     for intent in [Intent::Plan, Intent::Agent] {
         let mut expected = names(&all, intent);
-        expected.retain(|n| !["Task", "TodoWrite", "ExitPlanMode"].contains(&n.as_str()));
+        expected.retain(|n| !["Task", "TodoWrite", "ExitPlanMode", "AskUser"].contains(&n.as_str()));
         assert_eq!(names(&given, intent), expected, "{intent:?}");
     }
     // The mode binds a subagent as it binds the agent (§7.1).

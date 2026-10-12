@@ -37,7 +37,8 @@ use crate::intent::Intent;
 use crate::message::{strip_thinking, ContentBlock, Message};
 use crate::process::shell::Shell;
 use crate::provider::ProviderRequest;
-use crate::tool::ToolRegistry;
+use crate::tool::memory::store::MemoryIndex;
+use crate::tool::skill::Listing;
 use crate::usage::{Pricing, TokenCounts};
 
 use super::accumulator::{Accumulator, Completion};
@@ -105,7 +106,7 @@ impl Subagents {
     ) -> Result<String, ToolError> {
         let shared = &self.sender.shared;
         let me = Caller {
-            registry: Arc::new(ToolRegistry::delegated()),
+            registry: Arc::new(self.sender.registry.delegated()),
             ws: Arc::new(self.sender.ws.fork()),
             under: Some(self.row.clone()),
             ..self.sender.clone()
@@ -134,11 +135,16 @@ impl Subagents {
 
             let request = ProviderRequest {
                 model: model.id.clone(),
-                system: system_prompt(
-                    me.ws.root(),
-                    intent,
-                    me.instructions.as_deref(),
-                    shared.shell,
+                system: prompt::with_mcp(
+                    system_prompt(
+                        me.ws.root(),
+                        intent,
+                        me.instructions.as_deref(),
+                        me.skills.as_deref(),
+                        me.memory.as_deref(),
+                        shared.shell,
+                    ),
+                    me.mcp_notes.as_deref(),
                 ),
                 messages: shared.shown_to(&model, &history),
                 tools: me.registry.schemas(intent),
@@ -281,6 +287,8 @@ fn system_prompt(
     project_root: &Path,
     intent: Intent,
     instructions: Option<&Instructions>,
+    skills: Option<&Listing>,
+    memory: Option<&MemoryIndex>,
     shell: Shell,
 ) -> String {
     let agent = intent == Intent::Agent;
@@ -324,9 +332,19 @@ fn system_prompt(
     s.push_str(REPORT);
     s.push_str(prompt::CAPTIONS);
 
+    // Same order as the agent's prompt, so the two cannot drift apart: the
+    // human's instructions and skills first, the agent's own notes last.
     if let Some(instructions) = instructions {
         s.push('\n');
         s.push_str(&prompt::project_section(instructions));
+    }
+    if let Some(skills) = skills {
+        s.push('\n');
+        s.push_str(&prompt::skills_section(skills));
+    }
+    if let Some(memory) = memory {
+        s.push('\n');
+        s.push_str(&prompt::memory_section(memory));
     }
     s
 }
@@ -367,20 +385,94 @@ mod tests {
     }
 
     fn plain(intent: Intent) -> String {
-        system_prompt(Path::new("/p"), intent, None, Shell::default())
+        system_prompt(Path::new("/p"), intent, None, None, None, Shell::default())
+    }
+
+    fn notes() -> MemoryIndex {
+        MemoryIndex {
+            text: "- [build](build.md) — how the release is cut\n".into(),
+            truncated: false,
+        }
+    }
+
+    #[test]
+    fn a_subagent_is_given_the_memory_index_the_agent_has() {
+        // Subagents carry the Memory tool; without the index they would not
+        // know there is anything in it to read.
+        let memory = notes();
+        let with = system_prompt(
+            Path::new("/p"),
+            Intent::Agent,
+            None,
+            None,
+            Some(&memory),
+            Shell::default(),
+        );
+        assert!(with.contains("<project_memory>"));
+        assert!(with.contains("how the release is cut"));
+        assert!(!plain(Intent::Agent).contains("project_memory"));
+    }
+
+    #[test]
+    fn the_memory_section_is_stable_between_builds() {
+        // Same rule as the agent's: a prefix that moves on every request throws
+        // away the cache between the subagent's steps.
+        let memory = notes();
+        let build = || {
+            system_prompt(
+                Path::new("/p"),
+                Intent::Agent,
+                None,
+                None,
+                Some(&memory),
+                Shell::default(),
+            )
+        };
+        assert_eq!(build(), build());
+    }
+
+    #[test]
+    fn the_skills_listing_is_given_to_a_subagent_too() {
+        let skills = Listing {
+            entries: vec![crate::tool::skill::Entry {
+                name: "audit".into(),
+                description: "Аудит зависимостей".into(),
+            }],
+            truncated: false,
+        };
+        let with = system_prompt(
+            Path::new("/p"),
+            Intent::Plan,
+            None,
+            Some(&skills),
+            None,
+            Shell::default(),
+        );
+        assert_eq!(with.matches("<project_skills>").count(), 1);
+        assert!(with.contains("audit"));
     }
 
     #[test]
     fn the_prompt_is_stable_and_carries_the_project_rules() {
         let rules = Instructions {
-            path: "AGENTS.md".into(),
-            text: "Use tabs.".into(),
-            truncated: false,
+            root: Some(crate::instructions::RuleFile {
+                path: "AGENTS.md".into(),
+                text: "Use tabs.".into(),
+                truncated: false,
+            }),
+            nested: Vec::new(),
         };
         // The prefix of every request the subagent makes; a clock in here
         // would void the cache between its steps.
         assert_eq!(plain(Intent::Agent), plain(Intent::Agent));
-        let with = system_prompt(Path::new("/p"), Intent::Agent, Some(&rules), Shell::default());
+        let with = system_prompt(
+            Path::new("/p"),
+            Intent::Agent,
+            Some(&rules),
+            None,
+            None,
+            Shell::default(),
+        );
         assert!(with.contains("Use tabs."));
         assert!(with.trim_end().ends_with("</project_instructions>"));
         assert!(!plain(Intent::Agent).contains("project_instructions"));

@@ -54,7 +54,21 @@ impl Recorder {
 
     /// One event: into the journal, and into whatever the index takes from it.
     pub fn event(&self, event: &AgentEvent) {
-        self.events.append(event);
+        // Not journaled: the pending hunks and the panel's view of a file are
+        // answers about what is on disk now. A reopened session has neither,
+        // and the journal would take a whole file for every panel opened. The
+        // same goes for the `@` search: a file list from some other day is not
+        // a thing the conversation said. Nor is the state of the MCP servers:
+        // a reopened session connects to them anew.
+        if !matches!(
+            event,
+            AgentEvent::FileViewLoaded { .. }
+                | AgentEvent::FilesFound { .. }
+                | AgentEvent::McpUpdated { .. }
+                | AgentEvent::LspUpdated { .. }
+        ) {
+            self.events.append(event);
+        }
 
         let boundary = self.meta.lock().unwrap().absorb(event);
         if boundary {

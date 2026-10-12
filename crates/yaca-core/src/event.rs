@@ -52,6 +52,45 @@
 //! which `Task` row they are drawn under. §15 has no place for it because the
 //! spec leaves "where do subagents go" as an open question.
 //!
+//! The question slice adds two events beyond §15, for `AskUser`: the agent
+//! asks the human a question with ready options and waits, and the answer is
+//! the result of the tool call that asked. §5.7 draws a block only for
+//! permissions, a yes or no about an action; a question is a choice the agent
+//! cannot make for the human.
+//!
+//! * [`AgentEvent::QuestionAsked`] — the question on screen, with its options.
+//! * [`AgentEvent::QuestionResolved`] — closed: answered, dismissed, or the
+//!   turn stopped first (`reply: None`). A replayed journal without it would
+//!   draw a question nobody can answer any more.
+//!
+//! The file panel (§6.4) adds one event beyond §15:
+//!
+//! * [`AgentEvent::FileViewLoaded`] — the full diff of one file with its
+//!   unchanged lines, answering [`Command::ReadFileView`]. §6.4 asks for the
+//!   whole file, and the `FileChanged` diff is one call's hunks with three lines
+//!   of context, which is not that.
+//!
+//! The queue (§7.4) adds [`AgentEvent::QueueUpdated`]: the messages sent during
+//! a turn that the turn has not taken in yet, as a whole list, each with the id
+//! its cancel button names. Like `ProcessesUpdated` it is a snapshot, not a
+//! delta. It is not journaled: a queued message that was never taken in did not
+//! happen, and a reopened session must not show a chip for it.
+//!
+//! The mention search (§7.2) adds [`AgentEvent::FilesFound`]: the answer to
+//! [`Command::SearchFiles`], carrying the query it answers so the interface can
+//! drop an answer to a query it has already left. It is not journaled either —
+//! it is an answer about the disk now, like [`AgentEvent::FileViewLoaded`].
+//!
+//! MCP adds [`AgentEvent::McpUpdated`]: the session's MCP servers and the
+//! state of each, as a whole list. §7.3 names `/mcp` and §10 once listed an
+//! MCP section, but §15 has nothing either could be drawn from. A snapshot of
+//! live state like `ProcessesUpdated`, and not journaled for the same reason:
+//! a reopened session connects anew, and yesterday's "ready" would be a lie.
+//!
+//! Language servers add [`AgentEvent::LspUpdated`], for the same reason and
+//! on the same terms as `McpUpdated`: a whole list of servers and their
+//! states, a snapshot of what is live, not journaled.
+//!
 //! And the interface slice adds [`AgentEvent::UserMessage`]. §5.1 draws what
 //! the human said, and §9 reopens a session by replaying this journal: without
 //! it a reopened session is the agent talking to itself. The text is written
@@ -62,12 +101,14 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::change::{FileDiff, FileFact};
+use crate::change::{FileDiff, FileFact, FileView};
 use crate::checkpoint::{CheckpointChange, CheckpointSummary};
-use crate::id::{BlockId, CallId, CheckpointId, RequestId, TurnId};
+use crate::id::{BlockId, CallId, CheckpointId, QueuedId, RequestId, TurnId};
 use crate::intent::{Effort, Mode};
+use crate::mcp::McpServerSummary;
 use crate::permission::PermissionRequest;
 use crate::process::{ProcessId, ProcessSummary};
+use crate::question::{QuestionReply, QuestionRequest};
 use crate::usage::UsageSnapshot;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -168,6 +209,20 @@ pub enum AgentEvent {
     #[serde(rename_all = "camelCase")]
     PermissionResolved { request_id: RequestId },
 
+    /// The agent asks the human a question with ready options (`AskUser`).
+    /// The tool that asked is blocked until the question is answered,
+    /// dismissed, or the turn is cancelled.
+    #[serde(rename_all = "camelCase")]
+    QuestionAsked { request: QuestionRequest },
+
+    /// The question is closed. `reply` is what the human did; `None` means
+    /// the turn stopped before anyone answered.
+    #[serde(rename_all = "camelCase")]
+    QuestionResolved {
+        request_id: RequestId,
+        reply: Option<QuestionReply>,
+    },
+
     /// Список задач обновляется на месте, новый блок не создаётся (§5.6).
     #[serde(rename_all = "camelCase")]
     TodosUpdated { items: Vec<TodoItem> },
@@ -185,12 +240,43 @@ pub enum AgentEvent {
         diff: FileDiff,
     },
 
+    /// The full diff of one file for the panel (§6.4). `None`: nothing in the
+    /// file is pending any more, so there is no diff to show.
+    #[serde(rename_all = "camelCase")]
+    FileViewLoaded {
+        path: String,
+        view: Option<FileView>,
+    },
+
+    /// The messages sent during a turn that the turn has not taken in yet
+    /// (§7.4), oldest first. Empty when nothing waits. Sent whenever the list
+    /// changes, including on a cancel that found nothing to cancel.
+    #[serde(rename_all = "camelCase")]
+    QueueUpdated { queued: Vec<QueuedMessage> },
+
+    /// The answer to [`Command::SearchFiles`] (§7.2): the project's files that
+    /// match `query`, best first, capped. `query` is echoed so an answer that
+    /// arrives after the human typed on can be dropped.
+    #[serde(rename_all = "camelCase")]
+    FilesFound { query: String, paths: Vec<String> },
+
     /// Панель процессов целиком (§6.5).
     ///
     /// Панель — функция от последнего такого события, а не сумма предыдущих:
     /// состояние живёт в ядре, которое одно знает, жив ли ещё процесс.
     #[serde(rename_all = "camelCase")]
     ProcessesUpdated { processes: Vec<ProcessSummary> },
+
+    /// The session's MCP servers in full: which are connecting, ready or
+    /// failed, and the tools each brought. Sent whenever any of that changes.
+    #[serde(rename_all = "camelCase")]
+    McpUpdated { servers: Vec<McpServerSummary> },
+
+    /// The session's language servers in full, sent whenever one starts,
+    /// becomes ready or fails. Like `McpUpdated`: the list the interface
+    /// draws is the last such event.
+    #[serde(rename_all = "camelCase")]
+    LspUpdated { servers: Vec<crate::lsp::LspServerSummary> },
 
     /// Человек выбрал строку в панели — показать её вывод целиком (§6.5).
     #[serde(rename_all = "camelCase")]
@@ -316,10 +402,17 @@ impl AgentEvent {
             AgentEvent::ToolCallDenied { .. } => "toolCallDenied",
             AgentEvent::PermissionRequested { .. } => "permissionRequested",
             AgentEvent::PermissionResolved { .. } => "permissionResolved",
+            AgentEvent::QuestionAsked { .. } => "questionAsked",
+            AgentEvent::QuestionResolved { .. } => "questionResolved",
             AgentEvent::TodosUpdated { .. } => "todosUpdated",
             AgentEvent::PlanProposed { .. } => "planProposed",
             AgentEvent::FileChanged { .. } => "fileChanged",
+            AgentEvent::FileViewLoaded { .. } => "fileViewLoaded",
+            AgentEvent::QueueUpdated { .. } => "queueUpdated",
+            AgentEvent::FilesFound { .. } => "filesFound",
             AgentEvent::ProcessesUpdated { .. } => "processesUpdated",
+            AgentEvent::McpUpdated { .. } => "mcpUpdated",
+            AgentEvent::LspUpdated { .. } => "lspUpdated",
             AgentEvent::ProcessOutputReset { .. } => "processOutputReset",
             AgentEvent::ProcessOutput { .. } => "processOutput",
             AgentEvent::CheckpointCreated { .. } => "checkpointCreated",
@@ -380,6 +473,17 @@ pub struct ToolMeta {
     pub duration_ms: u32,
 }
 
+/// A message waiting in the queue (§7.4): its cancel handle and what the chip
+/// shows. Attachments are carried as sent, so the chip can name them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct QueuedMessage {
+    pub id: QueuedId,
+    pub text: String,
+    pub attachments: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
@@ -432,4 +536,9 @@ pub struct SessionState {
     /// Обход разрешений (§8). Не пятый режим, а флаг поверх текущего: чип
     /// режима и кольцо становятся `--rust`.
     pub bypass: bool,
+    /// The worktree this chat works in, when it was asked to be isolated
+    /// (`isolation`). Absent for a chat in the project's own tree.
+    #[serde(default)]
+    #[ts(optional)]
+    pub isolation: Option<crate::isolation::Isolation>,
 }

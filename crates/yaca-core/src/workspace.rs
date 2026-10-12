@@ -11,6 +11,8 @@ use std::sync::Mutex;
 
 use crate::error::{CoreError, ToolError};
 
+pub(crate) mod roots;
+
 /// Отпечаток файла на момент чтения. Слепок, по которому срез 3 проверит
 /// свежесть: файл, изменившийся после чтения, правится вслепую.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,8 +23,23 @@ pub struct ReadRecord {
 
 #[derive(Debug)]
 pub struct Workspace {
+    /// Where the tools work: the project, or the chat's own worktree of it
+    /// (`isolation`).
     root: PathBuf,
+    /// Further folders the session may work in, besides `root` (`with_roots`).
+    /// Canonical, directories, and none of them inside `root` or inside
+    /// another of them. Fixed for the life of the session.
+    extra: Vec<PathBuf>,
+    /// Where the project keeps `.yaca`. The same as `root` unless the chat is
+    /// isolated: settings, journals, memory and the shadow store belong to the
+    /// project, not to one chat's checkout.
+    home: PathBuf,
     read: Mutex<HashMap<PathBuf, ReadRecord>>,
+    /// Directory names the project added to the snapshot's skip list (§10).
+    /// Set once at session start from `.yaca/settings.json`: the permission
+    /// questions need the same list the snapshot walks with, or a directory
+    /// the project excludes would look saved when it is not.
+    shadow_exclude: Vec<String>,
 }
 
 impl Workspace {
@@ -37,9 +54,58 @@ impl Workspace {
             )));
         }
         Ok(Self {
+            home: canon.clone(),
             root: canon,
+            extra: Vec::new(),
             read: Mutex::new(HashMap::new()),
+            shadow_exclude: Vec::new(),
         })
+    }
+
+    /// The same project, worked in from `tree`: a worktree of it.
+    ///
+    /// The boundary of the tools moves to `tree`, and the project's `.yaca`
+    /// stays where it was — relative paths that start with it keep landing
+    /// there, so memory, skills and commands are the project's
+    /// in every chat.
+    pub fn in_tree(mut self, tree: impl AsRef<Path>) -> Result<Self, CoreError> {
+        let tree = tree.as_ref();
+        let canon = std::fs::canonicalize(tree).map_err(|e| {
+            CoreError::Config(format!("не открыть рабочее дерево {}: {e}", tree.display()))
+        })?;
+        if !canon.is_dir() {
+            return Err(CoreError::Config(format!("{} — не каталог", canon.display())));
+        }
+        self.root = canon;
+        Ok(self)
+    }
+
+    /// Adds the session's further folders, replacing any set given before.
+    ///
+    /// Checked against the primary root as it is now, so call it after
+    /// [`Workspace::in_tree`]: a folder inside the worktree is redundant, a
+    /// folder inside the project but outside the worktree is not. See
+    /// `roots::validate` for what is dropped and what is refused.
+    pub fn with_roots(mut self, extra: &[PathBuf]) -> Result<Self, CoreError> {
+        self.extra = roots::validate(&self.root, extra)?;
+        Ok(self)
+    }
+
+    /// Takes the project's snapshot exclusions (`shadow.exclude`). Trimmed and
+    /// emptied the same way the snapshot scanner does, so the two agree on
+    /// what a name means.
+    pub fn with_shadow_exclude(mut self, extra: &[String]) -> Self {
+        self.shadow_exclude = extra
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        self
+    }
+
+    /// The project's own snapshot exclusions, beside the built-in list.
+    pub fn shadow_exclude(&self) -> &[String] {
+        &self.shadow_exclude
     }
 
     /// The same project with nothing read yet.
@@ -51,17 +117,114 @@ impl Workspace {
     pub fn fork(&self) -> Self {
         Self {
             root: self.root.clone(),
+            extra: self.extra.clone(),
+            home: self.home.clone(),
             read: Mutex::new(HashMap::new()),
+            shadow_exclude: self.shadow_exclude.clone(),
         }
     }
 
+    /// The primary root: where relative paths start, where `.yaca` is looked
+    /// for beside, and what the checkpoints snapshot.
     pub fn root(&self) -> &Path {
         &self.root
     }
 
+    /// The additional roots, canonical, in the order they were given.
+    pub fn additional(&self) -> &[PathBuf] {
+        &self.extra
+    }
+
+    /// The additional roots as shown to a person or a model: absolute, with
+    /// forward slashes and no verbatim prefix. Recorded in the journal and
+    /// compared on resume.
+    pub fn additional_text(&self) -> Vec<String> {
+        self.extra.iter().map(|root| roots::plain(root)).collect()
+    }
+
+    /// Every root, the primary one first.
+    pub fn roots(&self) -> Vec<&Path> {
+        std::iter::once(self.root.as_path())
+            .chain(self.extra.iter().map(PathBuf::as_path))
+            .collect()
+    }
+
+    /// Whether `path` is one of the roots themselves, primary or additional.
+    pub fn is_a_root(&self, path: &Path) -> bool {
+        self.roots().contains(&path)
+    }
+
+    /// Whether `path` lies in an additional root (not the primary one).
+    pub fn in_additional(&self, path: &Path) -> bool {
+        !path.starts_with(&self.root) && self.extra.iter().any(|root| path.starts_with(root))
+    }
+
+    /// The root that holds `path`. Used wherever a check depends on which root
+    /// a path is in: git's configuration (`invariant`), the project's `.yaca`
+    /// and instructions, the question about what a rollback covers.
+    ///
+    /// A path in no root (the project's `.yaca` seen from an isolated chat, for
+    /// one) gets the primary root, which is what the checks did before there
+    /// were additional roots.
+    pub fn root_for(&self, path: &Path) -> &Path {
+        if path.starts_with(&self.root) {
+            return &self.root;
+        }
+        self.extra
+            .iter()
+            .find(|root| path.starts_with(root))
+            .map(PathBuf::as_path)
+            .unwrap_or(&self.root)
+    }
+
+    /// The project's folder, where `.yaca` is. Not [`Workspace::root`] in an
+    /// isolated chat: that is the worktree, which has no `.yaca` of its own.
+    pub fn home(&self) -> &Path {
+        &self.home
+    }
+
+    /// The project's `.yaca`, and so the one place a path may leave the root
+    /// to.
+    fn own_dir(&self) -> PathBuf {
+        self.home.join(crate::project::DIR)
+    }
+
+    fn is_isolated(&self) -> bool {
+        self.root != self.home
+    }
+
     /// Путь относительно корня — то, что видит человек в ленте.
+    ///
+    /// Файл в дополнительном корне показывается целиком, абсолютным путём:
+    /// относительная форма могла бы сойти за файл основного корня.
     pub fn display(&self, path: &Path) -> String {
-        path.strip_prefix(&self.root)
+        if let Ok(rel) = path.strip_prefix(&self.root) {
+            return rel.to_string_lossy().replace('\\', "/");
+        }
+        if self.in_additional(path) {
+            return roots::plain(path);
+        }
+        path.strip_prefix(&self.home)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/")
+    }
+
+    /// `path` in the form the roots are stored in: the same file, spelled so
+    /// that it compares equal to a path the tools resolved. For paths that
+    /// arrive from outside — a language server names files its own way.
+    pub fn in_form(&self, path: &Path) -> PathBuf {
+        roots::in_root_form(path, &self.root)
+    }
+
+    /// The path of `path` inside the root that holds it, forward slashes.
+    ///
+    /// The form a glob pattern is matched against: `src/**/*.rs` means the
+    /// `src` of every root. [`Workspace::display`] is the form shown to a
+    /// person and is absolute for an additional root, so it cannot serve here.
+    pub fn within_root(&self, path: &Path) -> String {
+        let root = self.root_for(path);
+        path.strip_prefix(root)
             .unwrap_or(path)
             .to_string_lossy()
             .replace('\\', "/")
@@ -108,20 +271,35 @@ impl Workspace {
                 None => break,
             }
         }
-        Ok(normalized)
+        // Returned in the form the roots are stored in, so an absolute path
+        // typed by the model is the same key as the one `canonicalize` gives.
+        Ok(roots::in_root_form(&normalized, &self.root))
     }
 
     fn join(&self, raw: &str) -> PathBuf {
         let p = Path::new(raw);
         if p.is_absolute() {
             p.to_path_buf()
+        } else if self.is_isolated() && p.starts_with(crate::project::DIR) {
+            // The worktree has no `.yaca`, and one made there would be this
+            // chat's alone: its memory would never reach the project.
+            self.home.join(p)
         } else {
             self.root.join(p)
         }
     }
 
+    /// Whether `path` is inside the primary root or any additional one.
+    fn contains(&self, path: &Path) -> bool {
+        path.starts_with(&self.root) || self.extra.iter().any(|root| path.starts_with(root))
+    }
+
+    /// The boundary rule. It is the same for every root: a symlink out of any
+    /// of them fails the canonical check, a `..` out of any of them fails the
+    /// lexical one. The `.yaca` exception is the primary project's only.
     fn ensure_inside(&self, canon: &Path, raw: &str) -> Result<(), ToolError> {
-        if canon.starts_with(&self.root) {
+        let form = roots::in_root_form(canon, &self.root);
+        if self.contains(&form) || (self.is_isolated() && form.starts_with(self.own_dir())) {
             Ok(())
         } else {
             Err(ToolError::rejected(format!(
@@ -275,5 +453,186 @@ mod tests {
         ws.mark_read(&p);
         assert!(ws.was_read(&p));
         assert!(ws.read_record(&p).unwrap().len > 0);
+    }
+
+    /// Основной корень с `a.txt` и дополнительный с `b.txt`, и третий каталог
+    /// вне обоих.
+    fn two_roots() -> (TempDir, TempDir, TempDir, Workspace) {
+        let main = TempDir::new();
+        main.write("a.txt", "основной\n");
+        let extra = TempDir::new();
+        extra.write("b.txt", "дополнительный\n");
+        let outside = TempDir::new();
+        outside.write("secret.env", "x\n");
+        let ws = Workspace::open(main.path())
+            .unwrap()
+            .with_roots(&[extra.path().to_path_buf()])
+            .unwrap();
+        (main, extra, outside, ws)
+    }
+
+    /// Путь так, как его видит модель: без `\\?\`, с прямыми косыми.
+    fn as_model_sees(path: &Path) -> String {
+        roots::plain(path)
+    }
+
+    #[test]
+    fn файл_дополнительного_корня_открывается_по_абсолютному_пути() {
+        let (_m, extra, _o, ws) = two_roots();
+        let by_abs = ws.resolve_existing(&extra.path().join("b.txt").to_string_lossy()).unwrap();
+        assert!(by_abs.starts_with(extra.path()));
+        // Тот же файл — тот же ключ: реестр прочитанного не расходится.
+        let by_model = ws.resolve_existing(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
+        assert_eq!(by_abs, by_model);
+        assert!(ws.resolve_new(&as_model_sees(&extra.path().join("новый.txt"))).is_ok());
+    }
+
+    #[test]
+    fn относительный_путь_всегда_идёт_в_основной_корень() {
+        let (_m, _e, _o, ws) = two_roots();
+        // `b.txt` есть только в дополнительном корне: относительный путь его
+        // не находит, а не подменяет собой.
+        let err = ws.resolve_existing("b.txt").unwrap_err();
+        assert!(err.to_string().contains("не найдено"), "{err}");
+        assert!(ws.resolve_existing("a.txt").unwrap().starts_with(ws.root()));
+    }
+
+    #[test]
+    fn путь_вне_всех_корней_отклоняется_и_существующий_и_нет() {
+        let (_m, _e, outside, ws) = two_roots();
+        let secret = outside.path().join("secret.env");
+        let err = ws.resolve_existing(&as_model_sees(&secret)).unwrap_err();
+        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
+
+        let missing = outside.path().join("нет.env");
+        let err = ws.resolve_new(&as_model_sees(&missing)).unwrap_err();
+        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
+    }
+
+    #[test]
+    fn символическая_ссылка_из_дополнительного_корня_наружу_отклоняется() {
+        let (_m, extra, outside, ws) = two_roots();
+        let link = extra.path().join("ссылка.env");
+        if make_file_link(&outside.path().join("secret.env"), &link).is_err() {
+            // Хост не даёт создать ссылку: проверка пропущена, а не пройдена.
+            eprintln!("пропуск: хост не создаёт символические ссылки");
+            return;
+        }
+        let err = ws.resolve_existing(&as_model_sees(&link)).unwrap_err();
+        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
+    }
+
+    #[test]
+    fn отображение_основного_корня_относительное_а_дополнительного_абсолютное() {
+        let (_m, extra, _o, ws) = two_roots();
+        let main_file = ws.resolve_existing("a.txt").unwrap();
+        assert_eq!(ws.display(&main_file), "a.txt");
+
+        let extra_file = ws.resolve_existing(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
+        let shown = ws.display(&extra_file);
+        assert_eq!(shown, as_model_sees(&extra_file));
+        assert!(!shown.contains(r"\\?\") && !shown.contains('\\'), "{shown}");
+        assert!(shown.ends_with("/b.txt"), "{shown}");
+        // Относительная форма была бы неотличима от файла основного корня.
+        assert_ne!(shown, "b.txt");
+    }
+
+    #[test]
+    fn корень_файла_и_путь_для_сопоставления_шаблонов() {
+        let (_m, extra, _o, ws) = two_roots();
+        let extra_file = ws.resolve_existing(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
+        assert_eq!(ws.root_for(&extra_file), ws.additional()[0].as_path());
+        assert_eq!(ws.within_root(&extra_file), "b.txt");
+
+        let main_file = ws.resolve_existing("a.txt").unwrap();
+        assert_eq!(ws.root_for(&main_file), ws.root());
+        assert_eq!(ws.within_root(&main_file), "a.txt");
+
+        assert!(ws.is_a_root(ws.additional()[0].as_path()));
+        assert!(ws.is_a_root(ws.root()));
+        assert!(!ws.is_a_root(&extra_file));
+    }
+
+    #[test]
+    fn правка_и_чтение_в_дополнительном_корне_держатся_за_один_ключ() {
+        let (_m, extra, _o, ws) = two_roots();
+        let path = ws.resolve_existing(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
+        ws.mark_read(&path);
+        // Тем же путём, каким его задаст правка, он узнаётся как прочитанный.
+        let edit_path = ws.resolve_new(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
+        assert!(ws.was_read(&edit_path));
+    }
+
+    #[test]
+    fn дубликаты_вложенные_и_основной_корень_сокращаются() {
+        let main = TempDir::new();
+        let extra = TempDir::new();
+        let inside = main.mkdir("sub");
+        let ws = Workspace::open(main.path())
+            .unwrap()
+            .with_roots(&[
+                main.path().to_path_buf(),
+                inside,
+                extra.path().to_path_buf(),
+                extra.path().to_path_buf(),
+            ])
+            .unwrap();
+        // Сам корень и то, что внутри него, уже покрыты; дубликат один.
+        assert_eq!(ws.additional(), [extra.path().to_path_buf()]);
+        assert_eq!(ws.roots().len(), 2);
+    }
+
+    #[test]
+    fn вложенный_дополнительный_корень_уходит_в_объемлющий() {
+        let main = TempDir::new();
+        let outer = TempDir::new();
+        let inner = outer.mkdir("inner");
+        let ws = Workspace::open(main.path())
+            .unwrap()
+            .with_roots(&[inner, outer.path().to_path_buf()])
+            .unwrap();
+        assert_eq!(ws.additional(), [outer.path().to_path_buf()]);
+    }
+
+    #[test]
+    fn корень_содержащий_проект_отклоняется_и_не_молча() {
+        let parent = TempDir::new();
+        let project = parent.mkdir("project");
+        let ws = Workspace::open(&project).unwrap();
+        let err = ws
+            .with_roots(&[parent.path().to_path_buf()])
+            .unwrap_err();
+        assert!(matches!(err, CoreError::Config(_)), "{err:?}");
+    }
+
+    #[test]
+    fn несуществующий_или_файловый_дополнительный_корень_отклоняется() {
+        let main = TempDir::new();
+        let other = TempDir::new();
+        let file = other.write("f.txt", "x\n");
+        let missing = main.path().join("нет");
+        let ws = Workspace::open(main.path()).unwrap();
+        assert!(matches!(
+            ws.with_roots(&[missing]),
+            Err(CoreError::Config(_))
+        ));
+        let ws = Workspace::open(main.path()).unwrap();
+        assert!(matches!(ws.with_roots(&[file]), Err(CoreError::Config(_))));
+    }
+
+    #[test]
+    fn fork_сохраняет_дополнительные_корни() {
+        let (_m, extra, _o, ws) = two_roots();
+        let forked = ws.fork();
+        assert_eq!(forked.additional(), ws.additional());
+        assert!(forked.resolve_existing(&as_model_sees(&extra.path().join("b.txt"))).is_ok());
+    }
+
+    /// Make a file link, or report that the host cannot (then the caller skips).
+    fn make_file_link(target: &Path, link: &Path) -> std::io::Result<()> {
+        #[cfg(unix)]
+        return std::os::unix::fs::symlink(target, link);
+        #[cfg(windows)]
+        return std::os::windows::fs::symlink_file(target, link);
     }
 }

@@ -18,20 +18,28 @@ use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
 
+use serde_json::Value;
+
 use crate::error::ToolError;
 use crate::event::{AgentEvent, ToolMeta};
+use crate::hooks::{self, Finished, PreOutcome};
 use crate::id::{CallId, TurnId};
 use crate::message::ContentBlock;
 use crate::instructions::Instructions;
+use crate::tool::memory::store::MemoryIndex;
+use crate::tool::skill::Listing;
 use crate::intent::Intent;
 use crate::provider::Provider;
 use crate::tool::{take_description, Progress, ToolCtx, ToolRegistry};
 use crate::usage::ModelInfo;
+use crate::verify;
 use crate::workspace::Workspace;
 
 use super::accumulator::{Garbled, PendingCall};
 use super::asking::{Answer, Gate, Queue};
+use super::changeset;
 use super::checkpoints;
+use super::questions::Questions;
 use super::subagent::Subagents;
 use super::Shared;
 
@@ -41,9 +49,11 @@ use super::Shared;
 /// only "cancelled" treats it as a transient failure and tries the same thing
 /// again; the point of stopping was that the person wants a word first.
 const STOPPED_BY_HUMAN: &str = "The user doesn't want to proceed with this tool use. \
-     The tool use was rejected: nothing it would have done was done. STOP what you are \
-     doing and wait for the user to tell you how to proceed. Their next message may \
-     explain what went wrong or how they would rather you worked — read it closely.";
+     The tool use was rejected (eg. if it was a file edit, the new content was NOT \
+     written to the file). STOP what you are doing and wait for the user to tell you \
+     how to proceed.\n\nNote: the user's next message may contain a correction or \
+     preference. Pay close attention — if they explain what went wrong or how they'd \
+     prefer you to work, follow it from now on.";
 
 /// Whoever is making calls: the agent in its turn, or a subagent inside one.
 #[derive(Clone)]
@@ -55,6 +65,13 @@ pub(super) struct Caller {
     pub(super) ws: Arc<Workspace>,
     pub(super) provider: Arc<dyn Provider>,
     pub(super) instructions: Option<Arc<Instructions>>,
+    /// The memory index and skills listing the agent's prompt carries. A
+    /// subagent gets the same two, so it knows what the project keeps.
+    pub(super) memory: Option<Arc<MemoryIndex>>,
+    pub(super) skills: Option<Arc<Listing>>,
+    /// What the agent's prompt says about the MCP servers. A subagent has the
+    /// same tools, so it is told the same.
+    pub(super) mcp_notes: Option<Arc<str>>,
     /// The `Task` row these calls are drawn under. `None` for the agent's own.
     pub(super) under: Option<CallId>,
 }
@@ -146,6 +163,24 @@ impl Caller {
         }
 
         done.sort_by_key(|(index, _)| *index);
+        // The check (`verify.rs`) is attached to the last successful change of
+        // the batch, once for the whole batch. Found before `done` is consumed
+        // below, and by position in it, which is also the position of its
+        // result.
+        let check = done
+            .iter()
+            .rposition(|(index, ran)| {
+                let succeeded = matches!(
+                    ran.result,
+                    ContentBlock::ToolResult {
+                        is_error: false,
+                        ..
+                    }
+                );
+                succeeded && verify::changes_files(&calls[*index].name)
+            })
+            .map(|at| (at, CallId::from(calls[done[at].0].id.clone())));
+
         // Every result first, then what the calls gave the model to look at:
         // a provider wants the results at the head of the message, and takes
         // an image only outside them (`ContentBlock::Image`).
@@ -155,6 +190,28 @@ impl Caller {
             results.push(ran.result);
             shown.extend(ran.shown);
         }
+
+        // Plan mode has no writing tools, so the intent check only matters if
+        // that ever changes. Not run once the human has stopped the turn: the
+        // loop is ending and nobody will read the result.
+        if let Some((at, row)) = check {
+            if let Some(settings) = self.shared.settings.verify.as_ref() {
+                if self.intent() == Intent::Agent && !cancel.is_cancelled() {
+                    let verdict =
+                        verify::run(settings, self.ws.as_ref(), self.shared.shell, cancel).await;
+                    self.emit(AgentEvent::ToolCallProgress {
+                        call_id: row,
+                        chunk: verify::for_human(settings.command(), &verdict),
+                    });
+                    if let Some(note) = verify::for_model(settings.command(), &verdict) {
+                        if let ContentBlock::ToolResult { content, .. } = &mut results[at] {
+                            content.push_str(&note);
+                        }
+                    }
+                }
+            }
+        }
+
         results.extend(shown);
         results
     }
@@ -204,8 +261,13 @@ impl Caller {
     ) -> (ContentBlock, bool) {
         let call_id = CallId::from(call.id.clone());
         let mut input = call.input;
-        // Подпись — забота ленты, модели она обратно не нужна.
-        let description = take_description(&mut input);
+        let tool = self.registry.get(&call.name, self.intent());
+        // Подпись — забота ленты, модели она обратно не нужна. Unless the
+        // tool has an argument of that name itself: then it is the tool's.
+        let description = match &tool {
+            Some(tool) if tool.keeps_description() => None,
+            _ => take_description(&mut input),
+        };
 
         // Arguments that never arrived whole: there is nothing to run, but
         // the call is in the history and is answered like any other.
@@ -215,7 +277,7 @@ impl Caller {
             return (result, false);
         }
 
-        let Some(tool) = self.registry.get(&call.name, self.intent()) else {
+        let Some(tool) = tool else {
             let err = ToolError::failed(format!("неизвестный инструмент: {}", call.name));
             let result = self.failed_unrun(turn_id, call_id, &call.name, description, input, err);
             return (result, false);
@@ -231,6 +293,20 @@ impl Caller {
             input: input.clone(),
             parent: self.under.clone(),
         });
+
+        // §7.1: a tool offered in Plan may still refuse this call — Bash does,
+        // for anything that could change a file. Refused before the question: a
+        // question about an action Plan does not allow would ask for something
+        // that cannot happen.
+        if self.intent() == Intent::Plan {
+            if let Err(reason) = tool.plan_check(self.ws.as_ref(), &input) {
+                self.emit(AgentEvent::ToolCallRejected {
+                    call_id,
+                    reason: reason.clone(),
+                });
+                return (tool_result(&call.id, reason, true), false);
+            }
+        }
 
         // One at a time across the whole session, not only within a batch:
         // subagents run side by side, and everything `Tool::concurrent` says
@@ -248,6 +324,32 @@ impl Caller {
                 lane = self.shared.lane.lock() => Some(lane),
             }
         };
+
+        // Hooks answer before the permission question (§5.7): a call a hook
+        // refuses was never going to run, so the human is not asked about it. After
+        // the lane, so a hook that reads the tree sees what the call would see.
+        match hooks::before(
+            self.shared.settings.hooks(),
+            self.ws.as_ref(),
+            self.shared.shell,
+            &call.name,
+            &input,
+            cancel,
+        )
+        .await
+        {
+            PreOutcome::Go => {}
+            PreOutcome::Refused(refusal) => {
+                self.emit(AgentEvent::ToolCallRejected {
+                    call_id,
+                    reason: refusal.for_human,
+                });
+                return (tool_result(&call.id, refusal.for_model, true), false);
+            }
+            PreOutcome::Stopped => {
+                return (self.stopped_by_human(&call.id, call_id, cancel), false);
+            }
+        }
 
         let mut asked_here = false;
         if let Some(need) = tool.permission(self.ws.as_ref(), &input) {
@@ -290,9 +392,27 @@ impl Caller {
                 .under
                 .is_none()
                 .then(|| Subagents::new(self.clone(), turn_id.clone(), call_id.clone())),
+            // A question belongs to the call that asks it, a subagent's too.
+            questions: Some(Questions::new(self.shared.clone(), call_id.clone())),
             vision: self.shared.sees(&self.model()),
             shell: self.shared.shell,
             respect_robots: self.shared.respect_robots,
+            lsp: Some(self.shared.lsp.clone()),
+        };
+
+        // Copied only when a post hook will read it: most calls have none, and
+        // a large write should not be copied for nothing.
+        let for_hooks =
+            hooks::wants_post(self.shared.settings.hooks(), &call.name).then(|| input.clone());
+
+        // §6.3: what the file held before a writer touched it, so one hunk of
+        // the write can be reverted later. Taken after the gate, like the
+        // snapshot: a refused write changes nothing and needs no baseline.
+        let before = match tool.target(&input) {
+            Some(target) if changeset::keeps(tool.name()) => {
+                changeset::before(&self.shared, target).await
+            }
+            _ => None,
         };
 
         let started = std::time::Instant::now();
@@ -300,7 +420,26 @@ impl Caller {
         let duration_ms = started.elapsed().as_millis() as u32;
 
         match outcome {
-            Ok(out) => {
+            Ok(mut out) => {
+                let changed = out.changed.is_some();
+                // What the language server makes of the file just written,
+                // in the same result: the model learns what it broke without
+                // asking. Before the feed gets the text, so the row shows it.
+                if let Some(change) = &out.changed {
+                    if change.fact.kind != crate::change::ChangeKind::Deleted {
+                        if let Ok(abs) = self.ws.resolve_new(&change.fact.path) {
+                            let note = self
+                                .shared
+                                .lsp
+                                .after_edit(&abs, &change.fact.path, cancel)
+                                .await;
+                            if let Some(note) = note {
+                                out.text.push_str("\n\n");
+                                out.text.push_str(&note);
+                            }
+                        }
+                    }
+                }
                 // Лента получает текст ровно один раз. Стримящий тул уже отдал
                 // его по дороге — команда пишет в ленту, пока работает (§0), —
                 // остальным его отдаёт отсюда сессия.
@@ -318,6 +457,12 @@ impl Caller {
                         diff: change.diff,
                     });
                 }
+                if let (true, Some(before)) = (changed, before) {
+                    changeset::after(&self.shared, before).await;
+                }
+                let text = self
+                    .after_hooks(&call.name, for_hooks, false, out.text, &call_id, cancel)
+                    .await;
                 self.emit(AgentEvent::ToolCallFinished {
                     call_id,
                     meta: ToolMeta {
@@ -328,7 +473,7 @@ impl Caller {
                 for (name, picture) in out.pictures {
                     shown.extend(ContentBlock::picture(&name, picture));
                 }
-                (tool_result(&call.id, out.text, false), asked_here)
+                (tool_result(&call.id, text, false), asked_here)
             }
             Err(ToolError::Rejected(reason)) => {
                 // Сработавшая защита — не сбой (§5.9).
@@ -349,11 +494,14 @@ impl Caller {
                 // Лента получает строку, модель — строку и подробность:
                 // вывод упавшей команды в подписи действия был бы простынёй,
                 // а без него модели нечего чинить.
+                let text = self
+                    .after_hooks(&call.name, for_hooks, true, err.for_model(), &call_id, cancel)
+                    .await;
                 self.emit(AgentEvent::ToolCallFailed {
                     call_id,
                     message: err.to_string(),
                 });
-                (tool_result(&call.id, err.for_model(), true), asked_here)
+                (tool_result(&call.id, text, true), asked_here)
             }
         }
     }
@@ -384,6 +532,47 @@ impl Caller {
             message: err.to_string(),
         });
         result
+    }
+
+    /// The post hooks of a call that ran. What they say goes into the call's row
+    /// and onto the end of the text the model reads. A hook cannot change whether
+    /// the call is an error: the flag is the tool's own, passed through.
+    async fn after_hooks(
+        &self,
+        tool: &str,
+        input: Option<Value>,
+        failed: bool,
+        text: String,
+        call_id: &CallId,
+        cancel: &CancellationToken,
+    ) -> String {
+        let Some(input) = input else {
+            return text;
+        };
+        let finished = Finished {
+            failed,
+            result: &text,
+        };
+        match hooks::after(
+            self.shared.settings.hooks(),
+            self.ws.as_ref(),
+            self.shared.shell,
+            tool,
+            &input,
+            finished,
+            cancel,
+        )
+        .await
+        {
+            None => text,
+            Some(note) => {
+                self.emit(AgentEvent::ToolCallProgress {
+                    call_id: call_id.clone(),
+                    chunk: note.for_human,
+                });
+                text + &note.for_model
+            }
+        }
     }
 
     /// The human stopped this call: one row in the feed, one sentence to the

@@ -27,7 +27,7 @@ use super::{FileChange, Narration, Tool, ToolCtx, ToolOutput};
 use crate::change::ChangeKind;
 use crate::error::ToolError;
 use crate::intent::Intent;
-use crate::permission::{PermissionKind, PermissionNeed};
+use crate::permission::PermissionNeed;
 use crate::workspace::Workspace;
 
 pub struct EditFile;
@@ -110,15 +110,7 @@ impl Tool for EditFile {
     fn permission(&self, ws: &Workspace, input: &Value) -> Option<PermissionNeed> {
         let raw = input["path"].as_str()?;
         let abs = ws.resolve_new(raw).ok()?;
-        let name = abs
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| raw.to_string());
-        Some(
-            PermissionNeed::new(PermissionKind::EditFile, self.name(), name)
-                .detail(ws.display(&abs))
-                .path(abs),
-        )
+        Some(files::edit_need(ws, self.name(), raw, abs))
     }
 
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
@@ -697,4 +689,33 @@ y = 8;
         assert!(out.text.contains("заменено вхождений: 3"), "{}", out.text);
     }
 
+}
+
+#[cfg(test)]
+mod guard_tests {
+    use super::*;
+    use crate::permission::{Invariant, PermissionKind};
+    use crate::testutil::TempDir;
+
+    #[test]
+    fn editing_git_configuration_is_an_invariant_in_every_mode() {
+        let dir = TempDir::new();
+        dir.write(".git/config", "[core]\n");
+        let ws = Workspace::open(dir.path()).unwrap();
+        let input = json!({ "path": ".git/config", "edits": [] });
+        let need = EditFile.permission(&ws, &input).unwrap();
+        assert_eq!(need.invariant, Some(Invariant::GitConfig));
+        assert_eq!(need.kind, PermissionKind::EditFile);
+    }
+
+    #[test]
+    fn editing_an_ordinary_file_is_not_an_invariant() {
+        let dir = TempDir::new();
+        dir.write("src/a.rs", "fn a() {}\n");
+        let ws = Workspace::open(dir.path()).unwrap();
+        let need = EditFile
+            .permission(&ws, &json!({ "path": "src/a.rs", "edits": [] }))
+            .unwrap();
+        assert_eq!(need.invariant, None);
+    }
 }

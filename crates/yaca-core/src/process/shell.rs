@@ -19,7 +19,7 @@ use std::process::Stdio;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::Child;
 use tokio::sync::mpsc;
 
@@ -157,11 +157,32 @@ pub struct Spawned {
 }
 
 pub fn spawn(shell: Shell, command: &str, cwd: &Path) -> std::io::Result<Spawned> {
+    spawn_with(shell, command, cwd, &[], None)
+}
+
+/// [`spawn`] with what a hook needs on top: extra environment variables, and
+/// bytes written to the command's standard input.
+///
+/// `stdin` of `None` keeps the rule `spawn` states: no terminal, so nothing
+/// waits for an answer. `Some` pipes the bytes in and closes the pipe after
+/// them, so a command that reads its input to the end gets an end.
+pub fn spawn_with(
+    shell: Shell,
+    command: &str,
+    cwd: &Path,
+    env: &[(&str, &str)],
+    stdin: Option<Vec<u8>>,
+) -> std::io::Result<Spawned> {
     let mut cmd = tokio::process::Command::from(shell_command(shell, command)?);
     cmd.current_dir(cwd)
         // No terminal is attached. Anything that stops to ask a question would
         // otherwise wait for an answer that cannot arrive.
-        .stdin(Stdio::null())
+        .stdin(if stdin.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .envs(env.iter().copied())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         // The runtime shutting down must not leave commands behind.
@@ -169,6 +190,17 @@ pub fn spawn(shell: Shell, command: &str, cwd: &Path) -> std::io::Result<Spawned
 
     let mut child = cmd.spawn()?;
     let pid = child.id();
+
+    if let (Some(bytes), Some(mut pipe)) = (stdin, child.stdin.take()) {
+        // Written from a task of its own: a command that answers before it has
+        // read everything would otherwise wait on us while we wait on it. A
+        // write that fails because the command exited early is not an error —
+        // the exit status says how it went.
+        tokio::spawn(async move {
+            let _ = pipe.write_all(&bytes).await;
+            let _ = pipe.shutdown().await;
+        });
+    }
 
     let (tx, output) = mpsc::channel(64);
     if let Some(out) = child.stdout.take() {

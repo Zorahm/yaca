@@ -12,7 +12,9 @@
 //!
 //! The rest rolls back with the point taken before the message, the same as a
 //! deleted file — except what snapshots do not keep at all: the excluded
-//! directories (`node_modules`, `target`…) and files over 8 MB.
+//! directories (`node_modules`, `target`…) and files over 8 MB. Deleting that
+//! is not something a rollback can undo, so it is asked about in every mode but
+//! bypass, Auto included (§8), and the question says what will not come back.
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -23,7 +25,8 @@ use serde_json::{json, Value};
 use super::{Narration, Tool, ToolCtx, ToolOutput};
 use crate::error::ToolError;
 use crate::intent::Intent;
-use crate::permission::{FileCount, PermissionKind, PermissionNeed};
+use crate::permission::unsaved;
+use crate::permission::{invariant, FileCount, PermissionKind, PermissionNeed};
 use crate::workspace::Workspace;
 
 /// How far the question counts before it says "more" (§5.7). The question
@@ -83,15 +86,21 @@ impl Tool for DeleteDir {
         if contents.kept.is_some() {
             return None;
         }
-        Some(
+        let mut need =
             PermissionNeed::new(PermissionKind::DeleteDirectory, self.name(), name_of(&abs))
                 .detail(ws.display(&abs))
-                .path(abs)
+                .path(abs.clone())
                 .files(FileCount {
                     files: contents.files,
                     more: contents.more,
-                }),
-        )
+                });
+        if let Some(unsaved) = unsaved::of_dir(ws, &abs).ok()? {
+            need = need.unsaved(unsaved);
+        }
+        if let Some(found) = invariant::of_path(ws.root_for(&abs), &abs) {
+            need = need.invariant(found);
+        }
+        Some(need)
     }
 
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
@@ -112,7 +121,9 @@ impl Tool for DeleteDir {
             )));
         }
         if !meta.is_dir() {
-            return Err(ToolError::failed(format!("{raw} — файл; его удаляет Delete")));
+            return Err(ToolError::failed(format!(
+                "{raw} — файл; его удаляет Delete"
+            )));
         }
 
         let rel = ctx.ws.display(&abs);
@@ -135,7 +146,10 @@ impl Tool for DeleteDir {
                 return Err(ToolError::Cancelled);
             }
             std::fs::remove_dir_all(&dir).map_err(|e| {
-                ToolError::failed(format!("каталог {} удалён не целиком: {e}", ws.display(&dir)))
+                ToolError::failed(format!(
+                    "каталог {} удалён не целиком: {e}",
+                    ws.display(&dir)
+                ))
             })?;
             Ok(contents.files)
         })
@@ -151,8 +165,17 @@ impl Tool for DeleteDir {
 
 /// The deletions no mode permits (§8): they are invariants, not questions.
 fn refusal(ws: &Workspace, abs: &Path) -> Option<ToolError> {
+    // Every root, not only the project's: a root is the boundary the session
+    // works inside, and deleting it would delete the boundary with its contents.
     if abs == ws.root() {
-        return Some(ToolError::rejected("это корень проекта; целиком его не удаляют"));
+        return Some(ToolError::rejected(
+            "это корень проекта; целиком его не удаляют",
+        ));
+    }
+    if ws.is_a_root(abs) {
+        return Some(ToolError::rejected(
+            "это дополнительный корень воркспейса; целиком его не удаляют",
+        ));
     }
     let name = abs.file_name()?;
     KEPT.iter().any(|kept| name == OsStr::new(kept)).then(|| {
@@ -220,6 +243,7 @@ fn survey(dir: &Path, cap: Option<u32>) -> std::io::Result<Contents> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::permission::Unsaved;
     use crate::testutil::TempDir;
     use crate::tool::read_file::ReadFile;
     use crate::tool::tests_support::ctx_for;
@@ -251,7 +275,10 @@ mod tests {
         dir.write(".git/HEAD", "ref\n");
         let (ctx, _ws) = ctx_for(&dir);
 
-        let err = DeleteDir.run(&ctx, json!({ "path": ".git" })).await.unwrap_err();
+        let err = DeleteDir
+            .run(&ctx, json!({ "path": ".git" }))
+            .await
+            .unwrap_err();
         assert!(matches!(err, ToolError::Rejected(_)), "{err:?}");
         assert!(dir.path().join(".git/HEAD").exists());
     }
@@ -262,7 +289,10 @@ mod tests {
         dir.write("a.txt", "x");
         let (ctx, _ws) = ctx_for(&dir);
 
-        let err = DeleteDir.run(&ctx, json!({ "path": "a.txt" })).await.unwrap_err();
+        let err = DeleteDir
+            .run(&ctx, json!({ "path": "a.txt" }))
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("Delete"), "{err}");
         assert!(dir.path().join("a.txt").exists());
     }
@@ -272,8 +302,82 @@ mod tests {
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
 
-        let err = DeleteDir.run(&ctx, json!({ "path": "nope" })).await.unwrap_err();
+        let err = DeleteDir
+            .run(&ctx, json!({ "path": "nope" }))
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("не найдено"), "{err}");
+    }
+
+    fn unsaved_of(dir: &TempDir, path: &str) -> Option<Unsaved> {
+        let ws = Workspace::open(dir.path()).unwrap();
+        DeleteDir
+            .permission(&ws, &json!({ "path": path }))
+            .expect("a directory is always a question")
+            .unsaved
+    }
+
+    #[test]
+    fn a_directory_holding_build_output_says_what_will_not_come_back() {
+        let dir = TempDir::new();
+        dir.write("pkg/src/lib.rs", "fn a() {}\n");
+        dir.write("pkg/target/debug/app.rlib", "built\n");
+
+        let unsaved = unsaved_of(&dir, "pkg").expect("target/ is not in any snapshot");
+        assert_eq!(unsaved.dirs, vec!["pkg/target".to_string()]);
+        assert_eq!(unsaved.dir_count, 1);
+        // The file under target/ is not counted: it is lost with its directory,
+        // and the question names the directory, not every file in it.
+        assert_eq!(unsaved.files, 0);
+    }
+
+    #[test]
+    fn a_directory_the_snapshot_keeps_in_full_has_nothing_unsaved() {
+        let dir = TempDir::new();
+        dir.write("docs/a.md", "text\n");
+        dir.write("docs/nested/b.md", "text\n");
+        assert_eq!(unsaved_of(&dir, "docs"), None);
+    }
+
+    #[test]
+    fn a_directory_inside_a_skipped_one_is_unsaved_as_a_whole() {
+        let dir = TempDir::new();
+        dir.write("target/debug/a.rlib", "x\n");
+        dir.write("pkg/node_modules/left-pad/index.js", "x\n");
+
+        // The snapshot never looked inside target/, so nothing in it is kept.
+        let unsaved = unsaved_of(&dir, "target/debug").expect("inside target/");
+        assert_eq!(unsaved.dirs, vec!["target/debug".to_string()]);
+        assert_eq!(unsaved.dir_count, 1);
+
+        let unsaved = unsaved_of(&dir, "pkg/node_modules/left-pad").expect("inside node_modules");
+        assert_eq!(unsaved.dir_count, 1);
+    }
+
+    #[test]
+    fn a_file_over_the_size_limit_is_unsaved() {
+        let dir = TempDir::new();
+        dir.write(
+            "big/data.bin",
+            &"x".repeat(crate::checkpoint::scan::MAX_FILE_BYTES as usize + 1),
+        );
+        dir.write("big/small.txt", "x\n");
+
+        let unsaved = unsaved_of(&dir, "big").expect("the big file is not in any snapshot");
+        assert_eq!(unsaved.files, 1);
+        assert_eq!(unsaved.dir_count, 0);
+    }
+
+    #[test]
+    fn the_listing_names_five_and_counts_the_rest() {
+        use crate::permission::unsaved::LISTED_DIRS;
+        let dir = TempDir::new();
+        for i in 0..7 {
+            dir.write(&format!("ws/p{i}/node_modules/x.js"), "x\n");
+        }
+        let unsaved = unsaved_of(&dir, "ws").unwrap();
+        assert_eq!(unsaved.dirs.len(), LISTED_DIRS);
+        assert_eq!(unsaved.dir_count, 7);
     }
 
     #[tokio::test]
@@ -281,7 +385,10 @@ mod tests {
         let dir = TempDir::new();
         dir.write("d/a.rs", "fn a() {}\n");
         let (ctx, ws) = ctx_for(&dir);
-        ReadFile.run(&ctx, json!({ "path": "d/a.rs" })).await.unwrap();
+        ReadFile
+            .run(&ctx, json!({ "path": "d/a.rs" }))
+            .await
+            .unwrap();
         let read = ws.resolve_existing("d/a.rs").unwrap();
         assert!(ws.was_read(&read));
 
@@ -290,5 +397,53 @@ mod tests {
         assert_eq!(out.meta.items, Some(1));
         // A file recreated there later has to be read before it is edited.
         assert!(!ws.was_read(&read));
+    }
+}
+
+#[cfg(test)]
+mod guard_tests {
+    use super::*;
+    use crate::permission::Invariant;
+    use crate::testutil::TempDir;
+
+    #[test]
+    fn a_directory_the_project_excludes_is_unsaved_when_settings_say_so() {
+        let dir = TempDir::new();
+        dir.write(".yaca/settings.json", r#"{ "shadow": { "exclude": ["fixtures"] } }"#);
+        dir.write("suite/fixtures/a.json", "{}\n");
+        let settings = crate::settings::Settings::load(dir.path()).unwrap();
+        let ws = Workspace::open(dir.path())
+            .unwrap()
+            .with_shadow_exclude(&settings.shadow.exclude);
+
+        let need = DeleteDir
+            .permission(&ws, &json!({ "path": "suite" }))
+            .unwrap();
+        let unsaved = need.unsaved.expect("fixtures/ is not in any snapshot");
+        assert_eq!(unsaved.dirs, vec!["suite/fixtures".to_string()]);
+    }
+
+    #[test]
+    fn a_directory_inside_git_is_git_configuration_and_asks_in_every_mode() {
+        let dir = TempDir::new();
+        dir.write(".git/hooks/pre-commit", "#!/bin/sh\n");
+        let ws = Workspace::open(dir.path()).unwrap();
+
+        // The repository itself is refused outright; its hooks are a question.
+        assert!(DeleteDir.permission(&ws, &json!({ "path": ".git" })).is_none());
+        let need = DeleteDir
+            .permission(&ws, &json!({ "path": ".git/hooks" }))
+            .unwrap();
+        assert_eq!(need.invariant, Some(Invariant::GitConfig));
+    }
+
+    #[test]
+    fn an_ordinary_directory_carries_no_invariant() {
+        let dir = TempDir::new();
+        dir.write("docs/a.md", "text\n");
+        let ws = Workspace::open(dir.path()).unwrap();
+        let need = DeleteDir.permission(&ws, &json!({ "path": "docs" })).unwrap();
+        assert_eq!(need.invariant, None);
+        assert_eq!(need.unsaved, None);
     }
 }

@@ -14,10 +14,10 @@ use std::time::Duration;
 
 use serde_json::json;
 use yaca_core::event::AgentEvent;
+use yaca_core::id::RequestId;
 use yaca_core::message::ContentBlock;
 use yaca_core::provider::mock::{script_text, script_tool_call, MockProvider, Turn};
 use yaca_core::provider::ProviderRequest;
-use yaca_core::id::RequestId;
 use yaca_core::{Command, Mode, PermissionAnswer, SessionConfig, SessionHandle, SessionStore};
 
 use common::{ask, calls, is_turn_over, session, until, TempProject};
@@ -312,11 +312,13 @@ async fn esc_stops_the_subagent_with_the_turn() {
     handle.send(Command::Cancel).await.unwrap();
     let seen = until(&mut rx, is_turn_over).await;
 
-    assert!(matches!(seen.last(), Some(AgentEvent::TurnCancelled { .. })));
-    assert!(seen.iter().any(|event| matches!(
-        event,
-        AgentEvent::ToolCallDenied { stopped: true, .. }
-    )));
+    assert!(matches!(
+        seen.last(),
+        Some(AgentEvent::TurnCancelled { .. })
+    ));
+    assert!(seen
+        .iter()
+        .any(|event| matches!(event, AgentEvent::ToolCallDenied { stopped: true, .. })));
     // Nothing was asked of the model after the stop: the agent's request and
     // at most the one the subagent had already opened.
     assert!(requests(&provider).len() <= 2);
@@ -351,9 +353,9 @@ async fn a_subagent_that_never_reports_runs_out_of_steps() {
     // Before giving up it was told, once, that the steps were spent.
     let told = |request: &ProviderRequest| {
         request.messages.last().is_some_and(|m| {
-            m.content.iter().any(
-                |b| matches!(b, ContentBlock::Text { text } if text.contains("final report")),
-            )
+            m.content
+                .iter()
+                .any(|b| matches!(b, ContentBlock::Text { text } if text.contains("final report")))
         })
     };
     assert!(told(&sent[steps]));
@@ -389,7 +391,10 @@ async fn a_reopened_session_shows_what_the_subagent_did() {
             ("r1".to_string(), Some("t1".to_string())),
         ]
     );
-    assert_eq!(shown_under(&replayed, "t1"), "Dates are parsed in dates.rs:1.");
+    assert_eq!(
+        shown_under(&replayed, "t1"),
+        "Dates are parsed in dates.rs:1."
+    );
 }
 
 #[tokio::test]
@@ -550,10 +555,46 @@ async fn plan_mode_binds_the_subagent_too() {
     let tools: Vec<_> = sent[1].tools.iter().map(|t| t.name.as_str()).collect();
     assert_eq!(
         tools,
-        vec!["Glob", "Grep", "Read", "ReadImage", "WebFetch", "WebSearch"]
+        vec![
+            "Bash",
+            "Glob",
+            "Grep",
+            "Read",
+            "ReadImage",
+            "Skill",
+            "WebFetch",
+            "WebSearch"
+        ]
     );
     assert!(sent[1].system.contains("Mode: plan"));
     assert!(!seen.iter().any(is_asking));
     assert!(result_of(&sent[2], "w1").1);
     assert!(!dir.path().join("notes.txt").exists());
+}
+
+#[tokio::test]
+async fn a_subagent_is_given_the_memory_index_the_agent_has() {
+    let dir = TempProject::new();
+    dir.write(
+        ".yaca/memory/MEMORY.md",
+        "- [release](release.md) — how the release is cut\n",
+    );
+
+    let provider = Arc::new(MockProvider::new(vec![
+        task("t1", "Look around."),
+        text("report"),
+        text("готово"),
+    ]));
+    let handle = session(&dir, provider.clone(), Mode::Manual);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "посмотри").await;
+    until(&mut rx, is_turn_over).await;
+
+    // The subagent has the Memory tool, so it must also have the index that
+    // says what there is to read; the prompt is the same shape as the agent's.
+    let sent = requests(&provider);
+    assert!(sent[0].system.contains("<project_memory>"));
+    assert!(sent[1].system.contains("how the release is cut"));
+    assert!(sent[1].system.contains("<project_memory>"));
 }

@@ -75,8 +75,16 @@ fn images(messages: &[Message]) -> usize {
         .count()
 }
 
+/// The history of a request, without the environment note on the first
+/// message: what these tests look at is the human's message and its images.
 fn sent(provider: &MockProvider, request: usize) -> Vec<Message> {
-    provider.seen.lock().unwrap()[request].messages.clone()
+    let mut messages = provider.seen.lock().unwrap()[request].messages.clone();
+    if let Some(first) = messages.first_mut() {
+        first.content.retain(|block| {
+            !matches!(block, ContentBlock::Text { text } if text.starts_with("<environment_context>"))
+        });
+    }
+    messages
 }
 
 /// A session on a model the provider described itself.

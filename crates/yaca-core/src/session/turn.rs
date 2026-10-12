@@ -26,8 +26,10 @@ use crate::checkpoint::CheckpointReason;
 use super::accumulator::Accumulator;
 use super::calls::Caller;
 use super::binding::{self, Fingerprint};
+use super::guard::{self, Flow, RepeatGuard};
 use super::inbox::Inbox;
-use super::{checkpoints, compact, prompt, Job, Shared, ToolRegistry};
+use super::questions::Questions;
+use super::{checkpoints, compact, environment, prompt, Job, Shared, ToolRegistry};
 
 /// Потолок на один ответ. Стриминг снимает вопрос таймаутов, но окно
 /// контекста конечно, и давать модели все 128k на реплику незачем.
@@ -36,11 +38,26 @@ const MAX_OUTPUT_TOKENS: u32 = 64_000;
 pub(super) struct Worker {
     pub(super) ws: Arc<Workspace>,
     pub(super) provider: Arc<dyn Provider>,
+    /// The core's tools and those of the MCP servers, as of the start of the
+    /// turn ([`Worker::take_mcp`]).
     pub(super) registry: Arc<ToolRegistry>,
+    /// The state of the MCP servers `registry` was built from. `None` until
+    /// the first turn.
+    pub(super) mcp_seen: Option<u64>,
+    /// What the system prompt says about the MCP servers, taken together with
+    /// their tools.
+    pub(super) mcp_notes: Option<Arc<str>>,
     /// The project's `AGENTS.md`, read once when the session starts. The
     /// system prompt is the cached prefix of every request, and a file read per
     /// message would move that prefix on every edit.
     pub(super) instructions: Option<Arc<Instructions>>,
+    /// The project's memory index, read once when the session starts: the
+    /// system prompt is the cached prefix, and a note written mid-session
+    /// must not move it.
+    pub(super) memory: Option<Arc<crate::tool::memory::store::MemoryIndex>>,
+    /// The project's skills list, read once when the session starts, for the
+    /// same reason as the memory index: it is part of the cached prefix.
+    pub(super) skills: Option<Arc<crate::tool::skill::Listing>>,
     pub(super) history: Vec<Message>,
     /// What the reasoning in `history` was produced under (`binding`).
     /// `None` until the first request, or for a session recorded before
@@ -62,21 +79,63 @@ impl Worker {
         let mut inbox = Inbox::new(rx);
         while let Some(job) = inbox.next().await {
             let token = CancellationToken::new();
-            *self.shared.cancel.lock().unwrap() = token.clone();
-
-            self.set_busy(true);
             match job {
-                Job::Message { text, attachments } => {
-                    self.run_turn(text, attachments, token, &mut inbox).await;
+                // Taken off the queue here, not when it was sent. A message
+                // cancelled while it waited is gone from the queue, and then
+                // the worker is not busy for it at all.
+                Job::Message { id } => {
+                    let Some(message) = self.shared.queue.take(&id) else {
+                        continue;
+                    };
+                    self.start(token.clone());
+                    let subject = message.text.clone();
+                    self.run_turn(message.text, message.attachments, token, &mut inbox)
+                        .await;
+                    self.save_isolated_work(subject).await;
                 }
                 Job::Compact => {
+                    self.start(token.clone());
                     self.compact(&token, None).await;
                 }
-                Job::EditSummary { text } => self.edit_summary(text),
+                Job::EditSummary { text } => {
+                    self.start(token);
+                    self.edit_summary(text);
+                }
             }
 
             self.set_busy(false);
         }
+    }
+
+    /// The cancel token of the job now running, and the busy window it opens.
+    fn start(&self, token: CancellationToken) {
+        *self.shared.cancel.lock().unwrap() = token;
+        self.set_busy(true);
+    }
+
+    /// Commits what the turn changed to the chat's branch (`isolation`). A
+    /// no-op in the project's own tree.
+    ///
+    /// Inside the busy window: a chat that reads "done" while its work is not
+    /// yet on the branch hands the human a merge of nothing.
+    async fn save_isolated_work(&self, subject: String) {
+        if self.shared.isolation.is_none() {
+            return;
+        }
+        let tree = self.ws.root().to_path_buf();
+        let outcome =
+            tokio::task::spawn_blocking(move || crate::isolation::commit_all(&tree, &subject))
+                .await;
+        let failure = match outcome {
+            Ok(Ok(_)) => return,
+            Ok(Err(err)) => err,
+            Err(_) => "the commit task did not finish".to_string(),
+        };
+        self.emit(AgentEvent::Error {
+            code: "isolation_commit_failed".into(),
+            message: format!("Правки чата не сохранены в его ветке: {failure}"),
+            retryable: false,
+        });
     }
 
     fn set_busy(&self, busy: bool) {
@@ -96,20 +155,50 @@ impl Worker {
         inbox: &mut Inbox,
     ) {
         let turn_id = TurnId::new();
-        let opening = self.hear(&turn_id, text, attachments).await;
+        let mut opening = self.hear(&turn_id, text, attachments).await;
+        // Ahead of what the human said: it is what happened before they spoke.
+        if let Some(note) = self.process_note() {
+            opening.content.insert(0, note);
+        }
+        // Only the first message of a session, and only when there is no
+        // history at all: it is the one message whose text stays put for the
+        // whole conversation, so the note costs nothing in cache. A resumed
+        // session already has it in the journal (`environment`).
+        if self.history.is_empty() {
+            let text = environment::note(
+                self.ws.root(),
+                self.shared.isolation.as_ref(),
+                &self.ws.additional_text(),
+            )
+            .await;
+            opening.content.insert(0, ContentBlock::Text { text });
+        }
         self.emit(AgentEvent::TurnStarted {
             turn_id: turn_id.clone(),
             at: TsMillis::now(),
         });
         self.remember(&turn_id, opening);
 
+        // Servers still starting are waited for here, each for no longer than
+        // its own startup deadline: their tools go in the head of the request.
+        self.shared.mcp.settled(&cancel).await;
+        self.take_mcp();
+
         // Set once a request refused as too long has been compacted and sent
         // again, until one gets through.
         let mut rescued = false;
+        // Answers received in this turn, against the ceiling in the settings.
+        // A request that was refused and sent again is one answer, not two.
+        let max_steps = self.shared.settings.max_steps();
+        let mut steps = 0u32;
+        let mut repeats = RepeatGuard::default();
         loop {
             if cancel.is_cancelled() {
                 self.emit(AgentEvent::TurnCancelled { turn_id });
                 return;
+            }
+            if steps >= max_steps {
+                return self.stop_at_ceiling(turn_id, max_steps);
             }
 
             // Before every request, not only before the human's message: a
@@ -156,6 +245,7 @@ impl Worker {
             }
 
             let done = acc.finish();
+            steps += 1;
 
             let info = self
                 .shared
@@ -195,6 +285,21 @@ impl Worker {
             // тихо отучить модель звать тулы параллельно.
             let mut message = Message::tool_results(results);
 
+            // The same call with the same answer, again and again: put to the
+            // human before the model is asked anything else. Not after a
+            // stop — nothing is asked of the model any more in this turn.
+            if let Some(repeat) = repeats.observe(&done.calls, &message.content) {
+                if !cancel.is_cancelled() {
+                    let questions = Questions::new(self.shared.clone(), repeat.call_id.clone());
+                    let (flow, note) = guard::put_to_human(questions, &repeat, &cancel).await;
+                    // After the results, never before (see below).
+                    message.content.push(note);
+                    if matches!(flow, Flow::Stop) {
+                        cancel.cancel();
+                    }
+                }
+            }
+
             // §7.4: what the human sent meanwhile joins here, after the batch
             // and before the model's next step, in the same message — a
             // second user message in a row is one the provider may refuse.
@@ -202,13 +307,56 @@ impl Worker {
             // turn, so the message would sit in the history unanswered; it
             // stays queued and gets a turn of its own.
             if !cancel.is_cancelled() {
-                for queued in inbox.messages() {
+                // After the results, never before: a provider wants every
+                // `tool_result` first in the message that answers the calls.
+                if let Some(note) = self.process_note() {
+                    message.content.push(note);
+                }
+                for queued in inbox.messages(&self.shared.queue) {
                     let said = self.hear(&turn_id, queued.text, queued.attachments).await;
                     message.content.extend(said.content);
                 }
             }
             self.remember(&turn_id, message);
         }
+    }
+
+    /// Background commands that ended on their own since the model last heard
+    /// anything, as a note it reads with its next input.
+    ///
+    /// Delivered at the next point the model is being spoken to anyway — after
+    /// a batch of calls, or with the human's next message — and not by waking
+    /// it: an idle agent starting a turn nobody asked for spends the human's
+    /// money on a guess about what they want done with a crashed server.
+    fn process_note(&self) -> Option<ContentBlock> {
+        let notices = self.shared.processes.take_notices();
+        if notices.is_empty() {
+            return None;
+        }
+        let mut text = String::from("[background commands ended]
+");
+        for n in notices {
+            let how = match n.code {
+                Some(0) => "exited successfully".to_string(),
+                Some(code) => format!("failed with exit code {code}"),
+                None => "was killed by a signal".to_string(),
+            };
+            text.push_str(&format!(
+                "- command {} (`{}`) {how} on its own.
+",
+                n.id, n.command
+            ));
+            // A command that outgrew the foreground has its whole output on
+            // disk; the buffer behind BashOutput keeps only the tail.
+            if let Some(file) = &n.file {
+                text.push_str(&format!(
+                    "  Its whole output is in the file {} — read it with Read.\n",
+                    self.ws.display(file)
+                ));
+            }
+        }
+        text.push_str("Read what it printed with BashOutput, or start it again with BashRestart.");
+        Some(ContentBlock::Text { text })
     }
 
     /// Something the human said: the point to come back to, the card in the
@@ -258,7 +406,7 @@ impl Worker {
         // prompt the project keeps under it — the same split the attachments
         // below make. The feed and the journal keep the typed line, so a
         // reopened session shows `/review` and not what it stood for.
-        let text = slash::expand(self.ws.root(), &text).unwrap_or(text);
+        let text = slash::expand(self.ws.home(), &text).unwrap_or(text);
 
         if attachments.is_empty() {
             return Message::user_text(text);
@@ -316,16 +464,43 @@ impl Worker {
         (path.is_absolute() && picture::is_picture(path)).then(|| path.to_path_buf())
     }
 
+    /// Takes the MCP servers' tools as they are now, if anything about the
+    /// servers changed since they were last taken.
+    ///
+    /// Once per turn and not per request: the tools and the system prompt are
+    /// the cached head of every request, and a server that reports a changed
+    /// list mid-turn would move it between two steps of one piece of work. A
+    /// server that dies mid-turn keeps its tools until the next one, and a call
+    /// to it fails with the reason.
+    fn take_mcp(&mut self) {
+        let now = self.shared.mcp.generation();
+        if self.mcp_seen == Some(now) {
+            return;
+        }
+        self.mcp_seen = Some(now);
+        let mut more = self.shared.mcp.tools();
+        // Offered only where there is a server to ask: a tool that can only
+        // answer "no servers" is a line in every request for nothing.
+        if !self.shared.lsp.names().is_empty() {
+            more.push(Arc::new(crate::tool::lsp::LspQuery));
+        }
+        self.registry = Arc::new(ToolRegistry::standard().with(more));
+        self.mcp_notes = self.shared.mcp.prompt_section().map(Arc::from);
+    }
+
     fn build_request(&mut self, turn_id: &TurnId) -> ProviderRequest {
         let state = self.shared.state.lock().unwrap().clone();
         let info = self.shared.model_info(&state.model);
         let intent = state.mode.intent();
-        let system = prompt::build(
+        let system = prompt::build_with_memory(
             self.ws.root(),
             intent,
             self.instructions.as_deref(),
             self.shared.shell,
+            self.memory.as_deref(),
+            self.skills.as_deref(),
         );
+        let system = prompt::with_mcp(system, self.mcp_notes.as_deref());
         let tools = self.registry.schemas(intent);
         // Before the history is copied: a prefix that moved takes the
         // reasoning bound to the old one with it.
@@ -368,6 +543,9 @@ impl Worker {
             ws: self.ws.clone(),
             provider: self.provider.clone(),
             instructions: self.instructions.clone(),
+            memory: self.memory.clone(),
+            skills: self.skills.clone(),
+            mcp_notes: self.mcp_notes.clone(),
             under: None,
         }
     }
@@ -388,6 +566,26 @@ impl Worker {
         }
         self.emit(AgentEvent::UsageUpdated {
             usage: self.usage.snapshot(self.context_max()),
+        });
+    }
+
+    /// The turn used all its steps. Ended with the error block rather than
+    /// quietly: a feed that just stops looks like the model finished.
+    ///
+    /// The history ends with the last batch's results, which is a state the
+    /// next message handles like it does after a stop.
+    fn stop_at_ceiling(&self, turn_id: TurnId, max_steps: u32) {
+        self.emit(AgentEvent::Error {
+            code: "step_limit".to_string(),
+            message: format!(
+                "Ход остановлен: исчерпан лимит в {max_steps} шагов. Напишите «продолжай», \
+                 чтобы дать модели новый ход, или поменяйте `maxSteps` в .yaca/settings.json."
+            ),
+            retryable: false,
+        });
+        self.emit(AgentEvent::TurnFinished {
+            turn_id,
+            stop_reason: StopReason::Failed,
         });
     }
 

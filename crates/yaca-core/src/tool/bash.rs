@@ -16,23 +16,24 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use tokio::process::Child;
-use tokio::sync::mpsc;
 
+use super::bash_background::{background, to_background, Waited};
 use super::{Narration, Tool, ToolCtx, ToolOutput};
 use crate::checkpoint::CheckpointReason;
 use crate::error::ToolError;
 use crate::intent::Intent;
-use crate::permission::{PermissionKind, PermissionNeed};
+use crate::permission::{invariant, readonly, unsaved, PermissionKind, PermissionNeed};
 use crate::process::output::{clamp, Lines, Ring, Utf8Stream, RING_LINES};
-use crate::process::{display_cwd, kill, shell, ProcessId, WeakProcesses};
+use crate::process::{kill, shell};
 use crate::workspace::Workspace;
 
 /// A foreground command that has not finished in two minutes is usually not a
-/// command but a server. The message that ends it says so, which is how the
-/// model learns `background` exists without being told twice.
+/// command but a server, or a build the model should not sit and wait on. It
+/// is not killed: it moves to the background and the result says so, which is
+/// how the model learns `background` exists without being told twice.
 const DEFAULT_TIMEOUT_MS: u64 = 120_000;
 const MAX_TIMEOUT_MS: u64 = 600_000;
+
 
 /// How much of the output the model sees. Shared with `bash_output`:
 /// the budget belongs to the model, not to one way of reaching it.
@@ -50,7 +51,10 @@ impl Tool for Bash {
         "Run a command in the project. Its output reaches the human as it appears. \
          Anything that does not end by itself — a dev server, a watcher, a long \
          build you want to keep an eye on — belongs in the background rather than \
-         behind a longer timeout."
+         behind a longer timeout. A command still running after the timeout is not \
+         stopped: it moves to the background by itself, and when it ends you are \
+         given a file with its whole output. In plan mode only commands that change \
+         nothing run (listing, reading, searching, read-only git)."
     }
 
     fn properties(&self) -> Value {
@@ -66,13 +70,17 @@ impl Tool for Bash {
             },
             "timeout_ms": {
                 "type": "integer",
-                "description": "Stop the command after this long. Default 120000, \
-                                ceiling 600000. Ignored for background commands.",
+                "description": "How long to wait for the command, in milliseconds. \
+                                Default 120000, ceiling 600000. A command still \
+                                running after this is not stopped: it moves to the \
+                                background and you are told so. Ignored for \
+                                commands started with background.",
             },
             "background": {
                 "type": "boolean",
                 "description": "Start the command and return at once. Read what it \
-                                has printed since with BashOutput.",
+                                has printed since with BashOutput. Stop it with \
+                                BashKill, restart it with BashRestart.",
             },
         })
     }
@@ -85,12 +93,31 @@ impl Tool for Bash {
         Narration::Model
     }
 
-    /// Agent only. Ask and plan promise to change nothing, and a command can
-    /// change anything — the core cannot tell `cargo tree` from `rm -rf`. The
-    /// tool is therefore absent from those modes rather than forbidden by a
-    /// sentence in the prompt, which a weak model would step over (§7.1).
+    /// Offered in Plan too, because reading the project is most of what a plan
+    /// needs from a shell (`git status`, `rg`). The core cannot tell `cargo
+    /// tree` from `rm -rf` by name, so each call is judged in
+    /// [`Tool::plan_check`] and refused there when it may write (§7.1).
     fn intents(&self) -> &'static [Intent] {
-        &[Intent::Agent]
+        &[Intent::Plan, Intent::Agent]
+    }
+
+    /// Plan lets through the commands the classifier can vouch for, and only
+    /// those (§7.1). The refusal names the way out, because the model will read
+    /// it and try again.
+    fn plan_check(&self, ws: &Workspace, input: &Value) -> Result<(), String> {
+        let Some(command) = command_of(input) else {
+            return Ok(());
+        };
+        let cwd = working_dir(ws, input).unwrap_or_else(|_| ws.root().to_path_buf());
+        if readonly::is_read_only_in(command, &search_dirs(ws, &cwd)) {
+            return Ok(());
+        }
+        Err(format!(
+            "В плане можно только читать: «{}» может что-то изменить. Чтение, \
+             поиск и листинг выполняются и здесь; запуск команды — в режиме «Ручной» \
+             или «Авто».",
+            head(command)
+        ))
     }
 
     /// §5.5.1: the first line of the expanded row is the full command.
@@ -109,12 +136,35 @@ impl Tool for Bash {
         // question is about to let a command loose somewhere, and `.` does not
         // say where.
         let cwd = working_dir(ws, input).unwrap_or_else(|_| ws.root().to_path_buf());
-        Some(
-            PermissionNeed::new(PermissionKind::RunCommand, self.name(), head(command))
-                .detail(command)
-                .note(cwd.to_string_lossy())
-                .command(command),
-        )
+
+        // §8: a commit or push is put to the human in every mode, whatever the
+        // command is wrapped in. Checked first, so a read-only shortcut can
+        // never skip it.
+        if let Some(invariant) = invariant::of_command(command) {
+            return Some(
+                PermissionNeed::new(PermissionKind::RunCommand, self.name(), head(command))
+                    .detail(command)
+                    .note(cwd.to_string_lossy())
+                    .command(command)
+                    .invariant(invariant),
+            );
+        }
+
+        // A command that changes nothing runs without a question (§7.1, §8).
+        if readonly::is_read_only_in(command, &search_dirs(ws, &cwd)) {
+            return None;
+        }
+
+        let mut need = PermissionNeed::new(PermissionKind::RunCommand, self.name(), head(command))
+            .detail(command)
+            .note(cwd.to_string_lossy())
+            .command(command);
+        // What a rollback would not bring back: the command may write into any
+        // additional root, and no line of it says which (`unsaved::command_reach`).
+        if let Some(reach) = unsaved::command_reach(ws) {
+            need = need.unsaved(reach);
+        }
+        Some(need)
     }
 
     /// §5.8: a snapshot before every permitted command. This is the one tool
@@ -151,7 +201,7 @@ fn command_of(input: &Value) -> Option<&str> {
 
 /// The first word — what §5.7 shows as the target and what an "always allow"
 /// rule keys on.
-fn head(command: &str) -> &str {
+pub(super) fn head(command: &str) -> &str {
     command.split_whitespace().next().unwrap_or(command)
 }
 
@@ -163,8 +213,18 @@ fn timeout_of(input: &Value) -> Duration {
     Duration::from_millis(ms)
 }
 
-/// Resolves `cwd` and keeps it inside the project. The command itself can walk
-/// out with `cd ..`; what the tool can enforce, it enforces (§8).
+/// The directories a program name may be resolved in before `PATH` (§8): the
+/// working directory and every root. A program that sits in one of them shadows
+/// the one `PATH` would have run.
+fn search_dirs<'a>(ws: &'a Workspace, cwd: &'a Path) -> Vec<&'a Path> {
+    let mut dirs = vec![cwd];
+    dirs.extend(ws.roots());
+    dirs
+}
+
+/// Resolves `cwd` and keeps it inside a root: the primary one, or any additional
+/// one. A relative `cwd` is taken from the primary root. The command itself can
+/// walk out with `cd ..`; what the tool can enforce, it enforces (§8).
 fn working_dir(ws: &Workspace, input: &Value) -> Result<PathBuf, ToolError> {
     let Some(raw) = input["cwd"].as_str().filter(|s| !s.trim().is_empty()) else {
         return Ok(ws.root().to_path_buf());
@@ -179,7 +239,9 @@ fn working_dir(ws: &Workspace, input: &Value) -> Result<PathBuf, ToolError> {
 enum Ending {
     /// Both pipes reached EOF: the command has said everything it will say.
     Done,
-    TimedOut,
+    /// Still running when the wait ran out. That ends the wait, not the
+    /// command: it is handed to the background.
+    Overran,
     Cancelled,
 }
 
@@ -208,7 +270,7 @@ async fn foreground(
         tokio::select! {
             biased;
             _ = ctx.cancel.cancelled() => break Ending::Cancelled,
-            _ = &mut deadline => break Ending::TimedOut,
+            _ = &mut deadline => break Ending::Overran,
             chunk = output.recv() => match chunk {
                 Some(raw) => {
                     let text = bytes.push(&raw);
@@ -222,6 +284,18 @@ async fn foreground(
         }
     };
 
+    // Before the tails are flushed: a half-written line belongs to the
+    // collector, which will finish it rather than split it in two.
+    if matches!(ending, Ending::Overran) {
+        let waited = Waited {
+            command,
+            cwd,
+            limit,
+            pid,
+        };
+        return Ok(to_background(ctx, waited, child, output, ring, bytes, lines).await);
+    }
+
     let tail = bytes.flush();
     if !tail.is_empty() {
         for line in lines.push(&tail) {
@@ -233,7 +307,7 @@ async fn foreground(
         ring.push(last);
     }
 
-    if !matches!(ending, Ending::Done) {
+    if matches!(ending, Ending::Cancelled) {
         if let Some(pid) = pid {
             let _ = tokio::task::spawn_blocking(move || kill::tree(pid)).await;
         }
@@ -245,23 +319,8 @@ async fn foreground(
     let produced = ring.next_index();
     let (text, truncated) = clamp(&ring.lines(), MODEL_OUTPUT_MAX_BYTES);
 
-    match ending {
-        Ending::Cancelled => return Err(ToolError::Cancelled),
-        Ending::TimedOut => {
-            return Err(ToolError::failed_with(
-                format!(
-                    "«{}» не уложилась в {} с и остановлена",
-                    head(command),
-                    limit.as_secs()
-                ),
-                format!(
-                    "{text}\n[остановлена по таймауту {} с; если это сервер или \
-                     наблюдатель, запусти её с background: true]",
-                    limit.as_secs()
-                ),
-            ))
-        }
-        Ending::Done => {}
+    if matches!(ending, Ending::Cancelled) {
+        return Err(ToolError::Cancelled);
     }
 
     let status = child
@@ -288,58 +347,6 @@ async fn foreground(
         },
         out.text,
     ))
-}
-
-/// Starts the command and leaves it in the process panel (§6.5).
-fn background(ctx: &ToolCtx, command: &str, cwd: &Path) -> Result<ToolOutput, ToolError> {
-    let spawned = shell::spawn(ctx.shell, command, cwd)
-        .map_err(|e| ToolError::failed(format!("не удалось запустить «{}»: {e}", head(command))))?;
-    let shell::Spawned { child, pid, output } = spawned;
-
-    let id = ctx
-        .processes
-        .register(command.to_string(), display_cwd(ctx.ws.root(), cwd), pid);
-    tokio::spawn(collect(ctx.processes.downgrade(), id, child, output));
-
-    Ok(ToolOutput::new(format!(
-        "Запущена в фоне под номером {id}. Читать её вывод — BashOutput, \
-         остановить — из панели процессов.\n"
-    ))
-    .lines(1))
-}
-
-/// Feeds a background command's output into its ring buffer until it ends.
-///
-/// Holds the registry weakly on purpose. A strong handle would keep the
-/// session's processes alive for as long as `npm run dev` runs — that is,
-/// forever — and the drop that kills them at the end of a session would never
-/// fire. Here the session going away closes the pipes instead, and this task
-/// notices and leaves.
-async fn collect(
-    processes: WeakProcesses,
-    id: ProcessId,
-    mut child: Child,
-    mut output: mpsc::Receiver<Vec<u8>>,
-) {
-    let mut bytes = Utf8Stream::default();
-    let mut lines = Lines::default();
-
-    while let Some(raw) = output.recv().await {
-        let text = bytes.push(&raw);
-        let Some(processes) = processes.upgrade() else {
-            return;
-        };
-        processes.output(id, lines.push(&text));
-    }
-
-    let mut last = lines.push(&bytes.flush());
-    last.extend(lines.flush());
-    let code = child.wait().await.ok().and_then(|s| s.code());
-
-    if let Some(processes) = processes.upgrade() {
-        processes.output(id, last);
-        processes.finished(id, code);
-    }
 }
 
 #[cfg(test)]
@@ -442,20 +449,65 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_command_that_overruns_is_stopped_and_told_about_the_background() {
+    async fn a_command_that_overruns_moves_to_the_background_instead_of_dying() {
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
 
-        let err = Bash
+        let out = Bash
             .run(&ctx, json!({ "command": sleeps(), "timeout_ms": 300 }))
             .await
-            .unwrap_err();
+            .unwrap();
 
-        let ToolError::Failed { message, detail } = err else {
-            panic!("ожидали неудачу, получили {err:?}");
+        assert!(out.text.contains("NOT stopped"), "{}", out.text);
+        assert!(out.text.contains("BashOutput"), "{}", out.text);
+
+        let panel = ctx.processes.summaries();
+        assert_eq!(panel.len(), 1);
+        assert_eq!(panel[0].state, ProcessState::Running);
+
+        ctx.processes.stop(panel[0].id);
+    }
+
+    #[tokio::test]
+    async fn a_command_that_moved_leaves_its_whole_output_in_a_file_when_it_ends() {
+        let dir = TempDir::new();
+        let (ctx, _ws) = ctx_for(&dir);
+
+        // Prints before the wait runs out and after it: both belong in the
+        // file, in order, and BashOutput must not hand `one` over a second
+        // time — the result of the call already did.
+        let command = if cfg!(windows) {
+            "echo one; Start-Sleep -Milliseconds 1500; echo two"
+        } else {
+            "echo one; sleep 1.5; echo two"
         };
-        assert!(message.contains("не уложилась"), "{message}");
-        assert!(detail.unwrap_or_default().contains("background"));
+        let out = Bash
+            .run(&ctx, json!({ "command": command, "timeout_ms": 700 }))
+            .await
+            .unwrap();
+        assert!(out.text.contains("NOT stopped"), "{}", out.text);
+        // Under a loaded machine the shell may start after the wait ran out,
+        // and `one` then arrives through the collector instead.
+        let given = out.text.contains("one");
+
+        let id = ctx.processes.summaries()[0].id;
+        assert!(ctx.processes.wait_ended(id, Duration::from_secs(15)).await);
+
+        let notices = ctx.processes.take_notices();
+        assert_eq!(notices.len(), 1);
+        let file = notices[0].file.clone().expect("no output file");
+        let text = std::fs::read_to_string(&file).unwrap();
+        let one = text.find("one").expect("`one` missing from the file");
+        let two = text.find("two").expect("`two` missing from the file");
+        assert!(one < two, "{text}");
+
+        let read = ctx.processes.read(id, 10_000).unwrap();
+        assert!(
+            !given || !read.text.contains("one"),
+            "read again: {}",
+            read.text
+        );
+        assert!(read.text.contains("two"), "{}", read.text);
     }
 
     #[tokio::test]
@@ -567,5 +619,45 @@ mod tests {
         let dir = TempDir::new();
         let ws = Workspace::open(dir.path()).unwrap();
         assert!(Bash.permission(&ws, &json!({ "command": "   " })).is_none());
+    }
+
+    #[test]
+    fn a_read_only_command_asks_nothing() {
+        let dir = TempDir::new();
+        let ws = Workspace::open(dir.path()).unwrap();
+        for command in ["git status", "ls -la", "rg TODO src"] {
+            let asked = Bash.permission(&ws, &json!({ "command": command }));
+            assert!(asked.is_none(), "{command}");
+        }
+    }
+
+    #[test]
+    fn a_push_is_an_invariant_even_when_it_looks_read_only() {
+        let dir = TempDir::new();
+        let ws = Workspace::open(dir.path()).unwrap();
+        let need = Bash
+            .permission(&ws, &json!({ "command": "echo ok && git push" }))
+            .unwrap();
+        assert_eq!(need.invariant, Some(crate::permission::Invariant::GitPush));
+        assert!(need.scopes(ws.root()).is_empty());
+    }
+
+    #[test]
+    fn plan_lets_read_only_commands_through_and_names_the_way_out_for_the_rest() {
+        let dir = TempDir::new();
+        let ws = Workspace::open(dir.path()).unwrap();
+        let read = json!({ "command": "git log -3" });
+        assert!(Bash.plan_check(&ws, &read).is_ok());
+
+        let refusal = Bash
+            .plan_check(&ws, &json!({ "command": "npm ci" }))
+            .unwrap_err();
+        assert!(refusal.contains("В плане"), "{refusal}");
+        assert!(refusal.contains("Ручной"), "{refusal}");
+    }
+
+    #[test]
+    fn bash_is_offered_in_plan_and_agent() {
+        assert_eq!(Bash.intents(), &[Intent::Plan, Intent::Agent]);
     }
 }

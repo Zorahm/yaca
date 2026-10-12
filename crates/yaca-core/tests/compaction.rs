@@ -51,7 +51,10 @@ fn tiny_session(dir: &TempProject, provider: Arc<MockProvider>) -> SessionHandle
 
 /// One step of a long turn: a read, with the window as full as `used` says.
 fn read_step(id: &str, used: u32) -> Turn {
-    let mut events = calls(&[(id, "Read", json!({ "path": "a.rs" }))]);
+    // The limit differs per step: the same read four times with the same
+    // answer is what the repeat check stops, and these tests are about the
+    // window rather than about that.
+    let mut events = calls(&[(id, "Read", json!({ "path": "a.rs", "limit": 1_000 + id.bytes().last().map_or(0, u32::from) }))]);
     if let Some(ProviderEvent::MessageStart { usage, .. }) = events.first_mut() {
         usage.input = used;
     }

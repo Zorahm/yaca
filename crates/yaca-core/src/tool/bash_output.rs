@@ -90,14 +90,15 @@ impl Tool for BashOutput {
         } else {
             text.push_str(&read.text);
         }
-        text.push_str(state_line(&read.state));
+        text.push_str(state_line(&read.state, read.stopped_by_model));
 
         Ok(ToolOutput::new(text).lines(read.lines))
     }
 }
 
-fn state_line(state: &ProcessState) -> &'static str {
+fn state_line(state: &ProcessState, by_model: bool) -> &'static str {
     match state {
+        ProcessState::Stopped if by_model => "[команда остановлена через BashKill]\n",
         ProcessState::Running => "[команда работает]\n",
         ProcessState::Exited { code: Some(0) } => "[команда завершилась успешно]\n",
         ProcessState::Exited { code: Some(_) } => "[команда завершилась с ошибкой]\n",

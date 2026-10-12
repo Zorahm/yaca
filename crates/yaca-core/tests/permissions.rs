@@ -8,10 +8,10 @@ mod common;
 
 use std::sync::Arc;
 
-
 use yaca_core::event::AgentEvent;
 use yaca_core::id::RequestId;
 use yaca_core::message::ContentBlock;
+use yaca_core::permission::Invariant;
 use yaca_core::provider::mock::{script_text, MockProvider, Turn};
 use yaca_core::provider::ProviderEvent;
 use yaca_core::{Command, Mode, PermissionAnswer, PermissionKind, ScopeKey};
@@ -496,7 +496,10 @@ async fn a_standing_refusal_from_the_project_file_needs_no_question() {
         "the refusal keeps its reason: {:?}",
         events.iter().map(AgentEvent::kind).collect::<Vec<_>>()
     );
-    assert!(victim.exists(), "the file the refusal protects is still there");
+    assert!(
+        victim.exists(),
+        "the file the refusal protects is still there"
+    );
 }
 
 /// A refusal outranks a grant covering the same call, and it is consulted
@@ -533,4 +536,403 @@ async fn a_refusal_outranks_a_grant_of_the_same_scope() {
         "the grant must not undo the refusal"
     );
     assert!(victim.exists());
+}
+
+// --- invariants, read-only commands, and what a deletion loses (§8) ----------
+
+fn bash(id: &str, command: &str) -> Vec<ProviderEvent> {
+    calls(&[(id, "Bash", serde_json::json!({ "command": command }))])
+}
+
+fn delete_dir(id: &str, path: &str) -> Vec<ProviderEvent> {
+    calls(&[(id, "DeleteDir", serde_json::json!({ "path": path }))])
+}
+
+fn first_request(events: &[AgentEvent]) -> Option<yaca_core::PermissionRequest> {
+    events.iter().find_map(|e| match e {
+        AgentEvent::PermissionRequested { request } => Some(request.clone()),
+        _ => None,
+    })
+}
+
+fn saw(events: &[AgentEvent], kind: &str) -> bool {
+    events.iter().any(|e| e.kind() == kind)
+}
+
+/// A git push is put to the human under bypass: the flag turns permissions
+/// off, and a push is an invariant, not a permission (§8).
+#[tokio::test]
+async fn a_push_is_asked_under_bypass() {
+    let dir = TempProject::new();
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(bash("t1", "git push origin main")),
+        Turn::Events(script_text("Stopped.")),
+    ]));
+    let handle = session(&dir, provider, Mode::Auto);
+    let mut rx = handle.subscribe();
+    handle.send(Command::SetBypass { on: true }).await.unwrap();
+
+    ask(&handle, "publish").await;
+    let asking = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
+    let request = first_request(&asking).unwrap();
+    assert_eq!(request.invariant, Some(Invariant::GitPush));
+    assert!(
+        request.scopes.is_empty(),
+        "no rule may be offered for a push"
+    );
+
+    handle
+        .send(Command::AnswerPermission {
+            request_id: request.id,
+            answer: PermissionAnswer::Deny { reason: None },
+        })
+        .await
+        .unwrap();
+    let rest = until(&mut rx, is_turn_over).await;
+    assert!(
+        saw(&rest, "toolCallDenied"),
+        "the refused push must not run"
+    );
+}
+
+/// "Always allow git" covers `git` as a command. It must not pass a commit,
+/// even under bypass: the question is put again.
+#[tokio::test]
+async fn an_always_allow_for_git_does_not_pass_a_commit() {
+    let dir = TempProject::new();
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(bash("t1", "mkdir made")),
+        Turn::Events(bash("t2", "git commit -m wip")),
+        Turn::Events(script_text("Done.")),
+    ]));
+    let handle = session(&dir, provider, Mode::Auto);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "work").await;
+    let first = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
+    // A "git" grant is stored, then bypass is switched on: the commit is still asked.
+    let mkdir = first_request(&first).unwrap();
+    handle
+        .send(Command::AnswerPermission {
+            request_id: mkdir.id,
+            answer: PermissionAnswer::AllowAlways {
+                scope: ScopeKey::CommandPrefix {
+                    prefix: "git".into(),
+                },
+            },
+        })
+        .await
+        .unwrap();
+
+    handle.send(Command::SetBypass { on: true }).await.unwrap();
+    let second = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
+    let commit = first_request(&second).unwrap();
+    assert_eq!(commit.invariant, Some(Invariant::GitCommit));
+    handle
+        .send(Command::AnswerPermission {
+            request_id: commit.id,
+            answer: PermissionAnswer::Deny { reason: None },
+        })
+        .await
+        .unwrap();
+    until(&mut rx, is_turn_over).await;
+}
+
+/// Plan refuses a write before any question is put: a question about an action
+/// Plan does not allow would ask for something that cannot happen.
+#[tokio::test]
+async fn plan_refuses_a_write_command_without_asking() {
+    let dir = TempProject::new();
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(bash("t1", "echo hi > made.txt")),
+        Turn::Events(script_text("Noted.")),
+    ]));
+    let handle = session(&dir, provider, Mode::Plan);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "plan it").await;
+    let rest = until(&mut rx, is_turn_over).await;
+
+    assert!(!saw(&rest, "permissionRequested"), "no question in Plan");
+    assert!(saw(&rest, "toolCallRejected"), "the write must be refused");
+    assert!(!dir.path().join("made.txt").exists());
+}
+
+#[tokio::test]
+async fn plan_runs_a_read_only_command_without_asking() {
+    let dir = TempProject::new();
+    dir.write("notes.txt", "remember\n");
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(bash("t1", "cat notes.txt")),
+        Turn::Events(script_text("Read it.")),
+    ]));
+    let handle = session(&dir, provider, Mode::Plan);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "read the notes").await;
+    let rest = until(&mut rx, is_turn_over).await;
+
+    assert!(!saw(&rest, "permissionRequested"));
+    assert!(saw(&rest, "toolCallFinished"), "{rest:?}");
+}
+
+#[tokio::test]
+async fn auto_runs_a_read_only_command_without_asking() {
+    let dir = TempProject::new();
+    dir.write("notes.txt", "remember\n");
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(bash("t1", "cat notes.txt")),
+        Turn::Events(script_text("Read it.")),
+    ]));
+    let handle = session(&dir, provider, Mode::Auto);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "read the notes").await;
+    let rest = until(&mut rx, is_turn_over).await;
+
+    assert!(!saw(&rest, "permissionRequested"));
+    assert!(saw(&rest, "toolCallFinished"));
+}
+
+/// The directory holds `target`, which no snapshot keeps: Auto must ask, and the
+/// question must say what will not come back.
+#[tokio::test]
+async fn auto_asks_before_deleting_a_directory_a_rollback_cannot_restore() {
+    let dir = TempProject::new();
+    let victim = dir.write("pkg/target/debug/app.rlib", "built\n");
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(delete_dir("t1", "pkg")),
+        Turn::Events(script_text("Kept it.")),
+    ]));
+    let handle = session(&dir, provider, Mode::Auto);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "clean up").await;
+    let asking = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
+    let request = first_request(&asking).unwrap();
+    let unsaved = request.unsaved.clone().expect("the loss must be named");
+    assert_eq!(unsaved.dirs, vec!["pkg/target".to_string()]);
+    assert_eq!(unsaved.dir_count, 1);
+
+    handle
+        .send(Command::AnswerPermission {
+            request_id: request.id,
+            answer: PermissionAnswer::Deny { reason: None },
+        })
+        .await
+        .unwrap();
+    until(&mut rx, is_turn_over).await;
+    assert!(victim.exists(), "a refused deletion removes nothing");
+}
+
+/// Under bypass the same deletion goes through unasked: bypass switches the
+/// permission off (§8), and the question about the loss is one of those.
+#[tokio::test]
+async fn bypass_deletes_what_a_rollback_cannot_restore_without_asking() {
+    let dir = TempProject::new();
+    let victim = dir.write("pkg/target/debug/app.rlib", "built\n");
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(delete_dir("t1", "pkg")),
+        Turn::Events(script_text("Gone.")),
+    ]));
+    let handle = session(&dir, provider, Mode::Auto);
+    let mut rx = handle.subscribe();
+    handle.send(Command::SetBypass { on: true }).await.unwrap();
+
+    ask(&handle, "clean up").await;
+    let rest = until(&mut rx, is_turn_over).await;
+
+    assert!(!saw(&rest, "permissionRequested"));
+    assert!(!victim.exists());
+}
+
+/// A directory the snapshot keeps in full is deleted in Auto as before.
+#[tokio::test]
+async fn auto_deletes_a_fully_saved_directory_without_asking() {
+    let dir = TempProject::new();
+    let victim = dir.write("docs/a.md", "text\n");
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(delete_dir("t1", "docs")),
+        Turn::Events(script_text("Removed.")),
+    ]));
+    let handle = session(&dir, provider, Mode::Auto);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "tidy").await;
+    let rest = until(&mut rx, is_turn_over).await;
+
+    assert!(!saw(&rest, "permissionRequested"));
+    assert!(!victim.exists());
+}
+
+// --- what a deletion loses, and git's own configuration (§8) ---------------
+
+fn asked_about(events: &[AgentEvent]) -> yaca_core::permission::PermissionRequest {
+    events
+        .iter()
+        .find_map(|e| match e {
+            AgentEvent::PermissionRequested { request } => Some(request.clone()),
+            _ => None,
+        })
+        .expect("no permission was requested")
+}
+
+#[tokio::test]
+async fn a_deletion_that_loses_what_no_snapshot_keeps_is_asked_in_auto() {
+    let dir = TempProject::new();
+    let victim = dir.write("data/dump.bin", &"x".repeat(8 * 1024 * 1024 + 1));
+
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(delete("t1", "data/dump.bin")),
+        Turn::Events(script_text("Removed.")),
+    ]));
+    let handle = session(&dir, provider, Mode::Auto);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "drop the dump").await;
+    let asking = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
+
+    // Auto deletes a small file unasked; this one is over the snapshot's limit.
+    let request = asked_about(&asking);
+    assert_eq!(request.unsaved.map(|u| u.files), Some(1));
+    assert!(victim.exists());
+
+    handle
+        .send(Command::AnswerPermission {
+            request_id: request.id,
+            answer: PermissionAnswer::Deny { reason: None },
+        })
+        .await
+        .unwrap();
+    until(&mut rx, is_turn_over).await;
+    assert!(victim.exists(), "a refused deletion deletes nothing");
+}
+
+#[tokio::test]
+async fn a_directory_the_project_excludes_in_settings_is_asked_in_auto() {
+    let dir = TempProject::new();
+    dir.write(
+        ".yaca/settings.json",
+        r#"{ "shadow": { "exclude": ["fixtures"] } }"#,
+    );
+    let golden = dir.write("suite/fixtures/golden.json", "{}\n");
+
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(calls(&[(
+            "t1",
+            "DeleteDir",
+            serde_json::json!({ "path": "suite" }),
+        )])),
+        Turn::Events(script_text("Removed.")),
+    ]));
+    let handle = session(&dir, provider, Mode::Auto);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "drop the suite").await;
+    let asking = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
+
+    // Built-in list knows nothing of `fixtures`; the project's own settings
+    // are what make the snapshot skip it, and so what makes it unsaved.
+    let request = asked_about(&asking);
+    let unsaved = request.unsaved.expect("fixtures/ is in no snapshot");
+    assert_eq!(unsaved.dirs, vec!["suite/fixtures".to_string()]);
+    assert!(golden.exists());
+
+    handle
+        .send(Command::AnswerPermission {
+            request_id: request.id,
+            answer: PermissionAnswer::Deny { reason: None },
+        })
+        .await
+        .unwrap();
+    until(&mut rx, is_turn_over).await;
+}
+
+fn write_file(id: &str, path: &str) -> Vec<ProviderEvent> {
+    calls(&[(
+        id,
+        "Write",
+        serde_json::json!({ "path": path, "content": "[alias]\n\tx = !sh\n" }),
+    )])
+}
+
+#[tokio::test]
+async fn git_configuration_is_asked_in_auto_and_the_refusal_writes_nothing() {
+    let dir = TempProject::new();
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(write_file("t1", ".git/config")),
+        Turn::Events(script_text("Stopped.")),
+    ]));
+    let handle = session(&dir, provider, Mode::Auto);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "set up git").await;
+    let asking = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
+
+    // Auto writes ordinary files unasked; git's configuration is a question.
+    let request = asked_about(&asking);
+    assert_eq!(request.invariant, Some(Invariant::GitConfig));
+    assert!(request.scopes.is_empty(), "an invariant offers no rule");
+
+    handle
+        .send(Command::AnswerPermission {
+            request_id: request.id,
+            answer: PermissionAnswer::Deny { reason: None },
+        })
+        .await
+        .unwrap();
+    until(&mut rx, is_turn_over).await;
+    assert!(!dir.path().join(".git/config").exists());
+}
+
+#[tokio::test]
+async fn git_configuration_is_asked_under_bypass_too() {
+    let dir = TempProject::new();
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(write_file("t1", ".gitattributes")),
+        Turn::Events(script_text("Stopped.")),
+    ]));
+    let handle = session(&dir, provider, Mode::Auto);
+    let mut rx = handle.subscribe();
+
+    handle.send(Command::SetBypass { on: true }).await.unwrap();
+    ask(&handle, "set up git").await;
+    let asking = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
+
+    // Bypass turns off permissions (§8); an invariant is not one of them.
+    let request = asked_about(&asking);
+    assert_eq!(request.invariant, Some(Invariant::GitConfig));
+    handle
+        .send(Command::AnswerPermission {
+            request_id: request.id,
+            answer: PermissionAnswer::Deny { reason: None },
+        })
+        .await
+        .unwrap();
+    until(&mut rx, is_turn_over).await;
+    assert!(!dir.path().join(".gitattributes").exists());
 }

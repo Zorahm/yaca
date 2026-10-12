@@ -36,6 +36,7 @@
 //! written by the feed, on the same rule as §5.4.1 and the permission block:
 //! the core names the action, the interface words it.
 
+pub mod gc;
 pub mod manifest;
 pub mod restore;
 pub mod scan;
@@ -145,7 +146,20 @@ impl Checkpoints {
     /// `exclude` is what the project added to the built-in skip list (§10).
     pub fn open(root: impl Into<PathBuf>, exclude: &[String]) -> io::Result<Self> {
         let root = root.into();
-        let store = Store::open(&root)?;
+        Self::open_in(root.clone(), &root, exclude)
+    }
+
+    /// A tree that is not where the project's `.yaca` is — a chat's worktree
+    /// (`isolation`). The points are of `root` and only of it; the objects go
+    /// to the project's store, which is safe to share because a name is the
+    /// hash of what is under it.
+    pub fn open_in(
+        root: impl Into<PathBuf>,
+        home: &std::path::Path,
+        exclude: &[String],
+    ) -> io::Result<Self> {
+        let root = root.into();
+        let store = Store::open(home)?;
         let scanner = Scanner::with_excludes(root.clone(), exclude);
         Ok(Checkpoints {
             inner: Arc::new(Inner {
@@ -178,6 +192,23 @@ impl Checkpoints {
         let mut state = self.inner.state.lock().unwrap();
         let manifest = state.scanner.scan(&self.inner.store)?;
         self.inner.record(&mut state, &manifest, reason)
+    }
+
+    /// The name the point's manifest has in the store. Lets the sweep tests
+    /// say which manifests are live without reaching into the list.
+    #[cfg(test)]
+    pub(crate) fn manifest_name(&self, id: &CheckpointId) -> Option<Hash> {
+        let state = self.inner.state.lock().unwrap();
+        find(&state, id).map(|r| r.manifest)
+    }
+
+    /// Runs the sweep of the shadow store on a blocking task and does not wait
+    /// for it: a session starts while the walk is still going. See [`gc`].
+    pub fn sweep_in_background(&self) {
+        let inner = self.inner.clone();
+        // Detached on purpose. A sweep that fails or panics costs disk space,
+        // never the session.
+        tokio::task::spawn_blocking(move || gc::run(&inner.store));
     }
 
     /// What rolling back would touch. `None` — no such point.
@@ -232,7 +263,8 @@ impl Inner {
         manifest: &Manifest,
         reason: CheckpointReason,
     ) -> io::Result<Option<CheckpointSummary>> {
-        let hash = self.store.put(manifest.encode().as_bytes())?;
+        let hash = self.store.put_manifest(&manifest.encode())?;
+        gc::remember(&self.store, hash);
         if let Some(last) = state.records.last() {
             let same_kind =
                 std::mem::discriminant(&last.summary.reason) == std::mem::discriminant(&reason);
@@ -254,7 +286,7 @@ impl Inner {
     }
 
     fn manifest_of(&self, hash: &Hash) -> io::Result<Manifest> {
-        Manifest::decode(&self.store.get_text(hash)?)
+        Manifest::decode(&self.store.get_manifest(hash)?)
     }
 }
 
@@ -363,6 +395,29 @@ mod tests {
         let done = ck.restore(&point.id).unwrap().unwrap();
         assert!(done.touched.is_empty());
         assert_eq!(ck.list().len(), 1, "and adds no point either");
+    }
+
+    /// What survives a restart, pinned down. Content does; the list does not.
+    /// A new instance knows no earlier point, so it cannot list one or roll
+    /// back to one, and it records the same tree again as a new point.
+    #[test]
+    fn a_reopened_store_keeps_content_but_not_the_list() {
+        let dir = TempDir::new();
+        let first = {
+            let ck = Checkpoints::open(dir.path(), &[]).unwrap();
+            dir.write("a.rs", "kept\n");
+            ck.create(CheckpointReason::Message).unwrap().unwrap()
+        };
+
+        let reopened = Checkpoints::open(dir.path(), &[]).unwrap();
+        assert!(reopened.list().is_empty());
+        assert!(reopened.restore(&first.id).unwrap().is_none());
+        let again = reopened.create(CheckpointReason::Message).unwrap();
+        assert!(again.is_some(), "the same tree is a new point to this instance");
+
+        // The bytes are still on disk for anything that still holds the name.
+        let store = Store::open(dir.path()).unwrap();
+        assert!(store.has(&Store::hash(b"kept\n")));
     }
 
     #[test]

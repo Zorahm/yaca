@@ -11,12 +11,17 @@
 //! interface copy: the core names the action and the target, the feed writes
 //! the sentence. Same rule as §5.4.1 — the interface writes what it knows.
 //!
-//! One thing here is not in the spec and is marked as such below:
-//! [`ScopeKey::Domain`]. §5.7 lists three scopes behind "Always allow" and a
-//! network permission fits none of them.
+//! Two things here are not in the spec and are marked as such below:
+//! [`ScopeKey::Domain`] and [`ScopeKey::McpServer`]. §5.7 lists three scopes
+//! behind "Always allow"; a network permission fits none of them, and a call
+//! to an MCP server fits only the widest.
 
 pub mod broker;
+mod cmdline;
+pub mod invariant;
 pub mod policy;
+pub mod readonly;
+pub mod unsaved;
 
 use std::path::{Path, PathBuf};
 
@@ -24,6 +29,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::id::{CallId, RequestId};
+use crate::workspace::roots;
 
 /// What is being asked for. The feed maps this onto the wording table in §5.7.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
@@ -93,6 +99,14 @@ pub enum ScopeKey {
     /// web, while the question that was asked was about one domain.
     #[serde(rename_all = "camelCase")]
     Domain { host: String },
+    /// Every tool of this MCP server.
+    ///
+    /// Not in §5.7 either. A server's tools are named one by one, so "every
+    /// call of this tool" is the narrow rule, and without this one the next
+    /// step up would be answering the same question for each of a server's
+    /// twenty tools.
+    #[serde(rename_all = "camelCase")]
+    McpServer { server: String },
 }
 
 #[derive(Deserialize)]
@@ -106,6 +120,8 @@ enum ScopeKeyDe {
     CommandPrefix { prefix: String },
     #[serde(rename_all = "camelCase")]
     Domain { host: String },
+    #[serde(rename_all = "camelCase")]
+    McpServer { server: String },
 }
 
 impl<'de> Deserialize<'de> for ScopeKey {
@@ -121,6 +137,7 @@ impl<'de> Deserialize<'de> for ScopeKey {
             ScopeKeyDe::Directory { path } => ScopeKey::Directory { path },
             ScopeKeyDe::CommandPrefix { prefix } => ScopeKey::CommandPrefix { prefix },
             ScopeKeyDe::Domain { host } => ScopeKey::Domain { host },
+            ScopeKeyDe::McpServer { server } => ScopeKey::McpServer { server },
         })
     }
 }
@@ -152,6 +169,61 @@ impl Refusal {
     pub fn new(scope: ScopeKey, reason: Option<String>) -> Self {
         Refusal { scope, reason }
     }
+}
+
+/// A question that no standing rule and no bypass can settle for the human (§8).
+///
+/// The invariants of §8 that no rule settles: a commit or a push needs an
+/// explicit command from the human, and a write into git's configuration runs
+/// programs when git next reads it. The core cannot know whether the human
+/// gave a command, or whether a configuration is theirs to change, so every
+/// such call is put to them. No "always" is offered for these questions, and a
+/// grant that matches one is ignored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub enum Invariant {
+    /// `git commit`, however it is spelled on the command line.
+    GitCommit,
+    /// `git push`.
+    GitPush,
+    /// A git command whose subcommand the shell produces at run time, so it may
+    /// be a commit or a push. Asked about rather than guessed at.
+    GitUnresolved,
+    /// A write, edit, delete or move that touches git's own configuration or
+    /// attributes: anything under a `.git` directory or `.git` file (a
+    /// worktree's or submodule's pointer), and any `.gitattributes` or
+    /// `.gitmodules` file. Git runs what those files name (`core.fsmonitor`,
+    /// diff and filter drivers, hooks) the next time it reads the repository,
+    /// so the write is the moment to ask: a later `git status` would run it
+    /// unasked. Asked in every mode, bypass included, as a push is.
+    GitConfig,
+}
+
+/// What a deletion of a directory takes away that a rollback cannot bring back
+/// (§5.7, §5.8).
+///
+/// The shadow repository keeps neither the directories it skips (build output,
+/// caches) nor the files it cannot track: over the size limit, links, and names
+/// it cannot spell. A rollback restores what it saved; these it never saved.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct Unsaved {
+    /// Project-relative paths of the skipped directories: the first few.
+    pub dirs: Vec<String>,
+    /// How many skipped directories there are in all. A number, not a list of
+    /// everything, because a monorepo can have hundreds of `node_modules`.
+    pub dir_count: u32,
+    /// Files the snapshot does not keep.
+    pub files: u32,
+    /// Additional roots the action reaches. The checkpoints snapshot the primary
+    /// root only, so nothing in these comes back on a rollback, whatever the
+    /// action was. Plain absolute paths (`Workspace::additional_text`).
+    ///
+    /// `default`: a journal written before the field existed replays too.
+    #[serde(default)]
+    pub roots: Vec<String>,
 }
 
 /// Files inside a directory, counted for the question about it (§5.7).
@@ -193,7 +265,21 @@ pub struct PermissionRequest {
     /// `default`: journals written before the field existed replay too (§9).
     #[serde(default)]
     pub files: Option<FileCount>,
-    /// Choices offered behind "Always allow" and "Always deny" alike.
+    /// Set when the question is an invariant (§8): the feed says why it is
+    /// asked at all, since no rule could have answered it. `default` for the
+    /// same reason as `files`.
+    #[serde(default)]
+    pub invariant: Option<Invariant>,
+    /// Set when deleting the directory loses what no snapshot keeps (§5.7).
+    /// The feed names what will not come back.
+    #[serde(default)]
+    pub unsaved: Option<Unsaved>,
+    /// The MCP server the call goes to (§5.7: "изменить данные в Asana"). The
+    /// feed names it in the question. `default` for the same reason as `files`.
+    #[serde(default)]
+    pub server: Option<String>,
+    /// Choices offered behind "Always allow" and "Always deny" alike. Empty for
+    /// an invariant: there is no rule the human could grant that would apply.
     pub scopes: Vec<ScopeKey>,
     /// `2 of 3` in the corner of the block.
     pub position: u32,
@@ -243,6 +329,13 @@ pub struct PermissionNeed {
     pub command: Option<String>,
     /// Host the action reaches. Feeds domain-scoped rules.
     pub domain: Option<String>,
+    /// MCP server the call goes to. Feeds server-scoped rules.
+    pub server: Option<String>,
+    /// The call is an invariant (§8): asked in every mode, bypass included,
+    /// and no grant answers it.
+    pub invariant: Option<Invariant>,
+    /// Deleting this loses what no snapshot keeps. Asked in Auto as well.
+    pub unsaved: Option<Unsaved>,
 }
 
 impl PermissionNeed {
@@ -258,7 +351,25 @@ impl PermissionNeed {
             path: None,
             command: None,
             domain: None,
+            server: None,
+            invariant: None,
+            unsaved: None,
         }
+    }
+
+    pub fn server(mut self, server: impl Into<String>) -> Self {
+        self.server = Some(server.into());
+        self
+    }
+
+    pub fn invariant(mut self, invariant: Invariant) -> Self {
+        self.invariant = Some(invariant);
+        self
+    }
+
+    pub fn unsaved(mut self, unsaved: Unsaved) -> Self {
+        self.unsaved = Some(unsaved);
+        self
     }
 
     pub fn detail(mut self, detail: impl Into<String>) -> Self {
@@ -301,7 +412,20 @@ impl PermissionNeed {
     /// The narrow option comes first on purpose: the list is answered by
     /// number, and the digit that gets pressed without reading should be
     /// the one that grants least.
+    ///
+    /// `root` is the **primary** root, and that is deliberate. A directory
+    /// scope inside it is stored relative to it, and a relative rule is only
+    /// ever resolved against the primary root (see [`covered_by`]). A
+    /// directory in an additional root is stored absolute, so a rule granted
+    /// for `src` of the project can never match `src` of another root.
+    ///
+    /// [`covered_by`]: PermissionNeed::covered_by
     pub fn scopes(&self, root: &Path) -> Vec<ScopeKey> {
+        // An invariant is answered for this call only. Offering a rule here
+        // would promise a grant that the gate is built to ignore.
+        if self.invariant.is_some() {
+            return Vec::new();
+        }
         let mut out = Vec::new();
 
         if let Some(command) = &self.command {
@@ -327,6 +451,13 @@ impl PermissionNeed {
         out.push(ScopeKey::Tool {
             name: self.tool.clone(),
         });
+        // After the tool, not before: for an MCP call the tool is the narrow
+        // rule and the server the wide one.
+        if let Some(server) = &self.server {
+            out.push(ScopeKey::McpServer {
+                server: server.clone(),
+            });
+        }
         out
     }
 
@@ -337,12 +468,17 @@ impl PermissionNeed {
                 crate::legacy::canonical_tool_name(name)
                     == crate::legacy::canonical_tool_name(&self.tool)
             }
+            // `root` is the primary root: a relative rule means a directory of
+            // the project and never of another root. An absolute rule (an
+            // additional root's directory) is joined as it is, because joining
+            // an absolute path replaces the base.
             ScopeKey::Directory { path } => self.path.as_ref().is_some_and(|touched| {
                 let dir = if path.is_empty() {
                     root.to_path_buf()
                 } else {
                     root.join(path)
                 };
+                let dir = roots::in_root_form(&dir, touched);
                 touched.starts_with(&dir)
             }),
             ScopeKey::CommandPrefix { prefix } => self
@@ -353,15 +489,18 @@ impl PermissionNeed {
             // Exact host, never a suffix: a rule for `docs.rs` that also
             // covered `evil-docs.rs` would grant what was never asked.
             ScopeKey::Domain { host } => self.domain.as_deref() == Some(host.as_str()),
+            ScopeKey::McpServer { server } => self.server.as_deref() == Some(server.as_str()),
         }
     }
 }
 
+/// A directory as a scope stores it: relative to the primary root, or, outside
+/// it, absolute (`roots::plain`).
 fn display_rel(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/")
+    match path.strip_prefix(root) {
+        Ok(rel) => rel.to_string_lossy().replace('\\', "/"),
+        Err(_) => roots::plain(path),
+    }
 }
 
 #[cfg(test)]
@@ -478,6 +617,32 @@ mod tests {
         };
         // A deletion carries no domain, so a network rule can never match it.
         assert!(!delete("a.rs").covered_by(&rule, &root()));
+    }
+
+    #[test]
+    fn an_mcp_call_offers_its_tool_and_then_its_server() {
+        let call = |server: &str, tool: &str| {
+            PermissionNeed::new(PermissionKind::McpWrite, &format!("mcp__{server}__{tool}"), tool)
+                .server(server)
+        };
+        let scopes = call("tracker", "create_task").scopes(&root());
+        assert_eq!(
+            scopes,
+            vec![
+                ScopeKey::Tool {
+                    name: "mcp__tracker__create_task".into()
+                },
+                ScopeKey::McpServer {
+                    server: "tracker".into()
+                },
+            ]
+        );
+
+        // The server rule covers its other tools, and nobody else's.
+        assert!(call("tracker", "close_task").covered_by(&scopes[1], &root()));
+        assert!(!call("files", "write").covered_by(&scopes[1], &root()));
+        assert!(!call("tracker", "close_task").covered_by(&scopes[0], &root()));
+        assert!(!delete("a.rs").covered_by(&scopes[1], &root()));
     }
 
     #[test]

@@ -5,11 +5,11 @@
 //! against this rather than against `api.anthropic.com` or anyone else — a
 //! test that needs a key and money stops being run in its second week.
 
-use yaca_core::error::ProviderError;
-use yaca_core::provider::ProviderStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
+use yaca_core::error::ProviderError;
+use yaca_core::provider::ProviderStream;
 
 /// What the server saw in the request.
 pub struct Seen {
@@ -77,7 +77,7 @@ pub async fn serve_all(responses: Vec<String>) -> (String, oneshot::Receiver<Vec
 }
 
 /// Reads one whole request off the socket. `None` — the peer hung up first.
-async fn read_one(socket: &mut tokio::net::TcpStream) -> Option<Seen> {
+pub async fn read_one(socket: &mut tokio::net::TcpStream) -> Option<Seen> {
     let mut raw = Vec::new();
     let mut buf = [0u8; 4096];
     loop {

@@ -29,7 +29,11 @@ fn opening(provider: &MockProvider) -> String {
         .content
         .iter()
         .filter_map(|b| match b {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            // The environment note rides on the first message of a session;
+            // these tests are about what the human's line became.
+            ContentBlock::Text { text } if !text.starts_with("<environment_context>") => {
+                Some(text.as_str())
+            }
             _ => None,
         })
         .collect::<Vec<_>>()

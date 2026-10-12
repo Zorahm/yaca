@@ -30,12 +30,15 @@ pub fn feed(events: Vec<AgentEvent>) -> Vec<AgentEvent> {
     let mut out = Vec::with_capacity(events.len());
     let mut open_turn: Option<TurnId> = None;
     let mut open_request: Option<RequestId> = None;
+    let mut open_question: Option<RequestId> = None;
 
     for event in events {
         match &event {
             // What was, and no longer is.
             AgentEvent::StateChanged { .. }
             | AgentEvent::ProcessesUpdated { .. }
+            | AgentEvent::McpUpdated { .. }
+            | AgentEvent::LspUpdated { .. }
             | AgentEvent::ProcessOutputReset { .. }
             | AgentEvent::ProcessOutput { .. }
             | AgentEvent::CheckpointCreated { .. }
@@ -56,6 +59,13 @@ pub fn feed(events: Vec<AgentEvent>) -> Vec<AgentEvent> {
                 open_request = None;
             }
 
+            AgentEvent::QuestionAsked { request } => open_question = Some(request.id.clone()),
+            AgentEvent::QuestionResolved { request_id, .. }
+                if open_question.as_ref() == Some(request_id) =>
+            {
+                open_question = None;
+            }
+
             _ => {}
         }
         out.push(event);
@@ -63,6 +73,14 @@ pub fn feed(events: Vec<AgentEvent>) -> Vec<AgentEvent> {
 
     // The question first: the answer that never came is why the turn stopped,
     // and the block has to be gone before the row under it is marked stopped.
+    // A question is closed with no reply, which is the same thing the live run
+    // does when the turn is cancelled, so the feed shows it as unanswered.
+    if let Some(request_id) = open_question {
+        out.push(AgentEvent::QuestionResolved {
+            request_id,
+            reply: None,
+        });
+    }
     if let Some(request_id) = open_request {
         out.push(AgentEvent::PermissionResolved { request_id });
     }
@@ -106,6 +124,7 @@ mod tests {
     fn asked(id: &str) -> AgentEvent {
         AgentEvent::PermissionRequested {
             request: PermissionRequest {
+                server: None,
                 id: RequestId::from(id),
                 call_id: CallId::from("call_1"),
                 kind: PermissionKind::RunCommand,
@@ -114,6 +133,8 @@ mod tests {
                 note: None,
                 size_bytes: None,
                 files: None,
+                invariant: None,
+                unsaved: None,
                 scopes: Vec::new(),
                 position: 1,
                 total: 1,
@@ -236,6 +257,70 @@ mod tests {
             AgentEvent::TurnCancelled {
                 turn_id: TurnId::from("t1")
             }
+        );
+    }
+
+    fn asked_question(id: &str) -> AgentEvent {
+        AgentEvent::QuestionAsked {
+            request: crate::question::QuestionRequest {
+                id: RequestId::from(id),
+                call_id: CallId::from("call_1"),
+                question: "Which way?".into(),
+                options: Vec::new(),
+                allow_other: true,
+                multi_select: false,
+            },
+        }
+    }
+
+    #[test]
+    fn a_question_nobody_answered_is_closed_without_a_reply() {
+        let replayed = feed(vec![started("t1"), asked_question("q_1")]);
+
+        assert_eq!(
+            replayed[2],
+            AgentEvent::QuestionResolved {
+                request_id: RequestId::from("q_1"),
+                reply: None,
+            },
+            "a question with buttons nobody will press would wait forever"
+        );
+        assert_eq!(
+            replayed[3],
+            AgentEvent::TurnCancelled {
+                turn_id: TurnId::from("t1")
+            }
+        );
+    }
+
+    #[test]
+    fn an_answered_ask_user_question_is_not_closed_again() {
+        let journal = vec![
+            started("t1"),
+            asked_question("q_1"),
+            AgentEvent::QuestionResolved {
+                request_id: RequestId::from("q_1"),
+                reply: Some(crate::question::QuestionReply::Dismissed),
+            },
+            finished("t1"),
+        ];
+
+        assert_eq!(feed(journal.clone()), journal);
+    }
+
+    #[test]
+    fn an_answered_ask_user_question_gains_no_second_resolution() {
+        let answered = AgentEvent::QuestionResolved {
+            request_id: RequestId::from("q_1"),
+            reply: Some(crate::question::QuestionReply::Dismissed),
+        };
+        let journal = vec![started("t1"), asked_question("q_1"), answered.clone()];
+
+        let replayed = feed(journal);
+        assert_eq!(
+            replayed.iter().filter(|e| **e == answered).count(),
+            1,
+            "an answered question must not gain a second resolution"
         );
     }
 

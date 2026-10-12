@@ -75,6 +75,7 @@ const NAMES: &[&str] = &[
     "delete",
     "duplicate",
     "key",
+    "mcp",
 ];
 
 pub fn is_command_name(text: &str) -> bool {

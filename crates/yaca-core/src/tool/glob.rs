@@ -27,11 +27,14 @@ impl Tool for Glob {
         json!({
             "pattern": {
                 "type": "string",
-                "description": "Path pattern relative to the project root.",
+                "description": "Path pattern relative to the project root. In an additional \
+                                root it is matched against the path inside that root.",
             },
             "path": {
                 "type": "string",
-                "description": "Directory to start searching from. Defaults to root.",
+                "description": "Directory to start searching from. Defaults to every root, \
+                                the project first. Files in an additional root are shown \
+                                by absolute path.",
             },
         })
     }
@@ -62,10 +65,11 @@ impl Tool for Glob {
             .as_str()
             .ok_or_else(|| ToolError::failed("не задан pattern"))?
             .to_string();
-        let start = match input["path"].as_str() {
-            Some(p) => ctx.ws.resolve_existing(p)?,
-            None => ctx.ws.root().to_path_buf(),
+        let given = match input["path"].as_str() {
+            Some(p) => Some(ctx.ws.resolve_existing(p)?),
+            None => None,
         };
+        let starts = super::files::starts(&ctx.ws, given);
 
         let matcher = globset::GlobBuilder::new(&pattern)
             .literal_separator(true)
@@ -79,26 +83,29 @@ impl Tool for Glob {
         // Обход синхронный и может быть долгим — уводим с реактора.
         let found = tokio::task::spawn_blocking(move || {
             let mut hits: Vec<(u64, String)> = Vec::new();
-            for entry in super::files::walk(&start) {
-                if cancel.is_cancelled() {
-                    return Err(ToolError::Cancelled);
+            for start in &starts {
+                for entry in super::files::walk(start) {
+                    if cancel.is_cancelled() {
+                        return Err(ToolError::Cancelled);
+                    }
+                    let Ok(entry) = entry else { continue };
+                    if !entry.file_type().is_some_and(|t| t.is_file()) {
+                        continue;
+                    }
+                    // Matched inside the root that holds the file, shown as
+                    // the root form (absolute for an additional root).
+                    if !matcher.is_match(ws.within_root(entry.path())) {
+                        continue;
+                    }
+                    let mtime = entry
+                        .metadata()
+                        .ok()
+                        .and_then(|m| m.modified().ok())
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    hits.push((mtime, ws.display(entry.path())));
                 }
-                let Ok(entry) = entry else { continue };
-                if !entry.file_type().is_some_and(|t| t.is_file()) {
-                    continue;
-                }
-                let rel = ws.display(entry.path());
-                if !matcher.is_match(&rel) {
-                    continue;
-                }
-                let mtime = entry
-                    .metadata()
-                    .ok()
-                    .and_then(|m| m.modified().ok())
-                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0);
-                hits.push((mtime, rel));
             }
 
             hits.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));

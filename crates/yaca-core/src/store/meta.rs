@@ -54,6 +54,12 @@ pub struct SessionMeta {
     /// The session this one was duplicated from (§9).
     #[serde(default)]
     pub forked_from: Option<SessionId>,
+    /// The additional roots the session was started with, as plain absolute
+    /// paths. Roots are fixed for a session's life, so a resume must find the
+    /// same set (`session::spawn`). Not shown to the interface.
+    #[serde(default)]
+    #[ts(skip)]
+    pub additional_roots: Vec<String>,
 }
 
 impl SessionMeta {
@@ -72,6 +78,7 @@ impl SessionMeta {
             tokens: TokenCounts::default(),
             files: Vec::new(),
             forked_from: None,
+            additional_roots: Vec::new(),
         }
     }
 

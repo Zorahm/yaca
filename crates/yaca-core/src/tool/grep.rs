@@ -1,6 +1,8 @@
 //! Поиск по содержимому. Регулярное выражение, обход с уважением к `.gitignore`.
 
 mod excerpts;
+#[cfg(test)]
+mod paging;
 
 use std::time::{Duration, Instant};
 
@@ -10,7 +12,7 @@ use serde_json::{json, Value};
 use super::{Narration, Tool, ToolCtx, ToolOutput};
 use crate::error::ToolError;
 use crate::intent::Intent;
-use excerpts::Excerpts;
+use excerpts::{Excerpts, Hit, DEFAULT_LIMIT, MAX_LIMIT, MAX_OUTPUT_BYTES};
 
 /// Файлы крупнее — почти наверняка данные, а не код.
 const MAX_FILE_BYTES: u64 = 4 * 1024 * 1024;
@@ -51,7 +53,11 @@ impl Tool for Grep {
         "Search for a regular expression in project files. Mode `content` returns \
          matching lines as `path:line: text`; with `before`, `after` or `context` it \
          adds the lines around each match as `path-line- text`, with `--` between \
-         groups, which often saves reading the file. Mode `files` returns only paths."
+         groups, which often saves reading the file. Mode `files` returns only paths. \
+         A page holds 200 matches (or `head_limit`); when there are more, the last \
+         line says so and gives the `offset` that continues from where it stopped. \
+         By default a pattern matches inside one line; `multiline` lets it span \
+         lines and makes `.` match a newline."
     }
 
     fn properties(&self) -> Value {
@@ -62,11 +68,14 @@ impl Tool for Grep {
             },
             "path": {
                 "type": "string",
-                "description": "Directory or file to search in. Defaults to the entire project.",
+                "description": "Directory or file to search in. Defaults to every root of \
+                                the session, the project first. Files in an additional \
+                                root are shown by absolute path.",
             },
             "glob": {
                 "type": "string",
-                "description": "Restrict to a path pattern, e.g. `**/*.rs`.",
+                "description": "Restrict to a path pattern, e.g. `**/*.rs`, matched against \
+                                the path inside the root that holds the file.",
             },
             "mode": {
                 "type": "string",
@@ -76,6 +85,25 @@ impl Tool for Grep {
             "case_insensitive": {
                 "type": "boolean",
                 "description": "Search case-insensitively.",
+            },
+            "multiline": {
+                "type": "boolean",
+                "description": "Match against the whole file instead of line by line, so \
+                                a pattern may span lines and `.` matches a newline, like \
+                                rg -U --multiline-dotall. A match is shown with every \
+                                line it covers and counts once.",
+            },
+            "head_limit": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Matches (or paths in `files` mode) on one page. Default 200, \
+                                at most 1000.",
+            },
+            "offset": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Matches (or paths) to skip, to read the next page. Take the \
+                                value from the footer of the previous page.",
             },
             "context": {
                 "type": "integer",
@@ -123,15 +151,21 @@ impl Tool for Grep {
         let pattern = input["pattern"]
             .as_str()
             .ok_or_else(|| ToolError::failed("не задан pattern"))?;
+        let multiline = input["multiline"].as_bool().unwrap_or(false);
         let re = regex::RegexBuilder::new(pattern)
             .case_insensitive(input["case_insensitive"].as_bool().unwrap_or(false))
+            // `^` and `$` stay line anchors, as in ripgrep's -U, and `.` takes
+            // newlines: the form a model reaching for "multiline" expects.
+            .multi_line(multiline)
+            .dot_matches_new_line(multiline)
             .build()
             .map_err(|e| ToolError::failed(format!("плохое выражение `{pattern}`: {e}")))?;
 
-        let start = match input["path"].as_str() {
-            Some(p) => ctx.ws.resolve_existing(p)?,
-            None => ctx.ws.root().to_path_buf(),
+        let given = match input["path"].as_str() {
+            Some(p) => Some(ctx.ws.resolve_existing(p)?),
+            None => None,
         };
+        let starts = super::files::starts(&ctx.ws, given);
 
         let path_filter = match input["glob"].as_str() {
             Some(g) => Some(
@@ -147,9 +181,14 @@ impl Tool for Grep {
         let files_only = input["mode"].as_str() == Some("files");
         let lines_of = |key: &str| input[key].as_u64().map(|n| n as usize);
         let around = lines_of("context").unwrap_or(0);
+        let offset = lines_of("offset").unwrap_or(0);
+        let page_size = lines_of("head_limit")
+            .map(|n| n.clamp(1, MAX_LIMIT))
+            .unwrap_or(DEFAULT_LIMIT);
         let mut excerpts = Excerpts::new(
             lines_of("before").unwrap_or(around),
             lines_of("after").unwrap_or(around),
+            page_size,
         );
         let ws = ctx.ws.clone();
         let cancel = ctx.cancel.clone();
@@ -164,25 +203,29 @@ impl Tool for Grep {
             // не мешаются в одном горячем цикле.
             let mut targets: Vec<(String, std::path::PathBuf)> = Vec::new();
 
-            for entry in super::files::walk(&start) {
-                if cancel.is_cancelled() {
-                    return Err(ToolError::Cancelled);
+            for start in &starts {
+                for entry in super::files::walk(start) {
+                    if cancel.is_cancelled() {
+                        return Err(ToolError::Cancelled);
+                    }
+                    if Instant::now() >= deadline {
+                        return Err(overran(limit));
+                    }
+                    let Ok(entry) = entry else { continue };
+                    if !entry.file_type().is_some_and(|t| t.is_file()) {
+                        continue;
+                    }
+                    if entry.metadata().map(|m| m.len()).unwrap_or(0) > MAX_FILE_BYTES {
+                        continue;
+                    }
+                    if path_filter
+                        .as_ref()
+                        .is_some_and(|m| !m.is_match(ws.within_root(entry.path())))
+                    {
+                        continue;
+                    }
+                    targets.push((ws.display(entry.path()), entry.path().to_path_buf()));
                 }
-                if Instant::now() >= deadline {
-                    return Err(overran(limit));
-                }
-                let Ok(entry) = entry else { continue };
-                if !entry.file_type().is_some_and(|t| t.is_file()) {
-                    continue;
-                }
-                if entry.metadata().map(|m| m.len()).unwrap_or(0) > MAX_FILE_BYTES {
-                    continue;
-                }
-                let rel = ws.display(entry.path());
-                if path_filter.as_ref().is_some_and(|m| !m.is_match(&rel)) {
-                    continue;
-                }
-                targets.push((rel, entry.path().to_path_buf()));
             }
 
             targets.sort_by(|a, b| a.0.cmp(&b.0));
@@ -204,7 +247,12 @@ impl Tool for Grep {
                 let text = String::from_utf8_lossy(&bytes).into_owned();
 
                 if files_only {
-                    if text.lines().any(|line| re.is_match(line)) {
+                    let found = if multiline {
+                        re.is_match(&text)
+                    } else {
+                        text.lines().any(|line| re.is_match(line))
+                    };
+                    if found {
                         total += 1;
                         files.push(rel);
                     }
@@ -214,12 +262,15 @@ impl Tool for Grep {
                 // Context needs the lines around a match, so the file is
                 // split once and the matches are found by index.
                 let lines: Vec<&str> = text.lines().collect();
-                let hits: Vec<usize> = (0..lines.len()).filter(|&i| re.is_match(lines[i])).collect();
+                let hits = hits_of(&re, &text, &lines, multiline);
                 if hits.is_empty() {
                     continue;
                 }
+                // Matches of earlier files come first, so this file's share
+                // of the skipped ones is what is left of the offset.
+                let skip = offset.saturating_sub(total).min(hits.len());
                 total += hits.len();
-                excerpts.file(&rel, &lines, &hits);
+                excerpts.file(&rel, &lines, &hits, skip);
                 files.push(rel);
             }
             Ok((excerpts, files, total))
@@ -228,27 +279,52 @@ impl Tool for Grep {
         .map_err(|e| ToolError::failed(format!("поиск упал: {e}")))??;
 
         let mut out = String::new();
-        let truncated;
         let shown;
         if files_only {
-            truncated = false;
-            shown = files.len();
-            for f in &files {
+            let mut count = 0;
+            for f in files.iter().skip(offset).take(page_size) {
                 out.push_str(f);
                 out.push('\n');
+                count += 1;
             }
+            shown = count;
         } else {
             let (text, matches) = excerpts.finish();
             out = text;
             shown = matches;
-            truncated = total > shown;
         }
+        let unit = if files_only { "файлов" } else { "совпадений" };
+        let last = offset + shown;
+        let truncated = last < total;
+
         if total == 0 {
             out.push_str("[совпадений нет]\n");
-        } else if truncated {
+        } else if offset >= total {
             out.push_str(&format!(
-                "\n[показаны {shown} из {total} совпадений в {} файлах]\n",
-                files.len()
+                "[offset {offset} за пределами выдачи: всего {total} {unit}]\n"
+            ));
+        } else if shown == 0 {
+            // Only content mode gets here: the context asked for fills the
+            // byte budget before the first match, and `offset` would not move.
+            out.push_str(&format!(
+                "[контекст не поместился в {} КБ раньше первого совпадения; уменьши \
+                 context, before или after]\n",
+                MAX_OUTPUT_BYTES / 1000
+            ));
+        } else if truncated || offset > 0 {
+            let in_files = if files_only {
+                String::new()
+            } else {
+                format!(" в {} файлах", files.len())
+            };
+            let more = if truncated {
+                format!("; продолжить: offset={last}")
+            } else {
+                String::new()
+            };
+            out.push_str(&format!(
+                "\n[показаны {}–{last} из {total} {unit}{in_files}{more}]\n",
+                offset + 1
             ));
         }
 
@@ -257,6 +333,41 @@ impl Tool for Grep {
             .items(items as u32)
             .truncated(truncated))
     }
+}
+
+/// The lines each match covers. Line by line a match is its own line; with
+/// `multiline` the pattern runs over the whole text and a match covers every
+/// line from where it starts to where it ends.
+fn hits_of(re: &regex::Regex, text: &str, lines: &[&str], multiline: bool) -> Vec<Hit> {
+    if !multiline {
+        return (0..lines.len())
+            .filter(|&i| re.is_match(lines[i]))
+            .map(Hit::line)
+            .collect();
+    }
+
+    // Byte offsets of the newlines: a position's line is the number of them
+    // before it, which is what `str::lines` counts too.
+    let newlines: Vec<usize> = text.match_indices('\n').map(|(at, _)| at).collect();
+    let line_of = |byte: usize| newlines.partition_point(|&at| at < byte);
+
+    re.find_iter(text)
+        .filter_map(|m| {
+            let first = line_of(m.start());
+            // A match that ends on a newline ends on the line before the one
+            // that newline opens.
+            let last = if m.end() > m.start() {
+                line_of(m.end() - 1)
+            } else {
+                first
+            };
+            // An empty match after the last newline is not on any line.
+            (first < lines.len()).then_some(Hit {
+                first,
+                last: last.min(lines.len() - 1),
+            })
+        })
+        .collect()
 }
 
 /// Форма неудачи для ленты и для модели. Красная (§5.9 красит `Failed`
@@ -270,234 +381,4 @@ fn overran(limit: Duration) -> ToolError {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::testutil::TempDir;
-    use crate::tool::tests_support::ctx_for;
-
-    /// The walk is stopped by the clock, and it says so in red: a search that
-    /// did not finish did not find "nothing", it found nothing *yet* (§5.9).
-    #[tokio::test]
-    async fn a_search_that_overruns_is_stopped_and_says_so() {
-        let dir = TempDir::new();
-        dir.write(
-            "a.rs",
-            "найди меня
-",
-        );
-        let (ctx, _ws) = ctx_for(&dir);
-
-        let tool = Grep {
-            deadline: Duration::ZERO,
-        };
-        let err = tool
-            .run(&ctx, json!({ "pattern": "найди" }))
-            .await
-            .unwrap_err();
-
-        assert!(matches!(err, ToolError::Failed { .. }), "получили {err:?}");
-        assert!(err.to_string().contains("не уложился"), "{err}");
-        // The model gets the way out as well, not only the fact.
-        assert!(
-            err.for_model().contains("подкаталоге"),
-            "{}",
-            err.for_model()
-        );
-    }
-    #[tokio::test]
-    async fn находит_строки_с_номерами() {
-        let dir = TempDir::new();
-        dir.write("src/a.rs", "let x = 1;\nlet clipboard = 2;\n");
-        dir.write("src/b.ts", "const clipboard = 3;\n");
-        let (ctx, _ws) = ctx_for(&dir);
-
-        let out = Grep::new()
-            .run(&ctx, json!({ "pattern": "clipboard" }))
-            .await
-            .unwrap();
-
-        assert!(out.text.contains("src/a.rs:2: let clipboard = 2;"));
-        assert!(out.text.contains("src/b.ts:1:"));
-        assert_eq!(out.meta.items, Some(2));
-    }
-
-    #[tokio::test]
-    async fn шаблон_пути_сужает_поиск() {
-        let dir = TempDir::new();
-        dir.write("src/a.rs", "clipboard\n");
-        dir.write("src/b.ts", "clipboard\n");
-        let (ctx, _ws) = ctx_for(&dir);
-
-        let out = Grep::new()
-            .run(&ctx, json!({ "pattern": "clipboard", "glob": "**/*.rs" }))
-            .await
-            .unwrap();
-
-        assert!(out.text.contains("src/a.rs"));
-        assert!(!out.text.contains("b.ts"));
-    }
-
-    #[tokio::test]
-    async fn режим_files_отдаёт_только_пути() {
-        let dir = TempDir::new();
-        dir.write("a.rs", "нужное\nнужное\n");
-        let (ctx, _ws) = ctx_for(&dir);
-
-        let out = Grep::new()
-            .run(&ctx, json!({ "pattern": "нужное", "mode": "files" }))
-            .await
-            .unwrap();
-
-        assert_eq!(out.text.trim(), "a.rs");
-        assert_eq!(out.meta.items, Some(1));
-    }
-
-    #[tokio::test]
-    async fn игнор_действует_и_вне_git_репозитория() {
-        let dir = TempDir::new();
-        dir.write(
-            ".gitignore",
-            "target
-node_modules
-",
-        );
-        dir.write(
-            "target/debug/build.rs",
-            "нужное
-",
-        );
-        dir.write(
-            "node_modules/pkg/index.js",
-            "нужное
-",
-        );
-        dir.write(
-            "src/a.rs",
-            "нужное
-",
-        );
-        let (ctx, _ws) = ctx_for(&dir);
-
-        let out = Grep::new()
-            .run(&ctx, json!({ "pattern": "нужное" }))
-            .await
-            .unwrap();
-
-        assert!(out.text.contains("src/a.rs"), "получили: {}", out.text);
-        assert!(!out.text.contains("target"), "получили: {}", out.text);
-        assert!(!out.text.contains("node_modules"), "получили: {}", out.text);
-    }
-
-    fn numbered(n: usize) -> String {
-        (1..=n).map(|i| format!("line {i}\n")).collect()
-    }
-
-    #[tokio::test]
-    async fn context_lines_surround_a_match_and_are_marked_apart() {
-        let dir = TempDir::new();
-        dir.write("a.rs", "one\ntwo\nfound\nfour\nfive\n");
-        let (ctx, _ws) = ctx_for(&dir);
-
-        let out = Grep::new()
-            .run(&ctx, json!({ "pattern": "found", "context": 1 }))
-            .await
-            .unwrap();
-
-        // ripgrep's marks: `:` on the match, `-` on the lines around it.
-        assert_eq!(out.text, "a.rs-2- two\na.rs:3: found\na.rs-4- four\n");
-        assert_eq!(out.meta.items, Some(1), "context lines are not matches");
-    }
-
-    #[tokio::test]
-    async fn before_and_after_are_separate_and_override_context() {
-        let dir = TempDir::new();
-        dir.write("a.rs", &numbered(9));
-        let (ctx, _ws) = ctx_for(&dir);
-
-        let out = Grep::new()
-            .run(
-                &ctx,
-                json!({ "pattern": "^line 5$", "context": 3, "before": 2, "after": 0 }),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(out.text, "a.rs-3- line 3\na.rs-4- line 4\na.rs:5: line 5\n");
-    }
-
-    #[tokio::test]
-    async fn overlapping_windows_merge_and_distant_ones_are_split() {
-        let dir = TempDir::new();
-        dir.write("a.rs", &numbered(12));
-        let (ctx, _ws) = ctx_for(&dir);
-
-        // Matches on 2, 4 and 10: the first two windows share line 3.
-        let out = Grep::new()
-            .run(
-                &ctx,
-                json!({ "pattern": "^line (2|4|10)$", "context": 1 }),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(
-            out.text,
-            "a.rs-1- line 1\na.rs:2: line 2\na.rs-3- line 3\na.rs:4: line 4\na.rs-5- line 5\n\
-             --\n\
-             a.rs-9- line 9\na.rs:10: line 10\na.rs-11- line 11\n"
-        );
-        assert_eq!(out.meta.items, Some(3));
-    }
-
-    #[tokio::test]
-    async fn groups_in_different_files_are_split_too() {
-        let dir = TempDir::new();
-        dir.write("a.rs", "x\nfound\n");
-        dir.write("b.rs", "found\ny\n");
-        let (ctx, _ws) = ctx_for(&dir);
-
-        let out = Grep::new()
-            .run(&ctx, json!({ "pattern": "found", "context": 1 }))
-            .await
-            .unwrap();
-
-        assert_eq!(out.text, "a.rs-1- x\na.rs:2: found\n--\nb.rs:1: found\nb.rs-2- y\n");
-    }
-
-    #[tokio::test]
-    async fn wide_context_is_cut_to_a_budget_and_counted_in_matches() {
-        let dir = TempDir::new();
-        let wide = "w".repeat(300);
-        let text: String = (0..2_000)
-            .map(|i| if i % 10 == 0 { "hit\n".to_string() } else { format!("{wide}\n") })
-            .collect();
-        dir.write("a.rs", &text);
-        let (ctx, _ws) = ctx_for(&dir);
-
-        let out = Grep::new()
-            .run(&ctx, json!({ "pattern": "^hit$", "context": 9 }))
-            .await
-            .unwrap();
-
-        // Two hundred matches with nine lines of context each way would be
-        // well over a megabyte.
-        assert!(out.text.len() < 110_000, "{} bytes", out.text.len());
-        assert!(out.meta.truncated);
-        // The footer counts matches, not the lines around them.
-        let footer = out.text.lines().last().unwrap();
-        assert!(footer.contains("из 200 совпадений"), "{footer}");
-    }
-
-    #[tokio::test]
-    async fn отсутствие_совпадений_проговаривается() {
-        let dir = TempDir::new();
-        dir.write("a.rs", "ничего\n");
-        let (ctx, _ws) = ctx_for(&dir);
-
-        let out = Grep::new()
-            .run(&ctx, json!({ "pattern": "^нет$" }))
-            .await
-            .unwrap();
-        assert!(out.text.contains("совпадений нет"));
-    }
-}
+mod tests;

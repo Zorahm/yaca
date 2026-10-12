@@ -385,11 +385,16 @@ async fn режим_plan_не_отдаёт_модели_пишущих_туло�
     assert_eq!(
         tools,
         vec![
+            // Asked in Plan too: a question is a read of the human, not a write.
+            "AskUser",
+            "Bash",
             "ExitPlanMode",
             "Glob",
             "Grep",
             "Read",
             "ReadImage",
+            // Read-only, so offered in plan as well as in agent.
+            "Skill",
             // The mode binds a subagent as it binds the agent.
             "Task",
             "TodoWrite",

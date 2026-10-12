@@ -183,8 +183,12 @@ impl Scanner {
             let mtime_ms = mtime_of(&meta);
             let mode = mode_of(&meta);
 
+            // A cached hash names an object that the sweep may have taken since
+            // the cache was filled. Reuse refreshes it, or the file is read again.
             let (hash, seen_at_ms) = match self.cache.get(&path) {
-                Some(c) if c.trustworthy(mtime_ms, len) => (c.hash, c.seen_at_ms),
+                Some(c) if c.trustworthy(mtime_ms, len) && store.keep_alive(&c.hash) => {
+                    (c.hash, c.seen_at_ms)
+                }
                 _ => {
                     let bytes = match std::fs::read(entry.path()) {
                         Ok(b) => b,

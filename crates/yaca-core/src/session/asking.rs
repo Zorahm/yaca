@@ -8,8 +8,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::event::AgentEvent;
 use crate::id::{CallId, RequestId};
-use crate::permission::broker::Standing;
-use crate::permission::policy::Verdict;
+use crate::permission::policy::Decision;
 use crate::permission::{PermissionAnswer, PermissionNeed, PermissionRequest};
 use crate::tool::take_description;
 
@@ -48,13 +47,11 @@ impl Caller {
     /// Standing rules come before the mode, so a refusal holds under bypass
     /// too: bypass means "stop asking me", not "do what I said no to".
     pub(super) fn gate(&self, need: &PermissionNeed) -> Gate {
-        match self.shared.broker.standing(need) {
-            Some(Standing::Refused(refusal)) => Gate::Refused(refusal.reason),
-            Some(Standing::Granted) => Gate::Pass,
-            None => match self.shared.policy().verdict(need.kind) {
-                Verdict::Allow => Gate::Pass,
-                Verdict::Ask => Gate::Ask,
-            },
+        let standing = self.shared.broker.standing(need);
+        match self.shared.policy().decide(need, standing.as_ref()) {
+            Decision::Pass => Gate::Pass,
+            Decision::Ask => Gate::Ask,
+            Decision::Refuse(reason) => Gate::Refused(reason),
         }
     }
 
@@ -80,6 +77,12 @@ impl Caller {
                 note: need.note.clone(),
                 size_bytes: need.size_bytes,
                 files: need.files,
+                invariant: need.invariant,
+                unsaved: need.unsaved.clone(),
+                server: need.server.clone(),
+                // The primary root, as `PermissionNeed::scopes` expects: rules
+                // for the project are relative to it, rules for an additional
+                // root are absolute, and neither reads the other.
                 scopes: need.scopes(self.ws.root()),
                 position,
                 total: position + self.still_to_ask(&queue),
@@ -128,7 +131,9 @@ impl Caller {
                     return false;
                 };
                 let mut input = call.input.clone();
-                let _ = take_description(&mut input);
+                if !tool.keeps_description() {
+                    let _ = take_description(&mut input);
+                }
                 let Some(need) = tool.permission(self.ws.as_ref(), &input) else {
                     return false;
                 };

@@ -19,6 +19,7 @@
 //! be safe in the narrow sense — fewer rules, less trust — but it would leave a
 //! human believing a rule applies when a typo has quietly dropped it.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -26,6 +27,7 @@ use ts_rs::TS;
 
 use crate::error::CoreError;
 use crate::intent::Mode;
+use crate::mcp::McpServerSettings;
 use crate::permission::{Refusal, ScopeKey};
 
 /// Where the file sits under the project root.
@@ -51,6 +53,213 @@ pub struct Settings {
     pub subagent_model: Option<String>,
     pub permissions: PermissionSettings,
     pub shadow: ShadowSettings,
+    /// The project's own check, run after a batch of calls that changed files
+    /// (see `verify.rs`). Absent means nothing runs after an edit.
+    pub verify: Option<VerifySettings>,
+    /// Commands run around every tool call that matches them (see `hooks.rs`).
+    /// Absent means no hooks, and a project that never wrote the section gets
+    /// exactly the calls it got before. Read it through [`Settings::hooks`],
+    /// which gives the empty set for both absent and `null`.
+    #[ts(optional)]
+    pub hooks: Option<HooksSettings>,
+    /// How many requests to the model one turn may make before it is stopped
+    /// (see `session/guard.rs`). Absent means [`Settings::DEFAULT_MAX_STEPS`].
+    #[ts(optional)]
+    pub max_steps: Option<u32>,
+    /// MCP servers of this project, by name (see `mcp::config`). On top of the
+    /// human's own list and the project's `.mcp.json`, and replacing a server
+    /// of the same name from either.
+    ///
+    /// A declaration that cannot be used does not stop the session, unlike a
+    /// broken hook: the server is listed as failed with the reason, and the
+    /// session works without its tools.
+    pub mcp_servers: BTreeMap<String, McpServerSettings>,
+}
+
+/// `"hooks": { "preToolUse": [...], "postToolUse": [...] }` in
+/// `.yaca/settings.json`.
+///
+/// Trust is the same as for `verify`: the human wrote the command in the file
+/// they own, so the core runs it without a permission question. What a hook may
+/// do is narrower, and that is the reason for the two lists. A pre hook can only
+/// refuse a call that was about to run; nothing a hook says can grant one.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(default, rename_all = "camelCase")]
+pub struct HooksSettings {
+    /// Run before a call, ahead of the permission question. Exit code 0 lets the
+    /// call go on; anything else refuses it, and the model reads the output.
+    pub pre_tool_use: Vec<HookSettings>,
+    /// Run after a call has run. Its output is added to what the model reads as
+    /// the result, and a failure is a note on the call, not a failure of it.
+    pub post_tool_use: Vec<HookSettings>,
+}
+
+/// One entry of a hook list. Both keys are required: an entry without a
+/// `match` would not say which calls it applies to, and one without a
+/// `command` would have nothing to run.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct HookSettings {
+    /// `*` for every tool, or one tool name exactly as the registry names it
+    /// (`Bash`, `Edit`, `Write`). Checked at load: a name no tool answers to
+    /// would be a hook that silently never runs.
+    #[serde(rename = "match")]
+    pub matcher: String,
+    /// The command line, run through the shell Bash uses, with `YACA_TOOL` and
+    /// `YACA_PROJECT_ROOT` in its environment and a JSON description of the call
+    /// on its standard input.
+    pub command: String,
+    /// Seconds before the command is stopped. Absent means
+    /// [`HookSettings::DEFAULT_TIMEOUT_SECS`].
+    pub timeout_secs: Option<u64>,
+}
+
+impl HookSettings {
+    /// Short on purpose: a hook is a check that should answer quickly, and one
+    /// that does not answer in this time is treated as refusing the call (see
+    /// `hooks.rs`), so a long default would stall every matching call.
+    pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
+    /// The same ceiling as for `verify`.
+    pub const MAX_TIMEOUT_SECS: u64 = 600;
+
+    pub fn command(&self) -> &str {
+        self.command.trim()
+    }
+
+    pub fn timeout(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(self.timeout_secs.unwrap_or(Self::DEFAULT_TIMEOUT_SECS))
+    }
+
+    /// Whether this hook runs for a call to `tool`.
+    pub fn applies_to(&self, tool: &str) -> bool {
+        self.matcher == "*" || self.matcher == tool
+    }
+}
+
+impl HooksSettings {
+    /// Why these hooks cannot be used, in words a human can act on. Checked at
+    /// load for the same reason `verify` is: a broken entry should stop the
+    /// session that would have run it, not fail some later call.
+    fn validate(&self) -> Result<(), String> {
+        let registry = crate::tool::ToolRegistry::standard();
+        let lists = [
+            ("preToolUse", &self.pre_tool_use),
+            ("postToolUse", &self.post_tool_use),
+        ];
+        for (phase, list) in lists {
+            for (at, hook) in list.iter().enumerate() {
+                let here = format!("hooks.{phase}[{at}]");
+                // An MCP tool is named by its server, which is not running
+                // when the file is read: the prefix is all that can be checked.
+                let known_name = registry.names().any(|name| name == hook.matcher)
+                    || crate::mcp::RESOURCE_TOOLS.contains(&hook.matcher.as_str())
+                    || hook.matcher.starts_with(crate::mcp::TOOL_PREFIX);
+                if hook.matcher != "*" && !known_name {
+                    let known = registry.names().collect::<Vec<_>>().join(", ");
+                    return Err(format!(
+                        "{here}.match: «{}» — нет такого инструмента; допустимы * или одно из имён: {known}",
+                        hook.matcher
+                    ));
+                }
+                if hook.command().is_empty() {
+                    return Err(format!("{here}.command пуст: задайте команду или уберите запись"));
+                }
+                if let Some(secs) = hook.timeout_secs {
+                    if !(1..=HookSettings::MAX_TIMEOUT_SECS).contains(&secs) {
+                        return Err(format!(
+                            "{here}.timeoutSecs должен быть от 1 до {} с, а не {secs}",
+                            HookSettings::MAX_TIMEOUT_SECS
+                        ));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// `"verify": { "command": "cargo check --message-format short" }` in
+/// `.yaca/settings.json`.
+///
+/// The command is written by the human, in the file they own, and the core runs
+/// it without asking the permission broker: a question before every check would
+/// make an edit cost a prompt. That is the trust this field grants, and the
+/// reason it lives here rather than as a tool the model can call.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(default, rename_all = "camelCase")]
+pub struct VerifySettings {
+    /// The command line, run through the shell Bash uses. Required: an empty
+    /// `verify` object is refused rather than read as "no check", because a
+    /// human who wrote one meant to have a check.
+    pub command: String,
+    /// Seconds before the command is stopped and reported as timed out.
+    /// Absent means [`VerifySettings::DEFAULT_TIMEOUT_SECS`].
+    pub timeout_secs: Option<u64>,
+    /// Directory the command runs in, relative to the project root. Absent
+    /// means the root. Kept inside the project by refusing anything that is
+    /// not a plain relative path.
+    pub cwd: Option<String>,
+}
+
+impl VerifySettings {
+    /// Two minutes: a type check or a unit-test run finishes well inside it;
+    /// one that does not is usually waiting on something.
+    pub const DEFAULT_TIMEOUT_SECS: u64 = 120;
+    /// The same ceiling Bash puts on a foreground command.
+    pub const MAX_TIMEOUT_SECS: u64 = 600;
+
+    /// The command without the whitespace around it.
+    pub fn command(&self) -> &str {
+        self.command.trim()
+    }
+
+    pub fn timeout(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(self.timeout_secs.unwrap_or(Self::DEFAULT_TIMEOUT_SECS))
+    }
+
+    pub fn cwd(&self) -> &str {
+        self.cwd.as_deref().unwrap_or(".")
+    }
+
+    /// Why these settings cannot be used, in words a human can act on. Checked
+    /// at load: a bad value that surfaced only when an edit happened would
+    /// fail that edit, far from the line that caused it.
+    fn validate(&self) -> Result<(), String> {
+        if self.command().is_empty() {
+            return Err("verify.command пуст: задайте команду или уберите verify целиком".into());
+        }
+        if let Some(secs) = self.timeout_secs {
+            if !(1..=Self::MAX_TIMEOUT_SECS).contains(&secs) {
+                return Err(format!(
+                    "verify.timeoutSecs должен быть от 1 до {} с, а не {secs}",
+                    Self::MAX_TIMEOUT_SECS
+                ));
+            }
+        }
+        if let Some(cwd) = &self.cwd {
+            if !is_project_relative(cwd) {
+                return Err(format!(
+                    "verify.cwd должен быть путём внутри проекта, а не «{cwd}»"
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// A plain relative path: no root, no drive, no `..`. Anything else could
+/// name a directory outside the project, and the human wrote a command, not
+/// a place for it to run.
+fn is_project_relative(raw: &str) -> bool {
+    use std::path::Component;
+
+    !raw.trim().is_empty()
+        && Path::new(raw)
+            .components()
+            .all(|part| matches!(part, Component::Normal(_) | Component::CurDir))
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
@@ -87,6 +296,11 @@ pub struct ShadowSettings {
 }
 
 impl Settings {
+    /// What a turn may spend when the project does not say. Matches the
+    /// subagent's ceiling: a task that needs more went round in circles or was
+    /// too wide to be one turn, and the human's "continue" costs one message.
+    pub const DEFAULT_MAX_STEPS: u32 = 100;
+
     /// Reads the file, or returns the defaults when there is none.
     pub fn load(root: &Path) -> Result<Settings, CoreError> {
         let path = crate::project::dir(root).join(FILE);
@@ -101,8 +315,20 @@ impl Settings {
             }
         };
 
-        serde_json::from_str(&text)
-            .map_err(|e| CoreError::Config(format!("{} разобран не до конца: {e}", path.display())))
+        let settings: Settings = serde_json::from_str(&text).map_err(|e| {
+            CoreError::Config(format!("{} разобран не до конца: {e}", path.display()))
+        })?;
+        if let Some(verify) = &settings.verify {
+            verify
+                .validate()
+                .map_err(|why| CoreError::Config(format!("{}: {why}", path.display())))?;
+        }
+        if let Some(hooks) = &settings.hooks {
+            hooks
+                .validate()
+                .map_err(|why| CoreError::Config(format!("{}: {why}", path.display())))?;
+        }
+        Ok(settings)
     }
 
     /// Writes the file, creating `.yaca/` if needed.
@@ -120,8 +346,24 @@ impl Settings {
             .map_err(|e| CoreError::Config(format!("не записать настройки: {e}")))
     }
 
+    /// The step ceiling of one turn. Never below two: with one, a turn could
+    /// not read a file and then answer about it.
+    pub fn max_steps(&self) -> u32 {
+        self.max_steps.unwrap_or(Self::DEFAULT_MAX_STEPS).max(2)
+    }
+
     pub fn mode_or_default(&self) -> Mode {
         self.mode.unwrap_or_default()
+    }
+
+    /// The project's hooks, or none. Borrowed from a static when the file has
+    /// no section, so callers never have to decide between "absent" and "empty".
+    pub fn hooks(&self) -> &HooksSettings {
+        static NONE: HooksSettings = HooksSettings {
+            pre_tool_use: Vec::new(),
+            post_tool_use: Vec::new(),
+        };
+        self.hooks.as_ref().unwrap_or(&NONE)
     }
 
     /// Which model summarizes history, given the session's own model (§5.11).
@@ -189,7 +431,12 @@ mod tests {
                         },
                         Some("коммит я делаю сам".into()),
                     ),
-                    Refusal::new(ScopeKey::Directory { path: ".yaca".into() }, None),
+                    Refusal::new(
+                        ScopeKey::Directory {
+                            path: ".yaca".into(),
+                        },
+                        None,
+                    ),
                 ],
             },
             shadow: ShadowSettings {
@@ -246,6 +493,221 @@ mod tests {
         let settings = Settings::load(dir.path()).unwrap();
         assert_eq!(settings.permissions.rules.len(), 1);
         assert!(settings.permissions.denies.is_empty());
+    }
+
+    #[test]
+    fn a_project_without_verify_has_no_check() {
+        let dir = TempDir::new();
+        dir.write(".yaca/settings.json", r#"{ "mode": "auto" }"#);
+        assert_eq!(Settings::load(dir.path()).unwrap().verify, None);
+    }
+
+    #[test]
+    fn verify_takes_a_command_and_defaults_the_rest() {
+        let dir = TempDir::new();
+        dir.write(
+            ".yaca/settings.json",
+            r#"{ "verify": { "command": "  cargo check  " } }"#,
+        );
+
+        let verify = Settings::load(dir.path()).unwrap().verify.unwrap();
+        assert_eq!(verify.command(), "cargo check");
+        assert_eq!(verify.timeout(), std::time::Duration::from_secs(120));
+        assert_eq!(verify.cwd(), ".");
+    }
+
+    #[test]
+    fn verify_reads_its_timeout_and_directory() {
+        let dir = TempDir::new();
+        dir.write(
+            ".yaca/settings.json",
+            r#"{ "verify": { "command": "npm test", "timeoutSecs": 30, "cwd": "web" } }"#,
+        );
+
+        let verify = Settings::load(dir.path()).unwrap().verify.unwrap();
+        assert_eq!(verify.timeout(), std::time::Duration::from_secs(30));
+        assert_eq!(verify.cwd(), "web");
+    }
+
+    /// Unknown keys are ignored everywhere else in the file, and `verify` is no
+    /// exception: a key from a newer Yaca must not stop an older one.
+    #[test]
+    fn verify_ignores_keys_it_does_not_know() {
+        let dir = TempDir::new();
+        dir.write(
+            ".yaca/settings.json",
+            r#"{ "verify": { "command": "cargo check", "somethingNew": true } }"#,
+        );
+        assert!(Settings::load(dir.path()).unwrap().verify.is_some());
+    }
+
+    #[test]
+    fn an_empty_verify_command_is_refused_at_load() {
+        let dir = TempDir::new();
+        dir.write(
+            ".yaca/settings.json",
+            r#"{ "verify": { "command": "  " } }"#,
+        );
+        let err = Settings::load(dir.path()).unwrap_err();
+        assert!(matches!(err, CoreError::Config(_)), "got {err:?}");
+    }
+
+    #[test]
+    fn a_verify_timeout_outside_the_range_is_refused_at_load() {
+        for bad in ["0", "601"] {
+            let dir = TempDir::new();
+            dir.write(
+                ".yaca/settings.json",
+                &format!(r#"{{ "verify": {{ "command": "x", "timeoutSecs": {bad} }} }}"#),
+            );
+            let err = Settings::load(dir.path()).unwrap_err();
+            assert!(matches!(err, CoreError::Config(_)), "{bad}: got {err:?}");
+        }
+    }
+
+    #[test]
+    fn a_verify_directory_outside_the_project_is_refused_at_load() {
+        for bad in ["..", "../other", "/etc", "", "a/../../b"] {
+            let dir = TempDir::new();
+            dir.write(
+                ".yaca/settings.json",
+                &serde_json::json!({ "verify": { "command": "x", "cwd": bad } }).to_string(),
+            );
+            let err = Settings::load(dir.path()).unwrap_err();
+            assert!(matches!(err, CoreError::Config(_)), "{bad:?}: got {err:?}");
+        }
+    }
+
+    #[test]
+    fn a_project_without_hooks_runs_nothing_around_a_call() {
+        let dir = TempDir::new();
+        dir.write(".yaca/settings.json", r#"{ "mode": "auto" }"#);
+        let settings = Settings::load(dir.path()).unwrap();
+        assert_eq!(settings.hooks, None);
+        assert_eq!(settings.hooks(), &HooksSettings::default());
+    }
+
+    #[test]
+    fn hooks_read_their_matcher_command_and_timeout() {
+        let dir = TempDir::new();
+        dir.write(
+            ".yaca/settings.json",
+            r#"{ "hooks": {
+                "preToolUse": [{ "match": "Bash", "command": " guard.sh ", "timeoutSecs": 5 }],
+                "postToolUse": [{ "match": "*", "command": "lint.sh" }]
+            } }"#,
+        );
+
+        let settings = Settings::load(dir.path()).unwrap();
+        let hooks = settings.hooks();
+        let pre = &hooks.pre_tool_use[0];
+        assert_eq!(pre.matcher, "Bash");
+        assert_eq!(pre.command(), "guard.sh");
+        assert_eq!(pre.timeout(), std::time::Duration::from_secs(5));
+        assert!(pre.applies_to("Bash") && !pre.applies_to("Edit"));
+
+        let post = &hooks.post_tool_use[0];
+        assert_eq!(post.timeout(), std::time::Duration::from_secs(30));
+        assert!(post.applies_to("Edit"), "a star matches every tool");
+    }
+
+    #[test]
+    fn a_hook_round_trips_with_its_match_key() {
+        let dir = TempDir::new();
+        let written = Settings {
+            hooks: Some(HooksSettings {
+                pre_tool_use: vec![HookSettings {
+                    matcher: "Write".into(),
+                    command: "check".into(),
+                    timeout_secs: Some(10),
+                }],
+                post_tool_use: Vec::new(),
+            }),
+            ..Settings::default()
+        };
+        written.save(dir.path()).unwrap();
+        let text = std::fs::read_to_string(dir.path().join(".yaca/settings.json")).unwrap();
+        assert!(text.contains("\"match\": \"Write\""), "{text}");
+        assert_eq!(Settings::load(dir.path()).unwrap(), written);
+    }
+
+    #[test]
+    fn a_hook_for_a_tool_no_one_has_is_refused_at_load() {
+        // A name the registry does not know would never match a call: the hook
+        // would be a line in the file that never runs, which is a lie about
+        // what is checked.
+        let dir = TempDir::new();
+        dir.write(
+            ".yaca/settings.json",
+            r#"{ "hooks": { "preToolUse": [{ "match": "ReadFile", "command": "x" }] } }"#,
+        );
+        let err = Settings::load(dir.path()).unwrap_err();
+        let CoreError::Config(why) = &err else {
+            panic!("got {err:?}");
+        };
+        assert!(why.contains("hooks.preToolUse[0].match"), "{why}");
+        assert!(why.contains("Bash") && why.contains("Skill"), "lists the real names: {why}");
+    }
+
+    #[test]
+    fn a_hook_may_name_an_mcp_tool() {
+        let dir = TempDir::new();
+        dir.write(
+            ".yaca/settings.json",
+            r#"{ "hooks": { "preToolUse": [
+                { "match": "mcp__tracker__create_task", "command": "x" },
+                { "match": "ReadMcpResource", "command": "x" }
+            ] } }"#,
+        );
+        assert_eq!(Settings::load(dir.path()).unwrap().hooks().pre_tool_use.len(), 2);
+    }
+
+    #[test]
+    fn mcp_servers_are_read_by_name() {
+        let dir = TempDir::new();
+        dir.write(
+            ".yaca/settings.json",
+            r#"{ "mcpServers": {
+                "files": { "command": "server-files", "args": ["."] },
+                "off": { "url": "https://example.test/mcp", "disabled": true }
+            } }"#,
+        );
+        let settings = Settings::load(dir.path()).unwrap();
+        assert_eq!(settings.mcp_servers["files"].args, ["."]);
+        assert!(settings.mcp_servers["off"].disabled);
+
+        settings.save(dir.path()).unwrap();
+        assert_eq!(Settings::load(dir.path()).unwrap(), settings);
+    }
+
+    #[test]
+    fn a_hook_with_an_empty_command_or_a_bad_timeout_is_refused_at_load() {
+        let cases = [
+            r#"{ "hooks": { "postToolUse": [{ "match": "*", "command": "  " }] } }"#,
+            r#"{ "hooks": { "postToolUse": [{ "match": "*", "command": "x", "timeoutSecs": 0 }] } }"#,
+            r#"{ "hooks": { "postToolUse": [{ "match": "*", "command": "x", "timeoutSecs": 601 }] } }"#,
+        ];
+        for text in cases {
+            let dir = TempDir::new();
+            dir.write(".yaca/settings.json", text);
+            let err = Settings::load(dir.path()).unwrap_err();
+            assert!(matches!(err, CoreError::Config(_)), "{text}: got {err:?}");
+        }
+    }
+
+    #[test]
+    fn a_hook_without_its_match_or_its_command_is_refused_at_load() {
+        // Both keys are required: without a match there is no saying which calls
+        // the hook is for, and without a command there is nothing to run.
+        for text in [
+            r#"{ "hooks": { "preToolUse": [{ "command": "x" }] } }"#,
+            r#"{ "hooks": { "preToolUse": [{ "match": "Bash" }] } }"#,
+        ] {
+            let dir = TempDir::new();
+            dir.write(".yaca/settings.json", text);
+            let err = Settings::load(dir.path()).unwrap_err();
+            assert!(matches!(err, CoreError::Config(_)), "{text}: got {err:?}");
+        }
     }
 
     #[test]
