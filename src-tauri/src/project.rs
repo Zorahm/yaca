@@ -62,5 +62,9 @@ pub fn shadow_excluded_dirs() -> Vec<&'static str> {
 #[tauri::command]
 pub fn project_instructions(project: String) -> Result<Option<String>, String> {
     let ws = yaca_core::Workspace::open(root(&project)?).map_err(|e| e.to_string())?;
-    Ok(yaca_core::instructions::load(&ws).map(|found| found.path))
+    // The root file only: nested ones govern their own directories and are
+    // not "the" instructions file of the project.
+    Ok(yaca_core::instructions::load(&ws)
+        .and_then(|found| found.root)
+        .map(|root| root.path))
 }

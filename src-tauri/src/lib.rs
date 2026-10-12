@@ -6,6 +6,7 @@
 //! получать сырой поток.
 
 mod bridge;
+mod mcp;
 mod notify;
 mod prefs;
 mod profile;
@@ -127,6 +128,12 @@ pub struct Startup {
 pub struct OpenedChat {
     pub id: SessionId,
     pub state: SessionState,
+    /// The chat's MCP servers, for the same reason as the state: they start
+    /// connecting when the session does, before the window listens.
+    pub mcp: Vec<yaca_core::McpServerSummary>,
+    /// The chat's language servers, listed when the session opens for the
+    /// same reason.
+    pub lsp: Vec<yaca_core::LspServerSummary>,
 }
 
 /// С чем сессию начал бы сам проект (§10): основа для нижнего ряда §7.1 на
@@ -177,6 +184,16 @@ async fn open_project(
     // полем конфига, как режим и усилие.
     config.respect_robots = state.prefs().respect_robots;
     config.shell = state.prefs().shell;
+    // The human's own MCP servers and their approvals of a project's: both
+    // live in the configuration directory, like the providers.
+    let config_home = config_dir()?;
+    config.mcp_servers =
+        yaca_core::mcp::config::load_global(&config_home).map_err(|e| e.to_string())?;
+    // The human's own language servers, from the same directory.
+    config.lsp_servers =
+        yaca_core::lsp::config::load_global(&config_home).map_err(|e| e.to_string())?;
+    config.lsp_autodetect = true;
+    config.mcp_approvals = Some(config_home);
     if let Some(id) = resume {
         config.resume_session(SessionId::from(id));
     }
@@ -212,12 +229,16 @@ async fn open_project(
     settings.remember_project(root);
     settings.save(&dir).map_err(|e| e.to_string())?;
 
-    let opened = OpenedChat {
-        id: handle.id().clone(),
+    let id = handle.id().clone();
+    state.open(handle.clone(), &app);
+    // Read after the bridge is listening, so a server that becomes ready in
+    // between is in one of the two: this list or the next frame.
+    Ok(OpenedChat {
+        id,
         state: handle.state(),
-    };
-    state.open(handle, &app);
-    Ok(opened)
+        mcp: handle.mcp(),
+        lsp: handle.lsp(),
+    })
 }
 
 /// Закрывает чат: ход останавливается, сессия отпускается, фоновые команды
@@ -476,6 +497,10 @@ pub fn run() {
             project::save_project_settings,
             project::project_instructions,
             project::shadow_excluded_dirs,
+            mcp::global_mcp_servers,
+            mcp::save_global_mcp_servers,
+            mcp::project_mcp_file,
+            mcp::session_mcp,
             window::open_settings,
         ])
         .run(context)

@@ -11,6 +11,7 @@
 
 use yaca_core::event::AgentEvent;
 use yaca_core::permission::PermissionRequest;
+use yaca_core::question::QuestionRequest;
 
 use tauri::{AppHandle, Manager};
 use tokio::sync::broadcast::error::RecvError;
@@ -35,6 +36,13 @@ fn toast_body(target: &str) -> String {
     format!("{BODY}{target}")
 }
 
+/// Toast text for a question: the sentence, then the question itself.
+const QUESTION_BODY: &str = "Агент задал вопрос: ";
+
+fn question_toast_body(question: &str) -> String {
+    format!("{QUESTION_BODY}{question}")
+}
+
 /// Watcher of a single chat: subscribed to the same broadcast stream as the
 /// bridge — a second subscriber, not a fork inside the bridge, which is
 /// about transport.
@@ -53,9 +61,9 @@ pub async fn watch(app: AppHandle, mut events: Receiver<AgentEvent>, stop: Cance
                     // Both asked at event time rather than tracked: the
                     // setting can be switched in the other window mid-turn,
                     // and a copy taken at subscribe time would be stale.
-                    let request = unattended(enabled(&app), focused(&app), &event);
-                    if let Some(request) = request {
-                        push(&app, &request.target);
+                    let asked = unattended(enabled(&app), focused(&app), &event);
+                    if let Some(asked) = asked {
+                        push(&app, &asked.body());
                     }
                 }
                 // A lagged subscriber, same as in the bridge: losing the
@@ -72,15 +80,33 @@ pub async fn watch(app: AppHandle, mut events: Receiver<AgentEvent>, stop: Cance
 /// pieces of data — the setting (§10), window focus and the kind of event.
 /// Separated from delivery so the test argues with it, not with the OS.
 ///
-/// `Some` carries the request itself: its `target` is what the human reads
-/// on the toast.
-fn unattended(enabled: bool, focused: bool, event: &AgentEvent) -> Option<&PermissionRequest> {
+/// `Some` carries the request itself: its target, or its question, is what
+/// the human reads on the toast.
+fn unattended(enabled: bool, focused: bool, event: &AgentEvent) -> Option<Asked<'_>> {
     if !enabled || focused {
         return None;
     }
     match event {
-        AgentEvent::PermissionRequested { request } => Some(request),
+        AgentEvent::PermissionRequested { request } => Some(Asked::Permission(request)),
+        // A question holds the turn until someone answers it, as a permission
+        // does, so the same toast is what brings the human back.
+        AgentEvent::QuestionAsked { request } => Some(Asked::Question(request)),
         _ => None,
+    }
+}
+
+/// What the human is being asked, as far as the toast needs to know it.
+enum Asked<'a> {
+    Permission(&'a PermissionRequest),
+    Question(&'a QuestionRequest),
+}
+
+impl Asked<'_> {
+    fn body(&self) -> String {
+        match self {
+            Asked::Permission(request) => toast_body(&request.target),
+            Asked::Question(request) => question_toast_body(&request.question),
+        }
     }
 }
 
@@ -101,9 +127,9 @@ fn focused(app: &AppHandle) -> bool {
 ///
 /// `show()` talks to the OS synchronously, hence a blocking thread: a slow
 /// notification daemon must not press down the asynchronous runtime pool.
-fn push(app: &AppHandle, target: &str) {
+fn push(app: &AppHandle, body: &str) {
     let app = app.clone();
-    let body = toast_body(target);
+    let body = body.to_string();
     // Identifier from `tauri.conf.json`: on Windows the NSIS and WiX
     // installers stamp it onto the Start-menu shortcut, and a toast under
     // the same AppUserModelID wears the app icon instead of the process
@@ -155,6 +181,7 @@ mod tests {
     /// A request of the same shape the core emits live.
     fn request(target: &str) -> PermissionRequest {
         PermissionRequest {
+            server: None,
             id: "r1".into(),
             call_id: "c1".into(),
             kind: PermissionKind::RunCommand,
@@ -164,6 +191,8 @@ mod tests {
             size_bytes: None,
             files: None,
             scopes: Vec::new(),
+            invariant: None,
+            unsaved: None,
             position: 1,
             total: 1,
         }
@@ -224,9 +253,28 @@ mod tests {
     #[test]
     fn toast_carries_request_target() {
         assert_eq!(
-            unattended(true, false, &permission("git commit")).unwrap().target,
-            "git commit"
+            unattended(true, false, &permission("git commit"))
+                .unwrap()
+                .body(),
+            toast_body("git commit")
         );
+    }
+
+    /// A question that waits unseen gets a toast that names the question.
+    #[test]
+    fn an_unfocused_question_notifies_with_its_text() {
+        let event = AgentEvent::QuestionAsked {
+            request: QuestionRequest {
+                id: "q1".into(),
+                call_id: "c1".into(),
+                question: "Какой путь?".into(),
+                options: Vec::new(),
+                allow_other: true,
+                multi_select: false,
+            },
+        };
+        let asked = unattended(true, false, &event).expect("no toast for a question");
+        assert!(asked.body().ends_with("Какой путь?"));
     }
 
     /// The body reads as a sentence and then the target: the separator keeps
