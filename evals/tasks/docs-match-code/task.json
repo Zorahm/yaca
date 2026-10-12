@@ -1,0 +1,6 @@
+{
+  "prompt": "docs/API.md no longer matches src/lib.rs. Update the documentation so that it describes the code exactly. Do not change the code. `cargo test` must pass.",
+  "mode": "agent",
+  "check": { "command": "cargo test --quiet" },
+  "expect": [ { "path": "docs/API.md", "contains": "DivideByZero" } ]
+}

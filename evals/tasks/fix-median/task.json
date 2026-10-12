@@ -1,0 +1,6 @@
+{
+  "prompt": "median() in src/lib.rs returns wrong answers. Fix it so that `cargo test` passes. Do not change anything under tests/.",
+  "mode": "agent",
+  "check": { "command": "cargo test --quiet" },
+  "expect": [ { "path": "tests/median.rs", "contains": "even_length_averages_middle_pair" } ]
+}

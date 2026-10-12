@@ -1,0 +1,6 @@
+{
+  "prompt": "The retry budget of the upload worker in src/upload.rs must match the specification in docs/SPEC.md. Change the constant so that `cargo test` passes. Do not edit the tests or the specification.",
+  "mode": "agent",
+  "check": { "command": "cargo test --quiet" },
+  "expect": [ { "path": "src/upload.rs", "contains": "MAX_ATTEMPTS: u32 = 7;" } ]
+}

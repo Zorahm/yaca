@@ -1,0 +1,9 @@
+{
+  "prompt": "Account::balance() is being renamed to Account::available(), because it returns the amount that can be spent right now, not the total. Rename the method in src/account.rs and update every caller in src/ so that `cargo test` passes. The tests already use the new name.",
+  "mode": "agent",
+  "check": { "command": "cargo test --quiet" },
+  "expect": [
+    { "path": "src/transfer.rs", "contains": "available()" },
+    { "path": "src/report.rs", "contains": "available()" }
+  ]
+}

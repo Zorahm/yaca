@@ -1,0 +1,6 @@
+{
+  "prompt": "src/wrap.rs has a wrap() that is not written yet. Implement it as its doc comment describes, and add a unit test for it inside src/wrap.rs (a #[cfg(test)] module with at least one #[test]). `cargo test` must pass.",
+  "mode": "agent",
+  "check": { "command": "cargo test --quiet" },
+  "expect": [ { "path": "src/wrap.rs", "contains": "#[test]" } ]
+}

@@ -1,0 +1,6 @@
+{
+  "prompt": "The pong server in src/main.rs must answer a line `ping` with `pong` followed by a newline. Start the server in the background, send it `ping` yourself, and look at what it actually sends back. Fix the server so that `cargo test` passes. Stop the background server before you finish.",
+  "mode": "agent",
+  "check": { "command": "cargo test --quiet" },
+  "expect": [ { "path": "src/main.rs", "contains": "pong\n" } ]
+}

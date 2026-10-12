@@ -1,0 +1,9 @@
+{
+  "prompt": "Add parse_header(line: &str) -> Result<Header, ParseError> to the parser in src/parser, so that the tests in tests/header.rs pass. Follow the project's instructions for every file you touch. `cargo test` must pass.",
+  "mode": "agent",
+  "check": { "command": "cargo test --quiet" },
+  "expect": [
+    { "path": "src/parser/header.rs", "contains": "pub fn parse_header(line: &str) -> Result<Header, ParseError>" },
+    { "path": "src/parser/header.rs", "contains": "/// " }
+  ]
+}

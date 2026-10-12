@@ -1,0 +1,6 @@
+{
+  "prompt": "The handlers in src/handlers still call the deprecated legacy_fetch. Change every handler to call net::fetch instead, with the same arguments and the same results, and make `cargo test` pass. Do not change the tests.",
+  "mode": "agent",
+  "check": { "command": "cargo test --quiet" },
+  "expect": [ { "path": "tests/migration.rs", "contains": "handlers_no_longer_call_legacy_fetch" } ]
+}

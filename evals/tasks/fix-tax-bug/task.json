@@ -1,0 +1,6 @@
+{
+  "prompt": "Invoice totals in tests/invoice.rs come out far too large. Find the cause and fix it so that `cargo test` passes. Do not change the tests.",
+  "mode": "agent",
+  "check": { "command": "cargo test --quiet" },
+  "expect": [ { "path": "src/tax.rs", "contains": "/ 100" } ]
+}

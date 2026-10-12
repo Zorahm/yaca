@@ -1,0 +1,6 @@
+{
+  "prompt": "Move the Config struct and its impl out of src/lib.rs into a new module src/config.rs. The public path tinyapp::config::Config must work, and describe() must keep working. `cargo test` must pass.",
+  "mode": "agent",
+  "check": { "command": "cargo test --quiet" },
+  "expect": [ { "path": "src/config.rs", "contains": "pub struct Config" } ]
+}
