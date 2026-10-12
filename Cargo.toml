@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/yaca-core", "crates/yaca-cli", "src-tauri"]
+members = ["crates/yaca-core", "crates/yaca-cli", "crates/yaca-evals", "src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
@@ -45,7 +45,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ts-rs = { version = "10", features = ["serde-json-impl"] }
 uuid = { version = "1", features = ["v4"] }
-windows-sys = { version = "0.61", features = ["Win32_Globalization"] }
+windows-sys = { version = "0.61", features = ["Win32_Globalization", "Win32_System_SystemInformation"] }
 
 [profile.dev]
 # Ядро пересобирается на каждой правке; зависимости — почти никогда.
