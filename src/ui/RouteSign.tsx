@@ -34,6 +34,8 @@ const KINDS: Record<string, SignKind> = {
   DeleteDir: "edit",
   Bash: "run",
   BashOutput: "run",
+  BashKill: "run",
+  BashRestart: "run",
   WebFetch: "web",
   WebSearch: "web",
 };

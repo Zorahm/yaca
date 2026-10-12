@@ -144,6 +144,21 @@
   user-select: none;
 }
 
+/* The fold is a button: a click opens the stretch (§6.4). Same grid as a row. */
+.diff-gap-btn {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.diff-gap-btn:hover,
+.diff-gap-btn:focus-visible {
+  color: var(--ink);
+}
+
 /* --- §6.5 панель процессов -------------------------------------------------- */
 
 .proc-list {
@@ -312,4 +327,125 @@
 /* Подтверждение §5.8 живёт внутри строки: вопрос стоит там, где спросили. */
 .ckpt .confirm {
   margin: 0 18px 10px;
+}
+
+/* --- §7.3 панель серверов MCP ------------------------------------------------ */
+
+.mcp-server {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.mcp-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--h-small-button);
+}
+
+.mcp-name {
+  font: 600 13px var(--mono);
+  color: var(--ink);
+}
+
+/* Состояние — слово, как у процесса §6.5: живое чернильное, сбой красный,
+   остальное серое. */
+.mcp-status {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+.mcp-status-live {
+  color: var(--ink);
+}
+
+.mcp-status-fail {
+  color: var(--red-ink);
+}
+
+/* Не режется: у сервера, ждущего одобрения, это и есть то, что одобряют. */
+.mcp-target {
+  font: 400 12px/18px var(--mono);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.mcp-meta,
+.mcp-note {
+  font-size: 11.5px;
+  line-height: 17px;
+  color: var(--ink-muted);
+}
+
+.mcp-note {
+  margin-top: 4px;
+}
+
+.mcp-reason {
+  margin: 4px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  font: 400 11.5px/17px var(--mono);
+  color: var(--red-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.mcp-tools {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.mcp-tools summary {
+  cursor: pointer;
+}
+
+.mcp-tools summary:hover,
+.mcp-tools summary:focus-visible {
+  color: var(--ink);
+}
+
+.mcp-tools ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mcp-tools li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.mcp-tool-name {
+  flex: none;
+  font: 400 12px var(--mono);
+  color: var(--ink);
+}
+
+.mcp-tool-kind {
+  flex: none;
+  font-size: 11px;
+}
+
+.mcp-tool-about {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Знак протокола перед словом в шапке панели. */
+.panel-title-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
 }

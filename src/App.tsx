@@ -35,6 +35,7 @@ import {
   type Effort,
   type ModelInfo,
   type PermissionAnswer,
+  type QuestionReply,
   type Preferences,
   type ProcessId,
   type SlashCommand,
@@ -44,7 +45,8 @@ import { relativeTo } from "./ui/format";
 import { t } from "./i18n";
 import { Feed, type FeedActions, type FeedJump } from "./ui/Feed";
 import { Notices } from "./ui/Bars";
-import { Composer, MODES, type ComposerActions } from "./ui/Composer";
+import { Composer, type ComposerActions } from "./ui/Composer";
+import { MODES } from "./ui/ModeMenu";
 import { Home } from "./ui/Home";
 import { imageActions } from "./ui/images";
 import { galleryOf } from "./ui/viewer/gallery";
@@ -52,6 +54,7 @@ import { Pictures } from "./ui/viewer/Viewer";
 import { TopBar } from "./ui/TopBar";
 import { Sidebar } from "./ui/sidebar/Sidebar";
 import { ProcessesPanel } from "./ui/panel/ProcessesPanel";
+import { McpPanel } from "./ui/panel/McpPanel";
 import { usePreferences } from "./ui/prefs";
 import { FilePanel } from "./ui/panel/FilePanel";
 import { CheckpointsPanel } from "./ui/panel/CheckpointsPanel";
@@ -70,7 +73,7 @@ import "./ui/viewer/viewer.css";
 import "./ui/sidebar/sidebar.css";
 
 /** Панель §1.1. Сессии уехали в свою колонку — сайдбар, а не панель. */
-type PanelKind = "checkpoints" | "file" | "processes";
+type PanelKind = "checkpoints" | "file" | "mcp" | "processes";
 
 export default function App({ prefs }: { prefs: Preferences }) {
   // Настройки приложения §10 живут в оболочке и меняются в соседнем окне:
@@ -238,6 +241,11 @@ export default function App({ prefs }: { prefs: Preferences }) {
         send(commands.answerPermission(active.feed.request.id, answer));
       }
     },
+    answerQuestion: (reply: QuestionReply) => {
+      if (active?.feed.question) {
+        send(commands.answerQuestion(active.feed.question.id, reply));
+      }
+    },
     previewCheckpoint: (id) => send(commands.previewCheckpoint(id)),
     openCheckpoints: () => setPanel("checkpoints"),
     restoreCheckpoint: (id) => send(commands.restoreCheckpoint(id)),
@@ -259,7 +267,6 @@ export default function App({ prefs }: { prefs: Preferences }) {
     // again while the agent is busy waits its turn like any other.
     resend: (text, attachments) => {
       if (!active) return;
-      if (active.feed.state?.busy) chats.patch(active.id, { queued: text });
       send(commands.send(text, attachments));
     },
   };
@@ -267,9 +274,13 @@ export default function App({ prefs }: { prefs: Preferences }) {
   const composerActions: ComposerActions = {
     send: (text, attachments) => {
       if (!active) return;
-      if (active.feed.state?.busy) chats.patch(active.id, { queued: text });
       send(commands.send(text, attachments));
     },
+    // §7.4: the core's queue, drawn as it stands. Cancelling sends the id; the
+    // list that comes back is what the chips show.
+    cancelQueued: (id) => send(commands.cancelQueued(id)),
+    // §7.2: the `@` menu asks the core, and the answer comes back in the feed.
+    searchFiles: (query) => send(commands.searchFiles(query)),
     stop: () => send(commands.cancel()),
     setMode: (mode) => send(commands.setMode(mode)),
     setBypass: (on) => send(commands.setBypass(on)),
@@ -279,6 +290,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
     // полосы §6.1.1 и у строки «Новый чат» сайдбара.
     compact: () => send(commands.compact()),
     openCheckpoints: () => setPanel("checkpoints"),
+    openMcp: () => setPanel("mcp"),
     newChat: () => {
       if (active !== null) newChat(active.project);
     },
@@ -321,7 +333,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
   );
 
   useShortcuts({
-    suspended: active?.feed.request != null,
+    // Esc belongs to an open question (it dismisses it), as it does to a permission.
+    suspended: active?.feed.request != null || active?.feed.question != null,
     panelOpen: panel !== null,
     closePanel: () => setPanel(null),
     prevFile: () => shiftFile(-1),
@@ -435,7 +448,22 @@ export default function App({ prefs }: { prefs: Preferences }) {
         )}
 
         {panel === "file" && filePanelPath !== null && (
-          <FilePanel path={filePanelPath} feed={active.feed} onClose={() => setPanel(null)} />
+          <FilePanel
+            path={filePanelPath}
+            feed={active.feed}
+            onClose={() => setPanel(null)}
+            onRead={(path) => send(commands.readFileView(path))}
+          />
+        )}
+
+        {panel === "mcp" && (
+          <McpPanel
+            servers={active.feed.mcp}
+            onClose={() => setPanel(null)}
+            onRefresh={() => void chats.refreshMcp(active.id).catch(failed)}
+            onReconnect={(server) => send(commands.reconnectMcpServer(server))}
+            onApprove={(server) => send(commands.approveMcpServer(server))}
+          />
         )}
 
         {panel === "checkpoints" && (
@@ -451,7 +479,11 @@ export default function App({ prefs }: { prefs: Preferences }) {
         <Feed feed={active.feed} actions={feedActions} ref={feedJump} />
 
         <div className="bars">
-          <Notices feed={active.feed} onCompact={() => send(commands.compact())} />
+          <Notices
+            feed={active.feed}
+            onCompact={() => send(commands.compact())}
+            onOpenMcp={() => setPanel("mcp")}
+          />
         </div>
 
         <Composer
@@ -463,7 +495,9 @@ export default function App({ prefs }: { prefs: Preferences }) {
             bypass: state.bypass,
           }}
           busy={state.busy}
-          ring={active.feed.request ? "waiting" : state.busy ? "busy" : "idle"}
+          ring={
+            active.feed.request || active.feed.question ? "waiting" : state.busy ? "busy" : "idle"
+          }
           usage={active.feed.usage}
           models={
             state.provider
@@ -471,7 +505,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
               : models
           }
           commands={slashCommands}
-          queued={active.queued}
+          queued={active.feed.queued}
+          found={active.feed.found}
           actions={composerActions}
           // Черновик принадлежит разговору, а не проекту: чатов в проекте
           // несколько, и недописанное в одном не должно всплывать в другом.

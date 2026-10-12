@@ -6,11 +6,10 @@
  * `.yaca/commands/*.md`, и разворачивает их ядро в момент отправки — окну от
  * них нужны имя и описание, чтобы нарисовать строку.
  *
- * Встроенных здесь четыре из восьми, перечисленных в §7.3. `/mcp`, `/init`,
- * `/cost` и `/help` ведут в MCP, файл проекта, разбор трат и справку —
- * подсистемы и экраны, которых нет, а команда, которая ничего не открывает,
- * ничем не лучше кнопки, которая ничего не открывает (§0). Приедут вместе со
- * своими подсистемами.
+ * Встроенных здесь пять из восьми, перечисленных в §7.3. `/init`, `/cost` и
+ * `/help` ведут в файл проекта, разбор трат и справку — экраны, которых нет,
+ * а команда, которая ничего не открывает, ничем не лучше кнопки, которая
+ * ничего не открывает (§0). Приедут вместе со своими подсистемами.
  *
  * Меню — функция от текста поля, а не отдельное состояние: закрывается оно
  * тем, что текст перестал быть командой. Флаг «меню открыто» был бы второй
@@ -21,7 +20,7 @@ import type { SlashCommand } from "../core/client";
 import { t, type Key } from "../i18n";
 
 /** Встроенная команда — то, что интерфейс умеет сделать сам. */
-export type Builtin = "checkpoints" | "clear" | "compact" | "model";
+export type Builtin = "checkpoints" | "clear" | "compact" | "mcp" | "model";
 
 /**
  * Все имена, занятые встроенными командами.
@@ -30,12 +29,13 @@ export type Builtin = "checkpoints" | "clear" | "compact" | "model";
  * нечего, но `/compact` там не должен вдруг означать чужой файл. Имя команды
  * значит одно и то же везде.
  */
-export const RESERVED: Builtin[] = ["checkpoints", "clear", "compact", "model"];
+export const RESERVED: Builtin[] = ["checkpoints", "clear", "compact", "mcp", "model"];
 
 const NOTE: Record<Builtin, Key> = {
   checkpoints: "slash.checkpoints",
   clear: "slash.clear",
   compact: "slash.compact",
+  mcp: "slash.mcp",
   model: "slash.model",
 };
 

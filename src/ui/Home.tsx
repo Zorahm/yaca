@@ -184,7 +184,8 @@ export function Home({
           usage={null}
           models={models}
           commands={commands}
-          queued={null}
+          queued={[]}
+          found={null}
           actions={actions}
           disabled={!ready}
           draftKey={`yaca.draft.${project ?? "none"}`}

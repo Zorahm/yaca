@@ -9,6 +9,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { AgentEvent } from "./bindings/AgentEvent";
+import type { QueuedMessage } from "./bindings/QueuedMessage";
+import type { QuestionReply } from "./bindings/QuestionReply";
 import {
   diffOf,
   emptyFeed,
@@ -207,6 +209,9 @@ describe("лента", () => {
       note: "/p",
       sizeBytes: null,
       files: null,
+      unsaved: null,
+      invariant: null,
+    server: null,
       scopes: [],
       position: 1,
       total: 1,
@@ -350,6 +355,9 @@ describe("подагент", () => {
       note: null,
       sizeBytes: null,
       files: null,
+      unsaved: null,
+      invariant: null,
+    server: null,
       scopes: [],
       position: 1,
       total: 1,
@@ -432,5 +440,183 @@ describe("подагент", () => {
   it("вызов без своего Task в ленте не теряется", () => {
     const feed = run(started("r1", "Read", "t-нет"));
     expect(top(feed).map((r) => r.callId)).toEqual(["r1"]);
+  });
+});
+
+describe("вопросы AskUser", () => {
+  const request = {
+    id: "q_1",
+    callId: "c1",
+    question: "Какой путь?",
+    options: [
+      { label: "Быстрый", description: "без тестов" },
+      { label: "Полный", description: null },
+    ],
+    allowOther: true,
+    multiSelect: false,
+  };
+
+  const asked = { type: "questionAsked" as const, request };
+  const resolved = (reply: QuestionReply | null) => ({
+    type: "questionResolved" as const,
+    requestId: "q_1",
+    reply,
+  });
+
+  function question(feed: Feed) {
+    const block = feed.blocks.find((b) => b.kind === "question");
+    if (!block || block.kind !== "question") throw new Error("нет блока вопроса");
+    return block;
+  }
+
+  it("вопрос встаёт в ленту открытым и занимает нижний ряд", () => {
+    const feed = run(asked);
+
+    expect(feed.question?.id).toBe("q_1");
+    expect(question(feed).status).toBe("open");
+    expect(question(feed).reply).toBeNull();
+    expect(visible(feed)).toHaveLength(1);
+  });
+
+  it("ответ закрывает вопрос, но строка с выбором остаётся в ленте", () => {
+    const feed = run(asked, resolved({ type: "answered", selected: [1], other: null }));
+
+    expect(feed.question).toBeNull();
+    expect(question(feed).status).toBe("answered");
+    expect(question(feed).reply).toEqual({ type: "answered", selected: [1], other: null });
+    // Блоки только добавляются: итог ответа — часть разговора.
+    expect(visible(feed)).toHaveLength(1);
+  });
+
+  it("отказ от ответа помечается отдельно от ответа", () => {
+    const feed = run(asked, resolved({ type: "dismissed" }));
+
+    expect(feed.question).toBeNull();
+    expect(question(feed).status).toBe("dismissed");
+    expect(question(feed).reply).toEqual({ type: "dismissed" });
+  });
+
+  it("ответ на вопрос, которого нет на экране, ничего не трогает", () => {
+    const feed = run(asked, {
+      type: "questionResolved",
+      requestId: "другой",
+      reply: { type: "dismissed" },
+    });
+
+    expect(feed.question?.id).toBe("q_1");
+    expect(question(feed).status).toBe("open");
+  });
+
+  it("вопрос без ответа из журнала закрыт и не висит открытым", () => {
+    // Так выглядит повтор незавершённого прогона: ядро закрывает вопрос
+    // без ответа, и лента не рисует кнопки, которые уже никто не слушает.
+    const feed = run(asked, resolved(null));
+
+    expect(feed.question).toBeNull();
+    expect(question(feed).status).toBe("unanswered");
+    expect(question(feed).reply).toBeNull();
+  });
+
+  it("выбор сохраняет свой текст рядом с отмеченными вариантами", () => {
+    const feed = run(
+      asked,
+      resolved({ type: "answered", selected: [0], other: "оба сразу" }),
+    );
+
+    expect(question(feed).reply).toEqual({
+      type: "answered",
+      selected: [0],
+      other: "оба сразу",
+    });
+  });
+});
+
+describe("панель файла (§6.4)", () => {
+  const pending = (path: string, hunks: number) => ({
+    fact: { path, kind: "modified" as const, movedFrom: null, added: hunks, removed: 0 },
+  });
+
+  it("каждая запись файла двигает счётчик, по которому панель перечитывает вид", () => {
+    const change = (callId: string, path: string) => ({
+      type: "fileChanged" as const,
+      callId,
+      fact: pending(path, 1).fact,
+      diff: { hunks: [], added: 1, removed: 0, truncated: false },
+    });
+    const feed = run(change("c1", "a.txt"), change("c2", "a.txt"));
+    expect(feed.writes).toBe(2);
+  });
+
+  it("вид файла держит последний ответ ядра по пути", () => {
+    const view = {
+      fact: pending("a.txt", 1).fact,
+      segments: [],
+      truncated: false,
+    };
+    const feed = run({ type: "fileViewLoaded", path: "a.txt", view });
+    expect(feed.fileView).toEqual({ path: "a.txt", view });
+  });
+
+  it("«нечего решать» приходит как null, а не как отсутствие ответа", () => {
+    const feed = run({ type: "fileViewLoaded", path: "a.txt", view: null });
+    expect(feed.fileView).toEqual({ path: "a.txt", view: null });
+  });
+
+  it("новый вид перекрывает прежний, даже для другого файла", () => {
+    const view = { fact: pending("b.txt", 1).fact, segments: [], truncated: false };
+    const feed = run(
+      { type: "fileViewLoaded", path: "a.txt", view: null },
+      { type: "fileViewLoaded", path: "b.txt", view },
+    );
+    expect(feed.fileView?.path).toBe("b.txt");
+  });
+});
+
+describe("очередь и поиск файлов (§7.4, §7.2)", () => {
+  const waiting = (id: string, text: string): QueuedMessage => ({
+    id,
+    text,
+    attachments: [],
+  });
+
+  it("shows exactly the list the core last sent, in its order", () => {
+    const feed = run(
+      { type: "queueUpdated", queued: [waiting("q1", "first"), waiting("q2", "second")] },
+    );
+    expect(feed.queued.map((m) => m.id)).toEqual(["q1", "q2"]);
+  });
+
+  it("drops a message the core no longer lists, and the empty list clears all", () => {
+    const after = run(
+      { type: "queueUpdated", queued: [waiting("q1", "a"), waiting("q2", "b")] },
+      { type: "queueUpdated", queued: [waiting("q2", "b")] },
+    );
+    expect(after.queued.map((m) => m.id)).toEqual(["q2"]);
+
+    const empty = reduceAll(after, [{ type: "queueUpdated", queued: [] }]);
+    expect(empty.queued).toEqual([]);
+  });
+
+  it("takes the message into the conversation without touching the queue itself", () => {
+    const feed = run(
+      { type: "queueUpdated", queued: [waiting("q1", "later")] },
+      { type: "queueUpdated", queued: [] },
+      said("later"),
+    );
+    expect(feed.queued).toEqual([]);
+    expect(visible(feed).some((b) => b.kind === "human" && b.text === "later")).toBe(true);
+  });
+
+  it("keeps the answer to a search with the query it answers", () => {
+    const feed = run({ type: "filesFound", query: "app", paths: ["src/app.rs"] });
+    expect(feed.found).toEqual({ query: "app", paths: ["src/app.rs"] });
+  });
+
+  it("the last answer wins, whichever query it is for", () => {
+    const feed = run(
+      { type: "filesFound", query: "a", paths: ["a.txt"] },
+      { type: "filesFound", query: "ab", paths: ["ab.txt"] },
+    );
+    expect(feed.found?.query).toBe("ab");
   });
 });

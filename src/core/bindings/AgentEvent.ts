@@ -6,9 +6,15 @@ import type { CheckpointId } from "./CheckpointId";
 import type { CheckpointSummary } from "./CheckpointSummary";
 import type { FileDiff } from "./FileDiff";
 import type { FileFact } from "./FileFact";
+import type { FileView } from "./FileView";
+import type { LspServerSummary } from "./LspServerSummary";
+import type { McpServerSummary } from "./McpServerSummary";
 import type { PermissionRequest } from "./PermissionRequest";
 import type { ProcessId } from "./ProcessId";
 import type { ProcessSummary } from "./ProcessSummary";
+import type { QuestionReply } from "./QuestionReply";
+import type { QuestionRequest } from "./QuestionRequest";
+import type { QueuedMessage } from "./QueuedMessage";
 import type { RequestId } from "./RequestId";
 import type { SessionState } from "./SessionState";
 import type { StopReason } from "./StopReason";
@@ -53,7 +59,7 @@ parent: CallId | null, } | { "type": "toolCallProgress", callId: CallId, chunk: 
  * Поля в §15 нет; лента без него написала бы про остановленную
  * команду, что человек её отклонил, чего не было.
  */
-stopped: boolean, } | { "type": "permissionRequested", request: PermissionRequest, } | { "type": "permissionResolved", requestId: RequestId, } | { "type": "todosUpdated", items: Array<TodoItem>, } | { "type": "planProposed", plan: string, } | { "type": "fileChanged", callId: CallId, fact: FileFact, diff: FileDiff, } | { "type": "processesUpdated", processes: Array<ProcessSummary>, } | { "type": "processOutputReset", id: ProcessId, text: string, 
+stopped: boolean, } | { "type": "permissionRequested", request: PermissionRequest, } | { "type": "permissionResolved", requestId: RequestId, } | { "type": "questionAsked", request: QuestionRequest, } | { "type": "questionResolved", requestId: RequestId, reply: QuestionReply | null, } | { "type": "todosUpdated", items: Array<TodoItem>, } | { "type": "planProposed", plan: string, } | { "type": "fileChanged", callId: CallId, fact: FileFact, diff: FileDiff, } | { "type": "fileViewLoaded", path: string, view: FileView | null, } | { "type": "queueUpdated", queued: Array<QueuedMessage>, } | { "type": "filesFound", query: string, paths: Array<string>, } | { "type": "processesUpdated", processes: Array<ProcessSummary>, } | { "type": "mcpUpdated", servers: Array<McpServerSummary>, } | { "type": "lspUpdated", servers: Array<LspServerSummary>, } | { "type": "processOutputReset", id: ProcessId, text: string, 
 /**
  * Сколько строк вытеснено из буфера. Панель говорит об этом прямо:
  * молча потерянный вывод неотличим от вывода, которого не было.

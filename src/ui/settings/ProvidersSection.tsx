@@ -24,6 +24,7 @@ import { useState } from "react";
 
 import type { ProviderSpec } from "../../core/client";
 import { t, tp } from "../../i18n";
+import { PROTOCOL_NAME, ProviderMark } from "../brand";
 import { ProviderForm } from "./ProviderForm";
 import { draftFromSpec, emptyDraft, isPreset, type ProviderDraft } from "./provider";
 import { useProviders } from "./useProviders";
@@ -134,14 +135,17 @@ function ProviderRow({
       />
 
       <button type="button" className="prov-main" onClick={onEdit} title={t("prov.edit_row")}>
-        <span className="prov-name">{spec.displayName}</span>
+        <span className="prov-name">
+          <ProviderMark id={spec.id} size={14} />
+          <span className="prov-name-text">{spec.displayName}</span>
+        </span>
         <span className="prov-meta">
           {spec.baseUrl} ·{" "}
           {answered ? tp("prov.models_count", spec.models.length) : t("prov.unasked")}
         </span>
       </button>
 
-      <span className="prov-proto">{spec.protocol}</span>
+      <span className="prov-proto">{PROTOCOL_NAME[spec.protocol]}</span>
 
       <div className="prov-actions">
         {/* Опрос — самое частое, что делают с ненастроенным провайдером, и

@@ -4,6 +4,8 @@ import type { Effort } from "./Effort";
 import type { Mode } from "./Mode";
 import type { PermissionAnswer } from "./PermissionAnswer";
 import type { ProcessId } from "./ProcessId";
+import type { QuestionReply } from "./QuestionReply";
+import type { QueuedId } from "./QueuedId";
 import type { RequestId } from "./RequestId";
 
 export type Command = { "type": "sendMessage", text: string, 
@@ -11,4 +13,4 @@ export type Command = { "type": "sendMessage", text: string,
  * Файлы, приложенные через `@` (§7.2). Регистрируются как прочитанные:
  * человек сам их приложил, заставлять агента перечитывать — глупость.
  */
-attachments: Array<string>, } | { "type": "cancel" } | { "type": "setMode", mode: Mode, } | { "type": "setModel", model: string, } | { "type": "setEffort", effort: Effort, } | { "type": "previewCheckpoint", id: CheckpointId, } | { "type": "restoreCheckpoint", id: CheckpointId, } | { "type": "compact" } | { "type": "editSummary", text: string, } | { "type": "answerPermission", requestId: RequestId, answer: PermissionAnswer, } | { "type": "setBypass", on: boolean, } | { "type": "watchProcess", id: ProcessId | null, } | { "type": "stopProcess", id: ProcessId, };
+attachments: Array<string>, } | { "type": "cancel" } | { "type": "setMode", mode: Mode, } | { "type": "setModel", model: string, } | { "type": "setEffort", effort: Effort, } | { "type": "previewCheckpoint", id: CheckpointId, } | { "type": "restoreCheckpoint", id: CheckpointId, } | { "type": "compact" } | { "type": "editSummary", text: string, } | { "type": "answerPermission", requestId: RequestId, answer: PermissionAnswer, } | { "type": "answerQuestion", requestId: RequestId, answer: QuestionReply, } | { "type": "setBypass", on: boolean, } | { "type": "watchProcess", id: ProcessId | null, } | { "type": "stopProcess", id: ProcessId, } | { "type": "readFileView", path: string, } | { "type": "cancelQueued", id: QueuedId, } | { "type": "searchFiles", query: string, } | { "type": "reconnectMcpServer", server: string, } | { "type": "approveMcpServer", server: string, };

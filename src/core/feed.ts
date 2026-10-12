@@ -21,8 +21,14 @@ import type { CheckpointChange } from "./bindings/CheckpointChange";
 import type { CheckpointSummary } from "./bindings/CheckpointSummary";
 import type { FileDiff } from "./bindings/FileDiff";
 import type { FileFact } from "./bindings/FileFact";
+import type { FileView } from "./bindings/FileView";
+import type { LspServerSummary } from "./bindings/LspServerSummary";
+import type { McpServerSummary } from "./bindings/McpServerSummary";
 import type { PermissionRequest } from "./bindings/PermissionRequest";
 import type { ProcessId } from "./bindings/ProcessId";
+import type { QueuedMessage } from "./bindings/QueuedMessage";
+import type { QuestionReply } from "./bindings/QuestionReply";
+import type { QuestionRequest } from "./bindings/QuestionRequest";
 import type { ProcessSummary } from "./bindings/ProcessSummary";
 import type { SessionState } from "./bindings/SessionState";
 import type { TodoItem } from "./bindings/TodoItem";
@@ -58,6 +64,15 @@ export type ActionRow = {
   children: ActionRow[];
 };
 
+/**
+ * Где стоит вопрос `AskUser` (§5.7-подобный блок).
+ *
+ * `open` — ждёт человека; `answered` и `dismissed` — что он сделал; `unanswered` —
+ * турн остановили раньше ответа. Блок остаётся в ленте во всех четырёх: вопрос,
+ * на который ответили, — это строка разговора, а не запрос, который можно убрать.
+ */
+export type QuestionStatus = "open" | "answered" | "dismissed" | "unanswered";
+
 export type FeedBlock =
   | { kind: "human"; key: string; text: string; attachments: string[] }
   | { kind: "agent"; key: string; blockId: string; text: string }
@@ -65,6 +80,14 @@ export type FeedBlock =
   | { kind: "actions"; key: string; rows: ActionRow[] }
   | { kind: "todos"; key: string; items: TodoItem[] }
   | { kind: "permission"; key: string; request: PermissionRequest; open: boolean }
+  | {
+      kind: "question";
+      key: string;
+      request: QuestionRequest;
+      status: QuestionStatus;
+      /** Что выбрано, когда ответ есть; `null`, пока открыто или без ответа. */
+      reply: QuestionReply | null;
+    }
   | { kind: "checkpoint"; key: string; checkpoint: CheckpointSummary }
   | { kind: "restored"; key: string; at: number; files: number }
   | { kind: "compacted"; key: string; summary: string; freed: number }
@@ -82,6 +105,16 @@ export type Feed = {
   /** Панель процессов (§6.5). */
   processes: ProcessSummary[];
   /**
+   * Серверы MCP этого чата, целиком, как их отдало ядро последним
+   * `mcpUpdated`. `null` — список ещё не приезжал.
+   */
+  mcp: McpServerSummary[] | null;
+  /**
+   * Language servers of this chat, whole, as the core last sent them in
+   * `lspUpdated`. `null` until the list has arrived.
+   */
+  lsp: LspServerSummary[] | null;
+  /**
    * Вывод выбранного процесса (§6.5). Приходит только для той строки, на
    * которую смотрят: `processOutputReset` кладёт буфер целиком, живые куски
    * дописываются. Один слот, а не карта: смотреть человек может только один.
@@ -96,10 +129,22 @@ export type Feed = {
    * правку.
    */
   diffs: Record<string, FileDiff>;
+  /**
+   * Сколько записей файлов пришло за сессию. Панель файла (§6.4) перечитывает
+   * вид, когда число растёт: новая запись меняет то, что она показывает.
+   */
+  writes: number;
+  /**
+   * Полный дифф одного файла для панели (§6.4), последний пришедший. Один слот:
+   * панель файла одна. `view: null` — в файле ничего не ждёт решения.
+   */
+  fileView: { path: string; view: FileView | null } | null;
   /** Панель чекпоинтов (§1.1). */
   checkpoints: CheckpointSummary[];
   /** Активный запрос разрешения, если он есть (§5.7). */
   request: PermissionRequest | null;
+  /** Открытый вопрос `AskUser`, если он есть: нижний ряд и горячие клавиши ждут его. */
+  question: QuestionRequest | null;
   /**
    * Что тронет откат, если его подтвердить (§5.8).
    *
@@ -107,6 +152,17 @@ export type Feed = {
    * должна та же строка чекпоинта, у которой спросили.
    */
   preview: { id: string; files: CheckpointChange[] } | null;
+  /**
+   * Сообщения, которые ждут своей очереди в ходе (§7.4), по порядку. Список
+   * приходит целиком от ядра: отмена и влитие меняют его там, а здесь только
+   * показывается то, что пришло последним.
+   */
+  queued: QueuedMessage[];
+  /**
+   * Последний ответ на `@`-поиск (§7.2). Несёт запрос, на который отвечает:
+   * композер показывает его, только когда запрос всё ещё тот, что набран.
+   */
+  found: { query: string; paths: string[] } | null;
 };
 
 export const emptyFeed: Feed = {
@@ -114,11 +170,18 @@ export const emptyFeed: Feed = {
   state: null,
   usage: null,
   processes: [],
+  mcp: null,
+  lsp: null,
   processOutput: null,
   diffs: {},
+  writes: 0,
+  fileView: null,
   checkpoints: [],
   request: null,
+  question: null,
   preview: null,
+  queued: [],
+  found: null,
 };
 
 /** Пачка событий — один снимок ленты (§12). */
@@ -229,11 +292,16 @@ function apply(feed: Feed, event: AgentEvent): void {
       // Индекс панели файла (§6.4) держится здесь же: панель показывает
       // последнее, что ядро прислало по этому пути.
       feed.diffs = { ...feed.diffs, [event.fact.path]: event.diff };
+      feed.writes += 1;
       patchRow(feed, event.callId, (row) => ({
         ...row,
         fact: event.fact,
         diff: event.diff,
       }));
+      return;
+
+    case "fileViewLoaded":
+      feed.fileView = { path: event.path, view: event.view };
       return;
 
     case "todosUpdated": {
@@ -262,6 +330,22 @@ function apply(feed: Feed, event: AgentEvent): void {
     case "permissionResolved":
       feed.request = null;
       closeRequest(feed, event.requestId);
+      return;
+
+    case "questionAsked":
+      feed.question = event.request;
+      feed.blocks.push({
+        kind: "question",
+        key: key("ques"),
+        request: event.request,
+        status: "open",
+        reply: null,
+      });
+      return;
+
+    case "questionResolved":
+      if (feed.question?.id === event.requestId) feed.question = null;
+      settleQuestion(feed, event.requestId, event.reply);
       return;
 
     case "planProposed":
@@ -362,6 +446,14 @@ function apply(feed: Feed, event: AgentEvent): void {
       feed.processes = event.processes;
       return;
 
+    case "mcpUpdated":
+      feed.mcp = event.servers;
+      return;
+
+    case "lspUpdated":
+      feed.lsp = event.servers;
+      return;
+
     case "checkpointsUpdated":
       feed.checkpoints = event.checkpoints;
       return;
@@ -372,6 +464,14 @@ function apply(feed: Feed, event: AgentEvent): void {
 
     case "stateChanged":
       feed.state = event.state;
+      return;
+
+    case "queueUpdated":
+      feed.queued = event.queued;
+      return;
+
+    case "filesFound":
+      feed.found = { query: event.query, paths: event.paths };
       return;
 
     // Начало и конец хода сами по себе ничего не рисуют: кольцо и кнопка
@@ -512,6 +612,29 @@ function closeRequest(feed: Feed, requestId: string): void {
   if (at === -1) return;
   const block = feed.blocks[at];
   if (block.kind === "permission") feed.blocks[at] = { ...block, open: false };
+}
+
+/**
+ * Закрывает вопрос ответом, отказом или ничем.
+ *
+ * Пишет в тот же блок, а не добавляет новый: вопрос один, и его строка в ленте
+ * должна стать итогом, а не второй записью про то же.
+ */
+function settleQuestion(
+  feed: Feed,
+  requestId: string,
+  reply: QuestionReply | null,
+): void {
+  const at = lastIndex(
+    feed,
+    (b) => b.kind === "question" && b.request.id === requestId,
+  );
+  if (at === -1) return;
+  const block = feed.blocks[at];
+  if (block.kind !== "question") return;
+  const status: QuestionStatus =
+    reply === null ? "unanswered" : reply.type === "dismissed" ? "dismissed" : "answered";
+  feed.blocks[at] = { ...block, status, reply };
 }
 
 function lastIndex(feed: Feed, match: (b: FeedBlock) => boolean): number {

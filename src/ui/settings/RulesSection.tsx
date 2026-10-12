@@ -19,8 +19,9 @@ import { t, type Key } from "../../i18n";
 import type { Mode } from "../../core/client";
 import { Row, Segments } from "./Row";
 
-/** Виды области §5.7 плюс домен — он сверх спеки, и `event.rs` это помечает. */
-const KINDS = ["tool", "directory", "commandPrefix", "domain"] as const;
+/** Виды области §5.7 плюс домен и сервер MCP — оба сверх спеки, и
+    `permission/mod.rs` это помечает. */
+const KINDS = ["tool", "directory", "commandPrefix", "domain", "mcpServer"] as const;
 type Kind = (typeof KINDS)[number];
 
 const KIND_NAMES: Record<Kind, Key> = {
@@ -28,6 +29,7 @@ const KIND_NAMES: Record<Kind, Key> = {
   directory: "rules.kind_directory",
   commandPrefix: "rules.kind_command",
   domain: "rules.kind_domain",
+  mcpServer: "rules.kind_mcp",
 };
 
 const KIND_HINTS: Record<Kind, Key> = {
@@ -35,9 +37,10 @@ const KIND_HINTS: Record<Kind, Key> = {
   directory: "rules.hint_directory",
   commandPrefix: "rules.hint_command",
   domain: "rules.hint_domain",
+  mcpServer: "rules.hint_mcp",
 };
 
-/** Значение области — одно поле у всех четырёх, только зовётся по-разному. */
+/** Значение области — одно поле у всех пяти, только зовётся по-разному. */
 function valueOf(scope: ScopeKey): string {
   switch (scope.type) {
     case "tool":
@@ -48,6 +51,8 @@ function valueOf(scope: ScopeKey): string {
       return scope.prefix;
     case "domain":
       return scope.host;
+    case "mcpServer":
+      return scope.server;
   }
 }
 
@@ -61,6 +66,8 @@ function scopeOf(kind: Kind, value: string): ScopeKey {
       return { type: "commandPrefix", prefix: value };
     case "domain":
       return { type: "domain", host: value };
+    case "mcpServer":
+      return { type: "mcpServer", server: value };
   }
 }
 

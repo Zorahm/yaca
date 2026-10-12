@@ -17,7 +17,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 
-import type { DiffLine, FileDiff, Span } from "../core/client";
+import type { DiffLine, FileDiff, Hunk, Span, ViewSegment } from "../core/client";
 import { t, tp } from "../i18n";
 import { runsOf } from "./codeText";
 import { utf16Spans, between, plainLine } from "./highlight";
@@ -34,13 +34,31 @@ const WINDOW_FROM = 200;
 /** Сколько строк держать нарисованными за краями окна. */
 const OVERSCAN = 8;
 
+/**
+ * What the file panel adds to the diff (§6.4): the whole file, its unchanged
+ * stretches, and the controls on each hunk. Only the panel passes these.
+ */
+export type FileBody = {
+  /** The file as the core shows it: hunks and the unchanged text between. */
+  segments: ViewSegment[];
+  /** The view stops before the end of the file. */
+  truncated: boolean;
+  /** Unchanged stretches the human has opened, by their index in `segments`. */
+  expanded: ReadonlySet<number>;
+  onExpand: (index: number) => void;
+};
+
 export function Diff({
   diff,
+  body,
   soft = false,
   gaps = false,
   path,
 }: {
-  diff: FileDiff;
+  /** The stream's diff of one call (§5.5.1). Absent when `body` is given. */
+  diff?: FileDiff;
+  /** The whole file, for the panel. Absent in the feed. */
+  body?: FileBody;
   /** В строке действия подложка мягче, чем в панели (§2). */
   soft?: boolean;
   /** Свёрнутые промежутки «⋯ N строк» между ханками — панель файла (§6.4). */
@@ -51,9 +69,15 @@ export function Diff({
   const language = useMemo(() => (path === undefined ? null : languageOf(path)), [path]);
   const highlight = useHighlight(language);
   const items = useMemo(
-    () => rows(diff, gaps, highlight),
-    [diff, gaps, highlight],
+    () =>
+      body
+        ? segmentRows(body, highlight)
+        : diff
+          ? rows(diff, gaps, highlight)
+          : [],
+    [diff, body, gaps, highlight],
   );
+  const truncated = body ? body.truncated : (diff?.truncated ?? false);
 
   const box = useRef<HTMLDivElement>(null);
   const [view, setView] = useState({ scrollTop: 0, height: 0, row: 0 });
@@ -91,7 +115,7 @@ export function Diff({
       {slice.padTop > 0 && <div style={{ height: slice.padTop }} />}
       {items.slice(slice.start, slice.end)}
       {slice.padBottom > 0 && <div style={{ height: slice.padBottom }} />}
-      {diff.truncated && <div className="diff-more">{t("row.diff_truncated")}</div>}
+      {truncated && <div className="diff-more">{t("row.diff_truncated")}</div>}
     </div>
   );
 }
@@ -128,7 +152,7 @@ function rows(
     }
     out.push(
       <div className="hunk" key={`h${index}`}>
-        {`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`}
+        {hunkHeader(hunk)}
       </div>,
     );
     for (const [at, line] of hunk.lines.entries()) {
@@ -137,6 +161,72 @@ function rows(
   }
 
   return out;
+}
+
+/** Unchanged lines kept beside a hunk when the rest of a stretch is folded (§6.4). */
+const CONTEXT = 3;
+
+/**
+ * The whole file as one flat list, shaped like `rows`. Unchanged stretches are
+ * folded to `⋯ N строк` except the lines beside a hunk; a click opens one.
+ * Hunks carry their actions on the header row (§6.3).
+ */
+function segmentRows(body: FileBody, highlight: LineHighlighter | null): ReactElement[] {
+  const out: ReactElement[] = [];
+  const last = body.segments.length - 1;
+
+  for (const [index, segment] of body.segments.entries()) {
+    if (segment.kind === "hunk") {
+      const { hunk } = segment;
+      out.push(
+        <div className="hunk" key={`h${index}`}>
+          {hunkHeader(hunk)}
+        </div>,
+      );
+      for (const [at, line] of hunk.lines.entries()) {
+        out.push(<Line key={`h${index}l${at}`} line={line} highlight={highlight} />);
+      }
+      continue;
+    }
+
+    // Segments alternate with hunks, so a stretch after the first one follows
+    // a hunk and a stretch before the last one precedes one. The start and the
+    // end of the file have nothing on that side worth keeping.
+    const { lines } = segment;
+    const head = index > 0 ? CONTEXT : 0;
+    const tail = index < last ? CONTEXT : 0;
+    const folded = lines.length - head - tail;
+
+    if (body.expanded.has(index) || folded <= 1) {
+      for (const [at, line] of lines.entries()) {
+        out.push(<Line key={`u${index}l${at}`} line={line} highlight={highlight} />);
+      }
+      continue;
+    }
+
+    for (const [at, line] of lines.slice(0, head).entries()) {
+      out.push(<Line key={`u${index}a${at}`} line={line} highlight={highlight} />);
+    }
+    out.push(
+      <button
+        type="button"
+        className="diff-gap diff-gap-btn"
+        key={`g${index}`}
+        onClick={() => body.onExpand(index)}
+      >
+        ⋯ {tp("file.gap", folded)}
+      </button>,
+    );
+    for (const [at, line] of lines.slice(lines.length - tail).entries()) {
+      out.push(<Line key={`u${index}b${at}`} line={line} highlight={highlight} />);
+    }
+  }
+
+  return out;
+}
+
+function hunkHeader(hunk: Hunk): string {
+  return `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`;
 }
 
 /** Сколько строк старой стороны спрятано перед ханком (§6.4). */

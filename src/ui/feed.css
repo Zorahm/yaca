@@ -680,6 +680,34 @@
   overflow-wrap: anywhere;
 }
 
+/* §5.7: why an invariant asks at all. Muted, above the detail. */
+.ask-invariant {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/* §5.7: what a directory delete takes away that no snapshot keeps. */
+.ask-unsaved {
+  margin-top: 6px;
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+.ask-unsaved-title {
+  color: var(--ink);
+}
+
+.ask-unsaved-list {
+  margin: 2px 0 0;
+  padding-left: 16px;
+}
+
+.ask-unsaved-note {
+  margin-top: 4px;
+  color: var(--ink);
+}
+
 .ask-actions {
   display: flex;
   align-items: center;
@@ -745,6 +773,72 @@
 
 .ask-deny input::placeholder {
   color: var(--ink-muted);
+}
+
+/* --- §5.7-подобный вопрос AskUser: варианты и итог ----------------------- */
+
+.question-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.question-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.question-option:hover {
+  background: var(--paper-sunken);
+}
+
+/* A picked option in a multi-choice question keeps its red edge. */
+.question-option[aria-pressed="true"] {
+  border-color: var(--red-ink);
+}
+
+.question-option-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.question-option-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* The settled line: a rule in the margin, not a box. The question is done. */
+.question-settled {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 12px;
+  border-left: 2px solid var(--line-strong);
+}
+
+.question-settled-q {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.question-settled-a {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
 }
 
 /* --- §5.8 checkpoint, §5.11 compaction, dividers ------------------------- */

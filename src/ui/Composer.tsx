@@ -2,9 +2,9 @@
  * Композер §7 и его нижний ряд §7.1.
  *
  * Поле не блокируется, пока агент работает (§7.4): отправленное встаёт в
- * очередь ядра и показывается чипом над полем. Отменить очередь пока нельзя —
- * такой команды у ядра нет, и ссылка «отменить», которая ничего не отменяет,
- * была бы худшим из двух вариантов (§0). Чип говорит только то, что правда.
+ * очередь ядра и показывается чипом над полем. Чипы — список ядра целиком:
+ * каждый показывает ожидающее сообщение, а `отменить` шлёт команду с его id.
+ * Ядро отвечает новым списком, поэтому чип говорит только то, что правда.
  *
  * Настройки нижнего ряда приходят пропсом, а не берутся из `SessionState`:
  * §9.1 ставит тот же композер на домашний экран, где сессии ещё нет, а
@@ -12,40 +12,34 @@
  *
  * Чего здесь нет из §7.1: кнопки диктовки. Распознавания речи нет, а кнопка,
  * молча ничего не делающая, это интерфейс, врущий про состояние. `＋` есть:
- * диалог файлов у оболочки нашёлся. `@` (§7.2) — нет: ему нужен поиск по
- * проекту, которого ядро наружу не отдаёт.
+ * диалог файлов у оболочки нашёлся. `@` (§7.2) есть: меню файлов проекта
+ * (`./MentionMenu`) открывается, когда `@` начинает слово; выбранный файл
+ * становится чипом над полем, как и приложенный через `＋`. На домашнем экране
+ * поиска нет, и меню там не открывается вовсе.
  *
  * `/` в начале строки открывает меню команд §7.3 (`./slash`). Меню не
  * состояние, а функция от текста поля: `⇥` и `⏎` берут подсвеченное,
  * пробел закрывает — дальше идут аргументы.
  */
 
-import { ArrowUp, Check, Plus, Stop } from "@phosphor-icons/react";
+import { ArrowUp, Plus, Stop } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ClipboardEvent } from "react";
 
 import type { Effort, Mode, ModelInfo, SlashCommand, UsageSnapshot } from "../core/client";
-import { t, type Key } from "../i18n";
+import type { Feed } from "../core/feed";
+import type { QueuedMessage } from "../core/bindings/QueuedMessage";
+import { t } from "../i18n";
 import { EffortMenu } from "./EffortMenu";
+import { ModeMenu, MODE_KEY } from "./ModeMenu";
 import { ModelMenu } from "./ModelMenu";
+import { MentionMenu, useMentions } from "./MentionMenu";
+import { withoutMention, type Mention } from "./mention";
+import { QueuedChip } from "./QueuedChip";
 import { SlashMenu } from "./SlashMenu";
 import { Attachment } from "./Attachment";
 import { builtinFor, menuFor, type Builtin, type SlashItem } from "./slash";
 import { StatusRing, type RingState } from "./StatusRing";
 
-export const MODES: Mode[] = ["plan", "manual", "auto", "edits"];
-
-const MODE_KEY: Record<Mode, Key> = {
-  plan: "mode.plan",
-  manual: "mode.manual",
-  auto: "mode.auto",
-  edits: "mode.edits",
-};
-const MODE_NOTE: Record<Mode, Key> = {
-  plan: "mode.plan_note",
-  manual: "mode.manual_note",
-  auto: "mode.auto_note",
-  edits: "mode.edits_note",
-};
 
 export type ComposerActions = {
   send: (text: string, attachments: string[]) => void;
@@ -67,6 +61,8 @@ export type ComposerActions = {
   newChat?: () => void;
   /** `/checkpoints` (§7.3, §1.1) — точки этого разговора, а не проекта. */
   openCheckpoints?: () => void;
+  /** `/mcp` (§7.3) — серверы этого разговора и состояние каждого. */
+  openMcp?: () => void;
   /**
    * `＋` (§7.2): спросить файлы и вернуть пути от корня проекта.
    *
@@ -92,6 +88,16 @@ export type ComposerActions = {
    * в ядре, которое читает каталог на каждом сообщении.
    */
   refreshCommands?: () => void;
+  /**
+   * `@` (§7.2): спросить ядро о файлах проекта по запросу. Ответ приходит в
+   * ленту, а не сюда. Нет действия — на экране нет сессии, и меню не открывается.
+   */
+  searchFiles?: (query: string) => void;
+  /**
+   * `отменить` у чипа очереди (§7.4): убрать сообщение, которое ещё не влито в
+   * ход. Нет действия — кнопки нет, чип только показывает, что ждёт.
+   */
+  cancelQueued?: (id: string) => void;
 };
 
 /** Что показывает и переключает нижний ряд §7.1. */
@@ -111,6 +117,7 @@ export function Composer({
   models,
   commands,
   queued,
+  found,
   actions,
   disabled = false,
   draftKey,
@@ -122,7 +129,10 @@ export function Composer({
   models: ModelInfo[];
   /** Слэш-команды проекта (§7.3) — вторая половина меню над полем. */
   commands: SlashCommand[];
-  queued: string | null;
+  /** Сообщения, которые ждут очереди ядра (§7.4), по порядку. */
+  queued: QueuedMessage[];
+  /** Последний ответ `@`-поиска (§7.2); показывается, только если запрос тот же. */
+  found: Feed["found"];
   actions: ComposerActions;
   /**
    * Отправлять некуда: на домашнем экране (§9.1) — пока не выбран проект.
@@ -186,9 +196,22 @@ export function Composer({
   if (actions.compact) builtins.push("compact");
   if (actions.newChat) builtins.push("clear");
   if (actions.openCheckpoints) builtins.push("checkpoints");
+  if (actions.openMcp) builtins.push("mcp");
 
   const slash = menuFor(text, commands, builtins);
   const slashIndex = slash === null ? 0 : Math.min(slashAt, slash.length - 1);
+
+  /** Где каретка: `@` читает текст до неё (§7.2). */
+  const [caret, setCaret] = useState(0);
+  /** Куда поставить каретку, когда поле получит текст, который её сдвигает. */
+  const pendingCaret = useRef<number | null>(null);
+  const mentions = useMentions({
+    text,
+    caret,
+    found,
+    search: actions.searchFiles,
+    onPick: (path, mention) => pickFile(path, mention),
+  });
 
   useEffect(() => {
     if (text) localStorage.setItem(draftKey, text);
@@ -209,6 +232,11 @@ export function Composer({
     if (!node) return;
     node.style.height = "auto";
     node.style.height = `${node.scrollHeight}px`;
+    const pending = pendingCaret.current;
+    if (pending !== null) {
+      pendingCaret.current = null;
+      node.setSelectionRange(pending, pending);
+    }
   }, [text]);
 
   /**
@@ -230,6 +258,7 @@ export function Composer({
     if (builtin === "compact") actions.compact?.();
     if (builtin === "clear") actions.newChat?.();
     if (builtin === "checkpoints") actions.openCheckpoints?.();
+    if (builtin === "mcp") actions.openMcp?.();
     if (builtin === "model") setMenu("model");
     clear();
   }
@@ -249,6 +278,18 @@ export function Composer({
     setText(`/${item.name} `);
   }
 
+  /**
+   * Взять файл из меню `@` (§7.2): `@запрос` уходит из поля, файл становится
+   * чипом над ним — тем же, что приложенный через `＋`, и уедет с сообщением.
+   */
+  function pickFile(path: string, mention: Mention) {
+    const next = withoutMention(text, mention, caret);
+    setText(next.text);
+    setCaret(next.caret);
+    pendingCaret.current = next.caret;
+    attach([path]);
+  }
+
   function send() {
     if (disabled || !text.trim()) return;
     // §7.3: встроенная команда не уезжает модели текстом. Проектная уезжает —
@@ -265,12 +306,15 @@ export function Composer({
   return (
     <div className="composer-wrap" onClick={() => setMenu(null)}>
       <div className="composer" onClick={(e) => e.stopPropagation()}>
-        {queued !== null && (
-          <div className="queued">
-            <span>{t("composer.queued")}</span>
-            <span className="mono-target">{queued}</span>
-          </div>
-        )}
+        {queued.map((message) => (
+          <QueuedChip
+            key={message.id}
+            text={message.text}
+            onCancel={
+              actions.cancelQueued && (() => actions.cancelQueued?.(message.id))
+            }
+          />
+        ))}
 
         {attached.length > 0 && (
           <div className="attachments">
@@ -288,6 +332,9 @@ export function Composer({
           {slash !== null && (
             <SlashMenu items={slash} at={slashIndex} onPick={pick} />
           )}
+          {mentions.open !== null && (
+            <MentionMenu paths={mentions.paths} at={mentions.at} onPick={mentions.pick} />
+          )}
 
           <textarea
             ref={field}
@@ -295,7 +342,11 @@ export function Composer({
             value={text}
             disabled={disabled}
             placeholder={t("composer.placeholder")}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              setCaret(e.target.selectionStart);
+            }}
+            onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
             onPaste={pasteImages}
             onKeyDown={(e) => {
               // Пока открыто меню команд §7.3, стрелки, `⇥` и `⏎` принадлежат
@@ -317,6 +368,10 @@ export function Composer({
                   return;
                 }
               }
+
+              // `@` (§7.2): пока открыто меню файлов, стрелки, ⏎ и ⇥ его, а
+              // Esc закрывает его, не останавливая агента.
+              if (mentions.keyDown(e)) return;
 
               // Пока висит запрос разрешения, цифры принадлежат ему (§5.7),
               // а поле всё равно остаётся живым.
@@ -426,91 +481,6 @@ export function Composer({
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-/**
- * §8: четыре взаимоисключающих режима одним списком; обход — флаг поверх.
- *
- * План стоит в этом же списке, а не отдельной осью: записывающих тулов в нём
- * нет, значит доверие в этот момент ничего не решает, и два контрола показывали
- * бы выбор, которого не существует.
- */
-function ModeMenu({
-  settings,
-  actions,
-  onClose,
-}: {
-  settings: ComposerSettings;
-  actions: ComposerActions;
-  onClose: () => void;
-}) {
-  const setBypass = actions.setBypass;
-
-  // Цифры принадлежат открытому меню, а не запросу разрешения (§5.7): пока
-  // список на экране и показывает свои `1`–`4`, они обязаны делать написанное.
-  // Отсюда фаза перехвата — слушатель запроса висит на всплытии.
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      const at = Number(event.key) - 1;
-      if (!Number.isInteger(at) || at < 0 || at >= MODES.length) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      actions.setMode(MODES[at]);
-      onClose();
-    }
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [actions, onClose]);
-
-  return (
-    <div className="menu menu-notes">
-      <div className="menu-item" style={{ color: "var(--ink-muted)" }}>
-        {t("mode.title")}
-      </div>
-      {MODES.map((mode, index) => (
-        <button
-          className="menu-item"
-          key={mode}
-          onClick={() => {
-            actions.setMode(mode);
-            onClose();
-          }}
-        >
-          <span className="menu-text">
-            <span>{t(MODE_KEY[mode])}</span>
-            <span className="menu-note">{t(MODE_NOTE[mode])}</span>
-          </span>
-          {settings.mode === mode && <span className="menu-mark"><Check size={13} weight="bold" /></span>}
-          <span className="keycap">{index + 1}</span>
-        </button>
-      ))}
-
-      {setBypass && (
-        <>
-          <div className="menu-sep" />
-
-          <button
-            className="menu-item"
-            onClick={() => {
-              // Включение требует подтверждения; инварианты не отключаются ничем.
-              if (settings.bypass || window.confirm(t("mode.bypass_confirm"))) {
-                setBypass(!settings.bypass);
-              }
-              onClose();
-            }}
-          >
-            <span className={settings.bypass ? "chip-danger" : undefined}>
-              {t("mode.bypass")}
-            </span>
-            <span className="menu-note" />
-            <span>
-              {settings.bypass ? t("mode.bypass_off") : t("mode.bypass_on")}
-            </span>
-          </button>
-        </>
-      )}
     </div>
   );
 }

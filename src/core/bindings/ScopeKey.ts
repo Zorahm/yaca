@@ -7,4 +7,4 @@
  * through the settings screen and nowhere else: a rule granted in a hurry
  * should not outlive the hurry.
  */
-export type ScopeKey = { "type": "tool", name: string, } | { "type": "directory", path: string, } | { "type": "commandPrefix", prefix: string, } | { "type": "domain", host: string, };
+export type ScopeKey = { "type": "tool", name: string, } | { "type": "directory", path: string, } | { "type": "commandPrefix", prefix: string, } | { "type": "domain", host: string, } | { "type": "mcpServer", server: string, };

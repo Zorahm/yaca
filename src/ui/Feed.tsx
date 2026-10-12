@@ -25,7 +25,7 @@ import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "reac
 
 import { VList, type VListHandle } from "virtua";
 
-import type { PermissionAnswer } from "../core/client";
+import type { PermissionAnswer, QuestionReply } from "../core/client";
 import type { Feed as FeedModel, FeedBlock } from "../core/feed";
 import { visible } from "../core/feed";
 import { t } from "../i18n";
@@ -42,6 +42,7 @@ import {
 } from "./Blocks";
 import { CodeBlock } from "./CodeBlock";
 import { Permission } from "./Permission";
+import { Question } from "./Question";
 import { RouteSign } from "./RouteSign";
 import { timeOf } from "./format";
 import { tp } from "../i18n";
@@ -59,6 +60,8 @@ export type FeedJump = {
 
 export type FeedActions = {
   answer: (answer: PermissionAnswer) => void;
+  /** §5.7-подобный вопрос `AskUser`: ответ или отказ от ответа. */
+  answerQuestion: (reply: QuestionReply) => void;
   previewCheckpoint: (id: string) => void;
   restoreCheckpoint: (id: string) => void;
   cancelPreview: () => void;
@@ -275,6 +278,16 @@ function Block({
 
     case "permission":
       return <Permission request={block.request} onAnswer={actions.answer} />;
+
+    case "question":
+      return (
+        <Question
+          request={block.request}
+          status={block.status}
+          reply={block.reply}
+          onAnswer={actions.answerQuestion}
+        />
+      );
 
     case "checkpoint":
       return (

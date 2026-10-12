@@ -67,6 +67,8 @@ describe("the question about deleting a directory", () => {
     note: null,
     sizeBytes: null,
     files,
+    unsaved: null,
+    invariant: null, server: null,
     scopes: [],
     position: 1,
     total: 1,

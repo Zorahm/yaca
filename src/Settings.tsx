@@ -7,9 +7,10 @@
  * этого проекта. Плоским списком человек менял бы «Режим» и не знал, где
  * именно, поэтому у проектной группы стоит чип папки, и он же переключатель.
  *
- * Разделов семь, а не девять. MCP и языковых серверов нет, потому что за ними
- * нет ничего в ядре, а раздел, который ничего не меняет, — это интерфейс,
- * врущий про состояние (§0).
+ * Разделов восемь, а не девять: языковых серверов нет, потому что за ними нет
+ * ничего в ядре, а раздел, который ничего не меняет, — это интерфейс, врущий
+ * про состояние (§0). MCP стоит в обеих группах — свои серверы у приложения,
+ * свои у проекта, — и это один и тот же раздел над двумя списками.
  *
  * Настройки применяются сразу, без кнопки «Сохранить»: она разрешила бы окну
  * показывать одно, а диску держать другое. Исключение — описание провайдера:
@@ -28,15 +29,20 @@ import {
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import {
+  globalMcpServers,
   models as fetchModels,
+  projectMcpFile,
   projects as listProjects,
+  saveGlobalMcpServers,
   setPreferences,
   type ModelInfo,
   type Preferences,
 } from "./core/client";
 import { t, type Key } from "./i18n";
+import { McpMark } from "./ui/brand";
 import { usePreferences } from "./ui/prefs";
 import { AppearanceSection } from "./ui/settings/AppearanceSection";
+import { McpSection, type McpServers } from "./ui/settings/McpSection";
 import { ModelsSection } from "./ui/settings/ModelsSection";
 import { NoticesSection } from "./ui/settings/NoticesSection";
 import { ProjectSection } from "./ui/settings/ProjectSection";
@@ -53,10 +59,12 @@ import "./ui/settings/settings.css";
 type Section =
   | "providers"
   | "tools"
+  | "mcp"
   | "appearance"
   | "notices"
   | "models"
   | "rules"
+  | "projectMcp"
   | "project";
 
 type Item = { id: Section; name: Key; icon: ReactNode };
@@ -64,6 +72,7 @@ type Item = { id: Section; name: Key; icon: ReactNode };
 const APP_SECTIONS: Item[] = [
   { id: "providers", name: "prov.title", icon: <Plugs size={15} /> },
   { id: "tools", name: "tools.title", icon: <Wrench size={15} /> },
+  { id: "mcp", name: "mcp.title", icon: <McpMark size={15} /> },
   { id: "appearance", name: "look.title", icon: <Palette size={15} /> },
   { id: "notices", name: "notices.title", icon: <Bell size={15} /> },
 ];
@@ -71,6 +80,7 @@ const APP_SECTIONS: Item[] = [
 const PROJECT_SECTIONS: Item[] = [
   { id: "models", name: "models.title", icon: <Cube size={15} /> },
   { id: "rules", name: "rules.title", icon: <ShieldCheck size={15} /> },
+  { id: "projectMcp", name: "mcp.title", icon: <McpMark size={15} /> },
   { id: "project", name: "proj.title", icon: <FolderSimple size={15} /> },
 ];
 
@@ -110,6 +120,8 @@ export default function Settings({ prefs: initial }: { prefs: Preferences }) {
   );
 
   const projectSettings = useProjectSettings(project);
+  const ownMcp = useOwnMcp();
+  const mcpFile = useMcpFile(project);
 
   // Раздел проекта без проекта показать нечем: список пуст, пока ни одной
   // папки не открывали.
@@ -151,6 +163,15 @@ export default function Settings({ prefs: initial }: { prefs: Preferences }) {
         <div className="set-scroll">
           {shown === "providers" && <ProvidersSection onChanged={refreshModels} />}
           {shown === "tools" && <ToolsSection prefs={prefs} onPatch={patchPrefs} />}
+          {shown === "mcp" && (
+            <McpSection
+              title={t("mcp.title")}
+              lede={t("mcp.lede_app")}
+              servers={ownMcp.servers}
+              error={ownMcp.error}
+              onSave={ownMcp.save}
+            />
+          )}
           {shown === "appearance" && <AppearanceSection prefs={prefs} onPatch={patchPrefs} />}
           {shown === "notices" && <NoticesSection prefs={prefs} onPatch={patchPrefs} />}
 
@@ -174,6 +195,18 @@ export default function Settings({ prefs: initial }: { prefs: Preferences }) {
                       onPatch={projectSettings.patch}
                     />
                   )}
+                  {shown === "projectMcp" && (
+                    <McpSection
+                      title={t("mcp.title")}
+                      lede={t("mcp.lede_project")}
+                      servers={projectSettings.settings.mcpServers}
+                      error={null}
+                      inherited={mcpFile}
+                      onSave={(mcpServers) =>
+                        projectSettings.patch((now) => ({ ...now, mcpServers }))
+                      }
+                    />
+                  )}
                   {shown === "project" && (
                     <ProjectSection
                       project={project}
@@ -189,6 +222,54 @@ export default function Settings({ prefs: initial }: { prefs: Preferences }) {
       </main>
     </div>
   );
+}
+
+/**
+ * The human's own MCP servers: read once, written on every change.
+ *
+ * Shown as chosen even when the write fails, with the refusal beside it — the
+ * same rule `useProjectSettings` follows, for the same reason.
+ */
+function useOwnMcp(): {
+  servers: McpServers | null;
+  error: string | null;
+  save: (next: McpServers) => void;
+} {
+  const [servers, setServers] = useState<McpServers | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void globalMcpServers().then(setServers, (e: unknown) => setError(String(e)));
+  }, []);
+
+  const save = useCallback((next: McpServers) => {
+    setServers(next);
+    setError(null);
+    void saveGlobalMcpServers(next).catch((e: unknown) => setError(String(e)));
+  }, []);
+
+  return { servers, error, save };
+}
+
+/** What the project's `.mcp.json` declares. A file that cannot be read shows
+    as no file: the section only displays it, and its own list still works. */
+function useMcpFile(project: string | null): McpServers {
+  const [servers, setServers] = useState<McpServers>({});
+
+  useEffect(() => {
+    setServers({});
+    if (project === null) return;
+    let live = true;
+    void projectMcpFile(project).then(
+      (next) => live && setServers(next),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [project]);
+
+  return servers;
 }
 
 function NavItem({

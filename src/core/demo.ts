@@ -12,6 +12,7 @@
  */
 
 import type { AgentEvent } from "./bindings/AgentEvent";
+import type { McpServerSummary } from "./bindings/McpServerSummary";
 import type { ModelInfo } from "./bindings/ModelInfo";
 import type { SessionState } from "./bindings/SessionState";
 
@@ -27,6 +28,49 @@ export const demoState: SessionState = {
   busy: false,
   bypass: false,
 };
+
+/**
+ * Серверы MCP стенда: по одному на каждое состояние, которое панель `/mcp`
+ * умеет рисовать с кнопкой, — готовый, ждущий одобрения и упавший.
+ */
+export const demoMcp: McpServerSummary[] = [
+  {
+    name: "docs",
+    source: "global",
+    transport: "http",
+    target: "https://docs.example.test/mcp",
+    status: "ready",
+    reason: null,
+    label: "docs-server 1.4.0",
+    tools: [
+      { name: "search", description: "Search the documentation.", readOnly: true },
+      { name: "add_note", description: "Attach a note to a page.", readOnly: false },
+    ],
+    resources: true,
+  },
+  {
+    name: "files",
+    source: "projectFile",
+    transport: "stdio",
+    target: "npx -y @example/server-files .",
+    status: "needsApproval",
+    reason: null,
+    label: null,
+    tools: [],
+    resources: false,
+  },
+  {
+    name: "tracker",
+    source: "project",
+    transport: "stdio",
+    target: "tracker-mcp --workspace yaca",
+    status: "failed",
+    reason: "процесс сервера завершился с кодом 1:\nerror: TRACKER_TOKEN is not set",
+    label: null,
+    tools: [],
+    resources: false,
+  },
+];
 
 export const demoModels: ModelInfo[] = [
   {
@@ -246,6 +290,9 @@ export const demoScript: AgentEvent[] = [
       note: "D:/Kod",
       sizeBytes: null,
       files: null,
+      unsaved: null,
+      invariant: null,
+    server: null,
       scopes: [
         { type: "commandPrefix", prefix: "npm" },
         { type: "tool", name: "Bash" },

@@ -239,6 +239,8 @@
 .segment {
   display: inline-flex;
   align-items: center;
+  /* Between a mark and its word, where a segment has one. */
+  gap: 6px;
   height: var(--h-small-button);
   padding: 0 14px;
   border: 1px solid var(--line-strong);
@@ -342,6 +344,18 @@
   margin-bottom: 8px;
   font-size: 12.5px;
   color: var(--ink-muted);
+}
+
+/* «отменить» у чипа очереди (§7.4): текстом, как чип режима, а не кнопкой. */
+.queued-cancel {
+  color: var(--ink-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.queued-cancel:hover,
+.queued-cancel:focus-visible {
+  color: var(--ink);
 }
 
 /* Крестик на чипе приложенного файла (§7.2). */

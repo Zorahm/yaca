@@ -23,6 +23,7 @@ import {
   commands,
   onEvents,
   openProject,
+  sessionMcp,
   sendCommand,
   sessionMeta,
   sessions,
@@ -44,11 +45,6 @@ export type Chat = {
   /** Title from the store (§3), which the core writes after the first turn. */
   title: string;
   feed: Feed;
-  /**
-   * Sent while the core was busy and not yet taken in. The core takes it after
-   * the current group of actions, not after the whole turn (§7.4).
-   */
-  queued: string | null;
   /** Where the arrows of the top bar stand in this chat's feed (§3). */
   at: number;
   /** Process whose output this chat is streaming (§6.5). */
@@ -72,6 +68,11 @@ export type Chats = {
   close: (id: SessionId) => Promise<void>;
   send: (id: SessionId, command: Command) => void;
   patch: (id: SessionId, fields: Partial<Chat>) => void;
+  /**
+   * Asks the core for a chat's MCP servers as they are now. For the panel,
+   * which may open after a change nobody was listening for.
+   */
+  refreshMcp: (id: SessionId) => Promise<void>;
 };
 
 export function useChats(onError: (error: unknown) => void): Chats {
@@ -89,6 +90,15 @@ export function useChats(onError: (error: unknown) => void): Chats {
 
   const patch = useCallback((id: SessionId, fields: Partial<Chat>) => {
     setChats((prev) => prev.map((chat) => (chat.id === id ? { ...chat, ...fields } : chat)));
+  }, []);
+
+  const refreshMcp = useCallback(async (id: SessionId) => {
+    const servers = await sessionMcp(id);
+    // Into the feed as it is when the answer lands, not as it was when the
+    // question was asked: events kept arriving in between.
+    setChats((prev) =>
+      prev.map((chat) => (chat.id === id ? { ...chat, feed: { ...chat.feed, mcp: servers } } : chat)),
+    );
   }, []);
 
   const refreshTitle = useCallback(async (id: SessionId) => {
@@ -175,6 +185,7 @@ export function useChats(onError: (error: unknown) => void): Chats {
     close,
     send,
     patch,
+    refreshMcp,
   };
 }
 
@@ -195,8 +206,9 @@ function born(opened: OpenedChat, project: string, recorded: AgentEvent[] = []):
     // рисуется сразу, и окно не проходит через кадр, в котором чат открыт, а
     // режима и модели у него ещё нет. Оно же перекрывает журнал: режим и
     // модель у открытой заново сессии свои.
-    feed: { ...reduceAll(emptyFeed, recorded), state: opened.state },
-    queued: null,
+    // Серверы MCP — так же и по той же причине: они начинают подключаться
+    // вместе с сессией, раньше, чем окно слушает её события.
+    feed: { ...reduceAll(emptyFeed, recorded), state: opened.state, mcp: opened.mcp, lsp: opened.lsp },
     at: -1,
     watched: null,
   };
@@ -206,15 +218,8 @@ function born(opened: OpenedChat, project: string, recorded: AgentEvent[] = []):
 function apply(chats: Chat[], frame: EventFrame): Chat[] {
   return chats.map((chat) => {
     if (chat.id !== frame.session) return chat;
-    // §7.4: what was sent while the core was busy stood in its queue, and the
-    // queue ended exactly when the core announced that message.
-    const sent = frame.events.some(
-      (event) => event.type === "userMessage" && event.text === chat.queued,
-    );
-    return {
-      ...chat,
-      feed: reduceAll(chat.feed, frame.events),
-      queued: sent ? null : chat.queued,
-    };
+    // The queue (§7.4) is in the feed, folded from the core's own list: what
+    // waits there is what the core says waits, not a copy kept here.
+    return { ...chat, feed: reduceAll(chat.feed, frame.events) };
   });
 }

@@ -11,7 +11,8 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
 
-import { demoModels, demoScript, demoState, inTauri } from "./demo";
+import { demoMcp, demoModels, demoScript, demoState, inTauri } from "./demo";
+import { DEMO_FILE_PATH, demoFileView } from "./demoFile";
 import { OPENAI_PROVIDER_ID, isPreset, needsKey } from "./provider";
 
 import type { AgentEvent } from "./bindings/AgentEvent";
@@ -23,14 +24,27 @@ import type { Command } from "./bindings/Command";
 import type { DiffLine } from "./bindings/DiffLine";
 import type { EventFrame } from "./bindings/EventFrame";
 import type { FileDiff } from "./bindings/FileDiff";
+import type { Hunk } from "./bindings/Hunk";
+import type { ViewSegment } from "./bindings/ViewSegment";
 import type { FileFact } from "./bindings/FileFact";
+import type { FileView } from "./bindings/FileView";
 import type { Effort } from "./bindings/Effort";
 import type { Mode } from "./bindings/Mode";
+import type { McpServerSettings } from "./bindings/McpServerSettings";
+import type { McpServerSummary } from "./bindings/McpServerSummary";
+import type { McpSource } from "./bindings/McpSource";
+import type { McpStatus } from "./bindings/McpStatus";
 import type { ModelInfo } from "./bindings/ModelInfo";
 import type { OpenedChat } from "./bindings/OpenedChat";
 import type { PermissionAnswer } from "./bindings/PermissionAnswer";
 import type { PermissionKind } from "./bindings/PermissionKind";
 import type { PermissionRequest } from "./bindings/PermissionRequest";
+import type { Invariant } from "./bindings/Invariant";
+import type { Unsaved } from "./bindings/Unsaved";
+import type { QuestionOption } from "./bindings/QuestionOption";
+import type { QueuedId } from "./bindings/QueuedId";
+import type { QuestionReply } from "./bindings/QuestionReply";
+import type { QuestionRequest } from "./bindings/QuestionRequest";
 import type { ProcessId } from "./bindings/ProcessId";
 import type { ProcessState } from "./bindings/ProcessState";
 import type { ProcessSummary } from "./bindings/ProcessSummary";
@@ -73,12 +87,24 @@ export type {
   EventFrame,
   FileDiff,
   FileFact,
+  FileView,
+  Hunk,
+  ViewSegment,
   Mode,
+  McpServerSettings,
+  McpServerSummary,
+  McpSource,
+  McpStatus,
   ModelInfo,
   OpenedChat,
   PermissionAnswer,
   PermissionKind,
   PermissionRequest,
+  Invariant,
+  Unsaved,
+  QuestionOption,
+  QuestionReply,
+  QuestionRequest,
   ProcessId,
   ProcessState,
   ProcessSummary,
@@ -300,6 +326,8 @@ export function openProject(
     return Promise.resolve({
       id: startDemo(path),
       state: { ...demoState, projectRoot: path },
+      mcp: structuredClone(demoMcp),
+      lsp: [],
     });
   }
   return invoke<OpenedChat>("open_project", { path, resume, startup });
@@ -480,6 +508,7 @@ export function discoverModels(spec: ProviderSpec): Promise<ModelInfo[]> {
 export function sendCommand(session: SessionId, command: Command): Promise<void> {
   if (!inTauri) {
     console.info("[стенд] команда", command);
+    answerInDemo(session, command);
     return Promise.resolve();
   }
   return invoke<void>("send_command", { session, command });
@@ -570,6 +599,59 @@ export function onEvents(handler: (frame: EventFrame) => void): Promise<Unlisten
   return listen<EventFrame>(EVENT_CHANNEL, (e) => handler(e.payload));
 }
 
+/**
+ * Ответы стенда на команды, на которые у ядра есть ответ событием.
+ *
+ * Панель файла (§6.4) висела бы на «Читаю файл…», и `@` висел бы на «ищем…»,
+ * если бы стенд молчал, — а это интерфейс, врущий о состоянии. Поэтому стенд
+ * отвечает, но только тем, что знает: единственным файлом демо. Кадр уходит
+ * следующим тиком, как приходит от ядра: ответ в том же стеке вызова прошёл
+ * бы раньше, чем интерфейс успел запомнить запрос.
+ */
+function answerInDemo(session: SessionId, command: Command): void {
+  if (command.type === "readFileView") {
+    const events: AgentEvent[] = [
+      { type: "fileViewLoaded", path: command.path, view: demoFileView(command.path) },
+    ];
+    window.setTimeout(() => demoHandler?.({ session, events }), 0);
+    return;
+  }
+  if (command.type === "searchFiles") {
+    // The stand has one file. It is offered when the query could name it, and
+    // an empty answer otherwise: the project it stands for has no others.
+    const query = command.query.toLowerCase();
+    const paths = DEMO_FILE_PATH.toLowerCase().includes(query) ? [DEMO_FILE_PATH] : [];
+    const events: AgentEvent[] = [{ type: "filesFound", query: command.query, paths }];
+    window.setTimeout(() => demoHandler?.({ session, events }), 0);
+    return;
+  }
+  if (command.type === "approveMcpServer" || command.type === "reconnectMcpServer") {
+    // Одобренный сервер стенда «запускается»; переподключённый остаётся тем,
+    // чем был, — упавший упадёт снова, как и настоящий с той же командой.
+    const approved = command.type === "approveMcpServer" ? command.server : null;
+    const servers = (demoMcpNow.get(session) ?? structuredClone(demoMcp)).map(
+      (server): McpServerSummary =>
+        server.name === approved && server.status === "needsApproval"
+          ? {
+              ...server,
+              status: "ready",
+              label: "server-files 0.6.2",
+              tools: [
+                { name: "read_file", description: "Read a file.", readOnly: true },
+                { name: "write_file", description: "Write a file.", readOnly: false },
+              ],
+            }
+          : server,
+    );
+    demoMcpNow.set(session, servers);
+    const events: AgentEvent[] = [{ type: "mcpUpdated", servers }];
+    window.setTimeout(() => demoHandler?.({ session, events }), 0);
+  }
+}
+
+/** Серверы MCP каждого чата стенда — после того, что с ними сделали. */
+const demoMcpNow = new Map<SessionId, McpServerSummary[]>();
+
 /** Заводит проигрыватель записи и отдаёт имя чата, которым тот назвался. */
 function startDemo(path: string): SessionId {
   const session: SessionId = `ses_demo${demoNext}`;
@@ -623,12 +705,22 @@ export const commands = {
     requestId,
     answer,
   }),
+  answerQuestion: (requestId: string, answer: QuestionReply): Command => ({
+    type: "answerQuestion",
+    requestId,
+    answer,
+  }),
   setBypass: (on: boolean): Command => ({ type: "setBypass", on }),
   watchProcess: (id: ProcessId | null): Command => ({
     type: "watchProcess",
     id,
   }),
   stopProcess: (id: ProcessId): Command => ({ type: "stopProcess", id }),
+  readFileView: (path: string): Command => ({ type: "readFileView", path }),
+  searchFiles: (query: string): Command => ({ type: "searchFiles", query }),
+  reconnectMcpServer: (server: string): Command => ({ type: "reconnectMcpServer", server }),
+  approveMcpServer: (server: string): Command => ({ type: "approveMcpServer", server }),
+  cancelQueued: (id: QueuedId): Command => ({ type: "cancelQueued", id }),
   previewCheckpoint: (id: CheckpointId): Command => ({
     type: "previewCheckpoint",
     id,
@@ -752,6 +844,8 @@ export function emptySettings(): Settings {
     subagentModel: null,
     permissions: { rules: [], denies: [] },
     shadow: { exclude: [] },
+    verify: null,
+    mcpServers: {},
   };
 }
 
@@ -802,6 +896,48 @@ export const SEARCH_KEY_ITEM = "tavily";
 export function searchKeySource(): Promise<KeySource> {
   if (!inTauri) return Promise.resolve("none");
   return invoke<KeySource>("search_key_source");
+}
+
+// --- MCP ---------------------------------------------------------------------
+
+type McpServers = { [key in string]?: McpServerSettings };
+
+/** В стенде общий список серверов живёт в памяти страницы. */
+let demoOwnMcp: McpServers = {};
+
+/**
+ * Свои серверы MCP — `mcp.json` в каталоге настроек, общие для всех проектов.
+ * Битый файл приезжает отказом: окно не должно предлагать перезаписать
+ * серверы, которые не сумело прочитать (§0).
+ */
+export function globalMcpServers(): Promise<McpServers> {
+  if (!inTauri) return Promise.resolve(structuredClone(demoOwnMcp));
+  return invoke<McpServers>("global_mcp_servers");
+}
+
+/** Пишет общий список целиком. До открытого чата он не доходит: тот работает
+    с серверами, с которыми начал. */
+export function saveGlobalMcpServers(servers: McpServers): Promise<void> {
+  if (!inTauri) {
+    demoOwnMcp = structuredClone(servers);
+    return Promise.resolve();
+  }
+  return invoke<void>("save_global_mcp_servers", { servers });
+}
+
+/** Что объявляет `.mcp.json` проекта. Только для показа: файл не наш. */
+export function projectMcpFile(project: string): Promise<McpServers> {
+  if (!inTauri) return Promise.resolve({});
+  return invoke<McpServers>("project_mcp_file", { project });
+}
+
+/**
+ * Серверы открытого чата как они есть сейчас. Обычно их приносит событие
+ * `mcpUpdated`; это — для окна, которое в тот момент не слушало.
+ */
+export function sessionMcp(session: SessionId): Promise<McpServerSummary[]> {
+  if (!inTauri) return Promise.resolve(demoMcpNow.get(session) ?? structuredClone(demoMcp));
+  return invoke<McpServerSummary[]>("session_mcp", { session });
 }
 
 /** Отказ без причины: `null`, а не пустая строка — так пишет ядро. */

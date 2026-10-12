@@ -13,6 +13,7 @@ import { Check } from "@phosphor-icons/react";
 
 import type { Protocol, ProviderSpec } from "../../core/client";
 import { t } from "../../i18n";
+import { PROTOCOL_NAME, ProtocolMark } from "../brand";
 import { HeadersEditor } from "./HeadersEditor";
 import { ModelsList } from "./ModelsList";
 import { useProviderForm } from "./useProviderForm";
@@ -83,7 +84,8 @@ export function ProviderForm({
                 aria-pressed={draft.protocol === protocol}
                 onClick={() => form.patch({ protocol })}
               >
-                {protocol}
+                <ProtocolMark protocol={protocol} size={13} />
+                {PROTOCOL_NAME[protocol]}
               </button>
             ))}
           </div>

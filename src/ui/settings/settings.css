@@ -433,6 +433,11 @@
 }
 
 .prov-name {
+  /* Знак провайдера стоит в строке имени; режется текст, а не знак. */
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
   font-size: 13.5px;
   font-weight: 500;
   color: var(--ink);
@@ -704,3 +709,22 @@
   background: var(--paper);
 }
 
+
+/* Многострочное поле формы сервера MCP: аргументы, окружение, заголовки —
+   по одному на строку. Высоту задаёт число строк, а не `--h-small-button`. */
+.prov-area {
+  height: auto;
+  padding: 6px 10px;
+  line-height: 18px;
+  resize: vertical;
+}
+
+.prov-name > svg {
+  flex: none;
+}
+
+.prov-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

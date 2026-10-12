@@ -115,6 +115,8 @@
   border-top-color: transparent;
 }
 
+/* §6.3: a hunk's decisions. Shown on hover, and on focus so the keyboard
+   reaches them. Only the file panel passes them, never the feed. */
 .diff-more {
   display: block;
   width: 100%;
