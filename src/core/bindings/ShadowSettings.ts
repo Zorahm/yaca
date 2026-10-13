@@ -3,7 +3,7 @@
 export type ShadowSettings = { 
 /**
  * Directory names the snapshot walk does not enter, on top of the
- * built-in list (§10, "исключения теневого репозитория").
+ * built-in list (§10, "exclusions of the shadow repository").
  *
  * Added to, never replacing: `.git` and `.yaca` are not negotiable, and a
  * project that dropped them from its list would be snapshotting its own

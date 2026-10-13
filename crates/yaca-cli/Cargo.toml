@@ -2,6 +2,7 @@
 name = "yaca-cli"
 description = "Безголовый прогон ядра Yaca: события турна как JSONL"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true

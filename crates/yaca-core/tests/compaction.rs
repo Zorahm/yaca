@@ -205,3 +205,44 @@ async fn an_overflow_with_nothing_to_compact_ends_the_turn_with_the_error() {
     assert_eq!(finished_with(&seen), Some(StopReason::Failed));
     assert_eq!(provider.seen.lock().unwrap().len(), 1);
 }
+
+/// The window taken apart (§7.1): the split travels with the figure it
+/// splits, and never disagrees with it.
+#[tokio::test]
+async fn the_usage_says_what_the_window_is_filled_with() {
+    let dir = TempProject::new();
+    dir.write("a.rs", "fn main() {}\n");
+    dir.write("AGENTS.md", "Keep every function under forty lines.\n");
+    let provider = Arc::new(MockProvider::new(vec![
+        read_step("c0", 4_000),
+        Turn::Events(script_text("Read it.")),
+    ]));
+    let handle = tiny_session(&dir, provider);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "read a.rs").await;
+    let seen = until(&mut rx, is_turn_over).await;
+
+    let usage = seen
+        .iter()
+        .find_map(|e| match e {
+            AgentEvent::UsageUpdated { usage } => Some(*usage),
+            _ => None,
+        })
+        .expect("no usage reported");
+    let b = usage.breakdown;
+
+    assert!(usage.context_used >= 4_000);
+    assert_eq!(
+        b.system_prompt + b.instructions + b.memory + b.skills + b.tools + b.mcp_tools
+            + b.mcp_notes + b.messages,
+        usage.context_used,
+        "{b:?}"
+    );
+    assert!(b.system_prompt > 0 && b.tools > 0 && b.messages > 0, "{b:?}");
+    assert!(b.instructions > 0, "AGENTS.md is in the prompt: {b:?}");
+    // No MCP servers in this session, and nothing made up for them.
+    assert_eq!((b.mcp_tools, b.mcp_notes), (0, 0));
+    // 10 000 less the 1 000 kept for the answer, compacted at 90% of the rest.
+    assert_eq!(b.reserved, 10_000 - 8_100);
+}

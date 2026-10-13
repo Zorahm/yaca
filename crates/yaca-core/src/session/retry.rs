@@ -50,8 +50,8 @@ fn retry_after(err: &ProviderError) -> Option<Duration> {
     }
 }
 
-/// Провайдер сказал, когда возвращаться, — слушаемся. Иначе удвоение
-/// с потолком: пять попыток укладываются примерно в полминуты.
+/// The provider said when to come back — we obey. Otherwise doubling
+/// with a cap: five attempts fit into roughly half a minute.
 fn backoff(attempt: u32, hinted: Option<Duration>) -> Duration {
     if let Some(d) = hinted {
         return d.min(Duration::from_secs(60));

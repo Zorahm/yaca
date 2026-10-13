@@ -1,7 +1,9 @@
 //! Providers and their keys (§10), and the models the bottom row offers (§7.1).
 
 use std::collections::HashMap;
+use std::path::Path;
 
+use serde::Serialize;
 use yaca_core::provider::models;
 use yaca_core::provider::registry::{ProviderSpec, Providers};
 use yaca_core::secrets::{self, KeySource};
@@ -9,36 +11,81 @@ use yaca_core::usage::ModelInfo;
 
 use crate::config_dir;
 
-/// Канал «список провайдеров изменился».
+/// Channel «список провайдеров изменился».
 ///
-/// Правят их в окне настроек §10, а показывает их переключатель моделей §7.1
-/// в главном окне. Без этого канала список там остался бы прежним до
-/// перезапуска — то есть окно врало бы про состояние (§0).
+/// They are edited in the settings window (§10), and the model switcher (§7.1)
+/// shows them in the main window. Without this channel the list there would stay
+/// as it was until a restart — that is, the window would lie about the state (§0).
 pub const PROVIDERS_CHANNEL: &str = "yaca://providers";
 
-/// Говорит окнам, что список изменился. Ошибка рассылки не роняет запись:
-/// на диске уже правда, а недоехавшее событие — это устаревший список, а не
-/// потерянная настройка.
+/// Tells the windows that the list has changed. A failed broadcast does not fail the write:
+/// the disk already holds the truth, and a missed event is a stale list, not a
+/// lost setting.
 fn announce(app: &tauri::AppHandle) {
     use tauri::Emitter;
     let _ = app.emit(PROVIDERS_CHANNEL, ());
 }
 
-/// Список провайдеров (§10).
+/// The list after a command that also asked a provider for its models.
+///
+/// The two are answered separately because they fail separately: a key that is
+/// in the keychain and a provider that is in the file stay there when the
+/// address then refuses, and reporting the refusal as the command's failure
+/// would say the key was not stored.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Asked {
+    providers: Providers,
+    /// Why the provider did not answer, when it was asked and did not.
+    poll_error: Option<String>,
+}
+
+/// Asks the saved provider and writes its answer down (`models::refresh`);
+/// `saved` is the list to answer with if it refuses.
+async fn ask(dir: &Path, saved: Providers, id: &str) -> Asked {
+    match models::refresh(dir, id).await {
+        Ok(providers) => Asked {
+            providers,
+            poll_error: None,
+        },
+        Err(e) => Asked {
+            providers: saved,
+            poll_error: Some(e.to_string()),
+        },
+    }
+}
+
+/// Provider list (§10).
 #[tauri::command]
 pub fn providers() -> Result<Providers, String> {
     Providers::load(&config_dir()?).map_err(|e| e.to_string())
 }
 
-/// Добавляет провайдера или заменяет одноимённого.
+/// Adds a provider or replaces one with the same name.
+///
+/// One saved without models is asked for them on the spot. That is the new
+/// provider: its key is stored before it is in the list, so the question
+/// `set_api_key` asks had nobody to go to yet.
 #[tauri::command]
-pub fn save_provider(app: tauri::AppHandle, spec: ProviderSpec) -> Result<Providers, String> {
+pub async fn save_provider(app: tauri::AppHandle, spec: ProviderSpec) -> Result<Asked, String> {
     let dir = config_dir()?;
+    let id = spec.id.clone();
+    let unasked = spec.models.is_empty();
+
     let mut providers = Providers::load(&dir).map_err(|e| e.to_string())?;
     providers.put(spec);
     providers.save(&dir).map_err(|e| e.to_string())?;
+
+    let asked = if unasked {
+        ask(&dir, providers, &id).await
+    } else {
+        Asked {
+            providers,
+            poll_error: None,
+        }
+    };
     announce(&app);
-    Ok(providers)
+    Ok(asked)
 }
 
 #[tauri::command]
@@ -51,27 +98,48 @@ pub fn delete_provider(app: tauri::AppHandle, id: String) -> Result<Providers, S
     Ok(providers)
 }
 
-/// Спросить у провайдера, какие модели он обслуживает (§10).
+/// Asks a provider which models it serves (§10).
 ///
-/// Берёт описание из формы, а не из реестра: адрес и заголовки могли только
-/// что поправить, а спрашивать надо у того, кого настраивают. Ключ — из
-/// кейчейна под тем же id; провайдеру, который ключа не просит, он и не нужен.
+/// Takes the description from the form, not from the registry: the address and headers could only
+/// have just been corrected, and the question has to go to the one being configured. The key
+/// comes from the keychain under the same id; a provider that does not ask for a key does not need one.
 ///
-/// Список возвращается, а не сохраняется: пока человек не нажал «Сохранить»,
+/// The list is returned, not saved: until the person presses «Save»,
 /// в реестре ничего меняться не должно.
 #[tauri::command]
 pub async fn discover_models(spec: ProviderSpec) -> Result<Vec<ModelInfo>, String> {
-    models::discover(&spec, key_for(&spec).as_deref())
+    models::discover(&spec, models::stored_key(&spec).as_deref())
         .await
         .map_err(|e| e.to_string())
 }
 
-/// §10: ключ уезжает в системный кейчейн, а не в файл и не в память процесса.
+/// §10: the key goes into the system keychain, not into a file and not into process memory.
 ///
-/// Провайдер называется всегда: угаданный записал бы ключ не под тем именем.
+/// The provider is always named: a guessed one would store the key under the wrong name.
+///
+/// A key stored for a provider in the list is the moment there is something to
+/// ask it with, so it is asked here and not by whichever window sent the key.
+/// The name may also be no provider at all — the web search key goes through
+/// this command — and then there is nobody to ask.
 #[tauri::command]
-pub fn set_api_key(provider: String, key: String) -> Result<(), String> {
-    secrets::store_api_key(&provider, &key).map_err(|e| e.to_string())
+pub async fn set_api_key(
+    app: tauri::AppHandle,
+    provider: String,
+    key: String,
+) -> Result<Asked, String> {
+    secrets::store_api_key(&provider, &key).map_err(|e| e.to_string())?;
+
+    let dir = config_dir()?;
+    let providers = Providers::load(&dir).map_err(|e| e.to_string())?;
+    if providers.get(&provider).is_none() {
+        return Ok(Asked {
+            providers,
+            poll_error: None,
+        });
+    }
+    let asked = ask(&dir, providers, &provider).await;
+    announce(&app);
+    Ok(asked)
 }
 
 #[tauri::command]
@@ -79,13 +147,13 @@ pub fn forget_api_key(provider: String) -> Result<(), String> {
     secrets::forget_api_key(&provider).map_err(|e| e.to_string())
 }
 
-/// Откуда взялся ключ: кейчейн, переменная окружения или ниоткуда.
+/// Where the key came from: the keychain, an environment variable, or nowhere.
 ///
-/// Не сам ключ. Экрану настроек нужно показать, что ключ есть и откуда он, —
-/// а ключ, уехавший в вебвью, оттуда уже не вернёшь.
+/// Not the key itself. The settings screen has to show that the key is there and where it came from —
+/// and a key that has gone to the webview cannot be fetched back from there.
 ///
-/// Провайдер, которому ключ не нужен вовсе, отвечает `not_needed`: «ключа нет»
-/// у локального шлюза было бы предупреждением ни о чём.
+/// A provider that needs no key at all answers `not_needed`: «ключа нет»
+/// would be a warning about nothing for a local gateway.
 #[tauri::command]
 pub fn api_key_source(provider: String) -> Result<&'static str, String> {
     let providers = Providers::load(&config_dir()?).map_err(|e| e.to_string())?;
@@ -102,12 +170,12 @@ pub fn api_key_source(provider: String) -> Result<&'static str, String> {
     })
 }
 
-/// Откуда взялся ключ веб-поиска (§10).
+/// Where the web search key came from (§10).
 ///
-/// Отдельная команда, а не `api_key_source("tavily")`: Tavily не провайдер,
-/// в реестре его нет, и общая команда ответила бы «нет в списке» про ключ,
-/// который преспокойно лежит в кейчейне. Записывается и забывается он теми же
-/// `set_api_key` и `forget_api_key` — хранилище одно на всех.
+/// A separate command, not `api_key_source("tavily")`: Tavily is not a provider and is not
+/// in the registry, so the shared command would answer «нет в списке» about a key that
+/// is quietly sitting in the keychain. It is written and forgotten through the same
+/// `set_api_key` and `forget_api_key` — the storage is one for everyone.
 #[tauri::command]
 pub fn search_key_source() -> &'static str {
     match secrets::key_source(secrets::TAVILY_ITEM) {
@@ -117,7 +185,7 @@ pub fn search_key_source() -> &'static str {
     }
 }
 
-/// Модели всех провайдеров (§7.1).
+/// Models of all providers (§7.1).
 #[tauri::command]
 pub fn models() -> Result<Vec<ModelInfo>, String> {
     let providers = Providers::load(&config_dir()?).map_err(|e| e.to_string())?;
@@ -135,15 +203,7 @@ pub async fn model_residency(provider: String) -> Result<HashMap<String, bool>, 
     let spec = providers
         .get(&provider)
         .ok_or_else(|| format!("провайдера «{provider}» нет в списке"))?;
-    models::residency(spec, key_for(spec).as_deref())
+    models::residency(spec, models::stored_key(spec).as_deref())
         .await
         .map_err(|e| e.to_string())
-}
-
-/// The key a request to this provider goes with: none for one that does not
-/// ask for it.
-fn key_for(spec: &ProviderSpec) -> Option<String> {
-    spec.needs_key()
-        .then(|| secrets::api_key(&spec.id).0)
-        .flatten()
 }

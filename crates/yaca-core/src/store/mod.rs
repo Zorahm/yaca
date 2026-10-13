@@ -27,6 +27,7 @@ pub mod meta;
 pub mod recorder;
 pub mod replay;
 pub mod search;
+pub mod transcript;
 
 use std::path::{Path, PathBuf};
 
@@ -95,12 +96,15 @@ impl SessionStore {
     }
 
     /// §9: rename. The new name sticks — a rebuilt index will not take it back.
+    ///
+    /// For a session that is not running. A running one keeps its index in
+    /// memory and writes it whole at the end of a turn, over whatever is put
+    /// here: it is renamed through `SessionHandle::rename`.
     pub fn rename(&self, id: &SessionId, title: &str) -> Result<(), CoreError> {
         let mut meta = self
             .meta(id)
             .ok_or_else(|| CoreError::Config(format!("нет сессии {id}")))?;
-        meta.title = title.trim().to_string();
-        meta.title_custom = !meta.title.is_empty();
+        meta.rename(title);
         meta.save(&self.root)?;
         Ok(())
     }
@@ -159,6 +163,7 @@ impl SessionStore {
         // Marking the copy is the panel's business, not a suffix glued on here.
         meta.title = source.title.clone();
         meta.title_custom = source.title_custom;
+        meta.title_by_model = source.title_by_model;
         meta.forked_from = Some(source.id);
         meta.save(&self.root)?;
         Ok(meta)
@@ -275,7 +280,7 @@ fn events_path(root: &Path, id: &SessionId) -> PathBuf {
 /// or the copy would show work its history does not remember doing.
 fn events_through(events: Vec<AgentEvent>, turn: &TurnId) -> Vec<AgentEvent> {
     let end = events.iter().position(|e| match e {
-        AgentEvent::TurnFinished { turn_id, .. } | AgentEvent::TurnCancelled { turn_id } => {
+        AgentEvent::TurnFinished { turn_id, .. } | AgentEvent::TurnCancelled { turn_id, .. } => {
             turn_id == turn
         }
         _ => false,
@@ -341,6 +346,7 @@ mod tests {
             recorder.event(&AgentEvent::TurnFinished {
                 turn_id,
                 stop_reason: StopReason::EndTurn,
+                at: Default::default(),
             });
         }
         id

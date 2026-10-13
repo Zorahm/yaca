@@ -1,12 +1,12 @@
 /**
- * Строка действия и её раскрытие (§5.5, §5.5.1).
+ * Строка действия и её раскрытие.
  *
  * Раскрытие происходит внутри группы: строка растёт вниз, соседние остаются на
  * местах. Раскрыта по умолчанию только выполняющаяся — список из пятнадцати
  * действий читается как список, а не как простыня.
  *
- * У строки `Task` в раскрытии сперва идут строки подагента — те же самые, с
- * тем же раскрытием в дифф и вывод, — а под ними отчёт, который он вернул.
+ * Строки `Task` здесь нет: подагенты стоят в ленте плашкой (`AgentsPlate`), а
+ * их действия — этими же строками в панели агентов.
  */
 
 import { CaretDown, CaretRight } from "@phosphor-icons/react";
@@ -14,11 +14,12 @@ import { useState } from "react";
 
 import type { ActionRow } from "../core/feed";
 import { t, tp } from "../i18n";
-import { caption, rowCounts, rowFiles } from "./captions";
+import { caption, isFileRow, rowCounts, rowFiles } from "./captions";
 import { CodeBlock } from "./CodeBlock";
 import { Diff } from "./Diff";
 import { plainPath } from "./format";
-import { RowSign } from "./RouteSign";
+import { parseRead } from "./readOutput";
+import { RowSign } from "./RowSign";
 import { Thumb } from "./Thumb";
 
 export function ActionRowView({
@@ -33,21 +34,34 @@ export function ActionRowView({
   const open = override ?? running;
   const counts = rowCounts(row);
   const files = rowFiles(row);
+  // What the model asked and what came back must not look alike: the request
+  // (a command, a pattern, a path) sits in a framed box, and under it the
+  // tool's answer is plain text. `Bash` adds a prompt. A row with a diff keeps
+  // its path as a plain line: the diff is its own answer.
+  const prompt = row.tool === "Bash";
+  // A row about a file is laid out around the file's name: the counters and
+  // the caret stand right after it, and the body is the path and, framed, the
+  // file's lines — never a command box.
+  const file = isFileRow(row);
+  // What was read is drawn like a diff — numbers in a gutter, text in the
+  // file's colours — not as the padded listing the tool wrote for the model.
+  const read = row.tool === "Read" && row.state === "done" ? parseRead(row.output) : null;
+  const boxed = !file;
 
   return (
     <div className={open ? "row row-open" : "row"}>
       <button
-        className="row-head"
+        className={file ? "row-head row-head-file" : "row-head"}
         aria-expanded={open}
         onClick={() => setOverride(!open)}
       >
         <RowSign row={row} />
-        {/* §1.1: клик по имени файла открывает панель файла, клик мимо имени —
+        {/* Клик по имени файла открывает панель файла, клик мимо имени —
             раскрывает строку. Имена у тулов без факта не кликабельны. */}
         <span className="row-caption">{caption(row, onOpenFile)}</span>
         {counts && (
-          <span className="counts">
-            <span className="count-add">+{counts.added}</span>{" "}
+          <span className="counts counts-pill">
+            <span className="count-add">+{counts.added}</span>
             <span className="count-del">−{counts.removed}</span>
           </span>
         )}
@@ -56,9 +70,17 @@ export function ActionRowView({
       </button>
 
       {open && (
-        <div className="row-body">
-          {/* Первая строка тела — полный путь или полная команда (§5.5.1). */}
-          {row.target && <div className="row-target">{plainPath(row.target)}</div>}
+        <div className={boxed ? "row-body row-body-cmd" : "row-body row-body-file"}>
+          {/* Первая строка тела — полный путь или полная команда. */}
+          {row.target && !boxed && (
+            <div className="row-target">{plainPath(row.target)}</div>
+          )}
+          {row.target && boxed && (
+            <pre className="cmd-box">
+              {prompt && <span className="cmd-prompt">$ </span>}
+              {prompt ? row.target : plainPath(row.target)}
+            </pre>
+          )}
 
           {/* То, на что модель посмотрела, человек видит тоже: «прочитал
               скриншот» без скриншота — отчёт, который нечем проверить. */}
@@ -66,43 +88,29 @@ export function ActionRowView({
             <Thumb path={row.target} />
           )}
 
-          {row.children.length > 0 && (
-            <div className="group-list">
-              {row.children.map((child) => (
-                <ActionRowView key={child.callId} row={child} onOpenFile={onOpenFile} />
-              ))}
-            </div>
-          )}
-
           {row.diff ? (
             <Diff diff={row.diff} soft path={row.fact?.path ?? row.target ?? undefined} />
+          ) : read ? (
+            <>
+              <Diff
+                body={{ lines: read.lines, truncated: false }}
+                soft
+                path={row.target ?? undefined}
+              />
+              {read.note && <div className="row-target row-dim row-note">{read.note}</div>}
+            </>
           ) : row.output.trim() ? (
-            <CodeBlock text={row.output} error={row.state === "failed"} />
+            // What a file holds is framed like a diff; what a command printed
+            // is plain text under its box.
+            <CodeBlock text={row.output} error={row.state === "failed"} plain={boxed} />
           ) : (
-            // Пока подагент работает, отчёта нет, но и «вывода нет» — неправда:
-            // его строки выше и есть то, что происходит.
-            row.children.length === 0 && (
-              <div className="row-target row-dim">{t("row.no_output")}</div>
-            )
+            <div className="row-target row-dim">{t("row.no_output")}</div>
           )}
 
           {/* Причина, по которой действие не состоялось, — целиком: в подписи
               она обрезана до строки, а чинить по обрезку нечего. */}
           {row.message && row.state !== "denied" && row.state !== "stopped" && (
             <div className="row-target row-dim">{row.message}</div>
-          )}
-
-          {/* Кнопок «принять» и «отклонить» здесь нет: подтверждение
-              спрашивается один раз и до записи (§16.37). */}
-          {row.fact && (
-            <div className="row-actions">
-              <button
-                className="btn btn-row"
-                onClick={() => onOpenFile(row.fact!.path)}
-              >
-                {t("row.open_file")}
-              </button>
-            </div>
           )}
         </div>
       )}

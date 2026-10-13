@@ -4,9 +4,15 @@ import type { ViewSegment } from "./ViewSegment";
 
 /**
  * A file's full diff against its baseline, with the unchanged lines between
- * the hunks (§6.4).
+ * the hunks (§6.4). A file the session has not changed is the same shape with
+ * no hunks in it: the panel shows a file the agent only read as well.
  */
-export type FileView = { fact: FileFact, segments: Array<ViewSegment>, 
+export type FileView = { 
+/**
+ * `None` — the session has not changed the file, so there is nothing to
+ * say about a change.
+ */
+fact: FileFact | null, segments: Array<ViewSegment>, 
 /**
  * The view stops before the rest of the file. Hunks past the cut are not
  * shown, so they cannot be decided from the panel either.

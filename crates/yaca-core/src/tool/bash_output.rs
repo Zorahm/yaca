@@ -48,7 +48,7 @@ impl Tool for BashOutput {
         Narration::Model
     }
 
-    /// Читает кольцевой буфер процесса — и только.
+    /// Reads the process's ring buffer — and nothing else.
     fn concurrent(&self) -> bool {
         true
     }

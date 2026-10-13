@@ -1,12 +1,12 @@
-//! Выполнение тулов: от вопроса о разрешении до строки в ленте.
+//! Running tools: from the permission question to the line in the feed.
 //!
-//! Разрешение спрашивается до запуска, а не вокруг него: §5.7 существует ровно
-//! затем, чтобы человек решил раньше, чем что-либо произошло. Сам вопрос — в
+//! Permission is asked before the run, not around it: §5.7 exists precisely
+//! so that the human decides before anything happens. The question itself lives in
 //! [`asking`](super::asking).
 //!
-//! Вызовов в одном ответе модели бывает несколько, и просит она их пачкой ровно
-//! затем, чтобы они шли разом. Кто может идти разом, решает `Tool::concurrent`;
-//! остальное — по очереди. См. [`Caller::run_batch`].
+//! A model response may contain several calls, and it asks for them in a batch precisely
+//! so that they run together. Which ones may run together is decided by `Tool::concurrent`;
+//! the rest run one after another. See [`Caller::run_batch`].
 //!
 //! The one making calls is a [`Caller`], not the worker, because the agent is
 //! not the only one who makes them: a subagent's calls go down the same road —
@@ -98,7 +98,7 @@ impl Caller {
         self.shared.model_info(id)
     }
 
-    /// Какие тулы вообще существуют в текущем режиме (§7.1).
+    /// Which tools exist at all in the current mode (§7.1).
     pub(super) fn intent(&self) -> Intent {
         self.shared.state.lock().unwrap().mode.intent()
     }
@@ -107,18 +107,18 @@ impl Caller {
         self.shared.emit(event);
     }
 
-    /// Пачка вызовов из одного ответа модели (§5.4).
+    /// A batch of calls from one model response (§5.4).
     ///
-    /// Подряд идущие вызовы, помеченные [`Tool::concurrent`], уходят работать
-    /// вместе; остальные — по очереди, потому что порядок им нужен: чекпоинт
-    /// снимается перед командой, вопрос §5.7 показывается по одному, правка
-    /// ложится поверх предыдущей.
+    /// Consecutive calls marked [`Tool::concurrent`] go off to run
+    /// together; the rest run one at a time, because they need order: the checkpoint
+    /// is taken before a command, the §5.7 question is shown one at a time, and an edit
+    /// lands on top of the previous one.
     ///
-    /// Одновременно — только подряд идущие. Пустить читающие вперёд их соседей
-    /// значило бы переставить ход, который модель написала в своём порядке.
+    /// Only consecutive calls run at once. Letting reads jump ahead of their neighbours
+    /// would reorder the run the model wrote in its own order.
     ///
-    /// Результаты собираются обратно в исходном порядке. Связывает их
-    /// `tool_use_id`, но порядок — то, в чём модель читает собственный ход.
+    /// Results are collected back in their original order. They are linked
+    /// by `tool_use_id`, but the order is what the model reads its own turn in.
     ///
     /// [`Tool::concurrent`]: crate::tool::Tool::concurrent
     pub(super) async fn run_batch(
@@ -144,8 +144,8 @@ impl Caller {
                         .await;
                     (index, ran)
                 });
-                // Ни один из них не спрашивает разрешения — иначе они бы сюда
-                // не попали, — поэтому `asked` не двигается.
+                // None of them asks for permission — otherwise they would not be here —
+                // so `asked` does not move.
                 done.extend(futures_util::future::join_all(together).await);
                 at += run;
             } else {
@@ -233,10 +233,10 @@ impl Caller {
         }
     }
 
-    /// Сколько вызовов с начала списка можно пустить одновременно.
+    /// How many calls from the start of the list may run at once.
     ///
-    /// Неизвестный тул — не одновременный: про него ничего не известно, а
-    /// ответит на него [`Caller::run_one`] строкой об этом.
+    /// An unknown tool is not concurrent: nothing is known about it, and
+    /// [`Caller::run_one`] answers it with a line saying so.
     fn concurrent_run(&self, calls: &[PendingCall]) -> usize {
         calls
             .iter()
@@ -262,7 +262,12 @@ impl Caller {
         let call_id = CallId::from(call.id.clone());
         let mut input = call.input;
         let tool = self.registry.get(&call.name, self.intent());
-        // Подпись — забота ленты, модели она обратно не нужна. Unless the
+        // Before the first event of the call, and before the checks that may
+        // fail it: a silent call stays silent whichever way it ends.
+        if tool.as_ref().is_some_and(|tool| tool.silent()) {
+            self.shared.silent.lock().unwrap().insert(call_id.0.clone());
+        }
+        // The caption is the feed's concern; the model does not need it back. Unless the
         // tool has an argument of that name itself: then it is the tool's.
         let description = match &tool {
             Some(tool) if tool.keeps_description() => None,
@@ -383,7 +388,7 @@ impl Caller {
         let ctx = ToolCtx {
             ws: self.ws.clone(),
             processes: self.shared.processes.clone(),
-            events: self.shared.events.clone(),
+            events: self.shared.tool_events(),
             progress: Progress::new(call_id.clone(), self.shared.events.clone()),
             cancel: cancel.clone(),
             // A subagent does not send another: the agent is the one who sees
@@ -397,6 +402,12 @@ impl Caller {
             vision: self.shared.sees(&self.model()),
             shell: self.shared.shell,
             respect_robots: self.shared.respect_robots,
+            title_locked: self
+                .shared
+                .recorder
+                .as_ref()
+                .is_some_and(|r| !r.meta().title_open_to_model()),
+            transcript: self.shared.recorder.as_ref().map(|r| r.transcript()),
             lsp: Some(self.shared.lsp.clone()),
         };
 
@@ -440,16 +451,18 @@ impl Caller {
                         }
                     }
                 }
-                // Лента получает текст ровно один раз. Стримящий тул уже отдал
-                // его по дороге — команда пишет в ленту, пока работает (§0), —
-                // остальным его отдаёт отсюда сессия.
-                if !ctx.progress.used() && !out.text.is_empty() {
+                // The feed gets the text exactly once. A streaming tool has already handed
+                // it over along the way — the command writes to the feed while it runs (§0) —
+                // the session hands it to everyone else from here.
+                // A detached call has said nothing for the human yet: its text
+                // is a note to the model, and its row is not this call's to end.
+                if !out.detached && !ctx.progress.used() && !out.text.is_empty() {
                     self.emit(AgentEvent::ToolCallProgress {
                         call_id: call_id.clone(),
                         chunk: out.text.clone(),
                     });
                 }
-                // Файловое действие: строка получает счётчики и дифф.
+                // File action: the line gets its counters and diff.
                 if let Some(change) = out.changed {
                     self.emit(AgentEvent::FileChanged {
                         call_id: call_id.clone(),
@@ -463,20 +476,22 @@ impl Caller {
                 let text = self
                     .after_hooks(&call.name, for_hooks, false, out.text, &call_id, cancel)
                     .await;
-                self.emit(AgentEvent::ToolCallFinished {
-                    call_id,
-                    meta: ToolMeta {
-                        duration_ms,
-                        ..out.meta
-                    },
-                });
+                if !out.detached {
+                    self.emit(AgentEvent::ToolCallFinished {
+                        call_id,
+                        meta: ToolMeta {
+                            duration_ms,
+                            ..out.meta
+                        },
+                    });
+                }
                 for (name, picture) in out.pictures {
                     shown.extend(ContentBlock::picture(&name, picture));
                 }
                 (tool_result(&call.id, text, false), asked_here)
             }
             Err(ToolError::Rejected(reason)) => {
-                // Сработавшая защита — не сбой (§5.9).
+                // A tripped guard is not a failure (§5.9).
                 self.emit(AgentEvent::ToolCallRejected {
                     call_id,
                     reason: reason.clone(),
@@ -491,9 +506,9 @@ impl Caller {
                 (self.stopped_by_human(&call.id, call_id, cancel), asked_here)
             }
             Err(err @ ToolError::Failed { .. }) => {
-                // Лента получает строку, модель — строку и подробность:
-                // вывод упавшей команды в подписи действия был бы простынёй,
-                // а без него модели нечего чинить.
+                // The feed gets the line, the model gets the line and the detail:
+                // the output of a failed command in an action's caption would be a wall of text,
+                // and without it the model has nothing to fix.
                 let text = self
                     .after_hooks(&call.name, for_hooks, true, err.for_model(), &call_id, cancel)
                     .await;

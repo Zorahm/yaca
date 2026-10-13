@@ -19,6 +19,7 @@ import type { RequestId } from "./RequestId";
 import type { SessionState } from "./SessionState";
 import type { StopReason } from "./StopReason";
 import type { TodoItem } from "./TodoItem";
+import type { TokenCounts } from "./TokenCounts";
 import type { ToolMeta } from "./ToolMeta";
 import type { TsMillis } from "./TsMillis";
 import type { TurnId } from "./TurnId";
@@ -59,9 +60,32 @@ parent: CallId | null, } | { "type": "toolCallProgress", callId: CallId, chunk: 
  * Поля в §15 нет; лента без него написала бы про остановленную
  * команду, что человек её отклонил, чего не было.
  */
-stopped: boolean, } | { "type": "permissionRequested", request: PermissionRequest, } | { "type": "permissionResolved", requestId: RequestId, } | { "type": "questionAsked", request: QuestionRequest, } | { "type": "questionResolved", requestId: RequestId, reply: QuestionReply | null, } | { "type": "todosUpdated", items: Array<TodoItem>, } | { "type": "planProposed", plan: string, } | { "type": "fileChanged", callId: CallId, fact: FileFact, diff: FileDiff, } | { "type": "fileViewLoaded", path: string, view: FileView | null, } | { "type": "queueUpdated", queued: Array<QueuedMessage>, } | { "type": "filesFound", query: string, paths: Array<string>, } | { "type": "processesUpdated", processes: Array<ProcessSummary>, } | { "type": "mcpUpdated", servers: Array<McpServerSummary>, } | { "type": "lspUpdated", servers: Array<LspServerSummary>, } | { "type": "processOutputReset", id: ProcessId, text: string, 
+stopped: boolean, } | { "type": "permissionRequested", request: PermissionRequest, } | { "type": "permissionResolved", requestId: RequestId, } | { "type": "questionAsked", request: QuestionRequest, } | { "type": "questionResolved", requestId: RequestId, reply: QuestionReply | null, } | { "type": "todosUpdated", items: Array<TodoItem>, } | { "type": "titleSet", title: string, } | { "type": "textShown", path: string, 
+/**
+ * The first line shown, 1-indexed.
+ */
+firstLine: number, 
+/**
+ * How many lines are shown.
+ */
+lines: number, 
+/**
+ * How many lines the file has: with the two above it tells a whole
+ * file from a part of one.
+ */
+total: number, text: string, } | { "type": "planProposed", plan: string, } | { "type": "fileChanged", callId: CallId, fact: FileFact, diff: FileDiff, } | { "type": "fileViewLoaded", path: string, view: FileView | null, } | { "type": "queueUpdated", queued: Array<QueuedMessage>, } | { "type": "filesFound", query: string, paths: Array<string>, } | { "type": "processesUpdated", processes: Array<ProcessSummary>, } | { "type": "mcpUpdated", servers: Array<McpServerSummary>, } | { "type": "lspUpdated", servers: Array<LspServerSummary>, } | { "type": "processOutputReset", id: ProcessId, text: string, 
 /**
  * Сколько строк вытеснено из буфера. Панель говорит об этом прямо:
  * молча потерянный вывод неотличим от вывода, которого не было.
  */
-dropped: number, } | { "type": "processOutput", id: ProcessId, chunk: string, } | { "type": "checkpointCreated", checkpoint: CheckpointSummary, } | { "type": "checkpointsUpdated", checkpoints: Array<CheckpointSummary>, } | { "type": "checkpointPreviewed", id: CheckpointId, files: Array<CheckpointChange>, } | { "type": "checkpointRestored", id: CheckpointId, at: TsMillis, files: number, } | { "type": "contextCompacted", summary: string, freed: number, } | { "type": "summaryEdited", summary: string, } | { "type": "usageUpdated", usage: UsageSnapshot, } | { "type": "turnFinished", turnId: TurnId, stopReason: StopReason, } | { "type": "turnCancelled", turnId: TurnId, } | { "type": "error", code: string, message: string, retryable: boolean, } | { "type": "retryScheduled", attempt: number, of: number, delayMs: number, reason: string, } | { "type": "stateChanged", state: SessionState, };
+dropped: number, } | { "type": "processOutput", id: ProcessId, chunk: string, } | { "type": "checkpointCreated", checkpoint: CheckpointSummary, } | { "type": "checkpointsUpdated", checkpoints: Array<CheckpointSummary>, } | { "type": "checkpointPreviewed", id: CheckpointId, files: Array<CheckpointChange>, } | { "type": "checkpointRestored", id: CheckpointId, at: TsMillis, files: number, } | { "type": "contextCompacted", summary: string, freed: number, } | { "type": "summaryEdited", summary: string, } | { "type": "subagentUsage", callId: CallId, tokens: TokenCounts, } | { "type": "usageUpdated", usage: UsageSnapshot, } | { "type": "turnFinished", turnId: TurnId, stopReason: StopReason, 
+/**
+ * When the turn ended. With `TurnStarted::at` it is the turn's
+ * duration, which the feed shows under the answer. Zero in a journal
+ * written before the field existed: "unknown", not "1970".
+ */
+at: TsMillis, } | { "type": "turnCancelled", turnId: TurnId, 
+/**
+ * As [`AgentEvent::TurnFinished::at`].
+ */
+at: TsMillis, } | { "type": "error", code: string, message: string, retryable: boolean, } | { "type": "retryScheduled", attempt: number, of: number, delayMs: number, reason: string, } | { "type": "stateChanged", state: SessionState, };

@@ -1,5 +1,5 @@
 /**
- * Панель процессов §6.5: фоновые команды, состояние, время работы, вывод
+ * Панель процессов: фоновые команды, состояние, время работы, вывод
  * выбранной строки.
  *
  * Список ядро отдаёт целиком событием `processesUpdated` — панель есть функция
@@ -25,7 +25,6 @@ import { Panel } from "./Panel";
 export function ProcessesPanel({
   feed,
   watched,
-  onClose,
   onWatch,
   onStop,
 }: {
@@ -33,7 +32,6 @@ export function ProcessesPanel({
   /** Выбранная строка. Само состояние выбора живёт в ядре; здесь оно нужно,
       чтобы вернуть выбор при повторном открытии панели. */
   watched: ProcessId | null;
-  onClose: () => void;
   onWatch: (id: ProcessId) => void;
   onStop: (id: ProcessId) => void;
 }) {
@@ -56,7 +54,7 @@ export function ProcessesPanel({
       : null;
 
   return (
-    <Panel open onOpenChange={(next) => !next && onClose()} title={t("top.processes")}>
+    <Panel>
       {processes.length === 0 ? (
         <div className="panel-empty">{t("proc.empty")}</div>
       ) : (

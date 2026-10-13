@@ -1,0 +1,75 @@
+/*
+ * The menu of a row: what a right click or a `⋯` opens.
+ *
+ * Not the composer's `.menu`. That one is a list of choices hung from a chip,
+ * wide enough for a note beside every name; this one is a list of commands at
+ * the pointer, read in a glance and left — tighter rows, an icon in the gutter.
+ *
+ * Radix places it, so nothing here positions. The highlight is Radix's too:
+ * `data-highlighted` follows the pointer and the arrow keys alike, where
+ * `:hover` would leave the keyboard without a cursor (§14).
+ */
+
+.pop {
+  z-index: 30;
+  min-width: 190px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+
+.pop-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: var(--h-small-button);
+  padding: 0 10px 0 8px;
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  color: var(--ink);
+  cursor: default;
+  outline: none;
+}
+
+.pop-item svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.pop-item[data-highlighted] {
+  background: var(--bg);
+}
+
+.pop-item[data-highlighted] svg {
+  color: var(--ink);
+}
+
+.pop-item[data-disabled] {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* What cannot be taken back is red in word and icon, lit or not: the colour
+   is a warning about the command, not a state of the row. */
+.pop-item-danger,
+.pop-item-danger svg,
+.pop-item-danger[data-highlighted] svg {
+  color: var(--err);
+}
+
+/* Why the item above it is switched off. */
+.pop-note {
+  max-width: 220px;
+  padding: 0 10px 6px 31px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.pop-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--line);
+}

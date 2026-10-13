@@ -1,5 +1,5 @@
-//! Токены и деньги. Кольцо состояния (§7.1) показывает и то и другое:
-//! заполнение — занятость контекста, тултип — `24k/200k · $0.31`.
+//! Tokens and money. The state ring (§7.1) shows both: the fill is how much of
+//! the context is occupied, the tooltip is `24k/200k · $0.31`.
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -13,9 +13,9 @@ use crate::provider::registry::ANTHROPIC_ID;
 pub struct TokenCounts {
     pub input: u32,
     pub output: u32,
-    /// Записано в кеш — считается дороже обычного ввода.
+    /// Written to the cache — billed higher than ordinary input.
     pub cache_write: u32,
-    /// Прочитано из кеша — считается почти даром.
+    /// Read from the cache — billed at almost nothing.
     pub cache_read: u32,
 }
 
@@ -27,33 +27,70 @@ impl TokenCounts {
         self.cache_read += other.cache_read;
     }
 
-    /// Сколько всего занято в окне контекста прямо сейчас.
+    /// How much of the context window is occupied right now.
     ///
-    /// Считается по последнему ответу, а не суммой за сессию: история
-    /// пересылается целиком каждый ход, и сумма ничего не значила бы.
+    /// Computed from the last response, not summed over the session: the history
+    /// is sent again in full each turn, so a sum would mean nothing.
     pub fn context_used(&self) -> u32 {
         self.input + self.cache_read + self.cache_write + self.output
     }
 }
 
-/// Что интерфейс кладёт в кольцо состояния.
+/// What the occupied part of the context window is made of, in tokens.
+///
+/// The provider measures one number for the whole request, so the split is an
+/// estimate: that number shared out by the size of each part's text
+/// (`session::window`). The parts other than `reserved` add up to
+/// `UsageSnapshot::context_used` exactly, so the list never disagrees with
+/// the figure above it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextBreakdown {
+    /// The core's own system prompt, without the sections counted below.
+    pub system_prompt: u32,
+    /// `AGENTS.md` at the root and in the directories below it.
+    pub instructions: u32,
+    /// The project's memory index.
+    pub memory: u32,
+    /// The project's skills list.
+    pub skills: u32,
+    /// Schemas of the core's own tools.
+    pub tools: u32,
+    /// Schemas of the tools the MCP servers brought.
+    pub mcp_tools: u32,
+    /// What the MCP servers say about themselves in the system prompt.
+    pub mcp_notes: u32,
+    /// The conversation: messages, calls and their results.
+    pub messages: u32,
+    /// Not occupied, but not free either: the room kept for the answer and
+    /// the margin before compaction starts on its own (§5.11). Outside
+    /// `context_used`.
+    pub reserved: u32,
+}
+
+/// What the interface puts into the state ring.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageSnapshot {
-    /// Токены последнего ответа.
+    /// Tokens of the last response.
     pub last: TokenCounts,
-    /// Токены за всю сессию — для `/cost`.
+    /// Tokens for the whole session — for `/cost`.
     pub total: TokenCounts,
-    /// Занято в окне контекста.
+    /// Occupied in the context window.
     pub context_used: u32,
-    /// Размер окна выбранной модели.
+    /// Size of the selected model's window.
     pub context_max: u32,
-    /// Накопленная стоимость сессии в долларах.
+    /// What `context_used` is made of. All zeroes in a snapshot recorded
+    /// before the field existed, and until the session's worker fills it.
+    #[serde(default)]
+    pub breakdown: ContextBreakdown,
+    /// Accumulated session cost in dollars.
     pub cost_usd: f64,
 }
 
-/// Цена модели, доллары за миллион токенов.
+/// Model price, dollars per million tokens.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
@@ -63,7 +100,7 @@ pub struct Pricing {
 }
 
 impl Pricing {
-    /// Множители кеша у Anthropic: запись ~1.25× от ввода, чтение ~0.1×.
+    /// Anthropic's cache multipliers: writes ~1.25× the input price, reads ~0.1×.
     pub fn cost(&self, t: TokenCounts) -> f64 {
         let m = 1e-6;
         t.input as f64 * self.input * m
@@ -73,32 +110,32 @@ impl Pricing {
     }
 }
 
-/// Откуда взялось окно контекста.
+/// Where the context window came from.
 ///
-/// Способ получения, а не само число: разница между «сервер ответил»,
-/// «ядро спросило у локального сервера то, что OpenAI-форма умалчивает», и
-/// «число придумано умолчанием» — это и есть видимость отката, о которой
-/// §10 просит. Старый `providers.json` поля не знает — `default`, чтобы
-/// записанное в нём догадкой оставаться и догадкой считалось.
+/// How the number was obtained, not the number itself: the difference between
+/// "the server answered", "the core asked the local server what the OpenAI
+/// shape leaves out" and "the number was made up by a default" is the visibility
+/// of a fallback that §10 asks for. An old `providers.json` has no such field —
+/// `default` keeps a guess recorded there a guess.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum ContextSource {
-    /// Сервер ничего не сказал из названного в `provider::models` — стоит
-    /// `unknown_model`'s 128 000, и это догадка, а не факт.
+    /// The server said nothing of what `provider::models` names — the
+    /// `unknown_model`'s 128 000 stands, and it is a guess, not a fact.
     #[default]
     DefaultGuess,
-    /// Провайдер ответил числом в собственном списке моделей.
+    /// The provider answered with a number from its own model list.
     ProviderReported,
-    /// Локальный сервер ответил, сколько реально выделил загруженной модели
-    /// (`provider::models::local`).
+    /// The local server answered with how much it actually allocated to the
+    /// loaded model (`provider::models::local`).
     DetectedAllocated,
-    /// Локальный сервер ответил архитектурным максимумом модели: то, что
-    /// свежая загрузка получит, но не обязательно то, под чем сессия работает.
+    /// The local server answered with the model's architectural maximum: what a
+    /// fresh load will get, but not necessarily what the session runs under.
     DetectedMaximum,
 }
 
-/// Модель, доступная в переключателе (§7.1).
+/// A model available in the switcher (§7.1).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
@@ -110,17 +147,17 @@ pub struct ModelInfo {
     pub context_max: u32,
     pub max_output: u32,
     pub pricing: Pricing,
-    /// Умеет ли `output_config.effort`. Старые модели — нет.
+    /// Whether it supports `output_config.effort`. Older models do not.
     pub supports_effort: bool,
-    /// Умеет ли адаптивное рассуждение — единственную форму, которую Yaca
-    /// умеет просить. Отдельно от усилия, потому что провайдер сообщает их
-    /// отдельно: Haiku 4.5 рассуждает по `budget_tokens`, но `effort` не
-    /// понимает, и один флаг на двоих отправил бы ей то, чего она не примет.
+    /// Whether it supports adaptive reasoning — the only form Yaca knows how to
+    /// ask for. Kept apart from effort, because the provider reports them
+    /// separately: Haiku 4.5 reasons by `budget_tokens` but does not understand
+    /// `effort`, and one flag for both would send it something it refuses.
     ///
-    /// `default` — ради `providers.json`, написанного до того, как поле
-    /// появилось: битый файл здесь останавливает запуск, и молча уронить
-    /// чужую настройку на обновлении нельзя. Умолчание `false` — сторона
-    /// отказа: недосланное рассуждение стоит глубины, лишнее — это 400.
+    /// `default` is for `providers.json` written before the field existed: a
+    /// broken file stops the start here, and silently dropping someone's setting
+    /// on an update is not allowed. The `false` default is the refusing side: a
+    /// reasoning that was not sent costs depth, an extra one is a 400.
     #[serde(default)]
     pub supports_thinking: bool,
     /// How `context_max` came to be. A fallback stays visible: see
@@ -142,15 +179,15 @@ fn yes() -> bool {
     true
 }
 
-/// Прайс-лист Anthropic, доллары за миллион токенов.
+/// Anthropic's price list, dollars per million tokens.
 ///
-/// Снимок, а не истина: цены Models API не отдаёт вовсе (`provider::models`),
-/// а платная модель, посчитанная бесплатной, — враньё в кольце §7.1. Модель
-/// не из списка считается бесплатной, как и всякая неизвестная, — это видно
-/// по нулю в тултипе, и это честнее выдуманной цифры.
+/// A snapshot, not the truth: the Models API does not return prices at all
+/// (`provider::models`), and a paid model counted as free is a lie in the §7.1
+/// ring. A model not on the list counts as free, like any unknown one — this
+/// shows as a zero in the tooltip, which is more honest than an invented figure.
 ///
-/// Сверяется по началу идентификатора: датированный снимок
-/// `claude-opus-4-5-20251101` попадает в строку `claude-opus-4-5`.
+/// Matched by the start of the identifier: a dated snapshot
+/// `claude-opus-4-5-20251101` falls under the `claude-opus-4-5` row.
 const PRICES: &[(&str, f64, f64)] = &[
     ("claude-fable-5-1", 10.0, 50.0),
     ("claude-fable-5", 10.0, 50.0),
@@ -165,10 +202,10 @@ const PRICES: &[(&str, f64, f64)] = &[
     ("claude-haiku-4-5", 1.0, 5.0),
 ];
 
-/// Цена модели по прайс-листу, если она там есть.
+/// The model's price from the price list, if it is there.
 ///
-/// Самый длинный подходящий префикс, а не первый: `claude-fable-5` — начало
-/// `claude-fable-5-1`, и короткая строка не должна перебивать точную.
+/// The longest matching prefix, not the first: `claude-fable-5` is the start of
+/// `claude-fable-5-1`, and the shorter string must not override the exact one.
 pub fn price_of(id: &str) -> Option<Pricing> {
     PRICES
         .iter()
@@ -205,8 +242,8 @@ pub fn catalog() -> Vec<ModelInfo> {
         m("claude-opus-5", "Opus 5", 1_000_000, 128_000),
         m("claude-opus-4-8", "Opus 4.8", 1_000_000, 128_000),
         m("claude-sonnet-5", "Sonnet 5", 1_000_000, 128_000),
-        // Haiku 4.5 — модель прошлого поколения: ни `output_config.effort`,
-        // ни адаптивного рассуждения она не понимает и отвечает 400.
+        // Haiku 4.5 is a previous-generation model: it understands neither
+        // `output_config.effort` nor adaptive reasoning, and answers 400.
         ModelInfo {
             supports_effort: false,
             supports_thinking: false,
@@ -221,9 +258,9 @@ pub fn model_info(id: &str) -> Option<ModelInfo> {
     catalog().into_iter().find(|m| m.id == id)
 }
 
-/// Модель, которой нет в списке провайдера. Считаем бесплатной и с
-/// консервативным окном, но не падаем: §8 обещает работу с любыми моделями,
-/// включая те, о которых Yaca не слышал.
+/// A model that is not in the provider's list. Counted as free and with a
+/// conservative window, but it does not fail: §8 promises to work with any
+/// model, including ones Yaca has never heard of.
 pub fn unknown_model(id: &str) -> ModelInfo {
     ModelInfo {
         id: id.to_string(),
@@ -242,7 +279,7 @@ pub fn unknown_model(id: &str) -> ModelInfo {
     }
 }
 
-/// Накопитель за сессию.
+/// Accumulator for the session.
 #[derive(Debug, Clone, Default)]
 pub struct UsageMeter {
     total: TokenCounts,
@@ -307,6 +344,9 @@ impl UsageMeter {
                 .estimated_context
                 .unwrap_or_else(|| self.last.context_used()),
             context_max,
+            // The meter counts tokens and knows nothing of what was sent;
+            // the worker does (`session::window`).
+            breakdown: ContextBreakdown::default(),
             cost_usd: self.cost_usd,
         }
     }

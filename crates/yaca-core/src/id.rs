@@ -1,4 +1,5 @@
-//! Идентификаторы. Новотипы поверх строки: в Rust не перепутать, в TS — обычный `string`.
+//! Identifiers. Newtypes over a string: they cannot be mixed up in Rust, and in TS
+//! they are a plain `string`.
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -11,7 +12,7 @@ macro_rules! string_id {
         pub struct $name(pub String);
 
         impl $name {
-            /// Свежий идентификатор с читаемым префиксом — по логу видно, что это.
+            /// A fresh identifier with a readable prefix — the log shows what it is.
             pub fn new() -> Self {
                 Self(format!("{}_{}", $prefix, uuid::Uuid::new_v4().simple()))
             }
@@ -48,43 +49,43 @@ macro_rules! string_id {
 }
 
 string_id!(
-    /// Сессия — один разговор в проекте.
+    /// Session — one conversation in the project.
     SessionId,
     "ses"
 );
 string_id!(
-    /// Турн — один заход агента от сообщения человека до остановки.
+    /// Turn — one run of the agent from the human's message to its stop.
     TurnId,
     "turn"
 );
 string_id!(
-    /// Блок текста или рассуждения внутри ответа модели.
+    /// A block of text or reasoning inside the model's answer.
     BlockId,
     "blk"
 );
 string_id!(
-    /// Вызов тула. Совпадает с `tool_use.id` провайдера, когда тот его даёт.
+    /// A tool call. Matches the provider's `tool_use.id` when the provider gives one.
     CallId,
     "call"
 );
 string_id!(
-    /// Запрос разрешения (§5.7). В срезе 1 не используется, но живёт в контракте.
+    /// A permission request (§5.7). Not used in slice 1, but part of the contract.
     RequestId,
     "req"
 );
 string_id!(
-    /// Чекпоинт (§5.8).
+    /// Checkpoint (§5.8).
     CheckpointId,
     "ckpt"
 );
 string_id!(
-    /// Сообщение, которое человек отправил во время хода и которое ещё не
-    /// влито в него (§7.4). Нужен, чтобы отменить именно это сообщение.
+    /// A message the human sent during a turn that has not yet been taken into
+    /// it (§7.4). Needed to cancel exactly this message.
     QueuedId,
     "qmsg"
 );
 
-/// Миллисекунды эпохи. В TS — обычное `number`, укладывается в 2^53 до 287-го тысячелетия.
+/// Milliseconds since the epoch. A plain `number` in TS; fits within 2^53 until the 287th millennium.
 pub fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

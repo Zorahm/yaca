@@ -1,8 +1,8 @@
-//! Общая обвязка файловых тулов: запись в дерево и инварианты (§8).
+//! Shared plumbing for file tools: writing to the tree and the invariants (§8).
 //!
-//! Инварианты живут здесь, а не в каждом туле, потому что «не отключаются
-//! ничем» — это про одно место, а не про четыре одинаковых проверки, из
-//! которых одну однажды забудут.
+//! The invariants live here, not in each tool, because "switched off by nothing"
+//! is a property of one place, not of four identical checks, one of which
+//! someone eventually forgets.
 
 use std::path::{Path, PathBuf};
 
@@ -13,8 +13,8 @@ use crate::workspace::{ReadRecord, Workspace};
 
 use super::ToolCtx;
 
-/// Где начинать поиск: там, куда его направили, а без пути — во всех корнях,
-/// основной первым. `grep`, `glob` и `@`-поиск ходят по одному списку.
+/// Where the search starts: where it was pointed, and without a path in every root,
+/// the primary one first. `grep`, `glob` and `@`-search walk the same list.
 pub(crate) fn starts(ws: &Workspace, given: Option<PathBuf>) -> Vec<PathBuf> {
     match given {
         Some(path) => vec![path],
@@ -22,10 +22,10 @@ pub(crate) fn starts(ws: &Workspace, given: Option<PathBuf>) -> Vec<PathBuf> {
     }
 }
 
-/// Вопрос о правке файла `abs` (§5.7). Один для `Write` и `Edit`.
+/// The question about editing file `abs` (§5.7). One for `Write` and `Edit`.
 ///
-/// Правка в дополнительном корне помечается как несохраняемая: откат её не
-/// вернёт, и человек должен узнать это до того, как она случится.
+/// An edit in an additional root is marked as unsaved: a rollback will not bring
+/// it back, and the human must learn that before it happens.
 pub(crate) fn edit_need(ws: &Workspace, tool: &str, raw: &str, abs: PathBuf) -> PermissionNeed {
     let name = abs
         .file_name()
@@ -45,13 +45,13 @@ pub(crate) fn edit_need(ws: &Workspace, tool: &str, raw: &str, abs: PathBuf) -> 
     }
 }
 
-/// Обход дерева для читающих тулов: `grep` и `glob` ходят одинаково.
+/// Tree walk for reading tools: `grep` and `glob` walk the same way.
 ///
-/// `require_git(false)` здесь не украшение. По умолчанию `ignore` применяет
-/// `.gitignore` только внутри git-репозитория, а проект без `.git` — обычное
-/// дело. Молча получив полный обход, тул уходит в `target/` и `node_modules/`
-/// и читает десятки тысяч файлов: строка в ленте висит минутами, и человек
-/// видит зависание, а не поиск.
+/// `require_git(false)` is not decoration here. By default `ignore` applies
+/// `.gitignore` only inside a git repository, and a project without `.git` is
+/// an ordinary case. Silently getting a full walk, the tool goes into `target/`
+/// and `node_modules/` and reads tens of thousands of files: the line in the feed
+/// hangs for minutes, and the human sees a freeze, not a search.
 pub(crate) fn walk(start: &Path) -> ignore::Walk {
     ignore::WalkBuilder::new(start)
         .hidden(true)
@@ -59,42 +59,65 @@ pub(crate) fn walk(start: &Path) -> ignore::Walk {
         .build()
 }
 
-/// Цель правки, прошедшая проверки.
+/// The target of an edit, past the checks.
 pub(crate) struct Target {
     pub abs: PathBuf,
     pub rel: String,
-    /// Содержимое на диске. `None` — файла нет.
+    /// Contents on disk. `None` — the file does not exist, or (only from
+    /// [`look_any`]) it is binary and has no text to show.
     pub current: Option<String>,
-    /// Отпечаток диска: по нему §8 поймает правку мимо Yaca.
+    /// Whether anything is at `abs`. Unlike `current`, true for a binary file.
+    pub exists: bool,
+    /// Fingerprint of the disk: by it §8 catches an edit made outside Yaca.
     pub fingerprint: Option<ReadRecord>,
 }
 
-/// Читает файл, не проверяя ничего сверх границ проекта.
+/// Reads a file, checking nothing beyond the project boundaries.
 pub(crate) fn look(ctx: &ToolCtx, raw: &str) -> Result<Target, ToolError> {
     look_in(&ctx.ws, raw)
 }
 
-/// То же по воркспейсу, без всего остального контекста.
+/// The same over the workspace, without the rest of the context.
 ///
-/// Отдельно, потому что это единственная часть чтения, которая ходит на диск,
-/// а `ToolCtx` через границу задачи не пронести. Тул, который хочет читать, не
-/// занимая исполнитель, уносит вызов в `spawn_blocking` с копией `Arc`.
+/// Separate, because this is the only part of reading that goes to disk, and a
+/// `ToolCtx` cannot be carried across the task boundary. A tool that wants to read
+/// without occupying the executor moves the call into `spawn_blocking` with a copy
+/// of the `Arc`.
 pub(crate) fn look_in(ws: &Workspace, raw: &str) -> Result<Target, ToolError> {
     let abs = ws.resolve_new(raw)?;
+    let current = read_text(&abs)?;
     Ok(Target {
         rel: ws.display(&abs),
-        current: read_text(&abs)?,
+        exists: current.is_some(),
+        current,
         fingerprint: ws.fingerprint(&abs),
         abs,
     })
 }
 
-/// Записывает содержимое в рабочее дерево и возвращает то, что интерфейс
-/// покажет строкой и диффом.
+/// Like [`look`], for tools that act on a file without editing its text:
+/// `Delete` and `Move`. A binary file is a legitimate target for them, so it
+/// comes back with `exists` set and no `current` instead of a refusal.
+pub(crate) fn look_any(ctx: &ToolCtx, raw: &str) -> Result<Target, ToolError> {
+    let abs = ctx.ws.resolve_new(raw)?;
+    // An unreadable file (binary, a directory, no access) still exists; the
+    // operation itself reports the real error if it cannot proceed.
+    let current = read_text(&abs).ok().flatten();
+    Ok(Target {
+        rel: ctx.ws.display(&abs),
+        exists: std::fs::symlink_metadata(&abs).is_ok(),
+        current,
+        fingerprint: ctx.ws.fingerprint(&abs),
+        abs,
+    })
+}
+
+/// Writes the contents to the working tree and returns what the interface
+/// will show as a line and a diff.
 ///
-/// Отпечаток обновляется здесь же: запись меняет mtime, и без этого агент не
-/// смог бы поправить файл дважды подряд — вторая правка упёрлась бы в
-/// собственную первую как в «файл изменился после чтения».
+/// The fingerprint is updated here too: a write changes the mtime, and without
+/// this the agent could not fix a file twice in a row — the second edit would hit
+/// its own first one as «файл изменился после чтения».
 pub(crate) fn write(
     ctx: &ToolCtx,
     target: &Target,
@@ -123,8 +146,8 @@ pub(crate) fn write(
     ))
 }
 
-/// То же плюс инварианты правки: файл должен быть прочитан и не должен был
-/// измениться после чтения (§8).
+/// The same plus the invariants of an edit: the file must have been read and must
+/// not have changed since the read (§8).
 pub(crate) fn look_editable(ctx: &ToolCtx, raw: &str) -> Result<Target, ToolError> {
     let target = look(ctx, raw)?;
     ensure_editable(ctx, &target)?;
@@ -141,8 +164,8 @@ fn ensure_editable(ctx: &ToolCtx, target: &Target) -> Result<(), ToolError> {
     }
 
     if ctx.ws.read_record(&target.abs) != target.fingerprint {
-        // Забываем отпечаток: пока файл не перечитан, править его вслепую
-        // нельзя, и повторная попытка упрётся в первую же проверку.
+        // Forget the fingerprint: until the file is re-read it may not be edited
+        // blind, and a retry runs into the very first check.
         ctx.ws.forget(&target.abs);
         return Err(ToolError::rejected(format!(
             "{} изменился после чтения — перечитай его",
@@ -153,8 +176,8 @@ fn ensure_editable(ctx: &ToolCtx, target: &Target) -> Result<(), ToolError> {
     Ok(())
 }
 
-/// Читает файл с диска. Двоичный и отсутствующий различаются: первый — отказ,
-/// второй — законный `None`.
+/// Reads a file from disk. Binary and missing are told apart: the first is a
+/// refusal, the second a legitimate `None`.
 pub(crate) fn read_text(path: &Path) -> Result<Option<String>, ToolError> {
     let bytes = match std::fs::read(path) {
         Ok(b) => b,

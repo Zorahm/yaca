@@ -46,7 +46,7 @@ pub fn feed(events: Vec<AgentEvent>) -> Vec<AgentEvent> {
             | AgentEvent::CheckpointPreviewed { .. } => continue,
 
             AgentEvent::TurnStarted { turn_id, .. } => open_turn = Some(turn_id.clone()),
-            AgentEvent::TurnFinished { turn_id, .. } | AgentEvent::TurnCancelled { turn_id }
+            AgentEvent::TurnFinished { turn_id, .. } | AgentEvent::TurnCancelled { turn_id, .. }
                 if open_turn.as_ref() == Some(turn_id) =>
             {
                 open_turn = None;
@@ -85,7 +85,10 @@ pub fn feed(events: Vec<AgentEvent>) -> Vec<AgentEvent> {
         out.push(AgentEvent::PermissionResolved { request_id });
     }
     if let Some(turn_id) = open_turn {
-        out.push(AgentEvent::TurnCancelled { turn_id });
+        out.push(AgentEvent::TurnCancelled {
+            turn_id,
+            at: Default::default(),
+        });
     }
 
     out
@@ -110,6 +113,7 @@ mod tests {
         AgentEvent::TurnFinished {
             turn_id: TurnId::from(turn),
             stop_reason: StopReason::EndTurn,
+            at: Default::default(),
         }
     }
 
@@ -229,7 +233,8 @@ mod tests {
         assert_eq!(
             replayed.last(),
             Some(&AgentEvent::TurnCancelled {
-                turn_id: TurnId::from("t1")
+                turn_id: TurnId::from("t1"),
+                at: Default::default(),
             }),
             "a call left running would keep its live dot forever"
         );
@@ -255,7 +260,8 @@ mod tests {
         assert_eq!(
             replayed[3],
             AgentEvent::TurnCancelled {
-                turn_id: TurnId::from("t1")
+                turn_id: TurnId::from("t1"),
+                at: Default::default(),
             }
         );
     }
@@ -288,7 +294,8 @@ mod tests {
         assert_eq!(
             replayed[3],
             AgentEvent::TurnCancelled {
-                turn_id: TurnId::from("t1")
+                turn_id: TurnId::from("t1"),
+                at: Default::default(),
             }
         );
     }

@@ -1,4 +1,4 @@
-//! Поиск по содержимому. Регулярное выражение, обход с уважением к `.gitignore`.
+//! Searching file contents. A regular expression, walking while respecting `.gitignore`.
 
 mod excerpts;
 #[cfg(test)]
@@ -14,20 +14,21 @@ use crate::error::ToolError;
 use crate::intent::Intent;
 use excerpts::{Excerpts, Hit, DEFAULT_LIMIT, MAX_LIMIT, MAX_OUTPUT_BYTES};
 
-/// Файлы крупнее — почти наверняка данные, а не код.
+/// Files larger than this are almost certainly data, not code.
 const MAX_FILE_BYTES: u64 = 4 * 1024 * 1024;
 
-/// Сколько поиску позволено идти, прежде чем его остановят.
+/// How long a search may run before it is stopped.
 ///
-/// Обход уважает `.gitignore`, но каталог без него — симлинк в корень диска,
-/// сетевой том, дерево на миллион файлов — уводит поиск в минуты. Строка
-/// действия при этом просто висит, и человек видит зависшее приложение, а не
-/// работающий поиск (§0). Минуты хватает всему, что вообще имеет смысл ждать.
+/// The walk respects `.gitignore`, but a directory without it — a symlink to the
+/// root of a disk, a network volume, a tree of a million files — takes the search
+/// into minutes. The action line then just hangs, and the human sees a frozen app
+/// rather than a working search (§0). A few minutes is enough for anything that is
+/// worth waiting for.
 const DEADLINE: Duration = Duration::from_secs(60);
 
 pub struct Grep {
-    /// Вынесен в поле, чтобы тест мог поставить свой: ждать минуту, проверяя
-    /// минутный потолок, — не тест, а простой.
+    /// A field so that a test can set its own: waiting a minute to check the
+    /// one-minute ceiling is not a test, it is idling.
     deadline: Duration,
 }
 
@@ -134,7 +135,7 @@ impl Tool for Grep {
         Narration::Model
     }
 
-    /// Поиск ничего не меняет.
+    /// Searching changes nothing.
     fn concurrent(&self) -> bool {
         true
     }
@@ -199,8 +200,8 @@ impl Tool for Grep {
             let mut files: Vec<String> = Vec::new();
             let mut total = 0usize;
 
-            // Сначала собираем, что вообще читать, потом ищем: обход и чтение
-            // не мешаются в одном горячем цикле.
+            // Collect what to read first, then search: the walk and the reads
+            // do not get in each other's way in one hot loop.
             let mut targets: Vec<(String, std::path::PathBuf)> = Vec::new();
 
             for start in &starts {
@@ -242,7 +243,7 @@ impl Tool for Grep {
                     continue;
                 };
                 if bytes.iter().take(8_192).any(|b| *b == 0) {
-                    continue; // двоичный
+                    continue; // binary
                 }
                 let text = String::from_utf8_lossy(&bytes).into_owned();
 
@@ -370,9 +371,9 @@ fn hits_of(re: &regex::Regex, text: &str, lines: &[&str], multiline: bool) -> Ve
         .collect()
 }
 
-/// Форма неудачи для ленты и для модели. Красная (§5.9 красит `Failed`
-/// `--rust`): поиск не довели до конца, и его результат — не «ничего не
-/// нашлось», а «неизвестно».
+/// The failure shape for the feed and for the model. Red (§5.9 colours `Failed`
+/// `--rust`): the search was not finished, and its result is not «ничего не
+/// нашлось» but «неизвестно».
 fn overran(limit: Duration) -> ToolError {
     ToolError::failed_with(
         format!("поиск не уложился в {} с и остановлен", limit.as_secs()),

@@ -99,11 +99,26 @@ fn a_subagent_has_the_agents_tools_less_the_agents_own() {
     let names = |reg: &ToolRegistry, intent| -> Vec<String> {
         reg.schemas(intent).into_iter().map(|s| s.name).collect()
     };
-    let (all, given) = (ToolRegistry::standard(), ToolRegistry::standard().delegated());
+    let (all, given) = (
+        ToolRegistry::of_session(true),
+        ToolRegistry::of_session(true).delegated(),
+    );
 
     for intent in [Intent::Plan, Intent::Agent] {
         let mut expected = names(&all, intent);
-        expected.retain(|n| !["Task", "TodoWrite", "ExitPlanMode", "AskUser"].contains(&n.as_str()));
+        expected.retain(|n| {
+            ![
+                "Task",
+                "TodoWrite",
+                "ExitPlanMode",
+                "AskUser",
+                "SetTitle",
+                "SendText",
+                "SearchMessage",
+                "ExtractMessage",
+            ]
+            .contains(&n.as_str())
+        });
         assert_eq!(names(&given, intent), expected, "{intent:?}");
     }
     // The mode binds a subagent as it binds the agent (§7.1).
@@ -157,4 +172,20 @@ fn подпись_чистится_по_правилам_спеки() {
 
     let mut absent = json!({ "path": "a.rs" });
     assert_eq!(take_description(&mut absent), None);
+}
+
+#[test]
+fn the_tools_that_read_the_journal_come_with_one() {
+    let names = |reg: &ToolRegistry, intent| -> Vec<String> {
+        reg.schemas(intent).into_iter().map(|s| s.name).collect()
+    };
+    let (without, with) = (ToolRegistry::of_session(false), ToolRegistry::of_session(true));
+
+    for tool in ["SearchMessage", "ExtractMessage"] {
+        assert!(!names(&without, Intent::Agent).contains(&tool.to_string()), "{tool}");
+        assert!(names(&with, Intent::Agent).contains(&tool.to_string()), "{tool}");
+    }
+    // Looking back changes nothing; a draft is a file, and plan writes none.
+    assert!(names(&with, Intent::Plan).contains(&"SearchMessage".to_string()));
+    assert!(!names(&with, Intent::Plan).contains(&"ExtractMessage".to_string()));
 }

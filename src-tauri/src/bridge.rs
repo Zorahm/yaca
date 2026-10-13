@@ -1,13 +1,13 @@
-//! Мост между потоком ядра и вебвью.
+//! Bridge between the core's event stream and the webview.
 //!
-//! §12 требует применять текстовые дельты пакетами по кадру, а не по событию.
-//! Причина не в отрисовке, а в IPC: каждый переход в вебвью стоит денег,
-//! а модель выдаёт десятки дельт в секунду.
+//! §12 requires applying text deltas in batches per frame, not per event.
+//! The reason is not rendering but IPC: every crossing into the webview costs money,
+//! and the model emits dozens of deltas per second.
 //!
-//! Мост на каждый открытый чат, а канал по-прежнему один: пачка едет с
-//! идентификатором сессии, и окно раскладывает её по лентам само. Канал на
-//! чат означал бы подписку и отписку на каждое открытие — лишний повод
-//! потерять события того, кто работает в фоне.
+//! There is one bridge per open chat, but the channel is still one: a batch travels with
+//! the session identifier, and the window sorts it into the feeds itself. A channel per
+//! chat would mean subscribing and unsubscribing on every open — an extra chance to
+//! lose the events of the one working in the background.
 
 use std::time::Duration;
 
@@ -19,10 +19,10 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio_util::sync::CancellationToken;
 
-/// Кадр при 60 fps.
+/// Frame at 60 fps.
 const FRAME: Duration = Duration::from_millis(16);
 
-/// Пачка событий одного чата (§12).
+/// Batch of events of one chat (§12).
 #[derive(Debug, Clone, Serialize, ts_rs::TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
@@ -55,8 +55,8 @@ pub async fn pump(
 
             received = events.recv() => match received {
                 Ok(event) => batch.push(event),
-                // Ядро обогнало вебвью. Пропуск дельт заметен, но лучше, чем
-                // отставание, которое уже не наверстать.
+                // The core outran the webview. Skipping deltas is noticeable, but it is better than
+                // a lag that can no longer be made up.
                 Err(RecvError::Lagged(_)) => continue,
                 Err(RecvError::Closed) => break,
             },
@@ -69,8 +69,8 @@ pub async fn pump(
     }
 }
 
-/// Склеивает подряд идущие дельты одного блока. Всё остальное проходит как есть:
-/// порядок событий — это и есть контракт, и перетасовывать его нельзя.
+/// Merges consecutive deltas of one block. Everything else passes through as is:
+/// the order of events is the contract itself, and it must not be shuffled.
 fn coalesce(batch: Vec<AgentEvent>) -> Vec<AgentEvent> {
     let mut out: Vec<AgentEvent> = Vec::with_capacity(batch.len());
 
@@ -156,6 +156,7 @@ mod tests {
             AgentEvent::TurnFinished {
                 turn_id: "t".into(),
                 stop_reason: StopReason::EndTurn,
+                at: TsMillis(2),
             },
         ]);
         assert_eq!(out.len(), 3);

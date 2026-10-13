@@ -52,6 +52,21 @@
 //! which `Task` row they are drawn under. §15 has no place for it because the
 //! spec leaves "where do subagents go" as an open question.
 //!
+//! A subagent sent in the background adds no event either, and moves one: the
+//! `Task` row gets its `ToolCallFinished` (or the failure) when the subagent
+//! is done, which is after the model has its `tool_result` and after rows of
+//! the agent's own that started later. A row's end says the work under it is
+//! over, not that the call returned.
+//!
+//! The agents panel adds [`AgentEvent::SubagentUsage`]: what one subagent has
+//! spent so far. The session's own figure in `UsageUpdated` is every subagent
+//! and the agent together, and the panel shows each of them its own.
+//!
+//! The context window adds no event, and one field: `breakdown` on the
+//! snapshot [`AgentEvent::UsageUpdated`] carries. §7.1 has the ring show how
+//! full the window is; what it is full of is known only where the request is
+//! built, so the split travels with the figure it splits.
+//!
 //! The question slice adds two events beyond §15, for `AskUser`: the agent
 //! asks the human a question with ready options and waits, and the answer is
 //! the result of the tool call that asked. §5.7 draws a block only for
@@ -91,6 +106,18 @@
 //! on the same terms as `McpUpdated`: a whole list of servers and their
 //! states, a snapshot of what is live, not journaled.
 //!
+//! `SetTitle` adds [`AgentEvent::TitleSet`]: the conversation's name as the
+//! model gave it. §3 takes the title from the first message, and that is often
+//! a greeting; the name has to travel as an event so the index folds it like
+//! everything else and a reopened or rebuilt session keeps it.
+//!
+//! `SendText` adds [`AgentEvent::TextShown`]: the text of a file put in front
+//! of the human as a block of the feed, without the model writing it out. §15
+//! has nothing to draw it from — `TextDelta` would pass the file off as the
+//! model's own words, and a tool row is output, not a part of the answer. The
+//! text travels in the event, so a reopened session shows what was shown then
+//! and not what the file holds now.
+//!
 //! And the interface slice adds [`AgentEvent::UserMessage`]. §5.1 draws what
 //! the human said, and §9 reopens a session by replaying this journal: without
 //! it a reopened session is the agent talking to itself. The text is written
@@ -109,7 +136,7 @@ use crate::mcp::McpServerSummary;
 use crate::permission::PermissionRequest;
 use crate::process::{ProcessId, ProcessSummary};
 use crate::question::{QuestionReply, QuestionRequest};
-use crate::usage::UsageSnapshot;
+use crate::usage::{TokenCounts, UsageSnapshot};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -227,6 +254,27 @@ pub enum AgentEvent {
     #[serde(rename_all = "camelCase")]
     TodosUpdated { items: Vec<TodoItem> },
 
+    /// The model named the conversation (`SetTitle`). The title in the list and
+    /// the top bar changes at once, not at the end of the turn. A name the human
+    /// typed in wins over it, which the index decides, not the interface.
+    #[serde(rename_all = "camelCase")]
+    TitleSet { title: String },
+
+    /// A file's text shown to the human as a block of its own (`SendText`):
+    /// the path and the lines it came from above, the text below.
+    #[serde(rename_all = "camelCase")]
+    TextShown {
+        path: String,
+        /// The first line shown, 1-indexed.
+        first_line: u32,
+        /// How many lines are shown.
+        lines: u32,
+        /// How many lines the file has: with the two above it tells a whole
+        /// file from a part of one.
+        total: u32,
+        text: String,
+    },
+
     /// `exit_plan_mode`: показать план и ждать, пока человек выберет режим (§7.1).
     #[serde(rename_all = "camelCase")]
     PlanProposed { plan: String },
@@ -240,8 +288,9 @@ pub enum AgentEvent {
         diff: FileDiff,
     },
 
-    /// The full diff of one file for the panel (§6.4). `None`: nothing in the
-    /// file is pending any more, so there is no diff to show.
+    /// The whole file for the panel (§6.4): its diff when the session changed
+    /// it, its text as it is when it did not. `None`: there is no such file to
+    /// show — it is gone, binary, or outside the workspace.
     #[serde(rename_all = "camelCase")]
     FileViewLoaded {
         path: String,
@@ -345,7 +394,14 @@ pub enum AgentEvent {
     #[serde(rename_all = "camelCase")]
     SummaryEdited { summary: String },
 
-    /// Заполнение кольца состояния.
+    /// What one subagent has spent since it was sent: a running total, not
+    /// the last step, so the newest event for a `Task` row is the whole
+    /// figure. Sent after each answer the subagent gets from the model.
+    #[serde(rename_all = "camelCase")]
+    SubagentUsage { call_id: CallId, tokens: TokenCounts },
+
+    /// Заполнение кольца состояния, а в `usage.breakdown` — из чего занятое
+    /// состоит: кольцо раскрывается в список по частям окна.
     #[serde(rename_all = "camelCase")]
     UsageUpdated { usage: UsageSnapshot },
 
@@ -354,11 +410,21 @@ pub enum AgentEvent {
     TurnFinished {
         turn_id: TurnId,
         stop_reason: StopReason,
+        /// When the turn ended. With `TurnStarted::at` it is the turn's
+        /// duration, which the feed shows under the answer. Zero in a journal
+        /// written before the field existed: "unknown", not "1970".
+        #[serde(default)]
+        at: TsMillis,
     },
 
     /// Строка `Остановлено`, незавершённые тулы в `отменено`.
     #[serde(rename_all = "camelCase")]
-    TurnCancelled { turn_id: TurnId },
+    TurnCancelled {
+        turn_id: TurnId,
+        /// As [`AgentEvent::TurnFinished::at`].
+        #[serde(default)]
+        at: TsMillis,
+    },
 
     /// Блок ошибки с кодом, «Повторить» и «Сменить модель» (§5.10).
     #[serde(rename_all = "camelCase")]
@@ -384,6 +450,22 @@ pub enum AgentEvent {
 }
 
 impl AgentEvent {
+    /// The call this event belongs to, for the events that are about one.
+    /// The session uses it to keep a silent call (`Tool::silent`) out of the
+    /// stream whole: one place that knows every event a call can produce.
+    pub fn call_id(&self) -> Option<&CallId> {
+        match self {
+            AgentEvent::ToolCallStarted { call_id, .. }
+            | AgentEvent::ToolCallProgress { call_id, .. }
+            | AgentEvent::ToolCallFinished { call_id, .. }
+            | AgentEvent::ToolCallFailed { call_id, .. }
+            | AgentEvent::ToolCallRejected { call_id, .. }
+            | AgentEvent::ToolCallDenied { call_id, .. }
+            | AgentEvent::FileChanged { call_id, .. } => Some(call_id),
+            _ => None,
+        }
+    }
+
     /// Тег события — тот же, что уезжает в JSON, и то, по чему интерфейс
     /// различает ветки. Живёт здесь, а не в тестах: список из двадцати с
     /// лишним веток, поддерживаемый в двух местах, расходится на первом же
@@ -405,6 +487,8 @@ impl AgentEvent {
             AgentEvent::QuestionAsked { .. } => "questionAsked",
             AgentEvent::QuestionResolved { .. } => "questionResolved",
             AgentEvent::TodosUpdated { .. } => "todosUpdated",
+            AgentEvent::TitleSet { .. } => "titleSet",
+            AgentEvent::TextShown { .. } => "textShown",
             AgentEvent::PlanProposed { .. } => "planProposed",
             AgentEvent::FileChanged { .. } => "fileChanged",
             AgentEvent::FileViewLoaded { .. } => "fileViewLoaded",
@@ -421,6 +505,7 @@ impl AgentEvent {
             AgentEvent::CheckpointRestored { .. } => "checkpointRestored",
             AgentEvent::ContextCompacted { .. } => "contextCompacted",
             AgentEvent::SummaryEdited { .. } => "summaryEdited",
+            AgentEvent::SubagentUsage { .. } => "subagentUsage",
             AgentEvent::UsageUpdated { .. } => "usageUpdated",
             AgentEvent::TurnFinished { .. } => "turnFinished",
             AgentEvent::TurnCancelled { .. } => "turnCancelled",
@@ -434,20 +519,43 @@ impl AgentEvent {
 /// Куда ядро складывает события. Тонкая обёртка поверх широковещательного
 /// канала: подписчиков может не быть вовсе — CLI гоняет ядро без них.
 #[derive(Clone)]
-pub struct EventSink(tokio::sync::broadcast::Sender<AgentEvent>);
+pub struct EventSink {
+    tx: tokio::sync::broadcast::Sender<AgentEvent>,
+    journal: Option<Journal>,
+}
+
+/// What a sink shows an event to before sending it on.
+type Journal = std::sync::Arc<dyn Fn(&AgentEvent) + Send + Sync>;
 
 impl EventSink {
     pub fn new(tx: tokio::sync::broadcast::Sender<AgentEvent>) -> Self {
-        EventSink(tx)
+        EventSink { tx, journal: None }
+    }
+
+    /// The same channel, with every event written down on the way out.
+    ///
+    /// For the sink a tool is handed: an event a tool sends is a part of the
+    /// conversation (`TitleSet`, `TodosUpdated`), and one that reached the
+    /// window but not the journal is gone at the next read of the index.
+    pub fn journaled(&self, journal: impl Fn(&AgentEvent) + Send + Sync + 'static) -> Self {
+        EventSink {
+            tx: self.tx.clone(),
+            journal: Some(std::sync::Arc::new(journal)),
+        }
     }
 
     pub fn emit(&self, event: AgentEvent) {
-        let _ = self.0.send(event);
+        if let Some(journal) = &self.journal {
+            journal(&event);
+        }
+        let _ = self.tx.send(event);
     }
 }
 
 /// Миллисекунды эпохи. В Rust `u64`, в TS обычное `number`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS,
+)]
 #[ts(export)]
 pub struct TsMillis(#[ts(type = "number")] pub u64);
 

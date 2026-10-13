@@ -7,6 +7,11 @@
  * a broken `providers.json`, and the failure is kept, not swallowed: showing
  * an empty list would claim "no providers" while the truth is that the file
  * did not parse (§0).
+ *
+ * A save also asks a provider that has no models yet (`save_provider`). Its
+ * refusal is not the save failing — the provider is in the file — so the save
+ * reports success and the refusal is shown above the list, where the row it
+ * is about says "not asked yet".
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -16,6 +21,7 @@ import {
   type ProviderSpec,
   type Providers,
 } from "../../core/client";
+import { t } from "../../i18n";
 
 export function useProviders() {
   const [data, setData] = useState<Providers | null>(null);
@@ -53,10 +59,24 @@ export function useProviders() {
     [],
   );
 
-  const save = useCallback(
-    (spec: ProviderSpec) => run(() => api.save(spec)),
-    [run],
-  );
+  const save = useCallback(async (spec: ProviderSpec): Promise<boolean> => {
+    try {
+      const asked = await api.save(spec);
+      setData(asked.providers);
+      setError(
+        asked.pollError === null
+          ? null
+          : t("prov.saved_unasked", {
+              name: spec.displayName,
+              error: asked.pollError,
+            }),
+      );
+      return true;
+    } catch (e) {
+      setError(String(e));
+      return false;
+    }
+  }, []);
   const remove = useCallback((id: string) => run(() => api.remove(id)), [run]);
 
   return { providers: data, error, save, remove };

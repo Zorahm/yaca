@@ -1,9 +1,9 @@
-//! Удаление и перемещение файла.
+//! Deleting and moving a file.
 //!
-//! Read-before-edit здесь намеренно не требуется. Инвариант защищает от
-//! правки вслепую — от того, что модель затрёт код, которого не видела.
-//! Удаление ничего не затирает поверх, а безопасность даёт §8: и удаление,
-//! и перемещение спрашивают разрешения везде, кроме «Авто».
+//! Read-before-edit is deliberately not required here. The invariant guards
+//! against editing blind — against the model overwriting code it never saw.
+//! Deletion overwrites nothing, and the safety comes from §8: both deleting
+//! and moving ask for permission everywhere except «Авто».
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -74,13 +74,13 @@ impl Tool for DeleteFile {
             .as_str()
             .ok_or_else(|| ToolError::failed("не задан path"))?;
 
-        let target = files::look(ctx, raw)?;
+        let target = files::look_any(ctx, raw)?;
         if target.abs.is_dir() {
             return Err(ToolError::failed(format!(
                 "{raw} — каталог; его удаляет DeleteDir"
             )));
         }
-        if target.current.is_none() {
+        if !target.exists {
             return Err(ToolError::failed(format!("не найдено: {raw}")));
         }
 
@@ -156,13 +156,13 @@ impl Tool for MoveFile {
             .as_str()
             .ok_or_else(|| ToolError::failed("не задан to"))?;
 
-        let from = files::look(ctx, raw_from)?;
-        let to = files::look(ctx, raw_to)?;
+        let from = files::look_any(ctx, raw_from)?;
+        let to = files::look_any(ctx, raw_to)?;
 
-        if from.current.is_none() {
+        if !from.exists {
             return Err(ToolError::failed(format!("не найдено: {raw_from}")));
         }
-        if to.current.is_some() {
+        if to.exists {
             return Err(ToolError::failed(format!(
                 "{raw_to} уже существует — перемещение затёрло бы его"
             )));
@@ -178,8 +178,8 @@ impl Tool for MoveFile {
         ctx.ws.forget(&from.abs);
         ctx.ws.mark_read(&to.abs);
 
-        // Содержимое не менялось — дифф пуст, а перемещение подписывает
-        // интерфейс по факту (§5.5).
+        // The content did not change — the diff is empty, and the move is labelled
+        // by the interface from the fact (§5.5).
         let fact = FileFact {
             path: to.rel.clone(),
             kind: ChangeKind::Moved,
@@ -197,7 +197,7 @@ impl Tool for MoveFile {
     }
 }
 
-/// Имя файла без пути — второй ярус запроса разрешения (§5.7).
+/// File name without the path — the second tier of a permission request (§5.7).
 fn short(path: &std::path::Path) -> String {
     path.file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -242,6 +242,61 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("не найдено"));
+    }
+
+    fn write_binary(dir: &TempDir, name: &str) -> std::path::PathBuf {
+        let path = dir.path().join(name);
+        std::fs::write(&path, [0x89, b'P', b'N', b'G', 0, 0, 1, 2, 0xff]).unwrap();
+        path
+    }
+
+    #[tokio::test]
+    async fn a_binary_file_can_be_deleted() {
+        let dir = TempDir::new();
+        let path = write_binary(&dir, "logo.png");
+        let (ctx, _ws) = ctx_for(&dir);
+
+        let out = DeleteFile
+            .run(&ctx, json!({ "path": "logo.png" }))
+            .await
+            .unwrap();
+
+        let fact = out.changed.unwrap().fact;
+        assert_eq!(fact.kind, ChangeKind::Deleted);
+        assert_eq!((fact.added, fact.removed), (0, 0));
+        assert!(!path.exists());
+    }
+
+    #[tokio::test]
+    async fn a_binary_file_can_be_moved() {
+        let dir = TempDir::new();
+        let from = write_binary(&dir, "logo.png");
+        let (ctx, _ws) = ctx_for(&dir);
+
+        let out = MoveFile
+            .run(&ctx, json!({ "from": "logo.png", "to": "assets/logo.png" }))
+            .await
+            .unwrap();
+
+        assert_eq!(out.changed.unwrap().fact.kind, ChangeKind::Moved);
+        assert!(!from.exists());
+        assert!(dir.path().join("assets/logo.png").exists());
+    }
+
+    #[tokio::test]
+    async fn moving_onto_an_existing_binary_file_is_refused() {
+        let dir = TempDir::new();
+        write_binary(&dir, "a.bin");
+        let target = write_binary(&dir, "b.bin");
+        let (ctx, _ws) = ctx_for(&dir);
+
+        let err = MoveFile
+            .run(&ctx, json!({ "from": "a.bin", "to": "b.bin" }))
+            .await
+            .unwrap_err();
+
+        assert!(err.to_string().contains("уже существует"));
+        assert!(target.exists());
     }
 
     #[tokio::test]

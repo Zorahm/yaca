@@ -1,8 +1,8 @@
-//! Провайдер по сценарию. Держит золотые тесты: на входе записанная
-//! последовательность ответов модели, на выходе — точный поток `AgentEvent`.
+//! Provider driven by a script. It backs the golden tests: the input is a recorded
+//! sequence of model responses, the output is the exact `AgentEvent` stream.
 //!
-//! Это главный тест ядра: контракт, от которого зависит весь интерфейс,
-//! проверяется без сети, без ключа и без денег.
+//! This is the core's main test: the contract the whole interface depends on
+//! is checked without network, without a key and without money.
 
 use std::sync::Mutex;
 
@@ -12,7 +12,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use super::{Provider, ProviderEvent, ProviderRequest, ProviderStream};
 use crate::error::ProviderError;
 
-/// Один ход модели: либо поток событий, либо отказ.
+/// One model turn: either a stream of events or a refusal.
 pub enum Turn {
     Events(Vec<ProviderEvent>),
     Fail(ProviderError),
@@ -20,10 +20,10 @@ pub enum Turn {
 
 pub struct MockProvider {
     turns: Mutex<std::collections::VecDeque<Turn>>,
-    /// Пауза перед каждым событием. Нужна тестам отмены: мгновенный поток
-    /// не даёт окна, в которое можно нажать `Esc`.
+    /// Pause before each event. Needed by the cancellation tests: an instant stream
+    /// leaves no window in which `Esc` can be pressed.
     gap: std::time::Duration,
-    /// Запросы, которые получил. Тест может проверить, что улетело.
+    /// Requests received. A test can check what was sent.
     pub seen: Mutex<Vec<ProviderRequest>>,
 }
 
@@ -41,7 +41,7 @@ impl MockProvider {
         self
     }
 
-    /// Один ход с обычным текстовым ответом.
+    /// One turn with a plain text reply.
     pub fn text(reply: &str) -> Self {
         Self::new(vec![Turn::Events(script_text(reply))])
     }
@@ -86,7 +86,7 @@ impl Provider for MockProvider {
     }
 }
 
-// --- готовые сценарии ------------------------------------------------------
+// --- ready-made scenarios ------------------------------------------------------
 
 use super::BlockKind;
 use crate::event::StopReason;
@@ -100,7 +100,7 @@ fn usage(input: u32, output: u32) -> TokenCounts {
     }
 }
 
-/// Модель отвечает текстом и заканчивает ход.
+/// The model replies with text and ends the turn.
 pub fn script_text(text: &str) -> Vec<ProviderEvent> {
     vec![
         ProviderEvent::MessageStart {
@@ -124,11 +124,11 @@ pub fn script_text(text: &str) -> Vec<ProviderEvent> {
     ]
 }
 
-/// Модель зовёт тул. `input` уезжает кусками, как в жизни.
+/// The model calls a tool. `input` goes out in chunks, as in real life.
 pub fn script_tool_call(id: &str, name: &str, input: serde_json::Value) -> Vec<ProviderEvent> {
     let json = input.to_string();
-    // Делим по границе символа: провайдер режет байтами, но тест не должен
-    // падать на кириллице в аргументах.
+    // Split on a character boundary: the provider cuts by bytes, but the test must not
+    // fail on Cyrillic in the arguments.
     let mid = (json.len() / 2..=json.len())
         .find(|i| json.is_char_boundary(*i))
         .unwrap_or(json.len());
@@ -162,7 +162,7 @@ pub fn script_tool_call(id: &str, name: &str, input: serde_json::Value) -> Vec<P
     ]
 }
 
-/// Модель рассуждает, потом отвечает.
+/// The model reasons, then answers.
 pub fn script_thinking(thought: &str, text: &str) -> Vec<ProviderEvent> {
     vec![
         ProviderEvent::MessageStart {

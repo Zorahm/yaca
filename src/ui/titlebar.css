@@ -1,0 +1,94 @@
+/*
+ * The window's own title bar and the frame around the rest of the window.
+ */
+
+/* The window: the bar, where there is one, and everything else under it. */
+.window {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+}
+
+.window-framed {
+  --h-title: 32px;
+  grid-template-rows: var(--h-title) minmax(0, 1fr);
+}
+
+/* Layers that cover the window — the settings, the picture viewer — are
+   `position: fixed` and used to mean the whole of it. Containment makes this
+   box what they are fixed to, so they cover everything but the title bar: a
+   window whose close button is under a layer cannot be closed. */
+.window-body {
+  min-height: 0;
+  contain: layout;
+}
+
+.title {
+  display: flex;
+  align-items: stretch;
+  height: var(--h-title);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  font-size: 12.5px;
+  color: var(--muted);
+  user-select: none;
+}
+
+.title-brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px 0 12px;
+  font: 600 12.5px var(--display);
+  color: var(--ink);
+}
+
+/* A press on the drawing would land on the drawing, which is not marked for
+   dragging; letting it through gives it to the brand, which is. */
+.title-brand .yaca-mark {
+  pointer-events: none;
+}
+
+.title-menu {
+  align-self: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-s);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.title-menu:hover,
+.title-menu[data-state="open"] {
+  background: var(--sunk);
+  color: var(--ink);
+}
+
+.title-gap {
+  flex: 1;
+}
+
+.title-controls {
+  display: flex;
+}
+
+/* The width Windows gives its own: the corner is found by habit, not by eye. */
+.title-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  color: var(--muted);
+}
+
+.title-button:hover {
+  background: var(--sunk);
+  color: var(--ink);
+}
+
+/* Windows' own red, on every theme: it is the one colour in the bar that
+   belongs to the system and not to the paper. */
+.title-close:hover {
+  background: #c42b1c;
+  color: #fff;
+}

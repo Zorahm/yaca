@@ -38,7 +38,8 @@ import { QueuedChip } from "./QueuedChip";
 import { SlashMenu } from "./SlashMenu";
 import { Attachment } from "./Attachment";
 import { builtinFor, menuFor, type Builtin, type SlashItem } from "./slash";
-import { StatusRing, type RingState } from "./StatusRing";
+import { ContextWindow } from "./ContextWindow";
+import { ContextRing } from "./ContextRing";
 
 
 export type ComposerActions = {
@@ -112,7 +113,6 @@ export type ComposerSettings = {
 export function Composer({
   settings,
   busy,
-  ring,
   usage,
   models,
   commands,
@@ -124,7 +124,6 @@ export function Composer({
 }: {
   settings: ComposerSettings;
   busy: boolean;
-  ring: RingState;
   usage: UsageSnapshot | null;
   models: ModelInfo[];
   /** Слэш-команды проекта (§7.3) — вторая половина меню над полем. */
@@ -143,7 +142,21 @@ export function Composer({
   draftKey: string;
 }) {
   const [text, setText] = useState(() => localStorage.getItem(draftKey) ?? "");
-  const [menu, setMenu] = useState<"mode" | "model" | "effort" | null>(null);
+  const [menu, setMenu] = useState<"mode" | "model" | "effort" | "context" | null>(null);
+
+  // A menu closes on a press anywhere outside it, not only on the composer's
+  // own band: the feed, the sidebar and the empty ground count too. The chip
+  // that opened it is inside a `.menu-anchor`, so its own toggle still works.
+  useEffect(() => {
+    if (menu === null) return;
+    const close = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest(".menu, .menu-anchor")) return;
+      setMenu(null);
+    };
+    document.addEventListener("pointerdown", close, true);
+    return () => document.removeEventListener("pointerdown", close, true);
+  }, [menu]);
   const [slashAt, setSlashAt] = useState(0);
   /** Приложенные файлы §7.2 — чипы над полем, уезжают с сообщением. */
   const [attached, setAttached] = useState<string[]>([]);
@@ -328,7 +341,8 @@ export function Composer({
           </div>
         )}
 
-        <div className="menu-anchor">
+        <div className="composer-input">
+        <div className="menu-anchor composer-field">
           {slash !== null && (
             <SlashMenu items={slash} at={slashIndex} onPick={pick} />
           )}
@@ -338,7 +352,7 @@ export function Composer({
 
           <textarea
             ref={field}
-            rows={2}
+            rows={1}
             value={text}
             disabled={disabled}
             placeholder={t("composer.placeholder")}
@@ -382,25 +396,32 @@ export function Composer({
             }}
           />
         </div>
-
-        <div className="composer-row">
-          <div className="menu-anchor">
-            <button
-              className={settings.bypass ? "chip chip-danger" : "chip"}
-              onClick={() => setMenu(menu === "mode" ? null : "mode")}
-            >
-              {t(MODE_KEY[settings.mode])}
-            </button>
-            {menu === "mode" && (
-              <ModeMenu
-                settings={settings}
-                actions={actions}
-                onClose={() => setMenu(null)}
-              />
+            {busy ? (
+              <button
+                className="send send-stop"
+                onClick={actions.stop}
+                aria-label={t("composer.stop")}
+              >
+                <Stop size={14} weight="fill" />
+              </button>
+            ) : (
+              <button
+                className="send"
+                onClick={send}
+                disabled={disabled || !text.trim()}
+                aria-label={t("composer.send")}
+              >
+                <ArrowUp size={16} weight="bold" />
+              </button>
             )}
-          </div>
+        </div>
+      </div>
 
-          {/* §7.1: `＋` вложения сразу за чипом режима. Нет действия — нет и
+      {/* Everything but the action lives under the box, not in it: the box is
+          the message, the row is how the message will be sent. Its own click
+          must not reach the wrap, which closes the menus. */}
+      <div className="composer-row" onClick={(e) => e.stopPropagation()}>
+          {/* §7.1: `＋` вложения стоит первым, чип режима — за ним. Нет действия — нет и
               кнопки: экран без корня проекта прикладывать нечего. */}
           {actions.pickFiles && (
             <button
@@ -424,6 +445,22 @@ export function Composer({
             </button>
           )}
 
+          <div className="menu-anchor">
+            <button
+              className={settings.bypass ? "chip chip-danger" : "chip"}
+              onClick={() => setMenu(menu === "mode" ? null : "mode")}
+            >
+              {t(MODE_KEY[settings.mode])}
+            </button>
+            {menu === "mode" && (
+              <ModeMenu
+                settings={settings}
+                actions={actions}
+                onClose={() => setMenu(null)}
+              />
+            )}
+          </div>
+
           <div className="composer-gap" />
 
           <ModelMenu
@@ -432,10 +469,16 @@ export function Composer({
             model={settings.model}
             provider={settings.provider}
             open={menu === "model"}
-            onToggle={() => setMenu(menu === "model" ? null : "model")}
+            onToggle={() => {
+              setMenu(menu === "model" ? null : "model");
+              // The menu's search field held the focus and is gone with it:
+              // without this `Esc` would leave the keyboard nowhere.
+              if (menu === "model") field.current?.focus();
+            }}
             onPick={(model) => {
               actions.setModel(model.id, model.providerId);
               setMenu(null);
+              field.current?.focus();
             }}
           />
 
@@ -459,27 +502,25 @@ export function Composer({
             />
           )}
 
-          <StatusRing state={ring} usage={usage} />
-
-          {busy ? (
-            <button
-              className="send send-stop"
-              onClick={actions.stop}
-              aria-label={t("composer.stop")}
-            >
-              <Stop size={14} weight="fill" />
-            </button>
+          {/* The ring opens into the context window (§7.1). Without a
+              session there is no window to open, and the ring is only a ring:
+              a button that opens nothing would lie about state (§0). */}
+          {usage === null ? (
+            <ContextRing usage={null} />
           ) : (
-            <button
-              className="send"
-              onClick={send}
-              disabled={disabled || !text.trim()}
-              aria-label={t("composer.send")}
-            >
-              <ArrowUp size={16} weight="bold" />
-            </button>
+            <div className="menu-anchor">
+              <button
+                className="chip chip-icon"
+                aria-label={t("ctx.title")}
+                aria-haspopup="dialog"
+                aria-expanded={menu === "context"}
+                onClick={() => setMenu(menu === "context" ? null : "context")}
+              >
+                <ContextRing usage={usage} />
+              </button>
+              {menu === "context" && <ContextWindow usage={usage} />}
+            </div>
           )}
-        </div>
       </div>
     </div>
   );

@@ -229,8 +229,12 @@ mod tests {
             AgentEvent::TurnFinished {
                 turn_id: "t".into(),
                 stop_reason: StopReason::EndTurn,
+                at: TsMillis(0),
             },
-            AgentEvent::TurnCancelled { turn_id: "t".into() },
+            AgentEvent::TurnCancelled {
+                turn_id: "t".into(),
+                at: TsMillis(0),
+            },
             AgentEvent::Error {
                 code: "e".into(),
                 message: "текст".into(),

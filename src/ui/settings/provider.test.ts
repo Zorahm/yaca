@@ -20,6 +20,7 @@ import {
   emptyDraft,
   mergedHeaders,
   needsKey,
+  newProviderId,
   type ProviderDraft,
 } from "./provider";
 
@@ -128,9 +129,9 @@ describe("drafts and specs", () => {
 });
 
 describe("draftProblems", () => {
-  it("demands id, name and base URL", () => {
+  it("demands a name and a base URL, and no id", () => {
     const keys = problemsOf(emptyDraft());
-    expect(keys).toContain("prov.error_id");
+    expect(keys).toHaveLength(2);
     expect(keys).toContain("prov.error_name");
     expect(keys).toContain("prov.error_url");
   });
@@ -149,5 +150,49 @@ describe("draftProblems", () => {
 
   it("refuses to build a spec while problems remain", () => {
     expect(draftToSpec(emptyDraft())).toBeNull();
+  });
+});
+
+describe("newProviderId", () => {
+  it("is made from the name", () => {
+    expect(newProviderId("My Gateway", "https://gate.example.com", [])).toBe(
+      "my-gateway",
+    );
+    expect(newProviderId("  LM Studio (local)  ", "", [])).toBe("lm-studio-local");
+  });
+
+  it("steps aside from an id that is already there", () => {
+    expect(newProviderId("OpenAI", "", ["openai"])).toBe("openai-2");
+    expect(newProviderId("OpenAI", "", ["openai", "openai-2"])).toBe("openai-3");
+  });
+
+  it("falls back to the host when the name has nothing Latin in it", () => {
+    expect(newProviderId("Мой шлюз", "http://localhost:11434", [])).toBe(
+      "localhost",
+    );
+    expect(newProviderId("Мой шлюз", "https://gate.example.com/v1", [])).toBe(
+      "gate-example-com",
+    );
+  });
+
+  it("still gives an id when neither says anything", () => {
+    expect(newProviderId("Шлюз", "не адрес", [])).toBe("provider");
+  });
+});
+
+describe("a new provider's id", () => {
+  const draft: ProviderDraft = {
+    ...emptyDraft(),
+    displayName: "OpenAI",
+    baseUrl: "https://proxy.example.com",
+  };
+
+  it("is assigned when the spec is built, clear of the ones taken", () => {
+    expect(draftToSpec(draft, ["openai", "anthropic"])?.id).toBe("openai-2");
+  });
+
+  it("is left alone once the provider has one: a rename must not move the key", () => {
+    const saved = { ...draft, id: "gateway", displayName: "Renamed" };
+    expect(draftToSpec(saved, ["gateway"])?.id).toBe("gateway");
   });
 });

@@ -3,6 +3,6 @@ import type { AgentEvent } from "./AgentEvent";
 import type { SessionId } from "./SessionId";
 
 /**
- * Пачка событий одного чата (§12).
+ * Batch of events of one chat (§12).
  */
 export type EventFrame = { session: SessionId, events: Array<AgentEvent>, };

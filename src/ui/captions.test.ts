@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import type { ActionRow } from "../core/feed";
 import type { PermissionRequest } from "../core/client";
 import { capitalize, t, tp } from "../i18n";
-import { caption, rowCounts, rowFiles, summary } from "./captions";
+import { caption, filePath, isFileRow, rowCounts, rowFiles, summary } from "./captions";
 import { Permission } from "./Permission";
 
 function row(patch: Partial<ActionRow>): ActionRow {
@@ -27,6 +27,7 @@ function row(patch: Partial<ActionRow>): ActionRow {
     fact: null,
     diff: null,
     children: [],
+    tokens: null,
     ...patch,
   };
 }
@@ -102,5 +103,32 @@ describe("шапка группы с подагентом", () => {
     // Файл создан, команда выполнена — кем, шапке всё равно: она про проект.
     expect(head.parts).toHaveLength(3);
     expect(head.added).toBe(3);
+  });
+});
+
+describe("a read file", () => {
+  const read = (patch: Partial<ActionRow>) =>
+    row({ tool: "Read", target: "crates/yaca-cli/Cargo.toml", meta: null, ...patch });
+
+  it("is captioned by the interface, with the file's name", () => {
+    // The model's own description gives way: the name has to be in the row.
+    const done = read({ description: "Read the manifest" });
+    expect(text(caption(done))).toBe(t("act.read", { name: "Cargo.toml" }));
+    expect(text(caption(read({ state: "running" })))).toBe(
+      t("act.reading", { name: "Cargo.toml" }),
+    );
+  });
+
+  it("opens in the file panel once it is read, by the path it was read by", () => {
+    expect(filePath(read({}))).toBe("crates/yaca-cli/Cargo.toml");
+    expect(filePath(read({ state: "running" }))).toBeNull();
+    expect(isFileRow(read({}))).toBe(true);
+  });
+
+  it("carries the path as the name's tooltip", () => {
+    const html = renderToStaticMarkup(
+      createElement("span", null, caption(read({}), () => {})),
+    );
+    expect(html).toContain('title="crates/yaca-cli/Cargo.toml"');
   });
 });

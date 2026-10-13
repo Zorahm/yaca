@@ -5,10 +5,10 @@
  */
 export type TokenCounts = { input: number, output: number, 
 /**
- * Записано в кеш — считается дороже обычного ввода.
+ * Written to the cache — billed higher than ordinary input.
  */
 cacheWrite: number, 
 /**
- * Прочитано из кеша — считается почти даром.
+ * Read from the cache — billed at almost nothing.
  */
 cacheRead: number, };

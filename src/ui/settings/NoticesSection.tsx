@@ -10,8 +10,8 @@
  */
 
 import type { Language, Preferences } from "../../core/client";
-import { t } from "../../i18n";
-import { Row, Segments, Switch } from "./Row";
+import { LOCALES, LOCALE_CODES, t } from "../../i18n";
+import { Row, Select, Switch } from "./Row";
 
 export function NoticesSection({
   prefs,
@@ -39,13 +39,14 @@ export function NoticesSection({
         </Row>
 
         <Row name={t("notices.language")} hint={t("notices.language_hint")}>
-          <Segments<Language>
+          <Select<Language>
             label={t("notices.language")}
             value={prefs.language}
             options={[
-              { value: "ru", label: t("notices.language_ru") },
-              { value: "en", label: t("notices.language_en") },
               { value: "system", label: t("notices.language_system") },
+              // Each language in itself, from the registry: a new one shows
+              // up here without this file knowing.
+              ...LOCALE_CODES.map((code) => ({ value: code, label: LOCALES[code].name })),
             ]}
             onChange={(language) => onPatch({ language })}
           />

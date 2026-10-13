@@ -17,7 +17,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
-use super::bash_background::{background, to_background, Waited};
+use super::bash_background::{background, drain_after_exit, to_background, Waited};
 use super::{Narration, Tool, ToolCtx, ToolOutput};
 use crate::checkpoint::CheckpointReason;
 use crate::error::ToolError;
@@ -281,6 +281,21 @@ async fn foreground(
                 }
                 None => break Ending::Done,
             },
+            // The shell is gone while something it started still holds the
+            // pipe: the command is done, and the call must not wait out its
+            // whole limit for a program that is no part of it.
+            _ = child.wait() => {
+                let mut rest = Vec::new();
+                drain_after_exit(&mut output, |raw| rest.push(raw)).await;
+                for raw in rest {
+                    let text = bytes.push(&raw);
+                    for line in lines.push(&text) {
+                        ring.push(line);
+                    }
+                    ctx.progress.push(text);
+                }
+                break Ending::Done;
+            }
         }
     };
 
@@ -551,6 +566,50 @@ mod tests {
         assert_eq!(panel[0].cwd, ".");
 
         ctx.processes.stop(panel[0].id);
+    }
+
+    /// A command that leaves something running behind it — `npm run dev &`,
+    /// `Start-Process` — has ended when its shell has, not when the last
+    /// program holding the output pipe lets go. Waiting for the pipe left it
+    /// `running` in the panel and the model never heard it was done.
+    #[tokio::test]
+    async fn a_command_that_left_a_child_behind_has_ended_when_its_shell_has() {
+        let dir = TempDir::new();
+        let (ctx, _ws) = ctx_for(&dir);
+
+        let command = if cfg!(windows) {
+            "Start-Process -NoNewWindow powershell -ArgumentList '-NoProfile','-Command','Start-Sleep 10'; echo launched"
+        } else {
+            "sleep 10 & echo launched"
+        };
+        Bash.run(&ctx, json!({ "command": command, "background": true }))
+            .await
+            .unwrap();
+        let id = ctx.processes.summaries()[0].id;
+
+        let ended = ctx.processes.wait_ended(id, Duration::from_secs(5)).await;
+        let state = ctx.processes.summaries()[0].state.clone();
+        assert!(ended, "still {state:?} after its shell was gone");
+    }
+
+    /// The same, in the foreground: the call returns when the shell does, with
+    /// what the command printed, instead of holding the model for the limit.
+    #[tokio::test]
+    async fn a_foreground_call_does_not_wait_for_what_its_shell_left_behind() {
+        let dir = TempDir::new();
+        let (ctx, _ws) = ctx_for(&dir);
+
+        let command = if cfg!(windows) {
+            "Start-Process -NoNewWindow powershell -ArgumentList '-NoProfile','-Command','Start-Sleep 10'; echo launched"
+        } else {
+            "sleep 10 & echo launched"
+        };
+        let started = std::time::Instant::now();
+        let out = Bash.run(&ctx, json!({ "command": command })).await.unwrap();
+
+        assert!(started.elapsed() < Duration::from_secs(6), "{:?}", started.elapsed());
+        assert!(out.text.contains("launched"), "{}", out.text);
+        assert!(!out.text.contains("NOT stopped"), "{}", out.text);
     }
 
     #[tokio::test]

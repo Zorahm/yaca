@@ -55,6 +55,7 @@ export function needsKey(
 export type HeaderDraft = { name: string; value: string };
 
 export type ProviderDraft = {
+  /** Empty until the provider is saved for the first time: see `newProviderId`. */
   id: string;
   displayName: string;
   protocol: Protocol;
@@ -90,19 +91,62 @@ export function draftFromSpec(spec: ProviderSpec): ProviderDraft {
   };
 }
 
+// --- id ---------------------------------------------------------------------
+
+/**
+ * The id a new provider is saved under.
+ *
+ * Nobody types it: it is the name of the keychain item and of the entry in
+ * `providers.json`, which is bookkeeping, and a field for it was a question
+ * the person had no reason to have an answer to. It is made from the name
+ * once, when the provider is created, and never again — renaming a provider
+ * must not move its key.
+ *
+ * A name with nothing Latin in it («Мой шлюз») falls back to the host of the
+ * address, and that to a plain word; `taken` keeps it from landing on a
+ * provider that is already there, which `Providers::put` would replace.
+ */
+export function newProviderId(
+  displayName: string,
+  baseUrl: string,
+  taken: ReadonlyArray<string>,
+): string {
+  const base = slug(displayName) || slug(hostOf(baseUrl)) || "provider";
+  let id = base;
+  for (let n = 2; taken.includes(id); n += 1) id = `${base}-${n}`;
+  return id;
+}
+
+function slug(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function hostOf(baseUrl: string): string {
+  try {
+    return new URL(baseUrl.trim()).hostname;
+  } catch {
+    return "";
+  }
+}
+
 // --- validation -------------------------------------------------------------
 
 /** A problem is a dictionary key with its holes, not a rendered string: the
     language of the window is the panel's business, not this module's. */
 export type Problem = { key: Key; params?: Params };
 
-function validate(draft: ProviderDraft): {
+function validate(
+  draft: ProviderDraft,
+  taken: ReadonlyArray<string>,
+): {
   problems: Array<Problem>;
   spec: ProviderSpec | null;
 } {
   const problems: Array<Problem> = [];
 
-  if (!draft.id.trim()) problems.push({ key: "prov.error_id" });
   if (!draft.displayName.trim()) problems.push({ key: "prov.error_name" });
   if (!draft.baseUrl.trim()) problems.push({ key: "prov.error_url" });
 
@@ -125,7 +169,9 @@ function validate(draft: ProviderDraft): {
       problems.length > 0
         ? null
         : {
-            id: draft.id.trim(),
+            id:
+              draft.id.trim() ||
+              newProviderId(draft.displayName, draft.baseUrl, taken),
             displayName: draft.displayName.trim(),
             protocol: draft.protocol,
             baseUrl: draft.baseUrl.trim(),
@@ -146,12 +192,18 @@ function validate(draft: ProviderDraft): {
 }
 
 export function draftProblems(draft: ProviderDraft): Array<Problem> {
-  return validate(draft).problems;
+  return validate(draft, []).problems;
 }
 
-/** The spec to save, or `null` while the draft has problems. */
-export function draftToSpec(draft: ProviderDraft): ProviderSpec | null {
-  return validate(draft).spec;
+/**
+ * The spec to save, or `null` while the draft has problems. `taken` is the
+ * ids already in the list, for a draft that has none of its own yet.
+ */
+export function draftToSpec(
+  draft: ProviderDraft,
+  taken: ReadonlyArray<string> = [],
+): ProviderSpec | null {
+  return validate(draft, taken).spec;
 }
 
 /** Where the provider's key stands, as the shell reports it (`apiKeySource`). */

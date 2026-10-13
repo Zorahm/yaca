@@ -1,5 +1,5 @@
-//! Помощники тестов. Свой временный каталог вместо зависимости: два вызова
-//! не окупают ещё один крейт в дереве сборки.
+//! Test helpers. Our own temporary directory instead of a dependency: two calls
+//! do not justify one more crate in the build tree.
 
 use std::path::{Path, PathBuf};
 
@@ -16,7 +16,7 @@ impl TempDir {
         &self.0
     }
 
-    /// Создаёт файл вместе с недостающими каталогами.
+    /// Creates the file together with any missing directories.
     pub fn write(&self, rel: &str, contents: &str) -> PathBuf {
         let p = self.0.join(rel);
         if let Some(parent) = p.parent() {

@@ -8,7 +8,7 @@
  *
  * Включается только когда Tauri рядом нет. В настоящем окне не участвует
  * ничем: подмена живых событий записанными — это ровно тот интерфейс, который
- * врёт про состояние (§0).
+ * врёт про состояние.
  */
 
 import type { AgentEvent } from "./bindings/AgentEvent";
@@ -169,7 +169,7 @@ function diff(added: string[], removed: string[]) {
   };
 }
 
-/** Сценарий: всё, что §5 умеет рисовать, по одному разу. */
+/** Сценарий: всё, что лента умеет рисовать, по одному разу. */
 export const demoScript: AgentEvent[] = [
   state({}),
   {
@@ -193,7 +193,9 @@ export const demoScript: AgentEvent[] = [
     text: "почини разбор дат в сегментах — падает на границе часового пояса",
     attachments: ["src/segments.ts"],
   },
-  { type: "turnStarted", turnId: "t1", at: NOW },
+  // The stand has no core behind it, so the turn starts when the window does:
+  // the live timer counts from a real moment, not from the fixed NOW.
+  { type: "turnStarted", turnId: "t1", at: Date.now() },
   state({ busy: true }),
   {
     type: "thinkingDelta",
@@ -211,7 +213,9 @@ export const demoScript: AgentEvent[] = [
   {
     type: "toolCallProgress",
     callId: "c1",
-    chunk: "export function parseSegment(raw: string) {\n  return new Date(raw);\n}\n",
+    // The listing as `Read` writes it: a right-aligned number, a tab, the line.
+    chunk:
+      "     1\texport function parseSegment(raw: string) {\n     2\t  return new Date(raw);\n     3\t}\n",
   },
   {
     type: "toolCallFinished",
@@ -224,6 +228,113 @@ export const demoScript: AgentEvent[] = [
     callId: "c2",
     meta: { lines: 3, items: 3, truncated: false, durationMs: 41 },
   },
+  // Three subagents sent together, one in each state the plate and the
+  // agents panel draw: reported, still at work, and ended without a report.
+  {
+    type: "toolCallStarted",
+    turnId: "t1",
+    callId: "a1",
+    tool: "Task",
+    description: "Выяснил, где ещё разбираются даты",
+    target: null,
+    input: {
+      prompt:
+        "Найди все места в src/, где строка превращается в дату: Date.parse, new Date(строка), свои разборщики.\n\nПо каждому месту скажи, в какой зоне получается результат — UTC или локальной. Ничего не меняй.\n\nВ отчёте: список path:line и одна строка о каждом.",
+    },
+    parent: null,
+  },
+  {
+    type: "toolCallStarted",
+    turnId: "t1",
+    callId: "a2",
+    tool: "Task",
+    description: "Проверяет, как зону считают тесты",
+    target: null,
+    input: { prompt: "Посмотри тесты сегментов: в какой зоне они запускаются и где она задаётся." },
+    parent: null,
+  },
+  {
+    type: "toolCallStarted",
+    turnId: "t1",
+    callId: "a3",
+    tool: "Task",
+    description: "Искал описание формата в документации",
+    target: null,
+    input: { prompt: "Найди в docs/ описание формата даты сегмента." },
+    parent: null,
+  },
+  {
+    type: "toolCallStarted",
+    turnId: "t1",
+    callId: "a1c1",
+    tool: "Grep",
+    description: "Нашёл разборы дат",
+    target: "rg \"Date.parse|new Date\\(\" src/",
+    input: {},
+    parent: "a1",
+  },
+  {
+    type: "toolCallFinished",
+    callId: "a1c1",
+    meta: { lines: 4, items: 4, truncated: false, durationMs: 37 },
+  },
+  {
+    type: "toolCallStarted",
+    turnId: "t1",
+    callId: "a1c2",
+    tool: "Read",
+    description: null,
+    target: "src/zone.ts",
+    input: {},
+    parent: "a1",
+  },
+  {
+    type: "toolCallProgress",
+    callId: "a1c2",
+    chunk: "     1\texport function offset(raw: string): number {\n     2\t  return 0;\n     3\t}\n",
+  },
+  {
+    type: "toolCallFinished",
+    callId: "a1c2",
+    meta: { lines: 3, items: null, truncated: false, durationMs: 6 },
+  },
+  {
+    type: "subagentUsage",
+    callId: "a1",
+    tokens: { input: 18400, output: 1260, cacheWrite: 0, cacheRead: 5200 },
+  },
+  {
+    type: "toolCallProgress",
+    callId: "a1",
+    chunk:
+      "Даты разбираются в двух местах, оба дают UTC:\n\n- `src/segments.ts:13` — `Date.parse(raw)`\n- `src/zone.ts:1` — `offset` всегда возвращает 0\n\nСвоих разборщиков нет.",
+  },
+  {
+    type: "toolCallFinished",
+    callId: "a1",
+    meta: { lines: 6, items: null, truncated: false, durationMs: 9400 },
+  },
+  {
+    type: "toolCallStarted",
+    turnId: "t1",
+    callId: "a2c1",
+    tool: "Read",
+    description: null,
+    target: "src/segments.test.ts",
+    input: {},
+    parent: "a2",
+  },
+  {
+    type: "subagentUsage",
+    callId: "a2",
+    tokens: { input: 9100, output: 420, cacheWrite: 0, cacheRead: 0 },
+  },
+  {
+    type: "subagentUsage",
+    callId: "a3",
+    tokens: { input: 3100, output: 90, cacheWrite: 0, cacheRead: 0 },
+  },
+  { type: "toolCallFailed", callId: "a3", message: "подагент ничего не ответил" },
   call("c3", "Edit", "src/segments.ts", null),
   {
     type: "fileChanged",
@@ -276,7 +387,23 @@ export const demoScript: AgentEvent[] = [
     type: "textDelta",
     turnId: "t1",
     blockId: "b2",
-    text: "Поправил. Прогоню тесты.\n",
+    text:
+      "## Что изменилось\n\nПоправил `parseSegment`: смещение зоны теперь **прибавляется** после разбора.\n\n" +
+      "```ts\nconst at = Date.parse(raw);\nreturn new Date(at + offset(raw));\n```\n\n" +
+      '```python\ndef count_lines(path: str) -> int:\n    with open(path, encoding="utf-8") as f:\n        return sum(1 for _ in f)\n```\n\n' +
+      "- `segments.ts` — сам разбор\n- `app.rs` — правка не прошла\n\nПрогоню тесты.\n",
+  },
+  {
+    type: "textShown",
+    path: "src/segments.ts",
+    firstLine: 12,
+    lines: 4,
+    total: 86,
+    text:
+      "export function parseSegment(raw: string): Date {\n" +
+      "  const at = Date.parse(raw);\n" +
+      "  return new Date(at + offset(raw));\n" +
+      "}",
   },
   call("c6", "Bash", "npm test -- segments", "Прогнал тесты сегментов"),
   {
@@ -308,7 +435,60 @@ export const demoScript: AgentEvent[] = [
       total: { input: 24_000, output: 800, cacheWrite: 0, cacheRead: 0 },
       contextUsed: 24_800,
       contextMax: 1_000_000,
+      breakdown: {
+        systemPrompt: 2_100,
+        instructions: 1_400,
+        memory: 300,
+        skills: 0,
+        tools: 6_200,
+        mcpTools: 0,
+        mcpNotes: 0,
+        messages: 14_800,
+        reserved: 157_600,
+      },
       costUsd: 0.31,
     },
   },
 ];
+
+/**
+ * The end of the recorded turn: what the core sends once the person has
+ * answered the question the script stops on. Played by the stand on that
+ * answer, so the finished state of a turn — the line with how long it took and
+ * when it ended — can be looked at as well as the running one.
+ */
+export function demoFinish(): AgentEvent[] {
+  return [
+    { type: "permissionResolved", requestId: "req_1" },
+    // The subagent left at work reports before the turn ends.
+    {
+      type: "toolCallFinished",
+      callId: "a2c1",
+      meta: { lines: 40, items: null, truncated: false, durationMs: 7 },
+    },
+    {
+      type: "subagentUsage",
+      callId: "a2",
+      tokens: { input: 14800, output: 760, cacheWrite: 0, cacheRead: 9100 },
+    },
+    {
+      type: "toolCallProgress",
+      callId: "a2",
+      chunk: "Тесты идут в UTC: зона задана в `vitest.config.ts:4` через `TZ`.",
+    },
+    {
+      type: "toolCallFinished",
+      callId: "a2",
+      meta: { lines: 1, items: null, truncated: false, durationMs: 21000 },
+    },
+    { type: "toolCallProgress", callId: "c6", chunk: "Тесты: 12 из 12 прошли.\n" },
+    {
+      type: "toolCallFinished",
+      callId: "c6",
+      meta: { lines: 1, items: null, truncated: false, durationMs: 3_200 },
+    },
+    { type: "textDelta", turnId: "t1", blockId: "b3", text: "Тесты проходят: 12 из 12." },
+    state({ busy: false }),
+    { type: "turnFinished", turnId: "t1", stopReason: "endTurn", at: Date.now() },
+  ];
+}

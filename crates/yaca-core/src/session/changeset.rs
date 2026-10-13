@@ -8,6 +8,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::change::view::view;
+use crate::change::FileView;
 use crate::event::AgentEvent;
 use crate::tool::files::read_text;
 
@@ -78,8 +80,25 @@ pub(super) async fn read_view(shared: &Arc<Shared>, path: String) {
 fn emit_view(shared: &Shared, path: &str) {
     shared.emit(AgentEvent::FileViewLoaded {
         path: path.to_owned(),
-        view: shared.changes.view(path),
+        view: shared.changes.view(path).or_else(|| on_disk(shared, path)),
     });
+}
+
+/// The view of a file the set does not know under this name: one the agent
+/// only read, or a changed one named another way.
+///
+/// The path comes from an action row, and a row of `Read` carries what the
+/// model wrote — absolute, or relative with a `./`. So it is resolved the way
+/// a tool resolves it, bounds included, and the set is asked again by the name
+/// it keeps. `None` when there is nothing to show: no such file, a directory,
+/// a binary, or a path outside the workspace.
+fn on_disk(shared: &Shared, path: &str) -> Option<FileView> {
+    let abs = shared.ws.resolve_existing(path).ok()?;
+    if let Some(changed) = shared.changes.view(&shared.ws.display(&abs)) {
+        return Some(changed);
+    }
+    let text = read_text(&abs).ok()??;
+    Some(view(&text, &text, None))
 }
 
 fn failed(shared: &Shared, code: &str, message: String) {

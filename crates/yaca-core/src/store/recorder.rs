@@ -22,6 +22,7 @@ use crate::session::log::EventLog;
 
 use super::history::{MessageLog, Record};
 use super::meta::SessionMeta;
+use super::transcript::Transcript;
 
 pub struct Recorder {
     root: PathBuf,
@@ -85,11 +86,28 @@ impl Recorder {
         self.meta.lock().unwrap().title_from_message(text);
     }
 
+    /// §9: a name typed by hand, for the session while it runs. Written down at
+    /// once rather than at the turn's end: the panel reads the file, and the
+    /// human has just watched the name change.
+    pub fn rename(&self, title: &str) -> std::io::Result<()> {
+        let meta = {
+            let mut meta = self.meta.lock().unwrap();
+            meta.rename(title);
+            meta.clone()
+        };
+        meta.save(&self.root)
+    }
+
     pub fn message(&self, turn: &TurnId, message: &Message) {
         self.messages.append(&Record::Message {
             turn: turn.clone(),
             message: message.clone(),
         });
+    }
+
+    /// The conversation as it was said, for the tools that look back into it.
+    pub fn transcript(&self) -> Transcript {
+        Transcript::new(&self.root, self.meta.lock().unwrap().id.clone())
     }
 
     /// Replaces the model's history wholesale — what compaction does (§5.11).
@@ -98,7 +116,10 @@ impl Recorder {
     /// journal is append-only so that a crash cannot leave it truncated, and a
     /// session that was compacted reopens compacted.
     pub fn replaced_history(&self, turn: &TurnId, history: &[Message]) {
-        self.messages.append(&Record::Reset { turn: turn.clone() });
+        self.messages.append(&Record::Reset {
+            turn: turn.clone(),
+            kept: history.len(),
+        });
         for message in history {
             self.message(turn, message);
         }
@@ -188,6 +209,7 @@ mod tests {
         r.event(&AgentEvent::TurnFinished {
             turn_id: TurnId::from("t1"),
             stop_reason: StopReason::EndTurn,
+            at: Default::default(),
         });
 
         let saved = SessionMeta::load(dir.path(), &r.meta().id).unwrap();

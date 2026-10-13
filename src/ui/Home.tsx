@@ -16,7 +16,6 @@
  * settings window exists — an interim step recorded in §16.
  */
 
-import { Gear } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 
 import {
@@ -30,10 +29,8 @@ import {
 } from "../core/client";
 import { t } from "../i18n";
 import { Composer, type ComposerActions, type ComposerSettings } from "./Composer";
-import { relativeTo } from "./format";
+import { plainPath, relativeTo } from "./format";
 import { imageActions } from "./images";
-import { ProjectChip } from "./ContextChips";
-import { Mark } from "./Mark";
 
 export function Home({
   models,
@@ -103,7 +100,7 @@ export function Home({
 
   const ready = project !== null && startup !== null;
   const settings: ComposerSettings = {
-    mode: startup?.mode ?? "manual",
+    mode: startup?.mode ?? "auto",
     provider: startup?.provider ?? "",
     model: startup?.model ?? "",
     effort: startup?.effort ?? "extra",
@@ -147,49 +144,58 @@ export function Home({
 
   return (
     <div className="home">
-      <div className="home-greeting">
-        <Mark />
-        <h1>{name === null ? t("home.greeting") : t("home.greeting_named", { name })}</h1>
-      </div>
+      <header className="home-top">{t("side.new")}</header>
 
-      <div className="home-bottom">
-        {shown !== null && <div className="home-error">{shown}</div>}
+      <div className="home-body">
+        <div className="home-wrap">
+          <div className="home-greeting">
+            <h1>{name === null ? t("home.greeting") : t("home.greeting_named", { name })}</h1>
+          </div>
+          <p className="home-lead">{t("home.lead")}</p>
 
-        <div className="home-chips-wrap">
-          <div className="home-chips">
-            <ProjectChip
-              path={project}
-              onPick={onPickProject}
-              disabled={!hasFileDialogs}
-            />
-            {/* До первого сообщения настроить провайдера бывает нужно, а
-                разговору эта кнопка не принадлежит (§9.1). Ведёт в окно §10. */}
-            <button
-              className="chip-context"
-              onClick={onOpenSettings}
-              title={t("prov.title")}
-            >
-              <span className="chip-icon" aria-hidden="true">
-                <Gear size={13} />
-              </span>
-              {t("prov.home_button")}
+          {/* The project is the folder: a card that names it and the one
+              button that changes it (§9). */}
+          <div className="home-pick">
+            <div className="home-pick-text">
+              <div className="home-pick-title">{t("home.pick_title")}</div>
+              <div className="home-pick-path" title={project ?? undefined}>
+                {project === null ? t("home.not_chosen") : plainPath(project)}
+              </div>
+            </div>
+            <button className="btn" onClick={onPickProject} disabled={!hasFileDialogs}>
+              {t("home.pick_project")}
             </button>
           </div>
-        </div>
 
-        <Composer
+          {/* Before the first message a provider may be missing, and that is
+              said here, not discovered by a refused send (§9.1, §10). */}
+          {!configured && (
+            <div className="home-note" role="status">
+              <span className="home-note-text">
+                <b>{t("home.no_provider")}</b> {t("home.no_provider_hint")}
+              </span>
+              <button className="btn btn-small" onClick={onOpenSettings} title={t("prov.title")}>
+                {t("prov.home_button")}
+              </button>
+            </div>
+          )}
+
+          {shown !== null && <div className="home-error">{shown}</div>}
+
+          <Composer
           settings={settings}
           busy={false}
-          ring="idle"
           usage={null}
           models={models}
           commands={commands}
           queued={[]}
           found={null}
           actions={actions}
-          disabled={!ready}
-          draftKey={`yaca.draft.${project ?? "none"}`}
-        />
+            disabled={!ready}
+            draftKey={`yaca.draft.${project ?? "none"}`}
+          />
+
+        </div>
       </div>
     </div>
   );

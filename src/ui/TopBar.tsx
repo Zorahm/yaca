@@ -1,24 +1,23 @@
 /**
- * Верхняя панель §3.
+ * Верхняя панель.
  *
  * Держит навигацию и опознание сессии, а не состояние работы: состояние живёт
  * внизу, рядом с композером, куда и так смотрят. Марки в шапке нет — квадрат с
  * отражённой `C` живёт на домашнем экране и в иконке приложения.
  *
- * Слева `List` — показать или спрятать сайдбар: список сессий уехал из
- * выдвижной панели §1.1 в свою колонку, и кнопка теперь про колонку, а не про
- * панель. Справа `SquaresFour` процессов с точкой при активных. Панель файла
- * открывается из ленты и полосы, а меню, поиск, диктовка и настройки ждут
- * своих подсистем: кнопка, которая ничего не открывает, это интерфейс,
- * врущий про состояние (§0). Стрелки листают ленту по сообщениям человека, и
- * это работает уже сейчас.
+ * По краям две кнопки одной формы (`yaca-icons`): слева показать или спрятать
+ * сайдбар, справа — правую панель. Иконка каждой показывает, открыта ли её
+ * колонка; при правой стоит точка, пока работают фоновые команды. Кнопка открывает панель на
+ * той вкладке, на которой её закрыли; сами вкладки переключаются в панели.
+ * Стрелки листают ленту по сообщениям человека.
  */
 
-import { ArrowLeft, ArrowRight, List, SquaresFour } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import { t } from "../i18n";
 import { baseName } from "./format";
+import { PanelLeft, PanelRight } from "./yaca-icons";
 
 export function TopBar({
   title,
@@ -29,10 +28,10 @@ export function TopBar({
   onForward,
   onRename,
   sidebarOpen,
-  panel,
+  panelOpen,
   runningProcesses,
   onToggleSidebar,
-  onToggleProcesses,
+  onTogglePanel,
 }: {
   title: string;
   projectRoot: string;
@@ -43,12 +42,12 @@ export function TopBar({
   onRename: (title: string) => void;
   /** Показана ли колонка сайдбара слева. */
   sidebarOpen: boolean;
-  /** Какая панель §1.1 открыта кнопкой шапки. */
-  panel: "processes" | null;
-  /** Точка при кнопке процессов — пока есть живые фоновые команды (§3). */
+  /** Открыта ли правая панель, на любой вкладке. */
+  panelOpen: boolean;
+  /** Точка при кнопке панели — пока есть живые фоновые команды. */
   runningProcesses: number;
   onToggleSidebar: () => void;
-  onToggleProcesses: () => void;
+  onTogglePanel: () => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
 
@@ -61,7 +60,7 @@ export function TopBar({
         aria-label={t("side.toggle")}
         title={t("side.toggle")}
       >
-        <List size={16} />
+        <PanelLeft size={18} open={sidebarOpen} />
       </button>
 
       <button
@@ -117,13 +116,12 @@ export function TopBar({
       <div className="top-icon-wrap">
         <button
           className="top-icon"
-          data-panel-trigger
-          aria-pressed={panel === "processes"}
-          onClick={onToggleProcesses}
-          aria-label={t("top.processes")}
-          title={t("top.processes")}
+          aria-pressed={panelOpen}
+          onClick={onTogglePanel}
+          aria-label={t("panel.toggle")}
+          title={t("panel.toggle")}
         >
-          <SquaresFour size={16} />
+          <PanelRight size={18} open={panelOpen} />
         </button>
         {runningProcesses > 0 && <span className="top-dot" aria-hidden="true" />}
       </div>

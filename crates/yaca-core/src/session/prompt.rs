@@ -150,6 +150,8 @@ const COMMUNICATION: &str = "<communication>\nWrite to the human in the language
      shorthand you used while working. Report results as they are: a failing test \
      with its output, a skipped step as skipped, and \"done\" or \"works\" only when \
      a result from this conversation shows it.\n\n\
+     In your first response, name the conversation with SetTitle, alongside \
+     your other first calls.\n\n\
      Long conversations are compacted automatically when the context fills up, so \
      the length of a conversation is never a reason to stop early or to suggest \
      starting over.\n</communication>\n\n";
@@ -438,8 +440,8 @@ mod tests {
 
     #[test]
     fn the_model_is_not_told_to_wait_for_a_button() {
-        // Правки уезжают на диск сразу, и «нажмите Применить» стало бы
-        // указанием на кнопку, которой нет (§16.37).
+        // Edits go to disk at once, and «нажмите Применить» would become
+        // a pointer to a button that does not exist (§16.37).
         let p = plain(Intent::Agent);
         assert!(!p.contains("change set"));
         assert!(!p.contains("on disk yet"));

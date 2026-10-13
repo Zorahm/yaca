@@ -1,5 +1,6 @@
 /**
- * Дифф §6.3. Одинаков в раскрытой строке действия и в панели файла.
+ * Дифф §6.3 в раскрытой строке действия — и тот же блок строк без диффа в
+ * панели файла (§6.4), которая показывает файл как он есть.
  *
  * Ханки, номера строк и пословные диапазоны считает ядро (§12): результат
  * одинаков везде, где дифф показывается, и разбирать текст в вебвью параллельно
@@ -15,10 +16,18 @@
  * разные высоты: окно §12 по-прежнему считает по токену `--diff-line`.
  */
 
-import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 
-import type { DiffLine, FileDiff, Hunk, Span, ViewSegment } from "../core/client";
-import { t, tp } from "../i18n";
+import type { DiffLine, FileDiff, Span } from "../core/client";
+import { t } from "../i18n";
 import { runsOf } from "./codeText";
 import { utf16Spans, between, plainLine } from "./highlight";
 import { languageOf } from "./languages";
@@ -35,24 +44,24 @@ const WINDOW_FROM = 200;
 const OVERSCAN = 8;
 
 /**
- * What the file panel adds to the diff (§6.4): the whole file, its unchanged
- * stretches, and the controls on each hunk. Only the panel passes these.
+ * A file's lines as they are, nothing marked as added or removed: the whole
+ * file in the panel (§6.4), or what a `Read` returned in its feed row (with
+ * `soft`).
  */
 export type FileBody = {
-  /** The file as the core shows it: hunks and the unchanged text between. */
-  segments: ViewSegment[];
+  lines: DiffLine[];
   /** The view stops before the end of the file. */
   truncated: boolean;
-  /** Unchanged stretches the human has opened, by their index in `segments`. */
-  expanded: ReadonlySet<number>;
-  onExpand: (index: number) => void;
+  /** Lines the panel's search found, by index in `lines`. */
+  hits?: ReadonlySet<number>;
+  /** The hit the search stands on: marked stronger and scrolled into view. */
+  current?: number | null;
 };
 
 export function Diff({
   diff,
   body,
   soft = false,
-  gaps = false,
   path,
 }: {
   /** The stream's diff of one call (§5.5.1). Absent when `body` is given. */
@@ -61,8 +70,6 @@ export function Diff({
   body?: FileBody;
   /** В строке действия подложка мягче, чем в панели (§2). */
   soft?: boolean;
-  /** Свёрнутые промежутки «⋯ N строк» между ханками — панель файла (§6.4). */
-  gaps?: boolean;
   /** Путь файла: из него выбирается грамматика подсветки (§6.3). */
   path?: string;
 }) {
@@ -71,13 +78,27 @@ export function Diff({
   const items = useMemo(
     () =>
       body
-        ? segmentRows(body, highlight)
+        ? body.lines.map((line, at) => (
+            <Line
+              key={at}
+              line={line}
+              highlight={highlight}
+              mark={at === body.current ? "now" : body.hits?.has(at) ? "hit" : null}
+            />
+          ))
         : diff
-          ? rows(diff, gaps, highlight)
+          ? rows(diff, highlight)
           : [],
-    [diff, body, gaps, highlight],
+    [diff, body, highlight],
   );
   const truncated = body ? body.truncated : (diff?.truncated ?? false);
+  // The gutter is as wide as the longest number in it and no wider: a column
+  // sized for five digits pushes a ten-line file's text away from its edge.
+  const digits = useMemo(() => {
+    const shown = body ? body.lines : (diff?.hunks.flatMap((hunk) => hunk.lines) ?? []);
+    const top = shown.reduce((max, line) => Math.max(max, line.newLine ?? 0, line.oldLine ?? 0), 0);
+    return String(top).length;
+  }, [diff, body]);
 
   const box = useRef<HTMLDivElement>(null);
   const [view, setView] = useState({ scrollTop: 0, height: 0, row: 0 });
@@ -87,11 +108,7 @@ export function Diff({
     const node = box.current;
     if (!node || !windowed) return;
 
-    // Высота строки берётся из токена, а не из константы: §2 обещает 20 px в
-    // компактном режиме, и окно, посчитанное по 24, промахнётся мимо экрана.
-    const row = parseFloat(
-      getComputedStyle(document.documentElement).getPropertyValue("--diff-line"),
-    );
+    const row = rowHeight(node);
 
     const measure = () =>
       setView({ scrollTop: node.scrollTop, height: node.clientHeight, row });
@@ -106,55 +123,80 @@ export function Diff({
     };
   }, [windowed]);
 
+  // The search steps from hit to hit: the one it stands on comes into view, a
+  // third of the way down, so the lines before it are there to read too.
+  const current = body?.current ?? null;
+  useEffect(() => {
+    const node = box.current;
+    if (!node || current === null) return;
+    const top = current * rowHeight(node);
+    if (top < node.scrollTop || top > node.scrollTop + node.clientHeight - rowHeight(node)) {
+      node.scrollTop = Math.max(0, top - node.clientHeight / 3);
+    }
+  }, [current]);
+
   const slice = windowed
     ? windowOf(items.length, view.row, view.scrollTop, view.height, OVERSCAN)
     : { start: 0, end: items.length, padTop: 0, padBottom: 0 };
 
   return (
-    <div className={soft ? "diff diff-soft" : "diff"} ref={box}>
+    <div
+      // A diff in a feed row wraps long lines like the rest of the tool's
+      // output. Windowing needs rows of one height, so a long diff that is
+      // windowed keeps single lines and scrolls sideways.
+      className={
+        soft
+          ? `diff diff-soft${windowed ? "" : " diff-wrap"}${body ? " diff-read" : ""}`
+          : "diff diff-whole"
+      }
+      style={{ "--digits": digits } as CSSProperties}
+      ref={box}
+    >
       {slice.padTop > 0 && <div style={{ height: slice.padTop }} />}
       {items.slice(slice.start, slice.end)}
       {slice.padBottom > 0 && <div style={{ height: slice.padBottom }} />}
-      {truncated && <div className="diff-more">{t("row.diff_truncated")}</div>}
+      {truncated && (
+        <div className="diff-more">{t(body ? "file.truncated" : "row.diff_truncated")}</div>
+      )}
     </div>
   );
+}
+
+/**
+ * Высота строки берётся из токена, а не из константы: §2 обещает 20 px в
+ * компактном режиме, и окно, посчитанное по 24, промахнётся мимо экрана.
+ * Читается с самого блока: панель файла ставит строкам свою высоту.
+ */
+function rowHeight(node: HTMLElement): number {
+  return parseFloat(getComputedStyle(node).getPropertyValue("--diff-line"));
 }
 
 /**
  * Дифф одним плоским списком строк одинаковой высоты.
  *
  * Плоским — потому что окно считает по индексу, и вложенность ханков ему
- * мешала бы; одинаковой высоты — потому что заголовок ханка и промежуток
- * лежат на той же сетке, что строки (§6.3).
+ * мешала бы; одинаковой высоты — потому что заголовок ханка лежит на той же
+ * сетке, что строки (§6.3).
  *
  * Грамматика резолвится один раз на весь дифф, а не на строку: у hook'а одна
  * подписка, и строки не перерисовывают друг друга наперегонки.
  */
 function rows(
   diff: FileDiff,
-  gaps: boolean,
   highlight: LineHighlighter | null,
 ): ReactElement[] {
   const out: ReactElement[] = [];
 
   for (const [index, hunk] of diff.hunks.entries()) {
-    // Промежуток считается от старой стороны: у созданного файла его не
-    // бывает, у правки середины — ровно столько, сколько строк между ханками.
-    if (gaps) {
-      const before = gapBefore(diff.hunks, index);
-      if (before > 0) {
-        out.push(
-          <div className="diff-gap" key={`g${index}`}>
-            ⋯ {tp("file.gap", before)}
-          </div>,
-        );
-      }
+    // In a feed row the `@@ -a,b +c,d @@` header is noise: the reader wants
+    // the lines. Hunks are told apart by a bare fold mark on the same grid.
+    if (index > 0) {
+      out.push(
+        <div className="hunk hunk-fold" key={`h${index}`}>
+          ⋯
+        </div>,
+      );
     }
-    out.push(
-      <div className="hunk" key={`h${index}`}>
-        {hunkHeader(hunk)}
-      </div>,
-    );
     for (const [at, line] of hunk.lines.entries()) {
       out.push(<Line key={`h${index}l${at}`} line={line} highlight={highlight} />);
     }
@@ -163,84 +205,14 @@ function rows(
   return out;
 }
 
-/** Unchanged lines kept beside a hunk when the rest of a stretch is folded (§6.4). */
-const CONTEXT = 3;
-
-/**
- * The whole file as one flat list, shaped like `rows`. Unchanged stretches are
- * folded to `⋯ N строк` except the lines beside a hunk; a click opens one.
- * Hunks carry their actions on the header row (§6.3).
- */
-function segmentRows(body: FileBody, highlight: LineHighlighter | null): ReactElement[] {
-  const out: ReactElement[] = [];
-  const last = body.segments.length - 1;
-
-  for (const [index, segment] of body.segments.entries()) {
-    if (segment.kind === "hunk") {
-      const { hunk } = segment;
-      out.push(
-        <div className="hunk" key={`h${index}`}>
-          {hunkHeader(hunk)}
-        </div>,
-      );
-      for (const [at, line] of hunk.lines.entries()) {
-        out.push(<Line key={`h${index}l${at}`} line={line} highlight={highlight} />);
-      }
-      continue;
-    }
-
-    // Segments alternate with hunks, so a stretch after the first one follows
-    // a hunk and a stretch before the last one precedes one. The start and the
-    // end of the file have nothing on that side worth keeping.
-    const { lines } = segment;
-    const head = index > 0 ? CONTEXT : 0;
-    const tail = index < last ? CONTEXT : 0;
-    const folded = lines.length - head - tail;
-
-    if (body.expanded.has(index) || folded <= 1) {
-      for (const [at, line] of lines.entries()) {
-        out.push(<Line key={`u${index}l${at}`} line={line} highlight={highlight} />);
-      }
-      continue;
-    }
-
-    for (const [at, line] of lines.slice(0, head).entries()) {
-      out.push(<Line key={`u${index}a${at}`} line={line} highlight={highlight} />);
-    }
-    out.push(
-      <button
-        type="button"
-        className="diff-gap diff-gap-btn"
-        key={`g${index}`}
-        onClick={() => body.onExpand(index)}
-      >
-        ⋯ {tp("file.gap", folded)}
-      </button>,
-    );
-    for (const [at, line] of lines.slice(lines.length - tail).entries()) {
-      out.push(<Line key={`u${index}b${at}`} line={line} highlight={highlight} />);
-    }
-  }
-
-  return out;
-}
-
-function hunkHeader(hunk: Hunk): string {
-  return `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`;
-}
-
-/** Сколько строк старой стороны спрятано перед ханком (§6.4). */
-function gapBefore(hunks: FileDiff["hunks"], index: number): number {
-  if (index === 0) return hunks[0].oldStart - 1;
-  const before = hunks[index - 1];
-  return hunks[index].oldStart - (before.oldStart + before.oldLines);
-}
-
 function Line({
   line,
   highlight,
+  mark = null,
 }: {
   line: DiffLine;
+  /** Found by the panel's search; `now` is the hit it stands on. */
+  mark?: "hit" | "now" | null;
   /** Пока грамматика не приехала — `null`, и строка рендерится без подсветки. */
   highlight: LineHighlighter | null;
 }) {
@@ -251,7 +223,7 @@ function Line({
   const number = line.kind === "del" ? line.oldLine : line.newLine;
 
   return (
-    <div className={`diff-line ${kind}`}>
+    <div className={mark ? `diff-line ${kind} diff-hit diff-hit-${mark}` : `diff-line ${kind}`}>
       <span className="diff-gutter">{number ?? ""}</span>
       <span className="diff-sign">{sign}</span>
       <span className="diff-text">{styled(line.text, line.spans, highlight)}</span>

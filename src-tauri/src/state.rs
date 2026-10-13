@@ -74,9 +74,9 @@ impl AppState {
             crate::EVENT_CHANNEL,
             id.clone(),
         ));
-        // Тост §15 слушает тот же поток отдельно: мост про транспорт,
-        // наблюдатель про уведомления, и в один файл их сводить — значит
-        // смешать две обязанности.
+        // The toast of §15 listens to the same stream separately: the bridge is about transport,
+        // the watcher is about notifications, and folding them into one file would mean
+        // mixing two responsibilities.
         tokio::spawn(crate::notify::watch(app.clone(), handle.subscribe(), stop.clone()));
 
         let chat = Chat {

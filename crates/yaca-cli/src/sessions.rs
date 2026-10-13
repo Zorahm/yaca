@@ -9,6 +9,7 @@
 use anyhow::{Context, Result};
 use clap::Subcommand;
 use yaca_core::id::{SessionId, TurnId};
+use yaca_core::provider::{models, registry};
 use yaca_core::secrets::{self, KeySource};
 use yaca_core::store::{MatchKind, SessionStore};
 
@@ -162,11 +163,39 @@ fn key(action: KeyAction, provider: &str) -> Result<()> {
                 .context("не прочитать ключ со стандартного ввода")?;
             secrets::store_api_key(provider, key.trim())?;
             println!("stored in the keychain");
+            ask_for_models(provider)?;
         }
         KeyAction::Clear => {
             secrets::forget_api_key(provider)?;
             println!("removed from the keychain");
         }
+    }
+    Ok(())
+}
+
+/// Asks the provider for its models now that there is a key to ask with — the
+/// same `models::refresh` the window runs on the same occasion.
+///
+/// The key is already stored when this runs, so a provider that refuses is
+/// reported and not returned as the command's failure. A name that is not in
+/// the list is no provider to ask: the web search key is set this way too.
+fn ask_for_models(provider: &str) -> Result<()> {
+    let dir = registry::config_dir()?;
+    if registry::Providers::load(&dir)?.get(provider).is_none() {
+        return Ok(());
+    }
+    // `run` is not async, and the one caller is already inside the runtime
+    // `main` started: blocking in place hands this thread's other work over
+    // instead of starving it.
+    let asked = tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(models::refresh(&dir, provider))
+    });
+    match asked {
+        Ok(providers) => {
+            let count = providers.get(provider).map_or(0, |p| p.models.len());
+            println!("{provider} answered with {count} models");
+        }
+        Err(e) => println!("{provider} did not answer with its models: {e}"),
     }
     Ok(())
 }

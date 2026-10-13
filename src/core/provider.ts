@@ -11,18 +11,67 @@
 
 import type { Protocol } from "./bindings/Protocol";
 
-/** `registry::ANTHROPIC_ID`. The first preset, and what a session starts on
-    when neither a provider nor a model is named. */
+/** `registry::ANTHROPIC_ID`: the one preset that speaks the Messages API. */
 export const BUILTIN_PROVIDER_ID = "anthropic";
 
-/** `registry::OPENAI_ID`. The second preset — everything that is not the
-    Messages API speaks this shape. */
+/** `registry::OPENAI_ID`. */
 export const OPENAI_PROVIDER_ID = "openai";
 
-/** `registry::is_preset`. The core refuses to delete either: the next load
-    would put it back, and a delete that undoes itself lies (§0). */
+/**
+ * `registry::presets`: the providers Yaca ships with, in the core's order.
+ *
+ * The window never builds its list from this — the list comes from the core.
+ * The table is here for what has no core behind it: the stand's registry, the
+ * "is this a preset" rule and the marks in `ui/brand`.
+ */
+export const PRESETS: ReadonlyArray<{
+  id: string;
+  displayName: string;
+  protocol: Protocol;
+  baseUrl: string;
+}> = [
+  {
+    id: OPENAI_PROVIDER_ID,
+    displayName: "OpenAI",
+    protocol: "openai",
+    baseUrl: "https://api.openai.com",
+  },
+  {
+    id: BUILTIN_PROVIDER_ID,
+    displayName: "Anthropic",
+    protocol: "anthropic",
+    baseUrl: "https://api.anthropic.com",
+  },
+  {
+    id: "google",
+    displayName: "Google AI Studio",
+    protocol: "openai",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+  },
+  {
+    id: "openrouter",
+    displayName: "OpenRouter",
+    protocol: "openai",
+    baseUrl: "https://openrouter.ai/api",
+  },
+  {
+    id: "deepseek",
+    displayName: "DeepSeek",
+    protocol: "openai",
+    baseUrl: "https://api.deepseek.com",
+  },
+  {
+    id: "zai",
+    displayName: "z.ai (coding plan)",
+    protocol: "openai",
+    baseUrl: "https://api.z.ai/api/coding/paas/v4",
+  },
+];
+
+/** `registry::is_preset`. The core refuses to delete one: the next load would
+    put it back, and a delete that undoes itself lies (§0). */
 export function isPreset(id: string): boolean {
-  return id === BUILTIN_PROVIDER_ID || id === OPENAI_PROVIDER_ID;
+  return PRESETS.some((preset) => preset.id === id);
 }
 
 /** `registry::KEY_PLACEHOLDER`. Substituted from the keychain at request time. */

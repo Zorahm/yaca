@@ -1,20 +1,20 @@
-//! Разбор потока Chat Completions в нормализованные `ProviderEvent`.
+//! Parsing of the Chat Completions stream into normalized `ProviderEvent`s.
 //!
-//! Здесь больше состояния, чем у Messages API, и не по прихоти:
+//! There is more state here than in the Messages API, and not by whim:
 //!
-//! * Индексов блоков форма не даёт вовсе — их назначает этот разбор, и
-//!   `ProviderEvent` требует монотонности.
-//! * Границы блоков тоже не приходят. Блок открывается на первой дельте
-//!   своего рода и закрывается, когда начинается другой род или кончился
-//!   поток.
-//! * Рассуждение зовётся `reasoning_content` у DeepSeek и Qwen, но
-//!   `reasoning` у OpenRouter. Читаются оба: это одно и то же поле, о названии
-//!   которого не договорились.
-//! * `finish_reason` приезжает раньше `usage`, поэтому конец сообщения
-//!   дописывается по концу потока, а не по нему.
-//! * Шлюзы вроде OpenRouter и DeepSeek присылают весь набор полей, заполняя
-//!   отсутствующее явным `null`. `serde(default)` покрывает только отсутствие
-//!   поля, но не `null`, — структурам и векторам нужен свой обходной путь.
+//! * The shape gives no block indexes at all — this parser assigns them, and
+//!   `ProviderEvent` requires monotonicity.
+//! * Block boundaries do not come either. A block opens on the first delta
+//!   of its kind and closes when a different kind starts or the stream
+//!   ends.
+//! * Reasoning is called `reasoning_content` by DeepSeek and Qwen, but
+//!   `reasoning` by OpenRouter. Both are read: it is one and the same field, whose name
+//!   nobody agreed on.
+//! * `finish_reason` arrives before `usage`, so the end of the message
+//!   is appended at the end of the stream, not on it.
+//! * Gateways such as OpenRouter and DeepSeek send the full set of fields, filling
+//!   what is absent with an explicit `null`. `serde(default)` covers only a missing
+//!   field, not `null` — structs and vectors need their own workaround.
 
 use std::collections::BTreeMap;
 
@@ -26,7 +26,7 @@ use crate::provider::http::StreamDecoder;
 use crate::provider::{BlockKind, ProviderEvent};
 use crate::usage::TokenCounts;
 
-/// Посылка, которой поток объявляет о своём конце.
+/// The chunk with which the stream announces its end.
 const DONE: &str = "[DONE]";
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -39,10 +39,10 @@ enum Open {
 pub(super) struct Decoder {
     started: bool,
     finished: bool,
-    /// Открытый блок текста или рассуждения и его индекс.
+    /// The open text or reasoning block and its index.
     open: Option<(Open, u32)>,
-    /// Индекс вызова в посылке → индекс блока у нас. Форма нумерует вызовы
-    /// своим счётом, который начинается с нуля рядом с текстом.
+    /// Index of a call in the chunk → index of our block. The shape numbers calls
+    /// with its own count, which starts from zero next to the text.
     calls: BTreeMap<u32, u32>,
     next_index: u32,
     stop: Option<StopReason>,
@@ -72,7 +72,7 @@ impl StreamDecoder for Decoder {
             });
         }
 
-        // Счётчики приезжают отдельной посылкой уже без `choices`.
+        // Counters arrive in a separate chunk, already without `choices`.
         if let Some(usage) = chunk.usage {
             self.usage = usage.into();
         }
@@ -102,8 +102,8 @@ impl StreamDecoder for Decoder {
         Ok(out)
     }
 
-    /// Байты кончились. Некоторые шлюзы просто закрывают соединение, не
-    /// присылая `[DONE]`, — хвост дописывается и в этом случае.
+    /// The bytes have run out. Some gateways simply close the connection without
+    /// sending `[DONE]` — the tail is appended in that case too.
     fn finish(&mut self) -> Vec<ProviderEvent> {
         if self.finished {
             return Vec::new();
@@ -124,7 +124,7 @@ impl StreamDecoder for Decoder {
 }
 
 impl Decoder {
-    /// Открывает блок нужного рода, закрыв предыдущий, если он другого.
+    /// Opens a block of the needed kind, closing the previous one if it is of another kind.
     fn open_block(&mut self, kind: Open) -> Vec<ProviderEvent> {
         if self.open.map(|(k, _)| k) == Some(kind) {
             return Vec::new();
@@ -156,8 +156,8 @@ impl Decoder {
         let index = match self.calls.get(&call.index) {
             Some(index) => *index,
             None => {
-                // Первая дельта вызова несёт имя и идентификатор; дальше
-                // приходят только аргументы.
+                // The first delta of a call carries the name and the id; after that
+                // only arguments arrive.
                 out.extend(self.close_open());
                 let index = self.take_index();
                 self.calls.insert(call.index, index);
@@ -198,9 +198,9 @@ fn parse_stop_reason(s: &str) -> Option<StopReason> {
     })
 }
 
-/// Явный `null` там, где по уму поле просто отсутствует: шлюзы нулями
-/// заполняют и векторы, и вложенные структуры. Читается как `Option`, чтобы
-/// и `null`, и отсутствие поля превратились в `Default`.
+/// An explicit `null` where, sensibly, the field is simply absent: gateways fill
+/// both vectors and nested structs with nulls. Read as an `Option`, so that
+/// a `null` and a missing field both become `Default`.
 fn null_as_default<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
     T: Default + Deserialize<'de>,
@@ -217,7 +217,7 @@ struct Chunk {
     choices: Vec<WireChoice>,
     #[serde(default)]
     usage: Option<WireUsage>,
-    /// Некоторые шлюзы кладут ошибку прямо в поток вместо статуса.
+    /// Some gateways put the error straight into the stream instead of a status.
     #[serde(default)]
     error: Option<WireError>,
 }
@@ -234,10 +234,10 @@ struct WireChoice {
 struct WireDelta {
     #[serde(default)]
     content: Option<String>,
-    /// DeepSeek, Qwen и совместимые.
+    /// DeepSeek, Qwen and compatible ones.
     #[serde(default)]
     reasoning_content: Option<String>,
-    /// OpenRouter и совместимые.
+    /// OpenRouter and compatible ones.
     #[serde(default)]
     reasoning: Option<String>,
     #[serde(default, deserialize_with = "null_as_default")]
@@ -245,7 +245,7 @@ struct WireDelta {
 }
 
 impl WireDelta {
-    /// Одно поле под двумя именами; пустая строка — не дельта.
+    /// One field under two names; an empty string is not a delta.
     fn reasoning(&self) -> Option<String> {
         self.reasoning_content
             .clone()
@@ -301,11 +301,11 @@ impl From<WireUsage> for TokenCounts {
             .map(|d| d.cached_tokens)
             .unwrap_or(0);
         TokenCounts {
-            // `prompt_tokens` считает и прочитанное из кеша: вычитаем, иначе
-            // ввод посчитается дважды и деньги §7.1 будут завышены.
+            // `prompt_tokens` also counts what was read from the cache: subtract it, otherwise
+            // the input is counted twice and the money of §7.1 is overstated.
             input: u.prompt_tokens.saturating_sub(cache_read),
             output: u.completion_tokens,
-            // Записи в кеш эта форма не сообщает вовсе.
+            // This shape does not report cache writes at all.
             cache_write: 0,
             cache_read,
         }
@@ -479,7 +479,7 @@ mod tests {
             ]
         );
 
-        // Оборвавшийся после `[DONE]` поток не дописывает хвост второй раз.
+        // A stream that cut off after `[DONE]` does not append the tail a second time.
         assert_eq!(d.finish(), vec![]);
     }
 
@@ -511,8 +511,8 @@ mod tests {
     #[test]
     fn явные_нулы_вместо_структур_и_векторов_не_роняют_разбор() {
         let mut d = Decoder::default();
-        // Шлюзы нулями заполняют всё, чего в посылке нет: и поля, и целые
-        // структуры с векторами.
+        // Gateways fill in with nulls everything missing from the chunk: both fields and
+        // whole structs with vectors.
         assert!(d.payload(r#"{"choices":null}"#).is_ok());
         assert!(d
             .payload(r#"{"choices":[{"delta":null,"finish_reason":null}]}"#)
@@ -527,8 +527,8 @@ mod tests {
 
     #[test]
     fn посылка_openrouter_с_явными_нулями_разбирается() {
-        // Реальные байты от шлюза: весь набор полей, заполненный явными
-        // null, — включая `tool_calls` и пустые `prompt_tokens_details`.
+        // Real bytes from a gateway: the full set of fields, filled with explicit
+        // nulls — including `tool_calls` and the empty `prompt_tokens_details`.
         let mut d = Decoder::default();
         let events = decode(
             &mut d,
@@ -552,8 +552,8 @@ mod tests {
             ]
         );
 
-        // Счётчики из той же посылки доезжают до конца сообщения; кеш в
-        // пустых деталях — ноль.
+        // Counters from the same chunk reach the end of the message; the cache in
+        // empty details is zero.
         let tail = d.finish();
         assert!(matches!(
             tail.as_slice(),

@@ -119,6 +119,16 @@ export function useChats(onError: (error: unknown) => void): Chats {
   useEffect(() => {
     const unlisten = onEvents((frame) => {
       setChats((prev) => apply(prev, frame));
+      // The model named the chat: show it now rather than at the end of the
+      // turn. The store has the last word, and `refreshTitle` below reconciles
+      // with it, so a name typed by hand is not lost for longer than the turn.
+      for (let i = frame.events.length - 1; i >= 0; i--) {
+        const event = frame.events[i];
+        if (event.type === "titleSet") {
+          patch(frame.session, { title: event.title });
+          break;
+        }
+      }
       // §3: the title is written down by the core when the turn ends, and the
       // top bar and the list both read it from there.
       if (frame.events.some((event) => event.type === "turnFinished")) {
@@ -128,7 +138,7 @@ export function useChats(onError: (error: unknown) => void): Chats {
     return () => {
       void unlisten.then((off) => off());
     };
-  }, [refreshTitle]);
+  }, [refreshTitle, patch]);
 
   const send = useCallback((id: SessionId, command: Command) => {
     void sendCommand(id, command).catch((e: unknown) => report.current(e));

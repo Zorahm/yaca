@@ -5857,7 +5857,7 @@ dependencies = [
 
 [[package]]
 name = "yaca-cli"
-version = "0.1.0"
+version = "1.0.2-alpha"
 dependencies = [
  "anyhow",
  "clap",
@@ -5871,7 +5871,7 @@ dependencies = [
 
 [[package]]
 name = "yaca-core"
-version = "0.1.0"
+version = "1.0.2-alpha"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -5901,7 +5901,7 @@ dependencies = [
 
 [[package]]
 name = "yaca-desktop"
-version = "0.1.0"
+version = "1.0.2-alpha"
 dependencies = [
  "notify-rust",
  "serde",
@@ -5918,7 +5918,7 @@ dependencies = [
 
 [[package]]
 name = "yaca-evals"
-version = "0.1.0"
+version = "1.0.2-alpha"
 dependencies = [
  "anyhow",
  "clap",

@@ -452,3 +452,50 @@ async fn the_model_stops_and_restarts_a_background_command_itself() {
         Some(AgentEvent::TurnFinished { .. })
     ));
 }
+
+fn pause() -> &'static str {
+    if cfg!(windows) {
+        "Start-Sleep -Milliseconds 1500"
+    } else {
+        "sleep 1.5"
+    }
+}
+
+#[tokio::test]
+async fn a_background_command_that_ends_mid_turn_is_reported_with_the_next_step() {
+    let dir = TempProject::new();
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(background("c1", "echo up& exit 3")),
+        // The model goes on working while the command ends, in the same turn.
+        Turn::Events(runs("c2", pause())),
+        Turn::Events(script_text("вижу")),
+    ]));
+    let handle = session(&dir, provider.clone(), Mode::Manual);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "подними сервер и проверь").await;
+    // Every command is asked about (§5.7): the two of this turn are allowed.
+    loop {
+        let seen = until_within(&mut rx, Duration::from_secs(60), |e| {
+            matches!(e, AgentEvent::PermissionRequested { .. }) || is_turn_over(e)
+        })
+        .await;
+        let Some(AgentEvent::PermissionRequested { request }) = seen.last() else {
+            break;
+        };
+        handle
+            .send(Command::AnswerPermission {
+                request_id: request.id.clone(),
+                answer: PermissionAnswer::Allow,
+            })
+            .await
+            .unwrap();
+    }
+
+    // Three requests, and the third is the model's next step after the pause:
+    // it is where it has to hear that the command it started has ended.
+    assert_eq!(provider.seen.lock().unwrap().len(), 3);
+    let note = last_user_text(&provider, 2);
+    let dump = format!("{:#?}", provider.seen.lock().unwrap()[2].messages);
+    assert!(note.contains("exit code 3"), "{dump}");
+}

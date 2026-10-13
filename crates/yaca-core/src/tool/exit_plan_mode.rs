@@ -1,7 +1,7 @@
-//! Выход из режима «План» (§7.1): показать план и ждать решения человека.
+//! Leaving «План» mode (§7.1): show the plan and wait for the human's decision.
 //!
-//! Тул не переключает режим сам. Переключение — решение человека, и ядро ждёт
-//! команды `SetMode`, а не додумывает её за него.
+//! The tool does not switch the mode itself. Switching is the human's decision,
+//! and the core waits for the `SetMode` command rather than guessing it for them.
 
 use async_trait::async_trait;
 use serde_json::{json, Value};

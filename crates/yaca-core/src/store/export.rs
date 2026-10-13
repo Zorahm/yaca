@@ -255,6 +255,7 @@ mod tests {
         let (meta, mut records) = session();
         records.push(Record::Reset {
             turn: TurnId::from("t2"),
+            kept: 0,
         });
         assert!(markdown(&meta, &records).contains("compacted"));
     }

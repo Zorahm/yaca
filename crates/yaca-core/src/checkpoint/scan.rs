@@ -402,7 +402,7 @@ mod tests {
 ",
         );
 
-        // §10: "исключения теневого репозитория".
+        // §10: "exclusions of the shadow repository".
         let mut scanner =
             Scanner::with_excludes(dir.path(), &["fixtures".to_string(), ".yaca".to_string()]);
         assert_eq!(paths(&scanner.scan(&store).unwrap()), vec!["src/a.rs"]);

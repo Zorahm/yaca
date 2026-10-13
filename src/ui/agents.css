@@ -1,0 +1,175 @@
+/*
+ * Subagents: the plate in the feed (AgentsPlate.tsx) and the rows of the
+ * agents panel (panel/AgentsPanel.tsx).
+ */
+
+/* --- the plate ------------------------------------------------------------ */
+
+/* A thing to press that leads elsewhere, so it is a framed chip and not a
+   line of the feed: as wide as what it says, never the whole column. */
+.agents-plate {
+  display: inline-flex;
+  align-items: center;
+  /* The feed lays its items out as stretched boxes. */
+  align-self: flex-start;
+  gap: 9px;
+  width: fit-content;
+  max-width: 100%;
+  height: var(--h-row);
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.agents-plate:hover {
+  border-color: var(--line-strong);
+}
+
+.agents-plate:hover .caret {
+  color: var(--ink);
+}
+
+.agents-plate-title {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.agents-plate-note {
+  display: inline-flex;
+  gap: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.agents-plate-note::before,
+.subagent-meta > span + span::before {
+  content: "·";
+  color: var(--line-strong);
+}
+
+.agents-plate-failed {
+  color: var(--err);
+}
+
+/* --- a subagent in the panel ---------------------------------------------- */
+
+.subagent {
+  flex: none;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Two lines: what it was sent to do, and under it what that has come to. */
+.subagent-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px 9px 18px;
+  text-align: left;
+}
+
+.subagent-head:hover {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+.subagent-head[aria-expanded="true"] .subagent-title {
+  font-weight: 600;
+}
+
+.subagent-done {
+  color: var(--ok);
+}
+
+.subagent-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.subagent-title {
+  font-size: 13px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subagent-meta {
+  display: flex;
+  gap: 6px;
+  font-size: 11.5px;
+  line-height: 17px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.subagent-meta > span + span {
+  display: inline-flex;
+  gap: 6px;
+}
+
+/* The opened row: the task on the right, as the one who asked; the work and
+   the report on the left, as the one who answered. */
+.subagent-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 12px 14px 18px;
+}
+
+.subagent-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  align-self: flex-end;
+  max-width: 92%;
+}
+
+.subagent-prompt-text {
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.subagent-prompt-folded {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+  overflow: hidden;
+}
+
+.subagent-prompt-more {
+  padding: 2px 4px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.subagent-prompt-more:hover {
+  color: var(--ink);
+}
+
+.subagent-chat > .group-list {
+  margin-top: 0;
+}
+
+.subagent-failed {
+  font-size: 13px;
+  color: var(--err);
+  overflow-wrap: anywhere;
+  user-select: text;
+}

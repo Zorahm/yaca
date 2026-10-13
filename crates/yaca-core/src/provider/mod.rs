@@ -1,9 +1,9 @@
-//! Граница провайдера.
+//! Provider boundary.
 //!
-//! Ядро не знает ни про Anthropic, ни про SSE. Оно шлёт [`ProviderRequest`]
-//! и читает поток нормализованных [`ProviderEvent`]. §8 обещает работу с любыми
-//! моделями, включая слабые локальные, поэтому вторая реализация появится
-//! наверняка, и граница проведена сейчас, а не когда припрёт.
+//! The core knows nothing about Anthropic or SSE. It sends [`ProviderRequest`]
+//! and reads a stream of normalized [`ProviderEvent`]. §8 promises work with any
+//! model, including weak local ones, so a second implementation will surely
+//! appear, and the boundary is drawn now rather than when it is needed.
 
 pub mod anthropic;
 mod http;
@@ -34,11 +34,11 @@ pub trait Provider: Send + Sync {
     async fn stream(&self, req: ProviderRequest) -> Result<ProviderStream, ProviderError>;
 }
 
-/// Провайдер по его описанию.
+/// Provider built from its description.
 ///
-/// Ключ берётся из кейчейна под `spec.id` — и только если описание его просит:
-/// шлюз без авторизации не должен требовать ключа, которого у него нет
-/// (см. `ProviderSpec::needs_key`).
+/// The key is taken from the keychain under `spec.id` — and only if the description asks for it:
+/// a gateway without authorization must not require a key it does not have
+/// (see `ProviderSpec::needs_key`).
 pub fn build(spec: registry::ProviderSpec) -> Arc<dyn Provider> {
     let key = spec
         .needs_key()
@@ -47,7 +47,7 @@ pub fn build(spec: registry::ProviderSpec) -> Arc<dyn Provider> {
     build_with_key(spec, key)
 }
 
-/// То же с явным ключом: этим пользуются CLI с ключом из окружения и тесты.
+/// The same with an explicit key: used by the CLI with a key from the environment, and by tests.
 pub fn build_with_key(spec: registry::ProviderSpec, key: Option<String>) -> Arc<dyn Provider> {
     match spec.protocol {
         registry::Protocol::Anthropic => Arc::new(anthropic::AnthropicProvider::new(spec, key)),
@@ -62,10 +62,10 @@ pub struct ProviderRequest {
     pub messages: Vec<Message>,
     pub tools: Vec<ToolSchema>,
     pub max_tokens: u32,
-    /// `output_config.effort`. `None` — модель не умеет, поле не отправляется.
+    /// `output_config.effort`. `None` — the model does not support it, the field is not sent.
     pub effort: Option<Effort>,
-    /// Просить ли рассуждение. Дисплей всегда `summarized`: §5.3 рисует текст
-    /// рассуждения, а по умолчанию API отдаёт пустой.
+    /// Whether to ask for reasoning. The display is always `summarized`: §5.3 draws the text
+    /// of the reasoning, and by default the API returns an empty one.
     pub thinking: bool,
 }
 
@@ -76,8 +76,8 @@ pub struct ToolSchema {
     pub input_schema: serde_json::Value,
 }
 
-/// Нормализованное событие потока. Индекс — позиция блока в ответе;
-/// провайдер обязан выдавать его монотонно, ядро на этом строит склейку.
+/// Normalized stream event. The index is the position of the block in the response;
+/// the provider must emit it monotonically, the core builds its assembly on that.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProviderEvent {
     MessageStart {
@@ -100,7 +100,7 @@ pub enum ProviderEvent {
         index: u32,
         signature: String,
     },
-    /// Аргументы тула приходят кусками JSON и склеиваются до `BlockStop`.
+    /// Tool arguments arrive as JSON chunks and are concatenated up to `BlockStop`.
     ToolInputDelta {
         index: u32,
         partial_json: String,

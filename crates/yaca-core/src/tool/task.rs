@@ -19,7 +19,7 @@ impl Tool for Task {
     }
 
     fn description(&self) -> &'static str {
-        "Hand a self-contained task to a subagent. It works in a fresh context of          its own and returns only a report, so the steps it takes do not fill          yours. Use it for work that takes many steps and comes down to a short          result: finding where something is implemented or used, surveying an          unfamiliar part of the project, a contained change you can describe          completely, a question to research on the web. For something one or two          calls would settle, make the calls yourself.          The subagent has the tools you have, under the same mode and the same          permissions: the human sees its calls and is asked about them as about          yours. It sees none of this conversation and cannot ask a question, so          the prompt has to carry everything it needs. Independent tasks requested          together in one response run at the same time; give those different          files to work on. What the subagent read or changed, you have not seen:          read a file yourself before you edit it or rely on what it now says."
+        "Hand a self-contained task to a subagent. It works in a fresh context of          its own and returns only a report, so the steps it takes do not fill          yours. Use it for work that takes many steps and comes down to a short          result: finding where something is implemented or used, surveying an          unfamiliar part of the project, a contained change you can describe          completely, a question to research on the web. For something one or two          calls would settle, make the calls yourself.          The subagent has the tools you have, under the same mode and the same          permissions: the human sees its calls and is asked about them as about          yours. It sees none of this conversation and cannot ask a question, so          the prompt has to carry everything it needs. Independent tasks requested          together in one response run at the same time; give those different          files to work on. You wait for the report unless you set `background`:          then the call returns at once, you go on with your own work, and the          report is handed to you when it is ready. What the subagent read or changed, you have not seen:          read a file yourself before you edit it or rely on what it now says."
     }
 
     fn properties(&self) -> Value {
@@ -27,6 +27,10 @@ impl Tool for Task {
             "prompt": {
                 "type": "string",
                 "description": "The task, complete on its own: what to do or find                     out, what you already know that narrows it, where it must stop,                     and what the report should contain.",
+            },
+            "background": {
+                "type": "boolean",
+                "description": "Set to true when you have work of your own to do                     while the subagent does this, on files it will not touch. Leave                     it out when the report is the next thing you need: waiting for                     it in place costs nothing.",
             },
         })
     }
@@ -64,6 +68,9 @@ impl Tool for Task {
             .as_ref()
             .ok_or_else(|| ToolError::failed("подагент не может запустить подагента"))?;
 
+        if input["background"].as_bool() == Some(true) {
+            return Ok(agents.send(prompt.to_string(), &ctx.cancel));
+        }
         let report = agents.run(prompt.to_string(), &ctx.cancel).await?;
         Ok(ToolOutput::new(report))
     }

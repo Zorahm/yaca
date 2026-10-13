@@ -6,7 +6,7 @@
   margin: 0 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-s);
-  background: var(--paper-sunken);
+  background: var(--sunk);
   /* §6.3: горизонтальный скролл на контейнер, а не на строку. Вертикальный
      тоже здесь: скроллится сам дифф, а не группа вокруг него (§5.4). */
   overflow: auto;
@@ -28,12 +28,26 @@
   height: var(--diff-line);
   line-height: var(--diff-line);
   font: 400 12px var(--mono);
+  font-variant-ligatures: none;
   white-space: pre;
+}
+
+/* Wrapped lines: the row grows with the text, and the sign stays at the top of
+   its first line. */
+.diff-wrap .diff-line {
+  height: auto;
+  min-height: var(--diff-line);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diff-wrap .diff-sign {
+  align-self: start;
 }
 
 .diff-gutter {
   padding-right: 8px;
-  color: var(--ink-muted);
+  color: var(--muted);
   font-size: 11.5px;
   text-align: right;
   user-select: none;
@@ -48,22 +62,22 @@
   padding-right: 12px;
 }
 
-/* Подложки разводятся из --green и --red-ink, а не своими токенами: иначе тема
+/* Подложки разводятся из --ok и --err, а не своими токенами: иначе тема
    переключается в двух местах и однажды разъедется. Цвет несёт знак, текст
    остаётся --ink — на подложке в 14% он читается лучше собственного тона,
    который приходилось подбирать под каждый фон. */
 .diff-add {
-  background: color-mix(in srgb, var(--green) 14%, transparent);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
 }
 .diff-add .diff-sign {
-  color: var(--green);
+  color: var(--ok);
 }
 
 .diff-del {
-  background: color-mix(in srgb, var(--red-ink) 14%, transparent);
+  background: color-mix(in srgb, var(--err) 14%, transparent);
 }
 .diff-del .diff-sign {
-  color: var(--red-ink);
+  color: var(--err);
 }
 
 .diff-add .diff-text,
@@ -72,15 +86,46 @@
 }
 
 .diff-ctx .diff-text {
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 /* Внутри строки действия фон мягче (§2). */
+/* In a feed row the mark comes first and the line number after it: the row
+   is read as "what was added", and the number says where. Both columns are
+   as narrow as they can be, so the text starts near the block's left edge. */
+.diff-soft .diff-line {
+  grid-template-columns: 22px calc(var(--digits, 3) * 1ch + 10px) 1fr;
+}
+.diff-soft .diff-sign {
+  order: -1;
+}
+.diff-soft .diff-gutter {
+  padding-right: 10px;
+}
+
+/* What a `Read` returned: no mark to show, and nothing changed for the lines
+   to step back from. */
+.diff-read .diff-line {
+  grid-template-columns: calc(var(--digits, 3) * 1ch + 22px) 1fr;
+}
+.diff-read .diff-sign {
+  display: none;
+}
+.diff-read .diff-ctx .diff-text {
+  color: var(--ink);
+}
+
+.diff-soft .hunk-fold {
+  border: 0;
+  background: transparent;
+  padding-left: 12px;
+}
+
 .diff-soft .diff-add {
-  background: color-mix(in srgb, var(--green) 9%, transparent);
+  background: var(--add);
 }
 .diff-soft .diff-del {
-  background: color-mix(in srgb, var(--red-ink) 9%, transparent);
+  background: var(--del);
 }
 
 /* Пословная подсветка — чуть плотнее фона строки (§6.3). */
@@ -89,11 +134,11 @@
 }
 
 .diff-add .word {
-  background: color-mix(in srgb, var(--green) 26%, transparent);
+  background: color-mix(in srgb, var(--ok) 26%, transparent);
 }
 
 .diff-del .word {
-  background: color-mix(in srgb, var(--red-ink) 26%, transparent);
+  background: color-mix(in srgb, var(--err) 26%, transparent);
 }
 
 /* Заголовок ханка: номера скрыты (§6.3). Высота — та же, что у строки: окно
@@ -105,8 +150,8 @@
   padding: 1px 0 1px 12px;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
-  background: var(--paper-raised);
-  color: var(--ink-muted);
+  background: var(--surface);
+  color: var(--muted);
   font: 400 11.5px/20px var(--mono);
 }
 
@@ -122,11 +167,17 @@
   width: 100%;
   padding: 6px 12px;
   border-top: 1px solid var(--line);
-  color: var(--ink-muted);
+  color: var(--muted);
   font-size: 12px;
   text-align: left;
 }
 
 .diff-more:hover {
+  color: var(--ink);
+}
+
+/* The file panel (§6.4) shows the file as it is: there is no change for the
+   lines to step back from, so they are in full ink. */
+.diff-whole .diff-ctx .diff-text {
   color: var(--ink);
 }

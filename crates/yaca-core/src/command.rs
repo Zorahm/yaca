@@ -1,8 +1,8 @@
-//! Команды внутрь ядра — обратная сторона §15.
+//! Commands going into the core — the other side of §15.
 //!
-//! Держим только то, что ядро умеет исполнить: объявлять команду, которая
-//! молча ничего не делает, — ровно тот случай, когда интерфейс врёт про
-//! состояние.
+//! We keep only what the core can actually carry out: declaring a command that
+//! silently does nothing is exactly the case where the interface lies about
+//! the state.
 //!
 //! Two of these are beyond §15's list.
 //!
@@ -52,16 +52,16 @@ pub enum Command {
     #[serde(rename_all = "camelCase")]
     SendMessage {
         text: String,
-        /// Файлы, приложенные через `@` (§7.2). Регистрируются как прочитанные:
-        /// человек сам их приложил, заставлять агента перечитывать — глупость.
+        /// Files attached via `@` (§7.2). They are registered as read: the human
+        /// attached them, so making the agent read them again would be pointless.
         #[serde(default)]
         attachments: Vec<String>,
     },
 
-    /// `Esc`. Незавершённые тулы получают `отменено`.
+    /// `Esc`. Unfinished tools get `отменено`.
     Cancel,
 
-    /// Переключатель режима в нижнем ряду композера (§7.1, §8).
+    /// Mode switch in the bottom row of the composer (§7.1, §8).
     #[serde(rename_all = "camelCase")]
     SetMode { mode: Mode },
 
@@ -88,37 +88,38 @@ pub enum Command {
     #[serde(rename_all = "camelCase")]
     EditSummary { text: String },
 
-    /// Ответ на активный запрос разрешения (§5.7).
+    /// Answer to the active permission request (§5.7).
     #[serde(rename_all = "camelCase")]
     AnswerPermission {
         request_id: RequestId,
         answer: PermissionAnswer,
     },
 
-    /// Ответ на вопрос `AskUser` с вариантами. Не §15: §5.7 даёт ответ только
-    /// на разрешение. Отказ от ответа — тот же вариант `Dismissed`, а не
-    /// отдельная команда, чтобы у вопроса был один путь закрытия.
+    /// Answer to an `AskUser` question with options. Not in §15: §5.7 gives an
+    /// answer only to permissions. Declining to answer is the same `Dismissed`
+    /// variant rather than a separate command, so that a question has one way to
+    /// close.
     #[serde(rename_all = "camelCase")]
     AnswerQuestion {
         request_id: RequestId,
         answer: QuestionReply,
     },
 
-    /// Обход разрешений. Включение подтверждает человек, флаг не
-    /// переживает перезапуск и сбрасывается при смене проекта (§8).
+    /// Bypass of permissions. The human confirms turning it on; the flag does not
+    /// survive a restart and is reset when the project changes (§8).
     #[serde(rename_all = "camelCase")]
     SetBypass { on: bool },
 
-    /// Выбор строки в панели процессов (§6.5). `None` — выбор снят.
+    /// Selecting a row in the process panel (§6.5). `None` — selection cleared.
     ///
-    /// Вывод течёт наружу только у выбранной строки. Болтливый `npm run dev`,
-    /// на который никто не смотрит, вытеснил бы настоящие события ленты из
-    /// широковещательного канала, а отставший подписчик их теряет.
+    /// Output flows out only for the selected row. A chatty `npm run dev` nobody
+    /// is looking at would push the real feed events out of the broadcast
+    /// channel, and a lagging subscriber loses them.
     #[serde(rename_all = "camelCase")]
     WatchProcess { id: Option<ProcessId> },
 
-    /// «Остановить» в панели процессов (§6.5). Бьёт по всему дереву, которое
-    /// команда за собой развела.
+    /// «Остановить» in the process panel (§6.5). Hits the whole tree that the
+    /// command has spawned.
     #[serde(rename_all = "camelCase")]
     StopProcess { id: ProcessId },
 

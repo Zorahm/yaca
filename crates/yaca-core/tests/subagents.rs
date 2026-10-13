@@ -598,3 +598,35 @@ async fn a_subagent_is_given_the_memory_index_the_agent_has() {
     assert!(sent[1].system.contains("how the release is cut"));
     assert!(sent[1].system.contains("<project_memory>"));
 }
+
+#[tokio::test]
+async fn each_subagent_reports_what_it_has_spent_so_far() {
+    let dir = TempProject::new();
+    dir.write("dates.rs", "fn parse_date() {}
+");
+
+    let provider = Arc::new(MockProvider::new(vec![
+        task("t1", "Find where dates are parsed."),
+        read("r1", "dates.rs"),
+        text("Dates are parsed in dates.rs:1."),
+        text("готово"),
+    ]));
+    let handle = session(&dir, provider.clone(), Mode::Manual);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "где разбираются даты?").await;
+    let seen = until(&mut rx, is_turn_over).await;
+
+    // One event per answer the subagent got, each the total up to then: the
+    // panel draws the newest and never has to add them up.
+    let spent: Vec<_> = seen
+        .iter()
+        .filter_map(|event| match event {
+            AgentEvent::SubagentUsage { call_id, tokens } => {
+                Some((call_id.0.as_str(), tokens.input, tokens.output))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(spent, vec![("t1", 100, 30), ("t1", 200, 50)]);
+}

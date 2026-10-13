@@ -1,5 +1,5 @@
 /**
- * The MCP panel, opened by `/mcp` (§7.3): this chat's servers and the state of
+ * The MCP panel, opened by `/mcp`: this chat's servers and the state of
  * each.
  *
  * The list is the core's, whole, from the last `mcpUpdated` — the panel keeps
@@ -18,7 +18,6 @@ import { useEffect } from "react";
 
 import type { McpServerSummary, McpSource, McpStatus } from "../../core/client";
 import { t, tp, type Key } from "../../i18n";
-import { McpMark } from "../brand";
 import { Panel } from "./Panel";
 
 const STATUS: Record<McpStatus, Key> = {
@@ -37,14 +36,12 @@ const SOURCE: Record<McpSource, Key> = {
 
 export function McpPanel({
   servers,
-  onClose,
   onRefresh,
   onReconnect,
   onApprove,
 }: {
   /** `null` — the list has not arrived yet. */
   servers: McpServerSummary[] | null;
-  onClose: () => void;
   onRefresh: () => void;
   onReconnect: (server: string) => void;
   onApprove: (server: string) => void;
@@ -56,7 +53,7 @@ export function McpPanel({
   }, []);
 
   return (
-    <Panel open onOpenChange={(next) => !next && onClose()} title={<span className="panel-title-mark"><McpMark size={15} /> {t("mcp.panel_title")}</span>}>
+    <Panel>
       {servers === null || servers.length === 0 ? (
         <div className="panel-empty">{t("mcp.panel_empty")}</div>
       ) : (

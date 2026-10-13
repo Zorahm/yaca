@@ -1,7 +1,7 @@
-//! Ход агента: от сообщения человека до остановки.
+//! The agent's turn: from the human's message to a stop.
 //!
-//! Работник владеет историей единолично — она никому не отдана под мьютекс, —
-//! и потому же живёт отдельной задачей от диспетчера.
+//! The worker owns the history alone — it is not handed to anyone under a mutex —
+//! and for the same reason lives in a separate task from the dispatcher.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -29,11 +29,20 @@ use super::binding::{self, Fingerprint};
 use super::guard::{self, Flow, RepeatGuard};
 use super::inbox::Inbox;
 use super::questions::Questions;
-use super::{checkpoints, compact, environment, prompt, Job, Shared, ToolRegistry};
+use super::{checkpoints, compact, environment, Job, Shared, ToolRegistry};
 
-/// Потолок на один ответ. Стриминг снимает вопрос таймаутов, но окно
-/// контекста конечно, и давать модели все 128k на реплику незачем.
+/// Cap on one response. Streaming removes the question of timeouts, but the window
+/// is finite, and there is no reason to give the model all 128k for one reply.
 const MAX_OUTPUT_TOKENS: u32 = 64_000;
+
+/// How a turn came to its end.
+enum End {
+    Finished(StopReason),
+    Cancelled,
+    Failed(ProviderError),
+    /// The ceiling on steps in the settings.
+    OutOfSteps(u32),
+}
 
 pub(super) struct Worker {
     pub(super) ws: Arc<Workspace>,
@@ -155,7 +164,40 @@ impl Worker {
         inbox: &mut Inbox,
     ) {
         let turn_id = TurnId::new();
-        let mut opening = self.hear(&turn_id, text, attachments).await;
+        let end = self
+            .steps(&turn_id, text, attachments, &cancel, inbox)
+            .await;
+
+        // Before the turn's last event: background subagents do not outlive
+        // the turn (`background`), and their rows close ahead of it.
+        self.shared.background.stop(&cancel).await;
+        self.settle_subagents();
+
+        match end {
+            End::Finished(stop_reason) => self.emit(AgentEvent::TurnFinished {
+                turn_id,
+                stop_reason,
+                at: TsMillis::now(),
+            }),
+            End::Cancelled => self.emit(AgentEvent::TurnCancelled {
+                turn_id,
+                at: TsMillis::now(),
+            }),
+            End::Failed(err) => self.fail_turn(turn_id, err),
+            End::OutOfSteps(max_steps) => self.stop_at_ceiling(turn_id, max_steps),
+        }
+    }
+
+    /// The turn itself: requests and batches of calls until something ends it.
+    async fn steps(
+        &mut self,
+        turn_id: &TurnId,
+        text: String,
+        attachments: Vec<String>,
+        cancel: &CancellationToken,
+        inbox: &mut Inbox,
+    ) -> End {
+        let mut opening = self.hear(turn_id, text, attachments).await;
         // Ahead of what the human said: it is what happened before they spoke.
         if let Some(note) = self.process_note() {
             opening.content.insert(0, note);
@@ -177,11 +219,11 @@ impl Worker {
             turn_id: turn_id.clone(),
             at: TsMillis::now(),
         });
-        self.remember(&turn_id, opening);
+        self.remember(turn_id, opening);
 
         // Servers still starting are waited for here, each for no longer than
         // its own startup deadline: their tools go in the head of the request.
-        self.shared.mcp.settled(&cancel).await;
+        self.shared.mcp.settled(cancel).await;
         self.take_mcp();
 
         // Set once a request refused as too long has been compacted and sent
@@ -194,19 +236,18 @@ impl Worker {
         let mut repeats = RepeatGuard::default();
         loop {
             if cancel.is_cancelled() {
-                self.emit(AgentEvent::TurnCancelled { turn_id });
-                return;
+                return End::Cancelled;
             }
             if steps >= max_steps {
-                return self.stop_at_ceiling(turn_id, max_steps);
+                return End::OutOfSteps(max_steps);
             }
 
             // Before every request, not only before the human's message: a
             // turn of many calls fills the window between its steps (§6.1.1).
-            self.compact_if_full(&turn_id, &cancel).await;
+            self.compact_if_full(turn_id, cancel).await;
 
-            let request = self.build_request(&turn_id);
-            let mut stream = match self.open_stream(request, &cancel).await {
+            let request = self.build_request(turn_id);
+            let mut stream = match self.open_stream(request, cancel).await {
                 Ok(s) => s,
                 // The provider measured what the estimate did not. Compacted
                 // and sent again, once: refused again, what is left does not
@@ -214,13 +255,13 @@ impl Worker {
                 Err(err) if err.is_context_overflow() && !rescued => {
                     rescued = true;
                     if compact::plan(&self.history).is_some()
-                        && self.compact(&cancel, Some(&turn_id)).await
+                        && self.compact(cancel, Some(turn_id)).await
                     {
                         continue;
                     }
-                    return self.fail_turn(turn_id, err);
+                    return End::Failed(err);
                 }
-                Err(err) => return self.fail_turn(turn_id, err),
+                Err(err) => return End::Failed(err),
             };
             rescued = false;
 
@@ -228,10 +269,7 @@ impl Worker {
             loop {
                 tokio::select! {
                     biased;
-                    _ = cancel.cancelled() => {
-                        self.emit(AgentEvent::TurnCancelled { turn_id });
-                        return;
-                    }
+                    _ = cancel.cancelled() => return End::Cancelled,
                     item = stream.next() => match item {
                         None => break,
                         Some(Ok(event)) => {
@@ -239,7 +277,7 @@ impl Worker {
                                 self.emit(out);
                             }
                         }
-                        Some(Err(err)) => return self.fail_turn(turn_id, err),
+                        Some(Err(err)) => return End::Failed(err),
                     },
                 }
             }
@@ -251,15 +289,17 @@ impl Worker {
                 .shared
                 .model_info(&self.shared.state.lock().unwrap().model);
             self.usage.record(done.usage, info.pricing);
-            self.emit(AgentEvent::UsageUpdated {
-                usage: self.usage.snapshot(info.context_max),
-            });
 
             if !done.blocks.is_empty() {
-                self.remember(&turn_id, Message::assistant(done.blocks));
+                self.remember(turn_id, Message::assistant(done.blocks));
             }
             // The figure just recorded covers everything sent and answered.
             self.measured = self.history.len();
+            // After the answer is in the history: the figure counts it, and
+            // the split of the figure (`window`) has to count it too.
+            self.emit(AgentEvent::UsageUpdated {
+                usage: self.usage_snapshot(),
+            });
 
             // Calls run whatever the stop reason says. A `tool_use` left
             // without its result makes the provider reject this conversation
@@ -269,20 +309,25 @@ impl Worker {
             // cap ends with its last call half-written — that one is answered
             // with an error rather than run (`calls::garbled`).
             if done.calls.is_empty() {
-                self.emit(AgentEvent::TurnFinished {
-                    turn_id,
-                    stop_reason: done.stop_reason,
-                });
-                return;
+                // Nothing left to do is not the end while subagents are still
+                // out: their reports are what the agent sent them for.
+                if !self.shared.background.pending() {
+                    return End::Finished(done.stop_reason);
+                }
+                match self.await_news(turn_id, cancel, inbox).await {
+                    Some(news) => self.remember(turn_id, news),
+                    None => return End::Cancelled,
+                }
+                continue;
             }
 
             let results = self
                 .caller()
-                .run_batch(&turn_id, &done.calls, &cancel)
+                .run_batch(turn_id, &done.calls, cancel)
                 .await;
             self.settle_subagents();
-            // Все результаты одним сообщением: разложить их по нескольким —
-            // тихо отучить модель звать тулы параллельно.
+            // All results in one message: splitting them across several —
+            // would quietly teach the model not to call tools in parallel.
             let mut message = Message::tool_results(results);
 
             // The same call with the same answer, again and again: put to the
@@ -291,7 +336,7 @@ impl Worker {
             if let Some(repeat) = repeats.observe(&done.calls, &message.content) {
                 if !cancel.is_cancelled() {
                     let questions = Questions::new(self.shared.clone(), repeat.call_id.clone());
-                    let (flow, note) = guard::put_to_human(questions, &repeat, &cancel).await;
+                    let (flow, note) = guard::put_to_human(questions, &repeat, cancel).await;
                     // After the results, never before (see below).
                     message.content.push(note);
                     if matches!(flow, Flow::Stop) {
@@ -309,15 +354,16 @@ impl Worker {
             if !cancel.is_cancelled() {
                 // After the results, never before: a provider wants every
                 // `tool_result` first in the message that answers the calls.
+                message.content.extend(self.reports());
                 if let Some(note) = self.process_note() {
                     message.content.push(note);
                 }
                 for queued in inbox.messages(&self.shared.queue) {
-                    let said = self.hear(&turn_id, queued.text, queued.attachments).await;
+                    let said = self.hear(turn_id, queued.text, queued.attachments).await;
                     message.content.extend(said.content);
                 }
             }
-            self.remember(&turn_id, message);
+            self.remember(turn_id, message);
         }
     }
 
@@ -328,7 +374,7 @@ impl Worker {
     /// a batch of calls, or with the human's next message — and not by waking
     /// it: an idle agent starting a turn nobody asked for spends the human's
     /// money on a guess about what they want done with a crashed server.
-    fn process_note(&self) -> Option<ContentBlock> {
+    pub(super) fn process_note(&self) -> Option<ContentBlock> {
         let notices = self.shared.processes.take_notices();
         if notices.is_empty() {
             return None;
@@ -365,7 +411,7 @@ impl Worker {
     /// The same whether it opens a turn or joins a running one (§7.4): each
     /// message gets its own point, and `Esc Esc` means "back to before the
     /// last thing I said" either way.
-    async fn hear(&self, turn_id: &TurnId, text: String, attachments: Vec<String>) -> Message {
+    pub(super) async fn hear(&self, turn_id: &TurnId, text: String, attachments: Vec<String>) -> Message {
         // §13, `Esc Esc`: "roll back to the previous message". The point has
         // to exist before the turn touches anything, and §5.1 hangs its
         // "roll back to before this message" on the same one.
@@ -394,7 +440,7 @@ impl Worker {
     /// One place, because the two must not diverge: a session whose journal is
     /// missing a `tool_result` reopens into a conversation the provider
     /// rejects outright.
-    fn remember(&mut self, turn_id: &TurnId, message: Message) {
+    pub(super) fn remember(&mut self, turn_id: &TurnId, message: Message) {
         if let Some(recorder) = &self.shared.recorder {
             recorder.message(turn_id, &message);
         }
@@ -421,7 +467,7 @@ impl Worker {
             };
             let name = self.ws.display(&path);
             if !picture::is_picture(&path) {
-                // §7.2: приложенный файл считается прочитанным.
+                // §7.2: an attached file counts as read.
                 self.ws.mark_read(&path);
                 head.push_str(&format!("- {name}\n"));
                 continue;
@@ -484,7 +530,8 @@ impl Worker {
         if !self.shared.lsp.names().is_empty() {
             more.push(Arc::new(crate::tool::lsp::LspQuery));
         }
-        self.registry = Arc::new(ToolRegistry::standard().with(more));
+        self.registry =
+            Arc::new(ToolRegistry::of_session(self.shared.recorder.is_some()).with(more));
         self.mcp_notes = self.shared.mcp.prompt_section().map(Arc::from);
     }
 
@@ -492,29 +539,26 @@ impl Worker {
         let state = self.shared.state.lock().unwrap().clone();
         let info = self.shared.model_info(&state.model);
         let intent = state.mode.intent();
-        let system = prompt::build_with_memory(
-            self.ws.root(),
-            intent,
-            self.instructions.as_deref(),
-            self.shared.shell,
-            self.memory.as_deref(),
-            self.skills.as_deref(),
-        );
-        let system = prompt::with_mcp(system, self.mcp_notes.as_deref());
-        let tools = self.registry.schemas(intent);
+        let (system, tools) = self.head(intent);
         // Before the history is copied: a prefix that moved takes the
         // reasoning bound to the old one with it.
         self.rebind(turn_id, binding::fingerprint(&system, &tools));
+        // Whatever the history holds, the request must not carry a call with
+        // no answer: the provider would refuse every request from here on
+        // (`message::answer_dangling_calls`). In the copy, so the journal and
+        // the history stay as they were written.
+        let mut messages = self.shared.shown_to(&info, &self.history);
+        crate::message::answer_dangling_calls(&mut messages);
         ProviderRequest {
             model: state.model,
             system,
-            messages: self.shared.shown_to(&info, &self.history),
+            messages,
             tools,
             max_tokens: self.answer_room(),
-            // Старые модели не знают ни `effort`, ни адаптивного рассуждения;
-            // отправить им это — получить 400 вместо ответа. Флага два,
-            // потому что провайдер сообщает их отдельно: бывает модель,
-            // которая рассуждает, но усилия не понимает.
+            // Old models know neither `effort` nor adaptive reasoning;
+            // sending it to them gets a 400 instead of an answer. There are two flags,
+            // because the provider reports them separately: there is a model
+            // that reasons but does not understand effort.
             effort: info.supports_effort.then_some(state.effort),
             thinking: info.supports_thinking,
         }
@@ -556,7 +600,7 @@ impl Worker {
     /// the calls of a batch run side by side on a shared borrow of it. Aside
     /// from the ring, like the summarizer: a subagent's window is not the
     /// agent's, and the ring shows the agent's.
-    fn settle_subagents(&mut self) {
+    pub(super) fn settle_subagents(&mut self) {
         let spent = self.shared.ledger.take();
         if spent.is_empty() {
             return;
@@ -565,7 +609,7 @@ impl Worker {
             self.usage.record_aside(counts, pricing);
         }
         self.emit(AgentEvent::UsageUpdated {
-            usage: self.usage.snapshot(self.context_max()),
+            usage: self.usage_snapshot(),
         });
     }
 
@@ -586,6 +630,7 @@ impl Worker {
         self.emit(AgentEvent::TurnFinished {
             turn_id,
             stop_reason: StopReason::Failed,
+            at: TsMillis::now(),
         });
     }
 
@@ -595,11 +640,12 @@ impl Worker {
             message: err.to_string(),
             retryable: err.is_retryable(),
         });
-        // Кольцо состояния гаснет по `TurnFinished`, поэтому оно обязано
-        // прийти и на неудачном ходу — иначе интерфейс врёт про состояние.
+        // The state ring goes out on `TurnFinished`, so it must
+        // arrive on a failed turn too — otherwise the interface lies about the state.
         self.emit(AgentEvent::TurnFinished {
             turn_id,
             stop_reason: StopReason::Failed,
+            at: TsMillis::now(),
         });
     }
 }

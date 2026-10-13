@@ -21,14 +21,19 @@
 //! a list that costs a round trip would put the network in front of the window
 //! opening. Discovery is an action: a button in the panel §10, and the moment a
 //! key is saved — which is the moment there is finally something to ask with.
+//! That second one is [`refresh`], and it is the core's to do rather than the
+//! window's: `yaca key set` stores a key too, and a provider that is configured
+//! from one front end and not from the other is two versions of the truth.
 
 use std::collections::HashMap;
+use std::path::Path;
 
 use serde_json::Value;
 
 use super::http;
-use super::registry::{Protocol, ProviderSpec};
-use crate::error::ProviderError;
+use super::registry::{Protocol, ProviderSpec, Providers};
+use crate::error::{CoreError, ProviderError};
+use crate::secrets;
 use crate::usage::ModelInfo;
 
 mod anthropic;
@@ -63,6 +68,39 @@ pub async fn discover(
     Ok(models)
 }
 
+/// Asks a saved provider for its models and writes the answer into
+/// `providers.json` in `dir`.
+///
+/// A refusal leaves the file as it was: the list that was there is what the
+/// provider last said, and an error is not a statement that it serves nothing.
+pub async fn refresh(dir: &Path, id: &str) -> Result<Providers, CoreError> {
+    let missing = || CoreError::Config(format!("провайдера «{id}» нет в списке"));
+
+    let spec = Providers::load(dir)?.get(id).cloned().ok_or_else(missing)?;
+    let models = discover(&spec, stored_key(&spec).as_deref()).await?;
+
+    // Read again rather than kept from above: the question took a round trip,
+    // and whatever was saved meanwhile must not be written over with a copy
+    // from before it.
+    let mut providers = Providers::load(dir)?;
+    providers
+        .list
+        .iter_mut()
+        .find(|p| p.id == id)
+        .ok_or_else(missing)?
+        .models = models;
+    providers.save(dir)?;
+    Ok(providers)
+}
+
+/// The key a request to this provider goes with: none for one that does not
+/// ask for it, so a local gateway never touches the keychain.
+pub fn stored_key(spec: &ProviderSpec) -> Option<String> {
+    spec.needs_key()
+        .then(|| secrets::api_key(&spec.id).0)
+        .flatten()
+}
+
 /// Which of the provider's models are in memory right now, by id (§7.1).
 ///
 /// Only a server that says gets an answer: a local one reports `loaded` per
@@ -83,7 +121,8 @@ pub async fn residency(
     }
 }
 
-/// A `GET` against the provider, asking for JSON rather than a stream.
+/// A `GET` of a protocol path ([`ProviderSpec::api`]), asking for JSON rather
+/// than a stream.
 ///
 /// The protocol's own `accept: text/event-stream` is for `/v1/messages`; a
 /// gateway that takes it literally here answers 406.
@@ -100,7 +139,7 @@ async fn get(
     );
 
     let resp = client
-        .get(spec.endpoint(path))
+        .get(spec.api(path))
         .headers(headers)
         .send()
         .await
@@ -115,7 +154,7 @@ async fn get(
     serde_json::from_str(&text).map_err(|e| {
         ProviderError::Config(format!(
             "{} ответил не тем JSON, которого ждёт список моделей: {e}",
-            spec.endpoint(path)
+            spec.api(path)
         ))
     })
 }

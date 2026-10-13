@@ -1,16 +1,16 @@
-//! Провайдер поверх Chat Completions.
+//! Provider on top of Chat Completions.
 //!
-//! Форма, которую отдают Ollama, LM Studio, vLLM, сам OpenAI, Groq, Together,
-//! DeepSeek и OpenRouter. Отличается от Messages API не только телом: здесь
-//! нет ни индексов блоков, ни явного конца сообщения, поэтому разбор потока
-//! ведёт состояние — см. [`events`].
+//! The shape served by Ollama, LM Studio, vLLM, OpenAI itself, Groq, Together,
+//! DeepSeek and OpenRouter. It differs from the Messages API not only in the body: here
+//! there are no block indexes and no explicit end of the message, so parsing the stream
+//! keeps state — see [`events`].
 //!
-//! Чего эта форма не умеет и что поэтому теряется: подпись рассуждения, запись
-//! в кеш промпта и уровни усилия выше `high`. Каждое место помечено там, где
-//! перевод их выбрасывает.
+//! What this shape cannot do, and so what is lost: the reasoning signature, writing
+//! to the prompt cache, and effort levels above `high`. Each place is marked where
+//! the translation drops them.
 //!
-//! Одну вещь провайдер о себе рассказывает сам — каким полем принимать потолок
-//! ответа. См. [`OpenAiProvider::stream`].
+//! One thing the provider tells us about itself — which field it takes the response
+//! ceiling in. See [`OpenAiProvider::stream`].
 
 mod body;
 mod events;
@@ -29,18 +29,18 @@ pub struct OpenAiProvider {
     http: reqwest::Client,
     spec: ProviderSpec,
     key: Option<String>,
-    /// Просил ли провайдер `max_completion_tokens` вместо `max_tokens`.
+    /// Whether the provider asked for `max_completion_tokens` instead of `max_tokens`.
     ///
-    /// Живёт на провайдере, а не в описании: это свойство модели, а не
-    /// адреса, — один и тот же шлюз отдаёт и те, и другие. Не переживает
-    /// сессию, и правильно: следующий запуск спросит заново и узнает, если
-    /// модель сменилась.
+    /// It lives on the provider, not in the description: this is a property of the model, not of
+    /// the address — one and the same gateway serves both kinds. It does not outlive
+    /// the session, and that is right: the next launch asks again and finds out if
+    /// the model has changed.
     completion_tokens: AtomicBool,
 }
 
 impl OpenAiProvider {
-    /// Ключ необязателен: локальный шлюз его обычно не спрашивает, и
-    /// требовать его значило бы не пускать Yaca к Ollama на своей же машине.
+    /// The key is optional: a local gateway usually does not ask for it, and
+    /// requiring it would keep Yaca from reaching Ollama on the same machine.
     pub fn new(spec: ProviderSpec, key: Option<String>) -> Self {
         OpenAiProvider {
             http: reqwest::Client::new(),
@@ -67,7 +67,7 @@ impl OpenAiProvider {
 
         let resp = self
             .http
-            .post(self.spec.endpoint("/v1/chat/completions"))
+            .post(self.spec.api("/chat/completions"))
             .headers(headers)
             .json(&body::build_body(req, max_field))
             .send()
@@ -79,12 +79,12 @@ impl OpenAiProvider {
     }
 }
 
-/// Отказ, в котором провайдер сам назвал поле, которое хочет вместо нашего.
+/// Refusal in which the provider itself named the field it wants instead of ours.
 ///
-/// Текст у OpenAI однозначный: `Unsupported parameter: 'max_tokens' is not
-/// supported with this model. Use 'max_completion_tokens' instead.` Проверяется
-/// именно упоминание имени, а не код и не модель: угадывать по имени модели —
-/// это список, который устаревает к следующему релизу.
+/// OpenAI's text is unambiguous: `Unsupported parameter: 'max_tokens' is not
+/// supported with this model. Use 'max_completion_tokens' instead.` Only the
+/// mention of the name is checked, not the code and not the model: guessing from
+/// the model name is a list that goes stale by the next release.
 fn asks_for_completion_tokens(err: &ProviderError) -> bool {
     matches!(
         err,
@@ -98,14 +98,15 @@ impl Provider for OpenAiProvider {
         &self.spec.id
     }
 
-    /// Запрос, а при нужде — второй.
+    /// The request, and if needed a second one.
     ///
-    /// Потолок ответа зовётся `max_tokens` почти везде и `max_completion_tokens`
-    /// у новых моделей самого OpenAI. Отправить оба нельзя, угадать по адресу
-    /// или имени модели — значит завести список, который устареет. Поэтому
-    /// спрашиваем как принято, а если провайдер отказал и в отказе назвал
-    /// другое поле — переспрашиваем им и запоминаем на сессию. Ход стоит одну
-    /// лишнюю попытку один раз, а не настройку, которую человек должен угадать.
+    /// The response ceiling is called `max_tokens` almost everywhere and
+    /// `max_completion_tokens` on newer OpenAI models. Sending both is not possible,
+    /// and guessing from the address or the model name would mean keeping a list
+    /// that goes stale. So we ask the usual way, and if the provider refused and
+    /// named another field in the refusal, we ask again with that field and remember
+    /// it for the session. A turn costs one extra attempt, once — not a setting the
+    /// human has to guess.
     async fn stream(&self, req: ProviderRequest) -> Result<ProviderStream, ProviderError> {
         let field = self.max_field();
         match self.post(&req, field).await {
@@ -141,12 +142,12 @@ mod tests {
 
     #[test]
     fn прочие_отказы_не_считаются_просьбой_переспросить() {
-        // Другая причина того же кода — переспрашивать нечем.
+        // A different reason for the same code — there is nothing to ask again with.
         assert!(!asks_for_completion_tokens(&http(
             400,
             "model `gpt-nope` does not exist"
         )));
-        // Тот же текст, но не 400: 429 лечится ожиданием, а не полем.
+        // The same text, but not a 400: a 429 is cured by waiting, not by a field.
         assert!(!asks_for_completion_tokens(&http(
             429,
             "max_completion_tokens"

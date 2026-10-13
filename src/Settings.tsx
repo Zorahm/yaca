@@ -1,5 +1,9 @@
 /**
- * Окно настроек §10.
+ * Настройки §10, поверх главного окна.
+ *
+ * Не отдельное окно: оно создавалось командой оболочки и на Windows вешало
+ * программу целиком, а ещё прятало разговор. Теперь это слой над ним, и
+ * закрывается он кнопкой в навигации или Esc.
  *
  * Навигация разрезана надвое — приложение и проект. §10 перечисляет разделы
  * одним списком, но в нём смешаны два уровня правды: провайдеры, внешний вид и
@@ -18,9 +22,11 @@
  */
 
 import {
+  ArrowLeft,
   Bell,
   Cube,
   FolderSimple,
+  Info,
   Palette,
   Plugs,
   ShieldCheck,
@@ -41,12 +47,14 @@ import {
 import { t, type Key } from "./i18n";
 import { McpMark } from "./ui/brand";
 import { usePreferences } from "./ui/prefs";
+import { AboutSection } from "./ui/settings/AboutSection";
 import { AppearanceSection } from "./ui/settings/AppearanceSection";
 import { McpSection, type McpServers } from "./ui/settings/McpSection";
 import { ModelsSection } from "./ui/settings/ModelsSection";
 import { NoticesSection } from "./ui/settings/NoticesSection";
 import { ProjectSection } from "./ui/settings/ProjectSection";
 import { ProvidersSection } from "./ui/settings/ProvidersSection";
+import { Select } from "./ui/settings/Row";
 import { RulesSection } from "./ui/settings/RulesSection";
 import { ToolsSection } from "./ui/settings/ToolsSection";
 import { useProjectSettings } from "./ui/settings/useProjectSettings";
@@ -54,14 +62,16 @@ import { useProjectSettings } from "./ui/settings/useProjectSettings";
 import "./ui/fonts";
 import "./ui/tokens.css";
 import "./ui/app.css";
+import "./ui/popmenu.css";
 import "./ui/settings/settings.css";
 
-type Section =
+export type Section =
   | "providers"
   | "tools"
   | "mcp"
   | "appearance"
   | "notices"
+  | "about"
   | "models"
   | "rules"
   | "projectMcp"
@@ -75,6 +85,7 @@ const APP_SECTIONS: Item[] = [
   { id: "mcp", name: "mcp.title", icon: <McpMark size={15} /> },
   { id: "appearance", name: "look.title", icon: <Palette size={15} /> },
   { id: "notices", name: "notices.title", icon: <Bell size={15} /> },
+  { id: "about", name: "about.title", icon: <Info size={15} /> },
 ];
 
 const PROJECT_SECTIONS: Item[] = [
@@ -88,9 +99,21 @@ function isProjectSection(section: Section): boolean {
   return PROJECT_SECTIONS.some((item) => item.id === section);
 }
 
-export default function Settings({ prefs: initial }: { prefs: Preferences }) {
+export default function Settings({
+  prefs: initial,
+  section,
+  onSection,
+  onClose,
+}: {
+  prefs: Preferences;
+  /** Held by the window, not here: the Help menu opens the layer on a section
+      of its choosing, and moves an open one there too. */
+  section: Section;
+  onSection: (section: Section) => void;
+  onClose: () => void;
+}) {
   const prefs = usePreferences(initial);
-  const [section, setSection] = useState<Section>("providers");
+  const setSection = onSection;
   const [projects, setProjects] = useState<string[]>([]);
   const [project, setProject] = useState<string | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -103,6 +126,18 @@ export default function Settings({ prefs: initial }: { prefs: Preferences }) {
       setProject((now) => now ?? list[0] ?? null);
     });
   }, []);
+
+  // Esc закрывает слой, пока фокус не в поле: в нём Esc принадлежит полю.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const target = e.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const refreshModels = useCallback(() => {
     void fetchModels().then(setModels, () => setModels([]));
@@ -130,6 +165,10 @@ export default function Settings({ prefs: initial }: { prefs: Preferences }) {
   return (
     <div className="settings">
       <nav className="set-nav" aria-label={t("set.nav")}>
+        <button type="button" className="set-close" onClick={onClose}>
+          <ArrowLeft size={15} aria-hidden="true" />
+          <span>{t("set.close")}</span>
+        </button>
         <div className="set-group">{t("set.group_app")}</div>
         {APP_SECTIONS.map((item) => (
           <NavItem key={item.id} item={item} active={shown} onPick={setSection} />
@@ -140,18 +179,15 @@ export default function Settings({ prefs: initial }: { prefs: Preferences }) {
             <div className="set-group">{t("set.group_project")}</div>
             {/* Чип проекта — он же переключатель: папок в списке несколько, и
                 раздел обязан сказать, какую из них он правит. */}
-            <select
+            <Select
+              mono
+              align="start"
               className="set-project"
-              aria-label={t("set.project")}
+              label={t("set.project")}
               value={project}
-              onChange={(e) => setProject(e.target.value)}
-            >
-              {projects.map((path) => (
-                <option key={path} value={path}>
-                  {path}
-                </option>
-              ))}
-            </select>
+              options={projects.map((path) => ({ value: path, label: path }))}
+              onChange={setProject}
+            />
             {PROJECT_SECTIONS.map((item) => (
               <NavItem key={item.id} item={item} active={shown} onPick={setSection} />
             ))}
@@ -174,6 +210,7 @@ export default function Settings({ prefs: initial }: { prefs: Preferences }) {
           )}
           {shown === "appearance" && <AppearanceSection prefs={prefs} onPatch={patchPrefs} />}
           {shown === "notices" && <NoticesSection prefs={prefs} onPatch={patchPrefs} />}
+          {shown === "about" && <AboutSection />}
 
           {isProjectSection(shown) && project !== null && (
             <>

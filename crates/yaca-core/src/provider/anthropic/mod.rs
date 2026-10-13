@@ -1,12 +1,12 @@
-//! Провайдер поверх Messages API.
+//! Provider on top of the Messages API.
 //!
-//! Не только `api.anthropic.com`: адрес, заголовки и список моделей приходят
-//! описанием (`registry::ProviderSpec`), поэтому этой же реализацией
-//! разговаривают корпоративный прокси, OpenRouter, LiteLLM и всё остальное,
-//! что отдаёт `/v1/messages` в форме Anthropic.
+//! Not only `api.anthropic.com`: the address, headers and model list come in a
+//! description (`registry::ProviderSpec`), so the same implementation talks to a
+//! corporate proxy, OpenRouter, LiteLLM and anything else that serves
+//! `/v1/messages` in the Anthropic shape.
 //!
-//! Сборка тела — в [`body`], разбор потока — в [`events`], общий с
-//! OpenAI-формой HTTP — в [`super::http`].
+//! Building the body is in [`body`], parsing the stream is in [`events`], and the
+//! HTTP code shared with the OpenAI shape is in [`super::http`].
 
 mod body;
 mod events;
@@ -25,7 +25,7 @@ pub struct AnthropicProvider {
 }
 
 impl AnthropicProvider {
-    /// Ключ необязателен: описание может не просить его вовсе — см.
+    /// The key is optional: the description may not ask for it at all — see
     /// `ProviderSpec::needs_key`.
     pub fn new(spec: ProviderSpec, key: Option<String>) -> Self {
         AnthropicProvider {
@@ -35,7 +35,7 @@ impl AnthropicProvider {
         }
     }
 
-    /// Встроенный Anthropic с ключом. Короткий путь для CLI и тестов.
+    /// Built-in Anthropic with a key. A short path for the CLI and tests.
     pub fn with_key(key: impl Into<String>) -> Self {
         Self::new(ProviderSpec::anthropic(), Some(key.into()))
     }
@@ -52,7 +52,7 @@ impl Provider for AnthropicProvider {
 
         let resp = self
             .http
-            .post(self.spec.endpoint("/v1/messages"))
+            .post(self.spec.api("/messages"))
             .headers(headers)
             .json(&body::build_body(&req))
             .send()

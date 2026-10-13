@@ -1,21 +1,23 @@
-//! Сессия: команды внутрь, поток событий наружу.
+//! Session: commands in, event stream out.
 //!
-//! Устроена двумя задачами, и это не украшательство. Диспетчер читает команды
-//! и обязан отвечать мгновенно — иначе `Esc` не останавливает агента, пока
-//! агент занят. Работник крутит турн и владеет историей единолично, поэтому
-//! история никому не отдана под мьютекс.
+//! Built from two tasks, and this is not decoration. The dispatcher reads commands
+//! and must answer instantly — otherwise `Esc` does not stop the agent while
+//! the agent is busy. The worker runs the turn and owns the history alone, so
+//! the history is not handed to anyone under a mutex.
 //!
-//! Разрезана по швам самого цикла: здесь устройство сессии и диспетчер, в
-//! [`turn`] — ход агента от сообщения до остановки, в [`calls`] — выполнение
-//! тулов, в [`asking`] — вопрос о разрешении перед ним, в [`checkpoints`] — снимки рабочего дерева
-//! и откат, в [`compaction`] — сжатие истории по ходу работы, в [`inbox`] —
-//! очередь работника и сообщения, вливающиеся в идущий ход (§7.4), в
-//! [`subagent`] — разговор, который тул `Task` ведёт внутри хода. Сообщения,
-//! ещё не влитые в ход, живут в [`queue`]: отмена и влитие — одна и та же
-//! запись под одним замком.
+//! Cut along the seams of the loop itself: here are the session's layout and the dispatcher, in
+//! [`turn`] — the agent's turn from message to stop, in [`calls`] — running
+//! tools, in [`asking`] — the permission question before them, in [`checkpoints`] — working-tree snapshots
+//! and rollback, in [`compaction`] — history compaction during the work, in [`inbox`] —
+//! the worker's queue and the messages that merge into the running turn (§7.4), in
+//! [`subagent`] — the conversation that the `Task` tool holds inside a turn, in
+//! [`background`] — the subagents the agent does not wait for. Messages
+//! not yet merged into a turn live in [`queue`]: cancelling and merging are the same
+//! record under one lock.
 
 pub mod accumulator;
 mod asking;
+mod background;
 pub mod binding;
 mod calls;
 mod changeset;
@@ -34,6 +36,7 @@ pub(crate) mod retry;
 pub mod subagent;
 mod turn;
 mod vision;
+mod window;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -88,15 +91,15 @@ pub struct SessionConfig {
     /// [`Providers::resolve`]: crate::provider::registry::Providers::resolve
     pub provider: String,
     pub model: String,
-    /// Модели провайдера, с которым говорит эта сессия (§10).
+    /// The provider's model this session talks to (§10).
     ///
-    /// Не глобальный каталог: окно контекста и цена берутся отсюда, а у
-    /// произвольного провайдера они свои. Модель, которой в списке нет,
-    /// считается неизвестной — бесплатной и с консервативным окном.
+    /// Not the global catalog: the context window and price are taken from here, while
+    /// an arbitrary provider has its own. A model that is not in the list
+    /// counts as unknown — free, with a conservative window.
     pub models: Vec<ModelInfo>,
     pub mode: Mode,
     pub effort: Effort,
-    /// Писать журнал в `.yaca/sessions`. CLI обычно не нужно.
+    /// Write the log to `.yaca/sessions`. The CLI usually does not need it.
     pub journal: bool,
     /// Continue an existing session instead of starting one (§9).
     ///
@@ -105,12 +108,12 @@ pub struct SessionConfig {
     /// Needs [`SessionConfig::journal`]: a session with nothing written down
     /// has nothing to come back to.
     pub resume: Option<SessionId>,
-    /// Соблюдать ли `Disallow` из `robots.txt` при загрузке страницы (§10).
+    /// Whether to respect `Disallow` from `robots.txt` when loading a page (§10).
     ///
-    /// Настройка приложения, и потому приезжает сюда, а не читается из
-    /// `.yaca/settings.json`: проект не решает, как Yaca ведёт себя в сети.
-    /// Умолчание — соблюдать; `yaca-cli` его и получает, ничего не зная о
-    /// настройках окна.
+    /// An application setting, so it arrives here rather than being read from
+    /// `.yaca/settings.json`: a project does not decide how Yaca behaves on the network.
+    /// The default is to respect it; `yaca-cli` gets it without knowing about
+    /// window settings.
     pub respect_robots: bool,
     /// Which shell commands run through (§10). The human's choice about the
     /// application, like the flag above, and settled for the whole session
@@ -250,8 +253,8 @@ impl SessionHandle {
         self.events.subscribe()
     }
 
-    /// Текущее состояние без ожидания события: подписчик, пришедший позже
-    /// старта, иначе не узнал бы, в каком режиме сессия.
+    /// The current state without waiting for an event: a subscriber arriving later
+    /// than the start would otherwise not know which mode the session is in.
     pub fn state(&self) -> SessionState {
         self.shared.state.lock().unwrap().clone()
     }
@@ -260,6 +263,18 @@ impl SessionHandle {
     /// being written down, so it has no line.
     pub fn meta(&self) -> Option<SessionMeta> {
         self.shared.recorder.as_ref().map(|r| r.meta())
+    }
+
+    /// §9: rename, for a session that is open. The index of a running session
+    /// is this session's to write, so the name goes in here and not past it
+    /// into the file (`SessionStore::rename`), where the next turn would
+    /// write the old one back.
+    pub fn rename(&self, title: &str) -> Result<(), CoreError> {
+        let recorder = self.shared.recorder.as_ref().ok_or_else(|| {
+            CoreError::Config(format!("сессия {} не записывается", self.id()))
+        })?;
+        recorder.rename(title)?;
+        Ok(())
     }
 
     /// The MCP servers as they are now, for the same late subscriber
@@ -284,11 +299,11 @@ impl SessionHandle {
 
 struct Shared {
     state: Mutex<SessionState>,
-    /// Токен текущего турна. Заменяется на каждом турне.
+    /// Token of the current turn. Replaced on every turn.
     cancel: Mutex<CancellationToken>,
     events: EventSink,
-    /// Фоновые команды (§6.5). Тоже общие: «Остановить» обязано работать,
-    /// пока агент занят чем-то другим.
+    /// Background commands (§6.5). Also shared: «Остановить» must work
+    /// while the agent is busy with something else.
     processes: Processes,
     /// Messages sent during a turn and not yet taken in (§7.4). Shared, because
     /// a cancel comes from the dispatcher while the worker is mid-turn.
@@ -299,13 +314,13 @@ struct Shared {
     /// The hunks of this session that are still pending (§6.3). Shared so a
     /// decision from the panel and a write from the agent meet at one set.
     changes: ChangeSet,
-    /// Кто спрашивает разрешения и помнит выданные правила (§5.7).
+    /// Who asks for permission and remembers the rules issued (§5.7).
     broker: Broker,
-    /// Вопросы `AskUser` на экране. Общие с диспетчером, как и разрешения:
-    /// ответ приходит командой, а ждёт его тул в работнике. Сам вопрос лежит
-    /// рядом с каналом, чтобы ответ проверить до доставки.
+    /// `AskUser` questions on screen. Shared with the dispatcher, like permissions:
+    /// the answer arrives as a command, while the tool waiting for it runs in the worker. The question itself sits
+    /// next to the channel, so the answer can be checked before delivery.
     questions: Pending<RequestId, QuestionRequest, QuestionReply>,
-    /// Модели провайдера этой сессии — источник окна контекста и цен (§10).
+    /// The provider's model for this session — the source of the context window and prices (§10).
     models: Vec<ModelInfo>,
     ws: Arc<Workspace>,
     /// The worktree this session works in, when it is isolated.
@@ -318,12 +333,17 @@ struct Shared {
     settings: Settings,
     /// What subagents spent and the worker has not counted yet.
     ledger: Arc<Ledger>,
+    /// Subagents the running turn sent in the background (`background`).
+    background: background::Background,
     /// Held by a call that may not run beside another (`calls`).
     lane: tokio::sync::Mutex<()>,
     /// Models that turned an image down in this session (`vision`).
     blind: Mutex<std::collections::HashSet<String>>,
-    /// Соблюдать ли `robots.txt` (§10). Из [`SessionConfig`], а не из файла
-    /// проекта: настройка приложения.
+    /// Calls of tools that are `silent`: their events are dropped in `emit`.
+    /// Call ids are unique, so entries are never reused and not worth removing.
+    silent: Mutex<std::collections::HashSet<String>>,
+    /// Whether to respect `robots.txt` (§10). From [`SessionConfig`], not from the
+    /// project file: an application setting.
     respect_robots: bool,
     /// The shell of this session's commands, named in its system prompt.
     shell: Shell,
@@ -336,10 +356,10 @@ struct Shared {
 }
 
 impl Shared {
-    /// Что известно о модели: из списка провайдера, а не из глобального
-    /// каталога. Незнакомая считается бесплатной и с консервативным окном —
-    /// §8 обещает работу с любыми моделями, включая те, о которых Yaca не
-    /// слышал.
+    /// What is known about the model: from the provider's list, not from the global
+    /// catalog. An unfamiliar model counts as free, with a conservative window —
+    /// §8 promises to work with any model, including ones Yaca has not
+    /// heard of.
     fn model_info(&self, id: &str) -> ModelInfo {
         self.models
             .iter()
@@ -349,10 +369,31 @@ impl Shared {
     }
 
     fn emit(&self, event: AgentEvent) {
+        // Dropped before the journal as well: a reopened session must not
+        // draw a row the live one never had.
+        if let Some(call) = event.call_id() {
+            if self.silent.lock().unwrap().contains(&call.0) {
+                return;
+            }
+        }
         if let Some(recorder) = &self.recorder {
             recorder.event(&event);
         }
         self.events.emit(event);
+    }
+
+    /// The sink a tool sends its own events through. They go by the journal
+    /// like everything [`Shared::emit`] sends: the index takes the title from
+    /// `TitleSet`, and a reopened session draws its tasks and shown text from
+    /// what was written down.
+    fn tool_events(&self) -> EventSink {
+        match &self.recorder {
+            Some(recorder) => {
+                let recorder = recorder.clone();
+                self.events.journaled(move |event| recorder.event(event))
+            }
+            None => self.events.clone(),
+        }
     }
 
     fn emit_state(&self) {
@@ -360,7 +401,7 @@ impl Shared {
         self.emit(AgentEvent::StateChanged { state });
     }
 
-    /// Матрица доверия §8 в том виде, в каком она сейчас настроена.
+    /// The §8 trust matrix as currently configured.
     fn policy(&self) -> Policy {
         let state = self.state.lock().unwrap();
         Policy {
@@ -401,7 +442,7 @@ fn check_resumed_roots(
     )))
 }
 
-/// Поднимает сессию и возвращает ручку к ней.
+/// Starts the session and returns a handle to it.
 pub fn spawn(
     config: SessionConfig,
     provider: Arc<dyn Provider>,
@@ -529,8 +570,10 @@ pub fn spawn(
         recorder,
         settings,
         ledger: Arc::default(),
+        background: Default::default(),
         lane: tokio::sync::Mutex::new(()),
         blind: Mutex::default(),
+        silent: Mutex::default(),
         state: Mutex::new(SessionState {
             // The project, not the worktree: the window files the chat under
             // the project it was opened in.
@@ -558,7 +601,7 @@ pub fn spawn(
             skills: crate::tool::skill::listing(&ws).map(Arc::new),
             ws,
             provider,
-            registry: Arc::new(ToolRegistry::standard()),
+            registry: Arc::new(ToolRegistry::of_session(shared.recorder.is_some())),
             mcp_seen: None,
             mcp_notes: None,
             // A resumed session opens compacted if that is how it was left,
@@ -583,14 +626,14 @@ pub fn spawn(
     })
 }
 
-/// Диспетчер. Ничего долгого здесь быть не должно.
+/// The dispatcher. Nothing long-running may happen here.
 async fn dispatch(mut rx: mpsc::Receiver<Command>, work: mpsc::Sender<Job>, shared: Arc<Shared>) {
     while let Some(cmd) = rx.recv().await {
         match cmd {
             Command::SendMessage { text, attachments } => {
-                // Отправленное во время работы встаёт в очередь (§7.4). Чип
-                // показываем только когда работник занят: простаивающий
-                // возьмёт сообщение сразу, и чип мигнул бы ложью про ожидание.
+                // A message sent while work is running goes into the queue (§7.4). The chip
+                // is shown only when the worker is busy: an idle one
+                // takes the message at once, and the chip would flash a lie about waiting.
                 let busy = shared.state.lock().unwrap().busy;
                 let id = shared.queue.push(text, attachments, busy);
                 if work.send(Job::Message { id }).await.is_err() {
@@ -615,7 +658,7 @@ async fn dispatch(mut rx: mpsc::Receiver<Command>, work: mpsc::Sender<Job>, shar
             }
             Command::Cancel => {
                 shared.cancel.lock().unwrap().cancel();
-                // Висящий вопрос без турна — вопрос ни о чём.
+                // A dangling question with no turn is a question about nothing.
                 shared.broker.abandon_all();
                 shared.questions.abandon_all();
             }
@@ -636,8 +679,8 @@ async fn dispatch(mut rx: mpsc::Receiver<Command>, work: mpsc::Sender<Job>, shar
             Command::RestoreCheckpoint { id } => checkpoints::restore(&shared, id).await,
 
             Command::AnswerPermission { request_id, answer } => {
-                // Правило выдаётся здесь, а не в работнике: даже если
-                // ожидающий уже ушёл, «разрешать всегда» должно остаться.
+                // The rule is issued here, not in the worker: even if
+                // the waiter has already gone, «разрешать всегда» must remain.
                 match &answer {
                     PermissionAnswer::AllowAlways { scope } => shared.broker.grant(scope.clone()),
                     PermissionAnswer::DenyAlways { scope, reason } => {
@@ -684,9 +727,9 @@ async fn dispatch(mut rx: mpsc::Receiver<Command>, work: mpsc::Sender<Job>, shar
             // Spawned inside: the walk must not hold up the dispatcher.
             Command::SearchFiles { query } => mentions::answer(&shared, query),
             Command::StopProcess { id } => {
-                // Убийство дерева процессов — запуск `taskkill`, то есть
-                // блокирующая работа; диспетчер обязан остаться отзывчивым.
-                // Ответа не ждём: панель обновится, когда процесс умрёт.
+                // Killing the process tree means running `taskkill`, which is
+                // blocking work; the dispatcher has to stay responsive.
+                // We do not wait for a reply: the panel updates when the process dies.
                 let processes = shared.processes.clone();
                 tokio::task::spawn_blocking(move || processes.stop(id));
             }

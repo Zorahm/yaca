@@ -89,50 +89,26 @@ describe("лента", () => {
     expect(feed.blocks[0].rows).toHaveLength(3);
   });
 
-  it("реплика между действиями закрывает группу", () => {
-    // §5.4: лента — разговор со вставленными строчками отчёта, а не одна
-    // бесконечная лестница.
-    const feed = run(started("c1"), wrote("b1", "теперь стили"), started("c2"));
-
-    expect(feed.blocks.map((b) => b.kind)).toEqual(["actions", "agent", "actions"]);
-  });
-
-  it("рассуждение между действиями группу не закрывает", () => {
-    // Модель, думающая перед каждым вызовом, иначе даёт лестницу групп по
-    // одной строке. Ответом рассуждение не является (§5.3).
+  it("реплика и рассуждение между действиями встают между ними", () => {
+    // Редьюсер держит порядок; в блоки работу хода собирает `core/work`.
     const feed = run(
       started("c1"),
-      thought("t1", "теперь тесты"),
       started("c2"),
-      thought("t2", "и ещё раз"),
+      thought("t1", "теперь тесты"),
       started("c3"),
+      wrote("b1", "теперь стили"),
+      started("c4"),
     );
 
     expect(feed.blocks.map((b) => b.kind)).toEqual([
       "actions",
       "reasoning",
-      "reasoning",
-    ]);
-    if (feed.blocks[0].kind !== "actions") throw new Error("не группа");
-    expect(feed.blocks[0].rows).toHaveLength(3);
-  });
-
-  it("рассуждение не склеивает группы через ответ", () => {
-    // Ответ закрывает группу, и рассуждение после него открытую группу не
-    // возвращает: иначе действия второго хода уехали бы в шапку первого.
-    const feed = run(
-      started("c1"),
-      wrote("b1", "готово"),
-      thought("t1", "дальше"),
-      started("c2"),
-    );
-
-    expect(feed.blocks.map((b) => b.kind)).toEqual([
       "actions",
       "agent",
-      "reasoning",
       "actions",
     ]);
+    if (feed.blocks[0].kind !== "actions") throw new Error("не группа");
+    expect(feed.blocks[0].rows).toHaveLength(2);
   });
 
   it("исход действия доезжает до своей строки", () => {
@@ -231,6 +207,7 @@ describe("лента", () => {
     const feed = run(started("c1"), started("c2"), finished("c1"), {
       type: "turnCancelled",
       turnId: "t1",
+      at: 0,
     });
 
     if (feed.blocks[0].kind !== "actions") throw new Error("не группа");
@@ -430,7 +407,7 @@ describe("подагент", () => {
     const feed = run(
       started("t1", "Task"),
       started("r1", "Read", "t1"),
-      { type: "turnCancelled", turnId: "t1" },
+      { type: "turnCancelled", turnId: "t1", at: 0 },
     );
 
     // Живая точка на вызове, который уже никто не выполняет, — враньё (§0).
@@ -618,5 +595,60 @@ describe("очередь и поиск файлов (§7.4, §7.2)", () => {
       { type: "filesFound", query: "ab", paths: ["ab.txt"] },
     );
     expect(feed.found?.query).toBe("ab");
+  });
+});
+
+describe("время хода", () => {
+  const begin: AgentEvent = { type: "turnStarted", turnId: "t1", at: 1_000 };
+
+  it("идущий ход несёт время начала, законченный — убирает его", () => {
+    expect(run(begin).turn).toEqual({ startedAt: 1_000 });
+    const done = run(begin, { type: "turnFinished", turnId: "t1", stopReason: "endTurn", at: 5_000 });
+    expect(done.turn).toBeNull();
+  });
+
+  it("под ответом встаёт строка с длительностью и временем конца", () => {
+    const feed = run(begin, wrote("b1", "готово"), {
+      type: "turnFinished",
+      turnId: "t1",
+      stopReason: "endTurn",
+      at: 134_000,
+    });
+    const last = feed.blocks[feed.blocks.length - 1];
+    expect(last).toMatchObject({ kind: "turnTime", startedAt: 1_000, endedAt: 134_000 });
+  });
+
+  it("остановленный ход тоже показывает, сколько он шёл", () => {
+    const feed = run(begin, { type: "turnCancelled", turnId: "t1", at: 4_000 });
+    expect(feed.blocks.map((b) => b.kind)).toEqual(["stopped", "turnTime"]);
+  });
+
+  it("без времени конца (журнал старой сборки) строки нет", () => {
+    const feed = run(begin, { type: "turnFinished", turnId: "t1", stopReason: "endTurn", at: 0 });
+    expect(feed.blocks.some((b) => b.kind === "turnTime")).toBe(false);
+  });
+});
+
+describe("показанный текст файла", () => {
+  const shown = (text: string): AgentEvent => ({
+    type: "textShown",
+    path: "notes.md",
+    firstLine: 2,
+    lines: 2,
+    total: 5,
+    text,
+  });
+
+  it("встаёт своим блоком с путём и строками", () => {
+    const feed = run(shown("two\nthree"));
+    expect(feed.blocks).toMatchObject([
+      { kind: "shown", path: "notes.md", firstLine: 2, lines: 2, total: 5, text: "two\nthree" },
+    ]);
+  });
+
+  it("не сливается с текстом агента вокруг", () => {
+    const feed = run(wrote("b1", "Вот файл:"), shown("two"), wrote("b1", "Это всё."));
+    expect(feed.blocks.map((b) => b.kind)).toEqual(["agent", "shown", "agent"]);
+    expect(feed.blocks[2]).toMatchObject({ text: "Это всё." });
   });
 });

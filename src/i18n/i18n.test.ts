@@ -8,8 +8,10 @@
 
 import { describe, expect, it } from "vitest";
 
-import { en } from "./en";
-import { ru } from "./ru";
+import { en, sections as enSections } from "./en";
+import { LOCALES } from "./locales";
+import { duplicates } from "./merge";
+import { ru, sections as ruSections } from "./ru";
 import { ruForm, enForm } from "./plural";
 import { translate, translatePlural } from "./index";
 
@@ -18,13 +20,22 @@ describe("словари", () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(ru).sort());
   });
 
+  it("не объявляют ключ в двух разделах", () => {
+    // Склейка разделов отдала бы победу последнему и промолчала.
+    expect(duplicates(ruSections)).toEqual([]);
+    expect(duplicates(enSections)).toEqual([]);
+  });
+
+  it("называют каждый язык", () => {
+    // Пустое имя — пустая строка в списке языков §10.
+    for (const [code, info] of Object.entries(LOCALES)) {
+      expect(info.name.trim(), code).not.toBe("");
+    }
+  });
+
   it("не оставляют кириллицу в английском", () => {
-    // Кроме имени самого языка: переключатель §10 называет каждый язык на нём
-    // самом — «Русский», а не «Russian». Это не забытый перевод, а
-    // единственный способ найти свой язык в интерфейсе, которого не читаешь.
-    const endonyms = new Set(["notices.language_ru"]);
     const russian = Object.entries(en)
-      .filter(([key, value]) => !endonyms.has(key) && /[А-Яа-яЁё]/.test(value))
+      .filter(([, value]) => /[А-Яа-яЁё]/.test(value))
       .map(([key]) => key);
     expect(russian).toEqual([]);
   });
@@ -70,13 +81,13 @@ describe("склонение", () => {
   });
 
   it("подставляет число в выбранную форму", () => {
-    expect(translatePlural("ru", "file.gap", 1)).toBe("1 строка");
-    expect(translatePlural("ru", "file.gap", 3)).toBe("3 строки");
-    expect(translatePlural("ru", "file.gap", 11)).toBe("11 строк");
+    expect(translatePlural("ru", "row.files", 1)).toBe("1 файл");
+    expect(translatePlural("ru", "row.files", 3)).toBe("3 файла");
+    expect(translatePlural("ru", "row.files", 11)).toBe("11 файлов");
     // Английскому нужна форма `other`, которой в словаре нет: он падает
     // в `many`, где лежит та же строка.
-    expect(translatePlural("en", "file.gap", 3)).toBe("3 lines");
-    expect(translatePlural("en", "file.gap", 1)).toBe("1 line");
+    expect(translatePlural("en", "row.files", 3)).toBe("3 files");
+    expect(translatePlural("en", "row.files", 1)).toBe("1 file");
   });
 });
 

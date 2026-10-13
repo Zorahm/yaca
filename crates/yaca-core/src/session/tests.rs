@@ -1,9 +1,9 @@
-//! Золотые тесты цикла.
+//! Golden tests of the loop.
 //!
-//! Проверяют ровно одно и главное: какая последовательность `AgentEvent`
-//! выходит наружу. Интерфейс — чистая функция от этого потока, поэтому если
-//! поток сохраняет форму, лента не сломается; если форма поехала — тест
-//! обязан упасть раньше, чем это увидит человек.
+//! They check exactly the one main thing: which sequence of `AgentEvent`
+//! comes out. The interface is a pure function of this stream, so if
+//! the stream keeps its shape, the feed does not break; if the shape shifts, the test
+//! must fail before a person sees it.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,7 +17,7 @@ use crate::event::StopReason;
 use crate::provider::mock::{script_text, script_tool_call, MockProvider, Turn};
 use crate::testutil::TempDir;
 
-/// Имя события — то, по чему интерфейс различает ветки.
+/// The event's name — what the interface tells branches apart by.
 fn names(events: &[AgentEvent]) -> Vec<&'static str> {
     events.iter().map(AgentEvent::kind).collect()
 }
@@ -80,12 +80,12 @@ async fn текстовый_ответ_даёт_ровно_ожидаемый_п
     assert_eq!(
         names(&events),
         vec![
-            "stateChanged", // кольцо закрутилось
-            // §5.8: точка снимается до того, как турн что-либо тронет, —
-            // отсюда возвращает `Esc Esc` (§13).
+            "stateChanged", // the ring started spinning
+            // §5.8: the point is taken before the turn touches anything —
+            // that is what `Esc Esc` returns to (§13).
             "checkpointCreated",
             "checkpointsUpdated",
-            // §5.1: карточку сообщения человека рисует поток, а не интерфейс.
+            // §5.1: the stream draws the human's message card, not the interface.
             "userMessage",
             "turnStarted",
             "textDelta",
@@ -131,7 +131,7 @@ async fn вызов_тула_проходит_весь_путь_и_подпис�
             "stateChanged",
             "checkpointCreated",
             "checkpointsUpdated",
-            // §5.1: карточку сообщения человека рисует поток, а не интерфейс.
+            // §5.1: the stream draws the human's message card, not the interface.
             "userMessage",
             "turnStarted",
             "usageUpdated",
@@ -153,7 +153,7 @@ async fn вызов_тула_проходит_весь_путь_и_подпис�
             ..
         } => {
             assert_eq!(tool, "Read");
-            // Точка без точки на конце — форма §5.4.1.
+            // A caption without a full stop at the end — the §5.4.1 form.
             assert_eq!(description.as_deref(), Some("Прочитал точку входа"));
             assert_eq!(target.as_deref(), Some("src/main.rs"));
             assert!(
@@ -170,8 +170,8 @@ async fn вызов_тула_проходит_весь_путь_и_подпис�
     }
 }
 
-/// Учёт приходит после каждого ответа модели, а не раз в турн: кольцо
-/// состояния должно заполняться и посреди хода с тулами.
+/// Usage arrives after every model response, not once per turn: the ring
+/// of state has to fill up in the middle of a turn with tools too.
 #[tokio::test]
 async fn расход_накапливается_на_каждом_ответе_модели() {
     let dir = TempDir::new();
@@ -223,8 +223,8 @@ async fn выход_за_границы_проекта_это_отклонени
     ask(&handle, "прочитай соседний проект").await;
     let events = collect(&mut rx).await;
 
-    // §5.9: сработавшая защита красится `--vermilion-ink`, не `--rust`,
-    // и это отдельное событие, а не упавший тул.
+    // §5.9: a tripped guard is painted `--vermilion-ink`, not `--rust`,
+    // and it is a separate event, not a failed tool.
     assert!(names(&events).contains(&"toolCallRejected"));
     assert!(!names(&events).contains(&"toolCallFailed"));
 }
@@ -274,7 +274,7 @@ async fn ошибка_провайдера_гасит_кольцо_а_не_ве�
             "stateChanged",
             "checkpointCreated",
             "checkpointsUpdated",
-            // §5.1: карточку сообщения человека рисует поток, а не интерфейс.
+            // §5.1: the stream draws the human's message card, not the interface.
             "userMessage",
             "turnStarted",
             "error",
@@ -290,8 +290,8 @@ async fn ошибка_провайдера_гасит_кольцо_а_не_ве�
         }
         other => panic!("не ошибка: {other:?}"),
     }
-    // Без `TurnFinished` кольцо крутилось бы вечно — интерфейс врал бы
-    // про состояние, чего §0 не допускает.
+    // Without `TurnFinished` the ring would spin forever — the interface would lie
+    // about the state, which §0 does not allow.
     assert!(matches!(
         events.last(),
         Some(AgentEvent::TurnFinished {
@@ -309,8 +309,8 @@ async fn лимит_запросов_повторяется_и_показыва�
         Turn::Fail(ProviderError::Http {
             status: 429,
             message: "rate limited".into(),
-            // Провайдер сказал, когда возвращаться, — слушаемся его,
-            // а тест на этом не спит.
+            // The provider said when to come back — we obey it,
+            // and the test does not sleep on it.
             retry_after_s: Some(0),
         }),
         Turn::Events(script_text("Дошло со второй попытки.")),
@@ -327,7 +327,7 @@ async fn лимит_запросов_повторяется_и_показыва�
             "stateChanged",
             "checkpointCreated",
             "checkpointsUpdated",
-            // §5.1: карточку сообщения человека рисует поток, а не интерфейс.
+            // §5.1: the stream draws the human's message card, not the interface.
             "userMessage",
             "turnStarted",
             "retryScheduled",
@@ -393,7 +393,11 @@ async fn режим_plan_не_отдаёт_модели_пишущих_туло�
             "Grep",
             "Read",
             "ReadImage",
+            // Shows a file to the human and writes nothing.
+            "SendText",
             // Read-only, so offered in plan as well as in agent.
+            // Allowed in plan: naming the conversation changes nothing on disk.
+            "SetTitle",
             "Skill",
             // The mode binds a subagent as it binds the agent.
             "Task",
@@ -460,7 +464,7 @@ async fn вложенный_файл_считается_прочитанным()
         .unwrap();
     collect(&mut rx).await;
 
-    // §7.2: человек приложил файл сам, заставлять агента перечитывать — глупость.
+    // §7.2: the human attached the file themselves; making the agent reread it would be silly.
     let seen = provider.seen.lock().unwrap();
     let first = format!("{:?}", seen[0].messages[0]);
     assert!(first.contains("notes.md"), "вложение не попало в сообщение");
@@ -483,17 +487,17 @@ async fn журнал_переигрывается_в_тот_же_поток() {
         .join(format!("{}.jsonl", handle.id()));
     let replayed = log::replay(&path).unwrap();
 
-    // Журнал пишет ровно то, что видел подписчик: сессия восстанавливается
-    // проигрыванием файла, и любое расхождение здесь — расхождение ленты.
-    // Хвостовой `stateChanged` приходит уже после `turnFinished`, на котором
-    // остановился сбор живого потока.
+    // The log writes exactly what the subscriber saw: the session is restored
+    // by replaying the file, and any mismatch here is a mismatch in the feed.
+    // The trailing `stateChanged` arrives after `turnFinished`, on which
+    // collecting the live stream stopped.
     assert_eq!(
         names(&replayed),
         [names(&live), vec!["stateChanged"]].concat()
     );
 }
 
-// --- правки в рабочем дереве (§6) -------------------------------------------
+// --- edits in the working tree (§6) -------------------------------------------
 
 fn правит(path: &str, old: &str, new: &str) -> Vec<crate::provider::ProviderEvent> {
     script_tool_call(
@@ -517,7 +521,7 @@ async fn правка_уезжает_в_дерево_и_даёт_ленте_ди
     let path = dir.write("src/a.rs", "let x = 1;\n");
 
     let provider = MockProvider::new(vec![
-        // Прочитать перед правкой обязан и мок: инвариант не отключается.
+        // The mock too has to read before an edit: the invariant is not switched off.
         Turn::Events(читает("toolu_read", "src/a.rs")),
         Turn::Events(правит("src/a.rs", "let x = 1;", "let x = 42;")),
         Turn::Events(script_text("Готово.")),
@@ -543,7 +547,7 @@ async fn правка_уезжает_в_дерево_и_даёт_ленте_ди
     assert_eq!((fact.added, fact.removed), (1, 1));
     assert!(!diff.hunks.is_empty(), "раскрытая строка без диффа пуста");
 
-    // §16.37: подтверждение одно и уже дано — правка на диске.
+    // §16.37: there is one confirmation and it is already given — the edit is on disk.
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "let x = 42;\n");
 }
 
@@ -564,8 +568,8 @@ async fn агент_перечитывает_собственную_правку
     ask(&handle, "замени слово").await;
     let events = collect(&mut rx).await;
 
-    // Последнее чтение обязано вернуть правку: она уже на диске, но отпечаток
-    // после записи должен быть свежим, иначе чтение упрётся в инвариант.
+    // The last read has to return the edit: it is already on disk, but the fingerprint
+    // after the write must be fresh, or the read will hit the invariant.
     let последний = events
         .iter()
         .filter_map(|e| match e {
@@ -592,9 +596,36 @@ async fn правка_непрочитанного_файла_отклоняет
     ask(&handle, "перепиши файл").await;
     let events = collect(&mut rx).await;
 
-    // §5.9: сработавшая защита — не сбой, и красится она иначе.
+    // §5.9: a tripped guard is not a failure, and it is painted differently.
     let имена = names(&events);
     assert!(имена.contains(&"toolCallRejected"), "получили {имена:?}");
     assert!(!имена.contains(&"fileChanged"));
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "чужой труд\n");
+}
+
+#[tokio::test]
+async fn naming_the_chat_leaves_no_row_in_the_stream() {
+    let dir = TempDir::new();
+    let provider = MockProvider::new(vec![
+        Turn::Events(script_tool_call(
+            "toolu_1",
+            "SetTitle",
+            json!({ "title": "Разбор дат" }),
+        )),
+        Turn::Events(script_text("Хорошо.")),
+    ]);
+    let handle = session(&dir, provider, Mode::Plan);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "привет").await;
+    let events = collect(&mut rx).await;
+
+    let kinds = names(&events);
+    assert!(kinds.contains(&"titleSet"), "{kinds:?}");
+    assert!(
+        !kinds.iter().any(|k| k.starts_with("toolCall")),
+        "the call must not reach the stream: {kinds:?}"
+    );
+    // The model still got its answer: the second response was asked for.
+    assert!(kinds.contains(&"textDelta"));
 }

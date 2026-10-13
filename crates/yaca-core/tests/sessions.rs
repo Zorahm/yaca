@@ -11,7 +11,7 @@ use std::sync::Arc;
 use yaca_core::event::AgentEvent;
 use yaca_core::id::SessionId;
 use yaca_core::message::{ContentBlock, Role};
-use yaca_core::provider::mock::{script_text, MockProvider, Turn};
+use yaca_core::provider::mock::{script_text, script_tool_call, MockProvider, Turn};
 use yaca_core::provider::ProviderRequest;
 use yaca_core::session::compact::SUMMARY_HEADER;
 use yaca_core::store::SessionStore;
@@ -113,6 +113,64 @@ async fn a_session_reopens_with_the_conversation_the_model_had() {
     assert_eq!(meta.messages, 2);
     assert!(meta.cost_usd > spent, "{} против {spent}", meta.cost_usd);
     assert_eq!(SessionStore::open(dir.path()).list().len(), 1);
+}
+
+#[tokio::test]
+async fn the_models_title_is_still_the_title_when_the_turn_ends() {
+    let dir = TempProject::new();
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(script_tool_call(
+            "toolu_1",
+            "SetTitle",
+            serde_json::json!({ "title": "Обзор проекта" }),
+        )),
+        Turn::Events(script_text("Готово.")),
+    ]));
+    let handle = recorded(&dir, provider, None);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "Привет. Посмотри проект.").await;
+    let seen = until(&mut rx, is_turn_over).await;
+    assert!(seen
+        .iter()
+        .any(|e| matches!(e, AgentEvent::TitleSet { title } if title == "Обзор проекта")));
+
+    // The window re-reads the title from the index when the turn ends (§3). An
+    // event that reached the window and not the index would show the name and
+    // then take it back.
+    assert_eq!(handle.meta().unwrap().title, "Обзор проекта");
+    let store = SessionStore::open(dir.path());
+    assert_eq!(store.list()[0].title, "Обзор проекта");
+
+    // And it is in the journal, so a reopened feed and a rebuilt index have it.
+    assert!(store
+        .events(handle.id())
+        .iter()
+        .any(|e| matches!(e, AgentEvent::TitleSet { .. })));
+}
+
+#[tokio::test]
+async fn a_name_typed_while_the_session_is_open_survives_the_next_turn() {
+    let dir = TempProject::new();
+    let handle = recorded(&dir, replies(2), None);
+    let mut rx = handle.subscribe();
+    ask(&handle, "почини разбор дат").await;
+    until(&mut rx, is_turn_over).await;
+
+    handle.rename("Мой заголовок").unwrap();
+    // On disk at once: the panel reads the file, not the session.
+    let store = SessionStore::open(dir.path());
+    assert_eq!(store.list()[0].title, "Мой заголовок");
+
+    // The session writes its index whole when a turn ends. A name that went
+    // into the file past the session would be overwritten here.
+    ask(&handle, "а теперь тесты").await;
+    until(&mut rx, is_turn_over).await;
+
+    let listed = store.list();
+    assert_eq!(listed[0].title, "Мой заголовок");
+    assert!(listed[0].title_custom);
+    assert_eq!(handle.meta().unwrap().title, "Мой заголовок");
 }
 
 #[tokio::test]

@@ -1,16 +1,17 @@
-//! Опрос моделей против настоящего сокета (§10).
+//! Model discovery against a real socket (§10).
 //!
-//! Разбор ответов покрыт юнит-тестами; здесь проверяется то, что между ними:
-//! адрес, заголовок `accept` и постраничный обход. Всё это живёт в HTTP, а не
-//! в разборе, и мок его не поймал бы.
+//! Parsing of responses is covered by unit tests; here what lies between them is checked:
+//! the address, the `accept` header and the paged walk. All of this lives in HTTP, not in
+//! parsing, and a mock would not have caught it.
 
 use std::collections::BTreeMap;
 
-use yaca_core::provider::models::{discover, residency};
-use yaca_core::provider::registry::{Protocol, ProviderSpec};
+use yaca_core::provider::models::{discover, refresh, residency};
+use yaca_core::provider::registry::{Protocol, ProviderSpec, Providers};
 
 mod common;
 use common::wire::{json_response, serve, serve_all};
+use common::TempProject;
 
 fn spec(base: impl Into<String>, protocol: Protocol) -> ProviderSpec {
     ProviderSpec {
@@ -49,22 +50,22 @@ async fn список_приезжает_страницами_и_склеива�
 
     let seen = seen.await.unwrap();
     assert_eq!(seen.len(), 2, "вторая страница спрашивается отдельно");
-    // Просим JSON, а не поток: `accept` протокола — для `/v1/messages`.
+    // We ask for JSON, not a stream: the protocol's `accept` is for `/v1/messages`.
     assert!(seen[0].has_header("accept", "application/json"), "{}", seen[0].headers);
     assert!(seen[0].headers.contains("GET /v1/models?limit="));
-    // Вторая страница начинается после последнего с первой.
+    // The second page starts after the last one of the first.
     assert!(
         seen[1].headers.contains("after_id=claude-opus-5"),
         "{}",
         seen[1].headers
     );
-    // Ключ подставился и сюда — список моделей за ним же.
+    // The key is substituted here too — the model list comes behind it.
     assert!(seen[0].has_header("x-api-key", "sk-test"));
 }
 
 #[tokio::test]
 async fn страница_без_курсора_не_уходит_в_бесконечность() {
-    // `has_more` без `last_id` — спрашивать нечем, и цикл кончается.
+    // `has_more` without `last_id` — there is nothing to ask with, and the loop ends.
     let (base, _seen) = serve(json(r#"{"data":[{"id":"m"}],"has_more":true}"#)).await;
     let models = discover(&spec(base, Protocol::Anthropic), Some("sk-test"))
         .await
@@ -100,8 +101,8 @@ async fn отказ_доносится_как_отказ_а_не_как_пуст
     );
     let (base, _seen) = serve(response).await;
 
-    // Пустой список означал бы «у провайдера нет моделей», а провайдер
-    // сказал совсем другое (§0).
+    // An empty list would mean "the provider has no models", but the provider
+    // said something quite different (§0).
     let err = discover(&spec(base, Protocol::Anthropic), Some("sk-bad"))
         .await
         .unwrap_err();
@@ -257,4 +258,59 @@ async fn a_local_server_that_says_nothing_keeps_the_openai_default() {
     // No third endpoint to be tried: `/api/ps` refusing means this is not an
     // Ollama at all, and `/api/show` goes unasked.
     assert_eq!(seen.len(), 3);
+}
+
+// `refresh` is discovery plus the file: what the shell and the CLI call the
+// moment a key is stored. The provider here overrides `authorization` away, so
+// no key is looked up and the test never touches the keychain.
+
+fn keyless(base: impl Into<String>) -> ProviderSpec {
+    let mut spec = spec(base, Protocol::OpenAi);
+    spec.headers.insert("authorization".into(), String::new());
+    spec
+}
+
+#[tokio::test]
+async fn a_refresh_writes_the_answer_into_the_file() {
+    // A versioned address, so the request also shows the `/v1` left out.
+    let (base, seen) = serve(json(r#"{"data":[{"id":"glm-4.6","context_length":200000}]}"#)).await;
+    let dir = TempProject::new();
+    let mut providers = Providers::default();
+    providers.put(keyless(format!("{base}/api/paas/v4")));
+    providers.save(dir.path()).unwrap();
+
+    let returned = refresh(dir.path(), "gateway").await.unwrap();
+
+    let saved = Providers::load(dir.path()).unwrap();
+    assert_eq!(returned, saved);
+    assert_eq!(saved.get("gateway").unwrap().models[0].id, "glm-4.6");
+    assert!(seen.await.unwrap().headers.contains("GET /api/paas/v4/models"));
+}
+
+#[tokio::test]
+async fn a_refused_refresh_leaves_the_saved_list_alone() {
+    let (base, _seen) = serve(json_response(
+        "401 Unauthorized",
+        r#"{"error":{"message":"no such key"}}"#,
+    ))
+    .await;
+    let dir = TempProject::new();
+    let mut spec = keyless(base);
+    spec.models = vec![yaca_core::usage::unknown_model("kept")];
+    let mut providers = Providers::default();
+    providers.put(spec);
+    providers.save(dir.path()).unwrap();
+
+    let err = refresh(dir.path(), "gateway").await.unwrap_err().to_string();
+
+    assert!(err.contains("no such key"), "{err}");
+    let saved = Providers::load(dir.path()).unwrap();
+    assert_eq!(saved.get("gateway").unwrap().models[0].id, "kept");
+}
+
+#[tokio::test]
+async fn a_refresh_of_a_provider_that_is_not_there_says_so() {
+    let dir = TempProject::new();
+    let err = refresh(dir.path(), "nobody").await.unwrap_err().to_string();
+    assert!(err.contains("«nobody»"), "{err}");
 }

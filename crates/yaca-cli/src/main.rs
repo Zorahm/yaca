@@ -68,7 +68,7 @@ struct Args {
     /// The default is the same as the window's: the CLI cannot have its own,
     /// or it would test a different core than the one running under the
     /// interface.
-    #[arg(long, default_value = "manual")]
+    #[arg(long, default_value = "auto")]
     mode: String,
 
     /// What to do with permission requests: deny | allow.
@@ -337,6 +337,7 @@ fn human(event: &AgentEvent) -> Option<String> {
         } => format!("\x1b[2mПовтор через {} с · попытка {attempt} из {of}\x1b[0m", delay_ms / 1000),
         AgentEvent::Error { code, message, .. } => format!("\x1b[31mОшибка {code}: {message}\x1b[0m"),
         AgentEvent::PlanProposed { plan } => format!("\n--- план ---\n{plan}\n"),
+        AgentEvent::TextShown { path, text, .. } => format!("\n--- {path} ---\n{text}\n"),
         AgentEvent::FileChanged { fact, .. } => format!(
             "\x1b[2m  {} +{} −{}\x1b[0m",
             fact.path, fact.added, fact.removed

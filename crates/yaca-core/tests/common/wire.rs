@@ -14,7 +14,7 @@ use yaca_core::provider::ProviderStream;
 /// What the server saw in the request.
 pub struct Seen {
     pub headers: String,
-    /// `null` у запроса без тела — то есть у всякого `GET`.
+    /// `null` for a request without a body — that is, for every `GET`.
     pub body: serde_json::Value,
 }
 
@@ -107,8 +107,8 @@ pub async fn read_one(socket: &mut tokio::net::TcpStream) -> Option<Seen> {
             continue;
         }
 
-        // `GET` тела не несёт вовсе: у опроса моделей его нет, и пустое
-        // тело — это `null`, а не «разбор не удался».
+        // A `GET` carries no body at all: model discovery has none, and an empty
+        // body is `null`, not a "parse failed".
         let body = if expected == 0 {
             serde_json::Value::Null
         } else {
@@ -121,9 +121,9 @@ pub async fn read_one(socket: &mut tokio::net::TcpStream) -> Option<Seen> {
 async fn answer(socket: &mut tokio::net::TcpStream, response: &str) {
     socket.write_all(response.as_bytes()).await.unwrap();
     socket.flush().await.unwrap();
-    // Именно shutdown, а не drop: на Windows закрытие сокета даёт RST,
-    // и тело ответа теряется по дороге. Поток без content-length
-    // кончается корректным FIN.
+    // It has to be shutdown, not drop: on Windows closing the socket sends an RST,
+    // and the response body is lost on the way. A stream without content-length
+    // ends with a proper FIN.
     let _ = socket.shutdown().await;
 }
 

@@ -2,6 +2,7 @@
 name = "yaca-desktop"
 description = "Yaca — оболочка приложения"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true

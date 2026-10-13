@@ -1,37 +1,48 @@
 /**
- * Панель файла §6.4: полный дифф на всю высоту с липкой шапкой.
+ * Панель файла: файл целиком, как он лежит сейчас, на всю высоту.
  *
- * Открывается кликом по имени файла в строке действия (§1.1). Весь файл с
- * неизменёнными строками приходит от ядра (`fileViewLoaded`): в потоке лежит
- * только дифф одного вызова с тремя строками контекста, а §6.4 хочет файл целиком.
- * Между ханками — свёрнутые промежутки «⋯ N строк», их можно раскрыть.
+ * Открывается кликом по имени файла в строке действия — созданного,
+ * изменённого или только прочитанного. Диффа здесь нет: что именно поменял
+ * вызов, показывает его раскрытая строка в ленте, а панель отвечает на другой
+ * вопрос — что в файле в итоге.
  *
- * Панель только показывает. Решать про ханк здесь нечего: правка уже лежит в
- * рабочем дереве, и единственный путь назад — «Откатить сюда» на чекпоинте
- * (§5.8).
+ * Это просмотр, а не редактор: номера строк и подсветка, без сворачивания
+ * блоков и без курсора. Имя файла стоит на вкладке панели; под шапкой — строка
+ * с путём и тремя действиями над файлом: поиск по тексту, копирование и
+ * раскрытие панели на всё окно.
+ *
+ * Текст приходит от ядра (`fileViewLoaded`) в виде сегментов с ханками; из них
+ * берутся строки новой стороны, удалённые отбрасываются.
  */
 
-import { ArrowBendUpLeft } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import {
+  ArrowsInSimple,
+  ArrowsOutSimple,
+  CaretDown,
+  CaretUp,
+  Check,
+  Copy,
+  MagnifyingGlass,
+  X,
+} from "@phosphor-icons/react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import type { DiffLine, FileView } from "../../core/client";
 import type { Feed } from "../../core/feed";
-import { factOf } from "../../core/feed";
 import { t } from "../../i18n";
-import { FileBadge } from "../FileBadge";
-import { Diff, type FileBody } from "../Diff";
+import { Diff } from "../Diff";
 import { plainPath } from "../format";
+import { useCopy } from "../useCopy";
 import { Panel } from "./Panel";
 
 export function FilePanel({
   path,
   feed,
-  onClose,
   onRead,
 }: {
   path: string;
   feed: Feed;
-  onClose: () => void;
-  /** Просит ядро отдать файл целиком (§6.4). */
+  /** Просит ядро отдать файл целиком. */
   onRead: (path: string) => void;
 }) {
   // Запрос уходит, когда панель показала другой файл и когда агент записал
@@ -46,55 +57,166 @@ export function FilePanel({
     readRef.current(path);
   }, [path, feed.writes]);
 
-  // Раскрытые промежутки считаются по индексам сегментов одного вида: в новом
-  // виде те же индексы значат другое, поэтому раскрытое сбрасывается.
-  const [expanded, setExpanded] = useState<ReadonlySet<number>>(() => new Set());
+  // `undefined` — ядро ещё не ответило за этот файл; `null` — показать
+  // нечего: файла нет, он двоичный или лежит вне проекта.
   const viewed = feed.fileView;
-  useEffect(() => {
-    setExpanded(new Set());
-  }, [path, viewed]);
-
-  // `undefined` — ядро ещё не ответило за этот файл; `null` — сессия этот
-  // файл не меняла.
   const shown = viewed !== null && viewed.path === path ? viewed.view : undefined;
-  const view = shown ?? null;
-  const fact = view?.fact ?? factOf(feed, path);
+  const lines = useMemo(() => (shown ? currentLines(shown) : []), [shown]);
+  // Удалённый файл приходит видом из одних удалённых строк: файла больше нет.
+  const gone = shown === null || (shown !== undefined && lines.length === 0);
+  const ready = shown !== undefined && shown !== null && !gone;
 
-  const body: FileBody | null =
-    shown === null || shown === undefined
-      ? null
-      : {
-          segments: shown.segments,
-          truncated: shown.truncated,
-          expanded,
-          onExpand: (index) => setExpanded((now) => new Set(now).add(index)),
-        };
+  const [full, setFull] = useState(false);
+  const { copied, copy } = useCopy();
+
+  // `null` — поиск закрыт. Открытый с пустой строкой ничего не находит.
+  const [query, setQuery] = useState<string | null>(null);
+  const [step, setStep] = useState(0);
+  const found = useMemo(() => find(lines, query ?? ""), [lines, query]);
+  // Другой запрос или другой файл — другой список находок; шаг по старому
+  // списку в нём ничего не значит.
+  useEffect(() => setStep(0), [found]);
+  const hits = useMemo(() => new Set(found), [found]);
+  const move = (by: number) =>
+    found.length > 0 && setStep((now) => (now + by + found.length) % found.length);
+
+  const copyLabel = t(copied ? "feed.copied" : "file.copy");
+  const fullLabel = t(full ? "file.shrink" : "file.expand");
 
   return (
     <Panel
-      open
-      onOpenChange={(next) => !next && onClose()}
-      title={<span className="panel-title-mono">{plainPath(path)}</span>}
+      full={full}
+      // `Esc` closes the search first and the panel only after it.
+      onEscape={(event) => {
+        if (query === null) return;
+        event.preventDefault();
+        setQuery(null);
+      }}
+      onKeyDown={(event) => {
+        if (ready && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+          event.preventDefault();
+          setQuery((now) => now ?? "");
+        }
+      }}
     >
-      <div className="panel-file-head">
-        {fact !== null && <FileBadge file={fact} />}
-        {view !== null && (
-          <span className="bar-counts">
-            <span className="count-add">+{view.fact.added}</span>{" "}
-            <span className="count-del">−{view.fact.removed}</span>
-          </span>
-        )}
-        {fact?.movedFrom && (
-          <span className="panel-file-moved"><ArrowBendUpLeft size={12} /> {fact.movedFrom}</span>
-        )}
+      <div className="file-bar">
+        <span className="file-path">{plainPath(path)}</span>
+        <button
+          className="top-icon"
+          aria-label={t("file.search")}
+          title={t("file.search")}
+          aria-pressed={query !== null}
+          disabled={!ready}
+          onClick={() => setQuery((now) => (now === null ? "" : null))}
+        >
+          <MagnifyingGlass size={15} />
+        </button>
+        <button
+          className="top-icon"
+          aria-label={copyLabel}
+          title={copyLabel}
+          disabled={!ready}
+          onClick={() => copy(lines.map((line) => line.text).join("\n"))}
+        >
+          {copied ? <Check size={15} weight="bold" /> : <Copy size={15} />}
+        </button>
+        <button
+          className="top-icon"
+          aria-label={fullLabel}
+          title={fullLabel}
+          onClick={() => setFull(!full)}
+        >
+          {full ? <ArrowsInSimple size={15} /> : <ArrowsOutSimple size={15} />}
+        </button>
       </div>
 
-      <div className="panel-file-diff">
+      {query !== null && (
+        <div className="file-search">
+          <input
+            className="file-search-input"
+            autoFocus
+            value={query}
+            placeholder={t("file.search_placeholder")}
+            aria-label={t("file.search")}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") move(event.shiftKey ? -1 : 1);
+            }}
+          />
+          <span className="file-search-count">
+            {query === ""
+              ? ""
+              : found.length === 0
+                ? t("file.search_none")
+                : t("file.search_count", { at: step + 1, of: found.length })}
+          </span>
+          <button
+            className="top-icon"
+            aria-label={t("file.search_prev")}
+            title={t("file.search_prev")}
+            disabled={found.length === 0}
+            onClick={() => move(-1)}
+          >
+            <CaretUp size={14} />
+          </button>
+          <button
+            className="top-icon"
+            aria-label={t("file.search_next")}
+            title={t("file.search_next")}
+            disabled={found.length === 0}
+            onClick={() => move(1)}
+          >
+            <CaretDown size={14} />
+          </button>
+          <button
+            className="top-icon"
+            aria-label={t("file.search_close")}
+            title={t("file.search_close")}
+            onClick={() => setQuery(null)}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      <div className="panel-file">
         {shown === undefined && <div className="panel-empty">{t("file.loading")}</div>}
-        {shown === null && <div className="panel-empty">{t("file.unchanged")}</div>}
-        {body !== null && <Diff body={body} path={path} />}
+        {gone && <div className="panel-empty">{t("file.unavailable")}</div>}
+        {ready && (
+          <Diff
+            body={{
+              lines,
+              truncated: shown.truncated,
+              hits,
+              current: found.length > 0 ? found[step] : null,
+            }}
+            path={path}
+          />
+        )}
       </div>
     </Panel>
   );
 }
 
+/**
+ * The file as it is now: every line of the new side, none of them marked.
+ * Word-level spans go too — they point at what changed, and nothing is shown
+ * as changed here.
+ */
+function currentLines(view: FileView): DiffLine[] {
+  return view.segments
+    .flatMap((segment) => (segment.kind === "hunk" ? segment.hunk.lines : segment.lines))
+    .filter((line) => line.kind !== "del")
+    .map((line) => ({ ...line, kind: "context" as const, spans: [] }));
+}
+
+/** Indexes of the lines that hold the query, case ignored. */
+function find(lines: DiffLine[], query: string): number[] {
+  const needle = query.toLowerCase();
+  if (needle === "") return [];
+  const out: number[] = [];
+  for (const [at, line] of lines.entries()) {
+    if (line.text.toLowerCase().includes(needle)) out.push(at);
+  }
+  return out;
+}

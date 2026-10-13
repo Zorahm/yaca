@@ -1,9 +1,9 @@
-//! Что у двух протоколов общее: заголовки, разбор неуспешного ответа и
-//! перекачка SSE в канал.
+//! What the two protocols share: headers, parsing of an unsuccessful response and
+//! pumping SSE into a channel.
 //!
-//! Отдельным файлом, потому что различаются они только формой тела и разбором
-//! событий. Скопированный второй раз `bytes_stream` — это два места, где чинить
-//! обрыв соединения.
+//! A separate file, because they differ only in the body's shape and in parsing
+//! events. A second copy of `bytes_stream` would be two places to fix
+//! a dropped connection.
 
 use futures_util::StreamExt;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -14,11 +14,11 @@ use super::sse::SseDecoder;
 use super::{ProviderEvent, ProviderStream};
 use crate::error::ProviderError;
 
-/// Заголовки провайдера в форме reqwest.
+/// Provider headers in reqwest's form.
 ///
-/// Через `HeaderMap`, а не цепочкой `.header()`: описание провайдера может
-/// перебивать умолчания протокола, а `.header()` добавляет второе значение
-/// вместо замены — запрос уехал бы с двумя `authorization`.
+/// Built through `HeaderMap`, not a chain of `.header()`: a provider description may
+/// override the protocol's defaults, and `.header()` adds a second value
+/// instead of replacing it — the request would go out with two `authorization`s.
 pub(super) fn header_map(
     spec: &ProviderSpec,
     key: Option<&str>,
@@ -34,7 +34,7 @@ pub(super) fn header_map(
     Ok(map)
 }
 
-/// Проверяет статус и превращает неуспех в ошибку с телом внутри.
+/// Checks the status and turns a failure into an error with the body inside.
 ///
 /// `spec` and `key` are what the request went out with: a refusal of a
 /// request sent without the key its description asks for says so.
@@ -53,8 +53,8 @@ pub(super) async fn check_status(
         .get("retry-after")
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.parse::<u64>().ok());
-    // Не `unwrap_or_default`: молча проглоченная причина превращается
-    // в пустой блок ошибки, по которому человеку нечего решать.
+    // Not `unwrap_or_default`: a silently swallowed cause turns into
+    // an empty error block that gives the human nothing to decide on.
     let text = match resp.text().await {
         Ok(t) => t,
         Err(e) => format!("тело ответа не прочиталось: {e}"),
@@ -86,10 +86,10 @@ fn name_missing_key(
     }
 }
 
-/// Текст ошибки из тела неуспешного ответа.
+/// Error text from the body of an unsuccessful response.
 ///
-/// Форма `{"error":{"message":…}}` одна и та же у обоих протоколов — это
-/// единственное, в чём они сошлись без уговора.
+/// The `{"error":{"message":…}}` shape is the same for both protocols — it is
+/// the only thing they agreed on without any coordination.
 pub(super) fn extract_api_message(body: &str) -> String {
     if let Some(message) = serde_json::from_str::<serde_json::Value>(body)
         .ok()
@@ -104,32 +104,32 @@ pub(super) fn extract_api_message(body: &str) -> String {
     }
     let raw: String = body.trim().chars().take(400).collect();
     if raw.is_empty() {
-        // Оборванный ответ бывает. Пустая строка в блоке ошибки (§5.10) —
-        // не бывает: человеку нечего было бы прочитать.
+        // A cut-off response does happen. An empty line in the error block (§5.10)
+        // does not happen: the human would have nothing to read.
         "провайдер не прислал подробностей".into()
     } else {
         raw
     }
 }
 
-/// Разбор одной формы потока.
+/// Parsing of one form of stream.
 ///
-/// Трейт, а не функция: OpenAI-форма не даёт ни индексов блоков, ни явного
-/// конца сообщения, поэтому разбору нужна память между посылками и хвост,
-/// который дописывается, когда поток кончился.
+/// A trait, not a function: the OpenAI shape gives neither block indexes nor an
+/// explicit end of the message, so parsing needs memory between payloads and a
+/// tail that is appended once the stream has ended.
 pub(super) trait StreamDecoder: Send + 'static {
     fn payload(&mut self, payload: &str) -> Result<Vec<ProviderEvent>, ProviderError>;
 
-    /// Байты кончились. Форма, закрывающая сообщение сама, ничего не добавляет.
+    /// The bytes have run out. A shape that closes the message itself adds nothing.
     fn finish(&mut self) -> Vec<ProviderEvent> {
         Vec::new()
     }
 }
 
-/// Перекачивает SSE в канал, разбирая каждую посылку.
+/// Pumps SSE into a channel, parsing each payload.
 ///
-/// Канал вместо ручного `Stream`: разбор SSE — это состояние поверх
-/// состояния, и городить `poll_next` ради экономии одной задачи незачем.
+/// A channel instead of a hand-written `Stream`: parsing SSE is state on top of
+/// state, and writing `poll_next` just to save one task is not worth it.
 pub(super) fn pump(resp: reqwest::Response, mut decode: impl StreamDecoder) -> ProviderStream {
     let (tx, rx) = tokio::sync::mpsc::channel(256);
     tokio::spawn(async move {
@@ -149,7 +149,7 @@ pub(super) fn pump(resp: reqwest::Response, mut decode: impl StreamDecoder) -> P
                     Ok(events) => {
                         for ev in events {
                             if tx.send(Ok(ev)).await.is_err() {
-                                return; // читатель ушёл — турн отменён
+                                return; // the reader has gone — the turn is cancelled
                             }
                         }
                     }

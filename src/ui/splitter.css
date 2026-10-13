@@ -1,0 +1,64 @@
+/*
+ * The handle on the edge of a resizable column (Splitter.tsx).
+ *
+ * Nothing is drawn until it is wanted: the column's own border is the resting
+ * state. Under the pointer a line appears, and it turns to the accent while
+ * the column is being dragged or the handle holds the keyboard focus.
+ */
+
+.splitter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 8px;
+  cursor: col-resize;
+  /* A touch drag would otherwise scroll the page under the handle. */
+  touch-action: none;
+  outline: none;
+}
+
+.splitter-left {
+  left: 0;
+}
+
+.splitter-right {
+  right: 0;
+}
+
+.splitter::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--line-strong);
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+/* On the sidebar the line lies on the column's border; on the panel it runs
+   down the middle of the gap between the feed and the card. */
+.splitter-right::after {
+  right: 0;
+}
+
+.splitter-left::after {
+  left: 3px;
+}
+
+.splitter:hover::after {
+  opacity: 1;
+}
+
+.splitter-on::after,
+.splitter:focus-visible::after {
+  background: var(--accent);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splitter::after {
+    transition: none;
+  }
+}

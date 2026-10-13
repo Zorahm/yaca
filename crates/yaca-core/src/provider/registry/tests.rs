@@ -19,8 +19,8 @@ fn отсутствующий_файл_даёт_оба_предустановл�
     let providers = Providers::load(dir.path()).unwrap();
     assert!(providers.get(ANTHROPIC_ID).is_some());
 
-    // OpenAI-форма — вторая, и приезжает без моделей: их отдаёт
-    // `/v1/models`, а не список, написанный здесь на глазок.
+    // The OpenAI shape is the second one, and it arrives without models: they come from
+    // `/v1/models`, not from a list written here by eye.
     let openai = providers.get(OPENAI_ID).unwrap();
     assert_eq!(openai.protocol, Protocol::OpenAi);
     assert!(openai.models.is_empty());
@@ -29,7 +29,7 @@ fn отсутствующий_файл_даёт_оба_предустановл�
 
 #[test]
 fn предустановленный_без_моделей_честно_отказывается_быть_выбранным() {
-    // Пока список пуст, разговаривать нечем — и это ошибка, а не тишина.
+    // While the list is empty there is nothing to talk to — and that is an error, not silence.
     assert!(ProviderSpec::openai().resolve_model("gpt-5").is_err());
 }
 
@@ -59,8 +59,9 @@ fn встроенный_провайдер_возвращается_в_спис�
     assert!(providers.get(ANTHROPIC_ID).is_some());
     assert!(providers.get(OPENAI_ID).is_some());
     assert_eq!(providers.get("gateway").unwrap().protocol, Protocol::OpenAi);
-    // Свой шлюз остаётся там, где его поставил автор файла.
-    assert_eq!(providers.list[1].id, "gateway");
+    // A custom gateway stays where the file's author put it: the presets
+    // arrive after it, not in front.
+    assert_eq!(providers.list[0].id, "gateway");
 }
 
 #[test]
@@ -81,7 +82,7 @@ fn ключ_подставляется_в_заголовок_а_не_лежит_
 
     assert!(headers.contains(&("authorization".into(), "Bearer sk-живой".into())));
     assert!(headers.contains(&("x-title".into(), "Yaca".into())));
-    // В самом описании ключа нет ни в каком виде.
+    // The key is not in the description in any form.
     assert!(!serde_json::to_string(&s).unwrap().contains("sk-живой"));
 }
 
@@ -138,11 +139,11 @@ fn модель_не_из_списка_дает_ошибку() {
         supports_images: true,
     }];
 
-    // Модель другого провайдера не подменяется молча, а отвергается.
+    // Another provider's model is not silently substituted, it is rejected.
     assert!(s.resolve_model("claude-opus-5").is_err());
-    // Своя модель остаётся собой.
+    // A provider's own model stays itself.
     assert_eq!(s.resolve_model("qwen3-coder").unwrap(), "qwen3-coder");
-    // Пустая строка берёт первую.
+    // An empty string picks the first one.
     assert_eq!(s.resolve_model("").unwrap(), "qwen3-coder");
 }
 
@@ -163,8 +164,8 @@ fn файл_написанный_до_нового_поля_модели_всё_
               "supportsEffort":false}]}]}"#,
     );
 
-    // Обновление не должно ронять чужую настройку: битый файл здесь
-    // останавливает запуск, и новое поле не повод.
+    // An update must not break someone else's setting: a broken file here
+    // stops the launch, and a new field is no reason for that.
     let providers = Providers::load(dir.path()).unwrap();
     let model = &providers.get("ollama").unwrap().models[0];
     assert_eq!(model.id, "qwen3-coder");
@@ -210,4 +211,82 @@ fn поиск_модели_и_все_модели() {
 fn a_preset_comes_without_models() {
     let providers = Providers::default();
     assert!(providers.all_models().is_empty());
+}
+
+#[test]
+fn presets_are_all_there_by_id() {
+    let ids: Vec<_> = Providers::default().list.into_iter().map(|p| p.id).collect();
+    assert_eq!(
+        ids,
+        ["openai", "anthropic", "google", "openrouter", "deepseek", "zai"]
+    );
+    assert!(ids.iter().all(|id| is_preset(id)));
+    assert!(!is_preset("gateway"));
+    // The two the rest of the core names directly.
+    assert_eq!(ProviderSpec::openai().id, OPENAI_ID);
+    assert_eq!(ProviderSpec::anthropic().id, ANTHROPIC_ID);
+}
+
+/// A file saved when there were two presets gains the rest on the next load,
+/// and what it already said about its own stays said.
+#[test]
+fn a_file_from_before_a_preset_existed_gains_it_at_the_end() {
+    let dir = TempDir::new();
+    dir.write(
+        FILE,
+        r#"{"list":[
+            {"id":"anthropic","displayName":"Anthropic","protocol":"anthropic",
+             "baseUrl":"https://proxy.example.com","models":[]},
+            {"id":"openai","displayName":"OpenAI","protocol":"openai",
+             "baseUrl":"https://api.openai.com","models":[]}]}"#,
+    );
+    let providers = Providers::load(dir.path()).unwrap();
+
+    let ids: Vec<_> = providers.list.iter().map(|p| p.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        ["anthropic", "openai", "google", "openrouter", "deepseek", "zai"]
+    );
+    assert_eq!(
+        providers.get(ANTHROPIC_ID).unwrap().base_url,
+        "https://proxy.example.com"
+    );
+}
+
+#[test]
+fn the_protocol_path_goes_under_v1() {
+    let s = spec(Protocol::OpenAi);
+    assert_eq!(s.api("/models"), "https://gate.example.com/v1/models");
+    // OpenRouter: a path of its own, and no version in it.
+    let mut s = spec(Protocol::OpenAi);
+    s.base_url = "https://openrouter.ai/api".into();
+    assert_eq!(
+        s.api("/chat/completions"),
+        "https://openrouter.ai/api/v1/chat/completions"
+    );
+}
+
+#[test]
+fn an_address_that_names_its_version_is_not_given_another() {
+    let mut s = spec(Protocol::OpenAi);
+    for (base, expected) in [
+        // Google AI Studio and z.ai: the version is not `v1`, and not last.
+        (
+            "https://generativelanguage.googleapis.com/v1beta/openai",
+            "https://generativelanguage.googleapis.com/v1beta/openai/models",
+        ),
+        (
+            "https://api.z.ai/api/coding/paas/v4/",
+            "https://api.z.ai/api/coding/paas/v4/models",
+        ),
+        // The base URL pasted with its `/v1` on.
+        ("https://api.openai.com/v1", "https://api.openai.com/v1/models"),
+        // A version in the host is not a version of the path.
+        ("https://v2.example.com", "https://v2.example.com/v1/models"),
+        // Nor is a word that only starts like one.
+        ("https://example.com/vendor", "https://example.com/vendor/v1/models"),
+    ] {
+        s.base_url = base.into();
+        assert_eq!(s.api("/models"), expected);
+    }
 }

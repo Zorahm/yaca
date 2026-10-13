@@ -99,10 +99,10 @@ export function RulesSection({
             label={t("rules.mode")}
             value={settings.mode ?? ""}
             options={[
-              { value: "plan", label: t("mode.plan") },
-              { value: "manual", label: t("mode.manual") },
               { value: "auto", label: t("mode.auto") },
+              { value: "manual", label: t("mode.manual") },
               { value: "edits", label: t("mode.edits") },
+              { value: "plan", label: t("mode.plan") },
             ]}
             onChange={(mode) =>
               onPatch((now) => ({ ...now, mode: mode === "" ? null : mode }))

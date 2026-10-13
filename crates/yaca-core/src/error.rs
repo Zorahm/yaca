@@ -1,8 +1,8 @@
 //! Core errors.
 //!
-//! Разделение важное и не косметическое: [`ToolError::Rejected`] — сработавший
-//! инвариант (§5.9), интерфейс красит его `--vermilion-ink` и человеку делать нечего;
-//! [`ToolError::Failed`] — настоящий сбой, `--rust`.
+//! The split matters and is not cosmetic: [`ToolError::Rejected`] is a tripped
+//! invariant (§5.9); the interface paints it `--vermilion-ink` and there is
+//! nothing for the human to do. [`ToolError::Failed`] is a real failure, `--rust`.
 
 use thiserror::Error;
 
@@ -33,21 +33,22 @@ pub enum ProviderError {
     Http {
         status: u16,
         message: String,
-        /// Заголовок `retry-after` в секундах, если провайдер его прислал.
+    /// The `retry-after` header in seconds, if the provider sent one.
         retry_after_s: Option<u64>,
     },
 
     #[error("не разобрал поток: {0}")]
     Protocol(String),
 
-    /// Провайдер описан так, что запрос не собрать: негодное имя заголовка,
-    /// негодное значение. Повтор не поможет — чинить надо описание.
+    /// The provider is described in a way that makes the request impossible to
+    /// build: a bad header name, a bad value. Retrying will not help — the
+    /// description has to be fixed.
     #[error("описание провайдера: {0}")]
     Config(String),
 }
 
 impl ProviderError {
-    /// Стоит ли повторять. Драйвит `RetryScheduled` (§5.10).
+    /// Whether to retry. Drives `RetryScheduled` (§5.10).
     pub fn is_retryable(&self) -> bool {
         match self {
             ProviderError::Network(_) => true,
@@ -118,16 +119,16 @@ impl ProviderError {
 
 #[derive(Debug, Error)]
 pub enum ToolError {
-    /// Инвариант отказал. Не сбой: сработавшая защита (§5.9).
+    /// An invariant refused. Not a failure: a safeguard that tripped (§5.9).
     #[error("{0}")]
     Rejected(String),
 
-    /// Тул не смог сделать работу.
+    /// The tool could not do the work.
     ///
-    /// `message` — форма неудачи для ленты (§5.5), одной строкой. `detail`
-    /// появляется там, где модели нужно больше, чем человеку: вывод упавшей
-    /// команды уже уехал в ленту по мере выполнения, дублировать его в
-    /// подписи строки незачем, а починить без него модель не может.
+    /// `message` is the shape of the failure for the feed (§5.5), one line. `detail`
+    /// appears where the model needs more than the human does: the output of a failed
+    /// command has already gone to the feed as it ran, so repeating it in the line's
+    /// caption is pointless, yet the model cannot fix anything without it.
     #[error("{message}")]
     Failed {
         message: String,
@@ -155,7 +156,7 @@ impl ToolError {
         }
     }
 
-    /// Неудача, о которой модель должна знать подробнее, чем лента.
+    /// A failure the model must know more about than the feed shows.
     pub fn failed_with(msg: impl Into<String>, detail: impl Into<String>) -> Self {
         ToolError::Failed {
             message: msg.into(),
@@ -163,7 +164,7 @@ impl ToolError {
         }
     }
 
-    /// Что уедет модели как `tool_result`.
+    /// What goes to the model as `tool_result`.
     pub fn for_model(&self) -> String {
         match self {
             ToolError::Failed {

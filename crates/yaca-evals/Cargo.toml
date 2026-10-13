@@ -2,6 +2,7 @@
 name = "yaca-evals"
 description = "Runs Yaca against real tasks with a real model and checks the result"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true

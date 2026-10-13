@@ -40,8 +40,18 @@ pub enum Record {
     /// A marker rather than a rewrite. The file is append-only so that a crash
     /// cannot leave it truncated, and what the human said before the summary is
     /// still theirs to search (§9).
+    ///
+    /// `kept` is how many of the message lines that follow are the history the
+    /// session went on with, written out again: the summary and the turns it
+    /// left as they were. They are the conversation for the provider, and
+    /// copies for anyone numbering what was said (`store::transcript`). Zero
+    /// in a journal written before the count was.
     #[serde(rename_all = "camelCase")]
-    Reset { turn: TurnId },
+    Reset {
+        turn: TurnId,
+        #[serde(default)]
+        kept: usize,
+    },
     /// Requests go out under a different prefix from here on, and the
     /// reasoning in the messages above was bound to the old one
     /// (`session::binding`). Replaying makes the cut the live session made.
@@ -57,7 +67,7 @@ impl Record {
         match self {
             Record::Prompt { turn, .. }
             | Record::Message { turn, .. }
-            | Record::Reset { turn }
+            | Record::Reset { turn, .. }
             | Record::Prefix { turn, .. } => turn,
         }
     }
@@ -233,6 +243,7 @@ mod tests {
             reply("t1", "длинный разговор"),
             Record::Reset {
                 turn: TurnId::from("t2"),
+                kept: 1,
             },
             reply("t2", "сводка"),
         ];
@@ -305,6 +316,7 @@ mod tests {
             reply("t1", "long"),
             Record::Reset {
                 turn: TurnId::from("t2"),
+                kept: 1,
             },
             reply("t2", "summary"),
         ];

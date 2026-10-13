@@ -14,7 +14,11 @@ import type { Mode } from "../core/client";
 import { t, type Key } from "../i18n";
 import type { ComposerActions, ComposerSettings } from "./Composer";
 
-export const MODES: Mode[] = ["plan", "manual", "auto", "edits"];
+/**
+ * In the order the list shows them, which is also the order `⇧⇥` walks: the
+ * default first, plan last — it is the one that is not a level of trust.
+ */
+export const MODES: Mode[] = ["auto", "manual", "edits", "plan"];
 
 export const MODE_KEY: Record<Mode, Key> = {
   plan: "mode.plan",
@@ -58,7 +62,7 @@ export function ModeMenu({
 
   return (
     <div className="menu menu-notes">
-      <div className="menu-item" style={{ color: "var(--ink-muted)" }}>
+      <div className="menu-item" style={{ color: "var(--muted)" }}>
         {t("mode.title")}
       </div>
       {MODES.map((mode, index) => (

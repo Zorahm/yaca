@@ -1,5 +1,5 @@
 /**
- * Панель чекпоинтов §1.1: список точек этого прогона и дифф от выбранной.
+ * Панель чекпоинтов: список точек этого прогона и дифф от выбранной.
  *
  * Список ядро отдаёт целиком событием `checkpointsUpdated` — панель есть
  * функция от него, своего списка тут нет. То же и с диффом: выбор строки шлёт
@@ -12,7 +12,7 @@
  * недалеко. Лента идёт в обратном порядке, но там точка стоит на своём месте
  * в разговоре, а здесь она строка списка.
  *
- * Дифф — тот же список файлов, что показывает подтверждение §5.8: что откат
+ * Дифф — тот же список файлов, что показывает подтверждение в ленте: что откат
  * сделает с каждым. Построчного диффа от точки ядро не отдаёт, и рисовать его
  * тут не из чего.
  *
@@ -20,8 +20,6 @@
  * не переживает её (README). Открытая заново сессия начинает с пустой панели,
  * и это правда — вернуться к вчерашней точке она не может.
  */
-
-import { Circle } from "@phosphor-icons/react";
 
 import type { CheckpointChange, CheckpointSummary } from "../../core/client";
 import type { Feed } from "../../core/feed";
@@ -32,13 +30,11 @@ import { Panel } from "./Panel";
 
 export function CheckpointsPanel({
   feed,
-  onClose,
   onPreview,
   onRestore,
   onCancel,
 }: {
   feed: Feed;
-  onClose: () => void;
   onPreview: (id: string) => void;
   onRestore: (id: string) => void;
   /** Снять вопрос, ничего не откатывая. */
@@ -48,7 +44,7 @@ export function CheckpointsPanel({
   const preview = feed.preview;
 
   return (
-    <Panel open onOpenChange={(next) => !next && onClose()} title={t("top.checkpoints")}>
+    <Panel>
       {points.length === 0 ? (
         <div className="panel-empty">{t("ckpt.empty")}</div>
       ) : (
@@ -88,14 +84,13 @@ function CheckpointRow({
   return (
     <div className="ckpt">
       <button className="ckpt-row" aria-expanded={asking} onClick={onPreview}>
-        <span className="ckpt-dot">
-          <Circle size={6} weight="fill" />
+        <span className={asking ? "ckpt-dot ckpt-dot-on" : "ckpt-dot"} />
+        <span className="ckpt-reason">
+          {reasonText(point.reason)} · {timeOf(point.at)}
         </span>
-        <span className="ckpt-time">{timeOf(point.at)}</span>
-        <span className="ckpt-reason">{reasonText(point.reason)}</span>
       </button>
 
-      {/* §5.8: откат показывает, что тронет, и ждёт подтверждения — до того,
+      {/* Откат показывает, что тронет, и ждёт подтверждения — до того,
           как что-либо произошло. */}
       {asking && files !== null && (
         <div className="confirm">

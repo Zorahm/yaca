@@ -1,8 +1,8 @@
-//! Разбор потока Messages API в нормализованные `ProviderEvent`.
+//! Parsing of the Messages API stream into normalized `ProviderEvent`s.
 //!
-//! Незнакомый тип блока или события проходит мимо, а не роняет поток: ответ,
-//! в котором приехал серверный тул, всё ещё содержит текст, который человек
-//! ждёт, и падение здесь стоило бы ему целого хода.
+//! An unknown block or event type is passed over rather than breaking the stream: a response,
+//! in which a server-side tool arrived still contains the text the human is
+//! waiting for, and failing here would cost them a whole turn.
 
 use serde::{Deserialize, Serialize};
 
@@ -12,8 +12,8 @@ use crate::provider::http::StreamDecoder;
 use crate::provider::{BlockKind, ProviderEvent};
 use crate::usage::TokenCounts;
 
-/// Messages API закрывает сообщение сам: `message_stop` приезжает в потоке,
-/// и дописывать хвост после обрыва байтов нечем.
+/// The Messages API closes the message itself: `message_stop` arrives in the stream,
+/// and there is nothing to append to the tail once the bytes have been cut off.
 pub(super) struct Decoder;
 
 impl StreamDecoder for Decoder {
@@ -66,8 +66,8 @@ fn decode_payload(payload: &str) -> Result<Vec<ProviderEvent>, ProviderError> {
                 index,
                 kind: BlockKind::ToolUse { id, name },
             }],
-            // Серверные тулы и блоки, которых мы ещё не знаем: молча мимо.
-            // Падать на незнакомом типе блока — худший из возможных ответов.
+            // Server tools and block types we do not know yet: silently passed over.
+            // Failing on an unknown block type is the worst possible answer.
             WireBlockStart::Unknown => vec![],
         },
         StreamEvent::ContentBlockDelta { index, delta } => match delta {

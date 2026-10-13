@@ -5,7 +5,8 @@ import type { TsMillis } from "./TsMillis";
 
 export type SessionMeta = { id: SessionId, 
 /**
- * Generated from the first message (§3), unless renamed.
+ * The model's name for the session, else cut from the first message
+ * (§3), unless renamed.
  */
 title: string, 
 /**

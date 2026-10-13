@@ -1,13 +1,13 @@
 //! Тулы и реестр.
 //!
-//! Здесь живёт механика §5.4.1: кто пишет подпись действия. Тулы делятся на два
-//! рода, и деление проведено в схеме вызова, а не в промпте.
+//! The mechanics of §5.4.1 live here: who writes the caption of an action. Tools
+//! come in two kinds, and the split is drawn in the call's schema, not in the prompt.
 //!
-//! * [`Narration::Interface`] — подпись выводится из факта: создан файл,
-//!   изменён, удалён, не удалось. Поля `description` в схеме нет вовсе, чтобы
-//!   модель не тратила на него токены и не пыталась переписать факт.
-//! * [`Narration::Model`] — подпись знает только модель: из `rg -n $'\x01' src/`
-//!   интерфейс не поймёт, зачем это запускали. Поле `description` обязательно.
+//! * [`Narration::Interface`] — the caption is derived from the fact: a file
+//!   created, changed, deleted, or failed. The `description` field is absent from
+//!   the schema altogether, so the model does not spend tokens on it or try to rewrite the fact.
+//! * [`Narration::Model`] — only the model knows the caption: from `rg -n $'\x01' src/`
+//!   the interface cannot tell why it was run. The `description` field is required.
 
 pub mod ask_user;
 pub mod bash;
@@ -18,6 +18,7 @@ pub mod delete_dir;
 pub mod delete_file;
 pub mod edit_file;
 pub mod exit_plan_mode;
+pub mod extract_message;
 pub(crate) mod files;
 pub(crate) mod net;
 pub mod glob;
@@ -28,6 +29,9 @@ pub(crate) mod page;
 pub(crate) mod robots;
 pub mod read_file;
 pub mod read_image;
+pub mod search_message;
+pub mod send_text;
+pub mod set_title;
 pub mod skill;
 pub mod task;
 pub mod todo_write;
@@ -57,23 +61,24 @@ use crate::process::Processes;
 use crate::provider::ToolSchema;
 use crate::session::questions::Questions;
 use crate::session::subagent::Subagents;
+use crate::store::transcript::Transcript;
 use crate::workspace::Workspace;
 
-/// Максимальная длина подписи из §5.4.1.
+/// Maximum length of a caption, from §5.4.1.
 pub const DESCRIPTION_MAX_CHARS: usize = 60;
 
-/// Кто подписывает действие в ленте.
+/// Who writes the caption of an action in the feed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Narration {
     Interface,
     Model,
 }
 
-/// Куда тул отдаёт вывод, пока ещё работает (§15, `ToolCallProgress`).
+/// Where a tool sends its output while it is still running (§15, `ToolCallProgress`).
 ///
-/// `call_id` зашит внутрь: тул физически не может дописать в чужую строку
-/// ленты. Флаг «пользовались» решает, кто отдаёт текст: лента получает его
-/// ровно один раз — либо по мере поступления, либо целиком, когда тул вернулся.
+/// `call_id` is built in: the tool physically cannot write into someone else's
+/// feed row. The «пользовались» flag decides who sends the text: the feed gets it
+/// exactly once — either as it arrives, or whole when the tool has returned.
 pub struct Progress {
     call_id: CallId,
     events: EventSink,
@@ -101,8 +106,8 @@ impl Progress {
         });
     }
 
-    /// Уходил ли вывод в ленту по дороге. Сессия смотрит сюда, чтобы не
-    /// показать один и тот же текст дважды.
+    /// Whether output went to the feed on the way. The session looks here so as not
+    /// to show the same text twice.
     pub fn used(&self) -> bool {
         self.used.load(Ordering::Relaxed)
     }
@@ -128,12 +133,20 @@ pub struct ToolCtx {
     /// The session's language servers. `None` only where there is no session
     /// behind the call, which is unit tests.
     pub lsp: Option<Lsp>,
-    /// Соблюдать ли `Disallow` из `robots.txt` (§10).
+    /// Whether to honour `Disallow` from `robots.txt` (§10).
     ///
-    /// Уровень приложения, а не проекта: это про то, как Yaca ведёт себя в
-    /// сети, и решает это человек за всю программу. Приезжает полем
-    /// [`crate::SessionConfig`] — той же дорогой, что режим и усилие.
+    /// An application-level setting, not a project one: it is about how Yaca behaves
+    /// on the network, and the human decides it for the whole program. It arrives as a field of
+    /// [`crate::SessionConfig`] — by the same route as the mode and the effort.
     pub respect_robots: bool,
+    /// What was said in this conversation, from the session's journal. `None`
+    /// where nothing is written down: the tools that read it are not offered
+    /// there (`ToolRegistry::of_session`).
+    pub transcript: Option<Transcript>,
+    /// The session already has a name the model may not replace — its own, or
+    /// one a human typed. `SetTitle` refuses on it. False where there is no
+    /// index behind the call.
+    pub title_locked: bool,
 }
 
 impl ToolCtx {
@@ -146,8 +159,8 @@ impl ToolCtx {
     }
 }
 
-/// Изменение, легшее в рабочее дерево. Отсюда интерфейс берёт подпись
-/// строки (§5.5) и дифф для её раскрытия (§5.5.1).
+/// A change that landed in the working tree. The interface takes the caption of
+/// the row (§5.5) and the diff for its expansion (§5.5.1).
 #[derive(Debug, Clone)]
 pub struct FileChange {
     pub fact: FileFact,
@@ -156,18 +169,21 @@ pub struct FileChange {
 
 #[derive(Debug)]
 pub struct ToolOutput {
-    /// Что уедет модели как `tool_result`.
+    /// What goes to the model as `tool_result`.
     pub text: String,
-    /// Что покажет интерфейс в раскрытой строке и в счётчиках.
+    /// What the interface shows in the expanded row and in the counters.
     pub meta: ToolMeta,
-    /// Заполнено файловыми тулами. Событие по нему шлёт сессия — она одна
-    /// знает `call_id`, и все события уходят из одного места.
+    /// Filled in by the file tools. The session sends the event from it — it alone
+    /// knows the `call_id`, and all events leave from one place.
     pub changed: Option<FileChange>,
     /// Images for the model, each under the name it is told. They reach it
     /// after the results of the batch: see [`ContentBlock::Image`].
     ///
     /// [`ContentBlock::Image`]: crate::message::ContentBlock::Image
     pub pictures: Vec<(String, Picture)>,
+    /// The call answered and its work goes on: the session leaves its row
+    /// open, and whoever was left working closes it (`session::background`).
+    pub detached: bool,
 }
 
 impl ToolOutput {
@@ -181,7 +197,13 @@ impl ToolOutput {
             },
             changed: None,
             pictures: Vec::new(),
+            detached: false,
         }
+    }
+
+    pub fn detached(mut self) -> Self {
+        self.detached = true;
+        self
     }
 
     pub fn picture(mut self, name: String, picture: Picture) -> Self {
@@ -204,9 +226,9 @@ impl ToolOutput {
         self
     }
 
-    /// Сколько строк ушло в ленту. Считается из `text` по умолчанию, но у
-    /// стримящих тулов лента и модель видят разное: команда отдаёт человеку
-    /// весь вывод, а модели — обрезанный.
+    /// How many lines went to the feed. Counted from `text` by default, but for
+    /// streaming tools the feed and the model see different things: a command gives the human
+    /// all of its output, and the model a cut one.
     pub fn lines(mut self, n: u32) -> Self {
         self.meta.lines = n;
         self
@@ -219,10 +241,10 @@ pub trait Tool: Send + Sync {
     /// server, at run time.
     fn name(&self) -> &str;
 
-    /// Описание тула для модели — не подпись действия.
+    /// The tool's description for the model — not the caption of an action.
     fn description(&self) -> &str;
 
-    /// Свойства JSON Schema без служебного `description`: его добавляет реестр.
+    /// JSON Schema properties without the internal `description`: the registry adds it.
     fn properties(&self) -> Value;
 
     fn required(&self) -> &[&str];
@@ -240,42 +262,50 @@ pub trait Tool: Send + Sync {
         false
     }
 
+    /// The call leaves no trace in the stream: no row, no output, no failure
+    /// line. For a tool whose effect reaches the interface another way — as an
+    /// event of its own — so that the row would only repeat it. The model still
+    /// sees the call and its result, and a refused call is still refused.
+    fn silent(&self) -> bool {
+        false
+    }
+
     fn narration(&self) -> Narration;
 
     fn intents(&self) -> &'static [Intent];
 
-    /// Может ли вызов идти одновременно с соседями по одной пачке (§5.4).
+    /// Whether a call may run at the same time as its neighbours in one batch (§5.4).
     ///
-    /// Модель зовёт тулы пачкой ровно затем, чтобы они шли разом, и пять
-    /// чтений подряд — это пять ожиданий вместо одного. Но одновременно
-    /// можно не всем.
+    /// The model calls tools in a batch precisely so that they run together, and five
+    /// reads in a row are five waits instead of one. But running at the same time
+    /// is not allowed for all of them.
     ///
-    /// `true` ставится тулу, который ничего не меняет и ни о чём не
-    /// спрашивает. Пишущим нельзя: две правки одного файла — гонка вокруг
-    /// инварианта свежести §8, где обе проверки проходят, а переживает одна,
-    /// и чекпоинт «перед командой» (§5.8) перестаёт что-либо значить, если
-    /// рядом бежит вторая команда. Спрашивающим нельзя тоже: §5.7 рисует один
-    /// блок со счётчиком `2 из 3`, и двум вопросам разом там негде встать.
+    /// `true` is set on a tool that changes nothing and asks about nothing.
+    /// Writing tools may not: two edits of one file are a race around
+    /// the §8 freshness invariant, where both checks pass but only one survives,
+    /// and the «перед командой» checkpoint (§5.8) stops meaning anything if
+    /// a second command runs alongside. Asking tools may not either: §5.7 draws one
+    /// block with a `2 из 3` counter, and two questions at once have nowhere to sit.
     fn concurrent(&self) -> bool {
         false
     }
 
-    /// Первая строка раскрытой строки действия (§5.5.1): полный путь,
-    /// полная команда, полный URL.
+    /// The first line of the expanded action row (§5.5.1): the full path,
+    /// full command, full URL.
     fn target(&self, _input: &Value) -> Option<String> {
         None
     }
 
-    /// Разрешение, которое нужно этому вызову (§8).
+    /// The permission this call needs (§8).
     ///
-    /// `None` — действие спрашивать не о чем ни в одном режиме доверия.
-    /// Считается до запуска тула: вопрос должен быть решён раньше, чем
-    /// что-либо произойдёт. Кривые аргументы дают `None` — про них
-    /// понятнее скажет сам тул.
+    /// `None` — there is nothing to ask about the action in any trust mode.
+    /// Worked out before the tool runs: the question must be settled before
+    /// anything happens. Malformed arguments give `None` — the tool itself will
+    /// say more clearly about them.
     ///
-    /// Берёт воркспейс, а не весь [`ToolCtx`]: вопрос задаётся до вызова, и
-    /// собирать ради него ленту, процессы и токен отмены значило бы строить
-    /// контекст, которым никто не воспользуется.
+    /// Takes the workspace, not the whole [`ToolCtx`]: the question is asked before the call, and
+    /// building the feed, processes and cancel token for it would mean building
+    /// a context that nobody uses.
     fn permission(&self, _ws: &Workspace, _input: &Value) -> Option<PermissionNeed> {
         None
     }
@@ -306,11 +336,23 @@ pub trait Tool: Send + Sync {
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError>;
 }
 
-/// Текст, который системный промпт вставляет в описание поля `description`.
+/// Text the system prompt puts into the description of the `description` field.
 const DESCRIPTION_FIELD_DOC: &str = "Single line, up to 60 characters, no trailing period: \
 what was done or discovered, in past tense first person, in the conversation's language. \
 Focus on the substance, not the tool: 'Found existing clipboard usage' \
 rather than 'Ran rg clipboard src/'. No tool names and no command flags.";
+
+/// The tools a subagent is not given: see [`ToolRegistry::delegated`].
+pub(crate) const AGENT_ONLY: [&str; 8] = [
+    "Task",
+    "TodoWrite",
+    "ExitPlanMode",
+    "AskUser",
+    "SetTitle",
+    "SendText",
+    "SearchMessage",
+    "ExtractMessage",
+];
 
 #[derive(Clone)]
 pub struct ToolRegistry {
@@ -334,7 +376,7 @@ impl ToolRegistry {
         self
     }
 
-    /// Полный набор ядра.
+    /// The core's full set.
     pub fn standard() -> Self {
         Self::new(vec![
             Arc::new(read_file::ReadFile),
@@ -344,6 +386,8 @@ impl ToolRegistry {
             Arc::new(web_fetch::WebFetch),
             Arc::new(web_search::WebSearch::default()),
             Arc::new(todo_write::TodoWrite),
+            Arc::new(set_title::SetTitle),
+            Arc::new(send_text::SendText),
             Arc::new(exit_plan_mode::ExitPlanMode),
             Arc::new(ask_user::AskUser),
             Arc::new(write_file::WriteFile),
@@ -361,29 +405,47 @@ impl ToolRegistry {
         ])
     }
 
+    /// The tools of a session: the core's set, and with a journal the ones
+    /// that read it. A session that writes nothing down has no journal to
+    /// read, and a tool that could only fail is not offered.
+    pub fn of_session(journaled: bool) -> Self {
+        let all = Self::standard();
+        if !journaled {
+            return all;
+        }
+        all.with(vec![
+            Arc::new(search_message::SearchMessage),
+            Arc::new(extract_message::ExtractMessage),
+        ])
+    }
+
     /// What a subagent works with: everything the agent has, less what
     /// belongs to the agent alone. `Task`, because the agent is the one who
     /// splits the work; the task list and the way out of plan mode, because
-    /// §5.6 and §7.1 draw one of each and it is the agent's; `AskUser`, because
+    /// §5.6 and §7.1 draw one of each and it is the agent's; `SetTitle`, because a conversation has one title and the
+    /// agent is the one who knows what it is about; `AskUser`, because
     /// the agent sees the whole task and is the one who puts choices to the
-    /// human, not a worker deep inside it.
+    /// human, not a worker deep inside it; `SendText`, because what is put in
+    /// front of the human is part of the agent's answer to them;
+    /// `SearchMessage` and `ExtractMessage`, because the conversation they
+    /// read is the agent's.
     ///
     /// Taken from the agent's registry rather than built anew, so a subagent
     /// has the same MCP tools the agent has.
     pub fn delegated(&self) -> Self {
         let mut all = self.clone();
-        for own in ["Task", "TodoWrite", "ExitPlanMode", "AskUser"] {
+        for own in AGENT_ONLY {
             all.tools.remove(own);
         }
         all
     }
 
-    /// Тул, если он вообще есть в этом режиме.
+    /// The tool, if it exists at all in this mode.
     ///
-    /// Режим тут не украшение: §7.1 не отдаёт модели записывающие тулы в
-    /// «Плане», и придуманный ею `write_file` обязан получить «неизвестный
-    /// инструмент», а не запрос разрешения. Спрашивать про действие, которого
-    /// в этом режиме не существует, — интерфейс, врущий про состояние (§0).
+    /// The mode is not decoration: §7.1 does not offer writing tools to the model in
+    /// «Плане», and a `write_file` it made up must get «неизвестный
+    /// инструмент», not a permission request. Asking about an action that does not exist
+    /// in this mode is an interface lying about the state (§0).
     pub fn get(&self, name: &str, intent: Intent) -> Option<Arc<dyn Tool>> {
         self.tools
             .get(name)
@@ -398,10 +460,10 @@ impl ToolRegistry {
         self.tools.keys().map(String::as_str)
     }
 
-    /// Схемы для запроса к модели.
+    /// Schemas for the request to the model.
     ///
-    /// Порядок детерминирован (`BTreeMap`): схемы идут первым куском запроса,
-    /// и перетасовка списка обнуляла бы кеш промпта на каждом ходу.
+    /// The order is deterministic (`BTreeMap`): the schemas go first in the request,
+    /// and shuffling the list would reset the prompt cache on every turn.
     pub fn schemas(&self, intent: Intent) -> Vec<ToolSchema> {
         self.tools
             .values()
@@ -444,10 +506,10 @@ impl ToolRegistry {
     }
 }
 
-/// Вынимает подпись модели из аргументов и приводит её к форме §5.4.1.
+/// Takes the model's caption out of the arguments and brings it to the form of §5.4.1.
 ///
-/// Нарушение длины режется, а не роняет турн: подпись — украшение ленты,
-/// и терять из-за неё работу тула нельзя.
+/// A length violation is cut rather than failing the turn: the caption is decoration for the feed,
+/// and losing a tool's work over it is not acceptable.
 pub fn take_description(input: &mut Value) -> Option<String> {
     let raw = input
         .as_object_mut()
@@ -475,12 +537,12 @@ pub fn take_description(input: &mut Value) -> Option<String> {
     Some(cut)
 }
 
-/// Общая обвязка тестов тулов: настоящий каталог, настоящий воркспейс,
-/// живая шина событий. Моков здесь нет намеренно — тул, который врёт про
-/// файловую систему, ловится только на файловой системе.
-/// Общая обвязка тестов тулов: настоящий каталог, настоящий воркспейс,
-/// живая шина событий. Моков здесь нет намеренно — тул, который врёт про
-/// файловую систему, ловится только на файловой системе.
+/// Shared scaffolding for tool tests: a real directory, a real workspace,
+/// a live event bus. There are no mocks here on purpose — a tool that lies about the
+/// file system is caught only on the file system.
+/// Shared scaffolding for tool tests: a real directory, a real workspace,
+/// a live event bus. There are no mocks here on purpose — a tool that lies about the
+/// file system is caught only on the file system.
 #[cfg(test)]
 pub(crate) mod tests_support {
     use std::sync::Arc;
@@ -518,6 +580,8 @@ pub(crate) mod tests_support {
             vision: true,
             shell: crate::process::shell::Shell::default(),
             respect_robots: true,
+            title_locked: false,
+            transcript: None,
             lsp: None,
         };
         (ctx, ws)

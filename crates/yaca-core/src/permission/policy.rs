@@ -127,8 +127,8 @@ mod tests {
             (RunCommand, [Ask, Ask, Ask]),
             (FetchUrl, [Ask, Allow, Ask]),
             (McpWrite, [Ask, Allow, Ask]),
-            // Правка пишется сразу, и «Ручной» — единственный, кто про неё
-            // спрашивает. Это и есть то самое одно подтверждение (§16.37).
+            // An edit is written at once, and «Ручной» is the only mode that asks
+            // about it. This is the one confirmation itself (§16.37).
             (EditFile, [Ask, Allow, Allow]),
         ];
 

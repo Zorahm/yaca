@@ -1,13 +1,13 @@
-//! Сборка тела запроса Messages API.
+//! Building the body of a Messages API request.
 //!
-//! Три вещи здесь сделаны намеренно и легко ломаются при «упрощении»:
+//! Three things here are deliberate and easy to break when «simplifying»:
 //!
-//! * `thinking.display` выставлен в `summarized`. По умолчанию на Opus 5 он
-//!   `omitted`, и §5.3 показывал бы пустой блок рассуждения.
-//! * Глубина рассуждения задаётся через `output_config.effort`, а не
-//!   `thinking.budget_tokens`: последний на Opus 5 / Sonnet 5 / Opus 4.7+
-//!   удалён и отвечает 400.
-//! * `temperature` не отправляется вовсе — там же удалён.
+//! * `thinking.display` is set to `summarized`. By default on Opus 5 it is
+//!   `omitted`, and §5.3 would show an empty reasoning block.
+//! * The depth of reasoning is set through `output_config.effort`, not through
+//!   `thinking.budget_tokens`: the latter is removed on Opus 5 / Sonnet 5 / Opus 4.7+
+//!   and answers 400.
+//! * `temperature` is not sent at all — it is removed there too.
 
 use serde_json::json;
 
@@ -19,7 +19,7 @@ pub(super) fn build_body(req: &ProviderRequest) -> serde_json::Value {
         "model": req.model,
         "max_tokens": req.max_tokens,
         "stream": true,
-        // Системный промпт стабилен весь разговор — первая точка кеша.
+        // The system prompt is stable for the whole conversation — the first cache point.
         "system": [{
             "type": "text",
             "text": req.system,
@@ -32,7 +32,7 @@ pub(super) fn build_body(req: &ProviderRequest) -> serde_json::Value {
         body["tools"] = wire_tools(&req.tools);
     }
     if req.thinking {
-        // `display` явно: по умолчанию текст рассуждения приходит пустым.
+        // `display` set explicitly: by default the reasoning text arrives empty.
         body["thinking"] = json!({ "type": "adaptive", "display": "summarized" });
     }
     if let Some(effort) = req.effort {
@@ -68,8 +68,8 @@ fn wire_messages(messages: &[Message]) -> serde_json::Value {
             .enumerate()
             .map(|(j, block)| {
                 let mut v = wire_block(block);
-                // Вторая точка кеша — хвост истории. Она едет вперёд каждый ход,
-                // и весь предыдущий разговор читается из кеша.
+                // The second cache point is the tail of the history. It moves forward each turn,
+                // and the whole previous conversation is read from the cache.
                 if i == last && j == last_block {
                     if let Some(obj) = v.as_object_mut() {
                         obj.insert("cache_control".into(), json!({ "type": "ephemeral" }));

@@ -16,6 +16,11 @@ export function timeOf(ms: number): string {
   });
 }
 
+/** The full date and time, for the tooltip over a turn's time line. */
+export function dateTimeOf(ms: number): string {
+  return new Date(ms).toLocaleString(locale, { dateStyle: "long", timeStyle: "medium" });
+}
+
 /** `1 ч 4 мин` — a process's uptime (§6.5). Counted by the UI: the core,
     ticking an event every second, would not say anything new. */
 export function durationOf(ms: number): string {
@@ -28,11 +33,24 @@ export function durationOf(ms: number): string {
   return t("dur.s", { n: seconds });
 }
 
-/** `24k` in the ring's tooltip (§7.1). */
+/**
+ * `259`, `24.8k`, `1M` — tokens in the context window (§7.1).
+ *
+ * One decimal and no more: the list under the ring puts 335.9k next to 19k,
+ * and rounding the first to 336k would make its rows stop adding up by eye.
+ * A whole number drops the `.0`, so a model's window reads `200k`, not
+ * `200.0k`.
+ */
 export function tokens(n: number): string {
   if (n < 1000) return String(n);
-  const thousands = n / 1000;
-  return `${thousands < 10 ? thousands.toFixed(1) : Math.round(thousands)}k`;
+  const short = (value: number) => value.toFixed(1).replace(/\.0$/, "");
+  // 999 950 and up would round to `1000k`.
+  return n < 999_950 ? `${short(n / 1000)}k` : `${short(n / 1_000_000)}M`;
+}
+
+/** `39%`, `33.6%` — a share of the context window, from a 0–1 ratio. */
+export function percent(ratio: number, digits: number): string {
+  return `${(ratio * 100).toFixed(digits)}%`;
 }
 
 /** `$0.31`. Four digits for tiny amounts: three cents are not zero. */

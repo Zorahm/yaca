@@ -1,17 +1,15 @@
 /**
  * Left sidebar: the navigation column of the window.
  *
- * Not a drawer §1.1. A drawer is opened for one look and gets in the way once
- * it stays; this list is looked at all day, so it lives in the frame as a
- * column of its own and the feed shrinks beside it instead of going inert
- * underneath. Processes and the file panel stay drawers — they cover the feed
- * because they are read against it, not next to it.
+ * This list is looked at all day, so it lives in the frame as a column of its
+ * own and the feed shrinks beside it. The panel on the right is the same kind
+ * of column; both are dragged to the width a person wants.
  *
  * Projects are the rows, chats are what folds out of them, and both are many:
  * several projects open at once, several chats open inside one. What the
  * window is showing is one of those rows; the rest keep working.
  *
- * The new-chat rows lead to the home screen §9.1 rather than opening a session
+ * The new-chat rows lead to the home screen rather than opening a session
  * of their own: a session is born with the first message, and a button that
  * left an empty row in the list would say otherwise.
  *
@@ -24,6 +22,10 @@ import { FolderPlus, Gear, Plus } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 
 import { t } from "../../i18n";
+import { ownTitleBar } from "../../core/frame";
+import { YacaMark } from "../Logo";
+import { SIDE, type Bounds } from "../resize";
+import { Splitter } from "../Splitter";
 import { ProjectGroup } from "./ProjectGroup";
 import type { Chat } from "../chats";
 import type { SessionId } from "../../core/client";
@@ -44,8 +46,12 @@ export function Sidebar({
   onAddProject,
   onForgetProject,
   onOpenSettings,
+  width,
+  bounds,
+  onResize,
+  collapsed = false,
 }: {
-  /** Projects the window knows about (§9.1), freshest first. */
+  /** Projects the window knows about, freshest first. */
   projects: string[];
   /** Every chat open in the window, in any project. */
   chats: Chat[];
@@ -59,8 +65,19 @@ export function Sidebar({
   onCloseChat: (id: SessionId) => void;
   onAddProject: () => void;
   onForgetProject: (project: string) => void;
-  /** Кнопка подвала ведёт в окно настроек §10, не в панель. */
+  /** Кнопка подвала ведёт в окно настроек, не в панель. */
   onOpenSettings: () => void;
+  /** The column's width and how far the handle on its edge may take it. */
+  width: number;
+  bounds: Bounds;
+  onResize: (width: number) => void;
+  /**
+   * Hidden, not unmounted. Folded away and brought back, the column has to
+   * be what it was: which projects were open, what was typed in the search,
+   * the lists already read. Unmounting it dropped all of that, and the
+   * sessions «disappeared» until each project was opened again.
+   */
+  collapsed?: boolean;
 }) {
   const [typed, setTyped] = useState("");
   const [query, setQuery] = useState("");
@@ -89,8 +106,30 @@ export function Sidebar({
   }
 
   return (
-    <nav className="side" aria-label={t("top.sessions")}>
+    <nav
+      className="side"
+      aria-label={t("top.sessions")}
+      style={collapsed ? { display: "none" } : { width }}
+    >
+      <Splitter
+        edge="right"
+        width={width}
+        bounds={bounds}
+        initial={SIDE.initial}
+        label={t("side.resize")}
+        onResize={onResize}
+      />
       <div className="side-head">
+        {/* Where the window draws its own title bar the mark and the name
+            are in it, a few pixels above; twice in one corner is once too
+            many. */}
+        {!ownTitleBar && (
+          <div className="side-brand">
+            <YacaMark size={22} />
+            Yaca
+          </div>
+        )}
+
         <button
           className="side-row side-new"
           disabled={current === null}
@@ -113,6 +152,7 @@ export function Sidebar({
       </div>
 
       <div className="side-scroll">
+        {projects.length > 0 && <div className="side-label">{t("side.projects")}</div>}
         {projects.length === 0 ? (
           <div className="side-empty">{t("side.no_projects")}</div>
         ) : (
@@ -146,7 +186,7 @@ export function Sidebar({
           {t("side.add_project")}
         </button>
 
-        {/* Окно §10, а не панель: настройки переживают разговор, и их
+        {/* Окно, а не панель: настройки переживают разговор, и их
             открывают, не закрывая ленту. */}
         <button className="side-row" onClick={onOpenSettings}>
           <span className="side-icon" aria-hidden="true">

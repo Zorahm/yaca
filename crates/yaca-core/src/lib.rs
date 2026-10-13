@@ -1,14 +1,14 @@
-//! Ядро Yaca.
+//! The Yaca core.
 //!
-//! Безголовое: ни окна, ни вебвью, ни Tauri. Наружу — поток [`AgentEvent`],
-//! внутрь — [`Command`]. Интерфейс есть чистая функция от этого потока, и
-//! проверить это можно без интерфейса: `yaca-cli` гоняет ровно то же ядро.
+//! Headless: no window, no webview, no Tauri. Out goes the stream of [`AgentEvent`],
+//! in comes [`Command`]. The interface is a pure function of that stream, and
+//! this can be checked without the interface: `yaca-cli` runs exactly the same core.
 //!
-//! Сейчас закрыты разговор целиком, стажирование правок, инварианты §8,
-//! разрешения и выполнение команд: читающие и пишущие тулы, набор непринятых
-//! правок с диффами, применение к рабочему дереву с проверкой конфликта,
-//! матрица доверия с запросами, команды со стримингом вывода и фоновые
-//! процессы с панелью §6.5.
+//! Currently covered: whole conversations, staging of edits, the §8 invariants,
+//! permissions and command execution: reading and writing tools, the set of unaccepted
+//! edits with their diffs, applying them to the working tree with a conflict check,
+//! the trust matrix with its requests, commands with streamed output, and background
+//! processes with the §6.5 panel.
 //!
 //! Checkpoints (§5.8) are in as well: a shadow store of its own under
 //! `.yaca/shadow`, a snapshot before each message, before the change set

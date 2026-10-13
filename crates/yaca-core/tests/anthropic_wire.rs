@@ -1,11 +1,11 @@
-//! Провайдер против настоящего сокета.
+//! Provider against a real socket.
 //!
-//! Разбор SSE и сборка тела проверяются модульными тестами, но между ними
-//! лежит HTTP: заголовки, статус, обрыв соединения. Здесь поднимается
-//! маленький сервер и говорит ровно то, что говорит Messages API.
+//! Parsing SSE and building the body are checked by unit tests, but HTTP lies
+//! between them: headers, status, a connection that drops. Here a small server
+//! is started and says exactly what the Messages API says.
 //!
-//! Живого обращения к api.anthropic.com в наборе нет намеренно: тест,
-//! которому нужен ключ и деньги, перестают гонять на второй неделе.
+//! There is no live call to api.anthropic.com in the suite on purpose: a test
+//! that needs a key and money stops being run in its second week.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,7 +23,7 @@ use futures_util::StreamExt;
 mod common;
 use common::wire::{json_response, refusal, serve};
 
-/// Встроенное описание, перенацеленное на поднятый сокет.
+/// Built-in description, redirected to the started socket.
 fn spec(base: impl Into<String>) -> ProviderSpec {
     ProviderSpec {
         base_url: base.into(),
@@ -110,7 +110,7 @@ async fn поток_проходит_по_настоящему_сокету() {
     )));
     assert_eq!(events.last(), Some(&ProviderEvent::MessageStop));
 
-    // Комментарий SSE (`: keep-alive`) не должен превращаться в событие.
+    // An SSE comment (`: keep-alive`) must not turn into an event.
     assert_eq!(events.len(), 7, "лишние события: {events:#?}");
 
     let seen = seen.await.unwrap();
@@ -121,7 +121,7 @@ async fn поток_проходит_по_настоящему_сокету() {
     let body = seen.body;
     assert_eq!(body["stream"], true);
     assert_eq!(body["model"], "claude-opus-5");
-    // Форма, за которую отвечает §5.3 и текущее состояние Messages API.
+    // The shape §5.3 is responsible for, and the current state of the Messages API.
     assert_eq!(body["thinking"]["type"], "adaptive");
     assert_eq!(body["thinking"]["display"], "summarized");
     assert_eq!(body["output_config"]["effort"], "xhigh");
@@ -137,9 +137,9 @@ async fn поток_проходит_по_настоящему_сокету() {
 #[tokio::test]
 async fn лимит_запросов_доносит_retry_after() {
     let body = r#"{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}"#;
-    // Длина считается, а не вписывается руками. Вписанная руками и разошедшаяся
-    // с телом даёт ровно ту картину, ради которой тест и написан: пустое
-    // сообщение об ошибке вместо причины.
+    // The length is counted, not typed in by hand. A hand-typed length that has
+    // drifted from the body gives exactly the picture the test is written for: an
+    // empty error message instead of the cause.
     let too_many = format!(
         "HTTP/1.1 429 Too Many Requests\r\n\
          Content-Type: application/json\r\n\
@@ -162,7 +162,7 @@ async fn лимит_запросов_доносит_retry_after() {
         } => {
             assert_eq!(status, 429);
             assert_eq!(message, "slow down");
-            // Без этого ядро выждало бы свои полсекунды и получило 429 снова.
+            // Without this the core would wait its half a second and get 429 again.
             assert_eq!(retry_after_s, Some(3));
         }
         other => panic!("не тот отказ: {other:?}"),

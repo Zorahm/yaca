@@ -1,5 +1,5 @@
-//! Поиск файлов по шаблону. Обход уважает `.gitignore`: агенту нечего делать
-//! в `node_modules`, и подмешивать туда внимание модели — прямой убыток.
+//! Finding files by pattern. The walk respects `.gitignore`: the agent has nothing
+//! to do in `node_modules`, and mixing attention to it into the model is a direct loss.
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -47,7 +47,7 @@ impl Tool for Glob {
         Narration::Model
     }
 
-    /// Обход дерева ничего не меняет.
+    /// Walking the tree changes nothing.
     fn concurrent(&self) -> bool {
         true
     }
@@ -80,7 +80,7 @@ impl Tool for Glob {
         let ws = ctx.ws.clone();
         let cancel = ctx.cancel.clone();
 
-        // Обход синхронный и может быть долгим — уводим с реактора.
+        // The walk is synchronous and may be long — move it off the reactor.
         let found = tokio::task::spawn_blocking(move || {
             let mut hits: Vec<(u64, String)> = Vec::new();
             for start in &starts {

@@ -35,6 +35,24 @@ impl Inbox {
         }
     }
 
+    /// Waits until a message stands at the head of the queue.
+    ///
+    /// Only the head, as in [`Inbox::messages`]: behind a compaction a message
+    /// waits for the turn to end, and this does not return for it.
+    pub(super) async fn message_waiting(&mut self) {
+        loop {
+            match self.held.front() {
+                Some(Job::Message { .. }) => return,
+                Some(_) => return std::future::pending().await,
+                None => match self.rx.recv().await {
+                    Some(job) => self.held.push_back(job),
+                    // The session is closing; the turn's cancel ends the wait.
+                    None => return std::future::pending().await,
+                },
+            }
+        }
+    }
+
     /// Messages waiting at the head of the queue, taken out of it.
     ///
     /// Only the head: a message sent after a compaction was asked for waits

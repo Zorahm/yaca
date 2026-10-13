@@ -1,8 +1,8 @@
-//! Журнал сессии: поток событий как есть, по событию на строку.
+//! Session log: the event stream as it is, one event per line.
 //!
-//! Это не логи для отладки, а хранилище истории (§9). Интерфейс — чистая
-//! функция от потока событий, поэтому записанный поток и есть сессия:
-//! чтобы открыть её заново, достаточно проиграть файл.
+//! These are not debug logs but the history store (§9). The interface is a pure
+//! function of the event stream, so the recorded stream is the session itself:
+//! to reopen it, it is enough to replay the file.
 
 use std::fs::{File, OpenOptions};
 use std::io::Write;
@@ -18,7 +18,7 @@ pub struct EventLog {
 }
 
 impl EventLog {
-    /// Открывает `<root>/.yaca/sessions/<id>.jsonl` на дозапись.
+    /// Opens `<root>/.yaca/sessions/<id>.jsonl` for appending.
     pub fn open(root: &Path, id: &SessionId) -> std::io::Result<Self> {
         let dir = crate::store::dir(root);
         std::fs::create_dir_all(&dir)?;
@@ -34,7 +34,7 @@ impl EventLog {
         &self.path
     }
 
-    /// Сбой записи не должен ронять турн: журнал полезен, но не критичен.
+    /// A write failure must not bring the turn down: the log is useful, but not critical.
     pub fn append(&self, event: &AgentEvent) {
         let Ok(line) = serde_json::to_string(event) else {
             return;
@@ -45,9 +45,9 @@ impl EventLog {
     }
 }
 
-/// Проиграть записанную сессию. Строки, которые не разобрались, пропускаются:
-/// формат событий будет меняться, и старая сессия должна открываться, пусть
-/// и не целиком.
+/// Replays a recorded session. Lines that did not parse are skipped:
+/// the event format will change, and an old session should still open, even if
+/// though not in full.
 pub fn replay(path: &Path) -> std::io::Result<Vec<AgentEvent>> {
     let text = std::fs::read_to_string(path)?;
     Ok(text
@@ -97,6 +97,7 @@ mod tests {
         log.append(&AgentEvent::TurnFinished {
             turn_id: TurnId::from("t1"),
             stop_reason: StopReason::EndTurn,
+            at: Default::default(),
         });
 
         let back = replay(log.path()).unwrap();

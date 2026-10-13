@@ -28,12 +28,15 @@ pub enum ViewSegment {
 }
 
 /// A file's full diff against its baseline, with the unchanged lines between
-/// the hunks (§6.4).
+/// the hunks (§6.4). A file the session has not changed is the same shape with
+/// no hunks in it: the panel shows a file the agent only read as well.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct FileView {
-    pub fact: FileFact,
+    /// `None` — the session has not changed the file, so there is nothing to
+    /// say about a change.
+    pub fact: Option<FileFact>,
     pub segments: Vec<ViewSegment>,
     /// The view stops before the rest of the file. Hunks past the cut are not
     /// shown, so they cannot be decided from the panel either.
@@ -90,7 +93,7 @@ pub fn hunks(before: &str, after: &str) -> Vec<Hunk> {
 
 /// The full view of one file: hunks interleaved with the unchanged text between
 /// them. `after` is what is on disk now, so unchanged lines come from it.
-pub fn view(before: &str, after: &str, fact: FileFact) -> FileView {
+pub fn view(before: &str, after: &str, fact: Option<FileFact>) -> FileView {
     let before_lines: Vec<&str> = before.split_inclusive('\n').collect();
     let all = hunks(before, after);
 
@@ -211,14 +214,14 @@ mod tests {
     fn view_keeps_every_line_of_the_after_text() {
         let before = "a\nb\nc\nd\ne\nf\ng\nh\n";
         let after = "a\nB\nc\nd\ne\nf\nG\nh\nнов\n";
-        let v = view(before, after, fact());
+        let v = view(before, after, Some(fact()));
         assert!(!v.truncated);
         assert_eq!(rebuild(&v), after);
     }
 
     #[test]
     fn view_of_an_untouched_file_is_one_unchanged_segment() {
-        let v = view("x\ny\n", "x\ny\n", fact());
+        let v = view("x\ny\n", "x\ny\n", None);
         assert_eq!(v.segments.len(), 1);
         assert!(matches!(v.segments[0], ViewSegment::Unchanged { .. }));
     }
@@ -227,7 +230,7 @@ mod tests {
     fn view_is_cut_at_a_hunk_boundary_when_too_long() {
         let before: String = (0..MAX_VIEW_LINES + 10).map(|i| format!("{i}\n")).collect();
         let after = format!("CHANGED\n{}", before.split_once('\n').unwrap().1);
-        let v = view(&before, &after, fact());
+        let v = view(&before, &after, Some(fact()));
         assert!(v.truncated);
         let shown: usize = v
             .segments

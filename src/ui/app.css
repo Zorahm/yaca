@@ -1,15 +1,22 @@
 /*
- * Каркас §1, шапка §3, полосы уведомлений §6.1.1, композер §7.
+ * Каркас, шапка, полосы уведомлений, композер.
  */
 
-/* Окно целиком: слева колонка сайдбара, справа всё остальное. Колонка
-   `auto` — ширину назначает себе сам сайдбар; спрятанный не занимает ничего,
-   и сетка становится однополосной, какой её описывает §1. */
+/* Окно целиком: слева колонка сайдбара, посередине лента, справа панель.
+   Крайние колонки `auto` — ширину назначают себе сами сайдбар и панель;
+   спрятанный сайдбар и закрытая панель не занимают ничего. Ряд один и назван
+   явно: развёрнутая панель ложится в ту же ячейку, что и лента, поверх неё. */
 .shell {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
+}
+
+.shell > .side {
+  grid-column: 1;
+  grid-row: 1;
 }
 
 /* Без этого лента с длинной строкой кода раздувает колонку `1fr` и уезжает
@@ -21,18 +28,19 @@
      `auto` track as soon as the sidebar was hidden and shrank to the width of
      its narrowest content. */
   grid-column: 2;
+  grid-row: 1;
 }
 
 .app {
   display: grid;
-  /* §1: 44px 1fr auto auto. Ряды `auto`, поэтому появление полосы не дёргает
+  /* Ряды полос и композера `auto`, поэтому появление полосы не дёргает
      высоту ленты. */
   grid-template-rows: var(--h-top) 1fr auto auto;
   height: 100%;
   overflow: hidden;
 }
 
-/* --- §3 верхняя панель -------------------------------------------------- */
+/* --- верхняя панель -------------------------------------------------- */
 
 .top {
   display: flex;
@@ -40,12 +48,8 @@
   gap: 6px;
   height: var(--h-top);
   padding: 0 10px;
-  background: var(--paper);
+  background: var(--bg);
   border-bottom: 1px solid var(--line);
-  /* Above the wash of an open panel (panel.css): the bar's buttons keep
-     working while a panel is up, so the bar must not look dimmed. */
-  position: relative;
-  z-index: 31;
 }
 
 .top-icon {
@@ -55,7 +59,7 @@
   height: 28px;
   border: 1px solid transparent;
   border-radius: var(--radius-m);
-  color: var(--ink-muted);
+  color: var(--muted);
   font-size: 15px;
   line-height: 1;
 }
@@ -65,9 +69,9 @@
 }
 
 .top-icon[aria-pressed="true"] {
-  border-color: var(--line-strong);
-  background: var(--paper-raised);
-  color: var(--ink);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
 }
 
 .top-icon:disabled {
@@ -77,7 +81,7 @@
 
 .top-title {
   margin-left: 6px;
-  font: 700 14px var(--display);
+  font: 600 15px var(--display);
   letter-spacing: 0;
   color: var(--ink);
   white-space: nowrap;
@@ -89,10 +93,10 @@
   padding: 0 6px;
   border: 1px solid var(--line);
   border-radius: var(--radius-s);
-  background: var(--paper-raised);
+  background: var(--surface);
   font-size: 12px;
   line-height: 18px;
-  color: var(--ink-muted);
+  color: var(--muted);
   white-space: nowrap;
 }
 
@@ -116,22 +120,34 @@
   display: inline-flex;
 }
 
-/* --- §6.1.1 полосы уведомлений ------------------------------------------ */
+/* --- полосы уведомлений ------------------------------------------ */
 
 .bars {
   display: flex;
-  /* §1: порядок снизу вверх фиксирован. */
+  /* Порядок снизу вверх фиксирован. */
   flex-direction: column;
+  gap: 8px;
 }
 
+/* Пустая полоса не занимает ничего; с уведомлениями она ложится на фон окна
+   теми же 24 px полей, что у композера. */
+.bars:not(:empty) {
+  padding: 8px 24px 0;
+}
+
+/* Карточка по мерке композера: та же ширина, тот же радиус. */
 .bar {
   display: flex;
   align-items: center;
   gap: 10px;
-  height: var(--h-bar);
-  padding: 10px 18px;
-  background: var(--paper-raised);
-  border-top: 1px solid var(--line);
+  width: 100%;
+  max-width: var(--measure);
+  min-height: var(--h-bar);
+  margin: 0 auto;
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
   font-size: 12.5px;
 }
 
@@ -143,7 +159,7 @@
 .bar-note {
   flex: 1;
   min-width: 0;
-  color: var(--ink-muted);
+  color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -152,13 +168,13 @@
 .bar-icon {
   display: inline-flex;
   align-items: center;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .bar-close {
   display: inline-flex;
   align-items: center;
-  color: var(--ink-muted);
+  color: var(--muted);
   padding: 0 2px;
 }
 
@@ -174,34 +190,34 @@
   gap: 6px;
   height: var(--h-button);
   padding: 0 14px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius-m);
-  background: var(--paper-raised);
+  background: var(--surface);
   color: var(--ink);
   font-size: 13px;
   white-space: nowrap;
 }
 
 .btn:hover {
-  background: var(--paper-sunken);
+  background: var(--sunk);
   color: var(--ink);
 }
 
 .btn-accent {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
   font-weight: 600;
 }
 
 .btn-accent:hover {
-  background: color-mix(in srgb, var(--ink) 84%, var(--paper));
-  border-color: color-mix(in srgb, var(--ink) 84%, var(--paper));
-  color: var(--paper);
+  background: color-mix(in srgb, var(--accent) 86%, black);
+  border-color: color-mix(in srgb, var(--accent) 86%, black);
+  color: var(--on-accent);
 }
 
-/* A destructive action is named by its label. Red is kept for what already
-   went wrong or waits for an answer, not for what the pointer is over. */
+/* A destructive action is named by its label. The error colour is kept for
+   what already went wrong, not for what the pointer is over. */
 .btn-danger:hover {
   border-color: var(--ink);
   color: var(--ink);
@@ -223,13 +239,13 @@
 .btn-row {
   height: var(--h-row-button);
   padding: 0 8px;
-  border-radius: var(--radius-m);
-  border-color: var(--line-strong);
+  border-radius: var(--radius-s);
+  border-color: var(--line);
   font-size: 12px;
 }
 
-/* --- переключатель из нескольких (§7.1, §10) ---------------------------- */
-/* Выбранный — заливкой акцента: он и есть «активная метка» §2. */
+/* --- переключатель из нескольких ---------------------------- */
+/* Выбранный — мягкой заливкой акцента с рамкой: он и есть «активная метка». */
 
 .segments {
   display: flex;
@@ -243,26 +259,27 @@
   gap: 6px;
   height: var(--h-small-button);
   padding: 0 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-s);
-  color: var(--ink-muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  color: var(--muted);
   /* Sans: a segment names a choice (a theme, a mode), and most are words. */
   font-size: 12.5px;
   white-space: nowrap;
 }
 
 .segment:hover {
-  background: var(--paper-sunken);
+  background: var(--sunk);
   color: var(--ink);
 }
 
 .segment[aria-pressed="true"] {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
 }
 
-/* --- §6.2 бейдж состояния файла ----------------------------------------- */
+/* --- бейдж состояния файла ----------------------------------------- */
 
 .badge {
   padding: 1px 6px;
@@ -274,36 +291,56 @@
 }
 
 .badge-modified {
-  border-color: color-mix(in srgb, var(--ink-muted) 40%, transparent);
-  color: var(--ink-muted);
+  border-color: color-mix(in srgb, var(--muted) 40%, transparent);
+  color: var(--muted);
 }
 .badge-created {
-  border-color: color-mix(in srgb, var(--green) 40%, transparent);
-  color: var(--green);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+  color: var(--ok);
 }
 .badge-rejected {
-  border-color: color-mix(in srgb, var(--red-ink) 40%, transparent);
-  color: var(--red-ink);
+  border-color: color-mix(in srgb, var(--err) 40%, transparent);
+  color: var(--err);
 }
 
-/* --- §7 композер -------------------------------------------------------- */
+/* --- композер -------------------------------------------------------- */
 
+/* No band of its own: the composer floats on the window ground, and only the
+   box and the row under it are drawn. */
 .composer-wrap {
-  padding: 8px 18px 14px;
-  background: var(--paper);
+  padding: 12px 24px 16px;
 }
 
 .composer {
-  max-width: 820px;
+  max-width: var(--measure);
   margin: 0 auto;
-  padding: 10px 12px 8px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-m);
-  background: var(--paper-raised);
+  padding: 8px 8px 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
 }
 
+/* The field is not a frame of its own: focus is the caret and a slightly
+   firmer edge on the box, not a coloured ring around the text. */
 .composer:focus-within {
-  border-color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.composer textarea:focus,
+.composer textarea:focus-visible {
+  outline: none;
+}
+
+/* The text and the one action beside it. */
+.composer-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.composer-field {
+  flex: 1;
+  min-width: 0;
 }
 
 .composer textarea {
@@ -311,26 +348,29 @@
   width: 100%;
   max-height: 264px;
   resize: none;
-  font: 400 13.5px/1.5 var(--sans);
+  font: 400 14px/1.5 var(--sans);
   color: var(--ink);
   user-select: text;
 }
 
 .composer textarea::placeholder {
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
-/* Отправлять некуда, пока не выбран проект (§9.1). */
+/* Отправлять некуда, пока не выбран проект. */
 .composer textarea:disabled {
-  color: var(--ink-muted);
+  color: var(--muted);
   cursor: default;
 }
 
+/* Mode, attach, model, effort and the ring: under the box, on its measure. */
 .composer-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 8px;
+  max-width: var(--measure);
+  margin: 8px auto 0;
+  padding: 0 6px;
 }
 
 .composer-gap {
@@ -343,12 +383,12 @@
   gap: 8px;
   margin-bottom: 8px;
   font-size: 12.5px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
-/* «отменить» у чипа очереди (§7.4): текстом, как чип режима, а не кнопкой. */
+/* «отменить» у чипа очереди: текстом, как чип режима, а не кнопкой. */
 .queued-cancel {
-  color: var(--ink-muted);
+  color: var(--muted);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -358,12 +398,12 @@
   color: var(--ink);
 }
 
-/* Крестик на чипе приложенного файла (§7.2). */
-/* Чип режима — текстом без рамки (§7.1). */
+/* Крестик на чипе приложенного файла. */
+/* Чип режима — текстом без рамки. */
 .chip {
   padding: 2px 4px;
   font-size: 12.5px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .chip:hover {
@@ -371,14 +411,14 @@
 }
 
 .chip-danger {
-  color: var(--red-ink);
+  color: var(--err);
 }
 
 .chip-strong {
   color: var(--ink);
 }
 
-/* `＋` вложения (§7.1): тот же чип, но иконкой. */
+/* `＋` вложения: тот же чип, но иконкой. */
 .chip-icon {
   display: inline-flex;
   align-items: center;
@@ -388,43 +428,162 @@
 .send {
   display: grid;
   place-items: center;
-  width: var(--h-small-button);
-  height: var(--h-small-button);
-  border-radius: var(--radius-m);
+  flex: none;
+  align-self: flex-end;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
   background: var(--ink);
-  color: var(--paper);
+  color: var(--bg);
   font-size: 14px;
 }
 
 .send:hover {
-  background: color-mix(in srgb, var(--ink) 84%, var(--paper));
+  background: color-mix(in srgb, var(--ink) 84%, var(--bg));
 }
 
 .send:disabled {
-  background: var(--paper-sunken);
-  color: var(--ink-muted);
+  background: var(--line);
+  color: var(--surface);
   cursor: not-allowed;
 }
 
 .send-stop {
-  background: var(--paper-sunken);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
   color: var(--ink);
 }
 
 .send-stop:hover {
-  background: var(--rail-fill-deep);
+  background: var(--sunk);
 }
 
-/* Кольцо состояния (§7.1). */
+/* Кольцо контекста. */
 .ring {
   display: block;
   width: 16px;
   height: 16px;
 }
 
-.spin {
-  transform-origin: 50% 50%;
-  animation: yacaSpin 1.4s linear infinite;
+/* The fill follows the window as it fills up, rather than jumping per answer. */
+.ring-fill {
+  transition: stroke-dasharray 0.4s ease, stroke 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ring-fill {
+    transition: none;
+  }
+}
+
+/* The context window, opened from the ring. A panel of figures, not a
+   list of choices: wider than a menu, and nothing in it is pressed. */
+.menu.menu-context {
+  width: 340px;
+  padding: 14px 16px 12px;
+  cursor: default;
+}
+
+.ctx-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ctx-total {
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* Segments grow by their tokens (`flex-grow` is set inline), so the bar is the
+   window to scale. The gap is the surface showing through: neighbours of a
+   close hue still read as two. */
+.ctx-bar {
+  display: flex;
+  gap: 1px;
+  height: 4px;
+  margin: 10px 0 12px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.ctx-seg {
+  flex: 0 0 0;
+  min-width: 0;
+}
+
+.ctx-list {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  column-gap: 8px;
+  row-gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.ctx-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+
+.ctx-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.ctx-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.ctx-num {
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ctx-share {
+  min-width: 46px;
+}
+
+[data-part="messages"] { background: var(--ctx-messages); }
+[data-part="systemPrompt"] { background: var(--ctx-system); }
+[data-part="tools"] { background: var(--ctx-tools); }
+[data-part="mcpTools"] { background: var(--ctx-mcp-tools); }
+[data-part="mcpNotes"] { background: var(--ctx-mcp-notes); }
+[data-part="instructions"] { background: var(--ctx-instructions); }
+[data-part="memory"] { background: var(--ctx-memory); }
+[data-part="skills"] { background: var(--ctx-skills); }
+/* A figure that came without a split has no category to take a hue from. */
+[data-part="used"] { background: var(--ink); }
+/* Kept back and left over: no hue, because neither is anything yet. */
+[data-part="reserved"] { background: var(--line-strong); }
+[data-part="free"] { background: var(--line); }
+
+.ctx-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ctx-cost {
+  white-space: nowrap;
 }
 
 /* Меню (режим, модель, усилие). */
@@ -435,9 +594,9 @@
   z-index: 20;
   min-width: 260px;
   padding: 6px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-m);
-  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  background: var(--surface);
   box-shadow: var(--shadow-pop);
 }
 
@@ -458,11 +617,79 @@
 }
 
 .menu-item:hover {
-  background: var(--paper-sunken);
+  background: var(--sunk);
   color: var(--ink);
 }
 
-/* Меню слэш-команд §7.3: над полем, по его ширине, а не по ширине чипа. */
+/* The model list (§7.1): past a hundred rows once every provider answered, so
+   it has a search field on top and scrolls under it at a fixed height rather
+   than growing off the window. */
+.menu-models {
+  display: flex;
+  flex-direction: column;
+  width: 360px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.menu-search {
+  flex: none;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  font-size: 13px;
+  color: var(--ink);
+  outline: none;
+}
+
+.menu-search::placeholder {
+  color: var(--muted);
+}
+
+.menu-scroll {
+  max-height: 380px;
+  padding: 0 6px 6px;
+  overflow-y: auto;
+}
+
+/* Stays at the top of the scroll while its rows pass under it: forty rows
+   into OpenRouter, the heading is the only thing saying whose they are. */
+.menu-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 10px 4px;
+  background: var(--surface);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* A gateway's names run long ("Anthropic: Claude Sonnet 5 (self-moderated)");
+   the row keeps to one line and the id is in its tooltip. */
+.menu-model {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-models .menu-note {
+  flex: none;
+}
+
+.menu-empty {
+  padding: 14px 10px 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Меню слэш-команд Над полем, по его ширине, а не по ширине чипа. */
 .menu-slash {
   right: auto;
   left: 0;
@@ -471,16 +698,16 @@
   overflow-y: auto;
 }
 
-/* Подсвеченная строка — та, которую возьмут `⇥` и `⏎` (§13, §7.3). */
+/* Подсвеченная строка — та, которую возьмут `⇥` и `⏎`. */
 .menu-item[aria-selected="true"] {
-  background: var(--paper-sunken);
-  color: var(--ink);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
 }
 
 .menu-note {
   flex: 1;
   font-size: 12px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 /* Список, у которого каждая строка с пояснением-фразой, шире обычного меню:
@@ -497,7 +724,7 @@
   min-width: 340px;
 }
 
-/* Пояснение под названием, а не справа от него (§8). Справа оно отъедает
+/* Пояснение под названием, а не справа от него. Справа оно отъедает
    ширину у самого списка и рвётся на две ломаные строки, из-за чего меню
    читается по диагонали вместо того, чтобы читаться сверху вниз. Колонкой
    идут только списки, где пояснение — фраза; там, где справа стоит действие
@@ -517,25 +744,13 @@
 .menu-mark {
   display: inline-flex;
   align-items: center;
-  color: var(--ink);
+  color: var(--accent-ink);
 }
 
 .menu-sep {
   height: 1px;
   margin: 5px 6px;
   background: var(--line);
-}
-
-/* Меню на Radix (§9: строка сессии) ставит себя само, поэтому статические
-   `bottom`/`right` из `.menu` ему мешают. Всё остальное — тот же вид: одно
-   меню в окне выглядит одинаково, откуда бы его ни открыли. */
-.menu-pop {
-  position: static;
-  min-width: 200px;
-}
-
-.menu-item-danger {
-  color: var(--ink);
 }
 
 /* --- заставка до открытия проекта --------------------------------------- */

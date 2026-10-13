@@ -27,8 +27,8 @@ pub(super) async fn anthropic(
 
     for _ in 0..MAX_PAGES {
         let path = match &after {
-            None => format!("/v1/models?limit={PAGE_SIZE}"),
-            Some(id) => format!("/v1/models?limit={PAGE_SIZE}&after_id={id}"),
+            None => format!("/models?limit={PAGE_SIZE}"),
+            Some(id) => format!("/models?limit={PAGE_SIZE}&after_id={id}"),
         };
         let page: AnthropicPage = parse(get(client, spec, key, &path).await?)?;
 

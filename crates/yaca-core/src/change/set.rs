@@ -73,7 +73,7 @@ impl ChangeSet {
     pub fn view(&self, path: &str) -> Option<FileView> {
         let files = self.files.lock().unwrap();
         let t = files.iter().find(|t| t.path == path && t.changed())?;
-        Some(view::view(text(&t.baseline), text(&t.after), fact(t)))
+        Some(view::view(text(&t.baseline), text(&t.after), Some(fact(t))))
     }
 }
 
@@ -117,9 +117,9 @@ mod tests {
         set.record("a.txt".into(), abs("a.txt"), Some("one\n".into()), Some("two\n".into()));
         set.record("a.txt".into(), abs("a.txt"), Some("two\n".into()), Some("three\n".into()));
 
-        let view = set.view("a.txt").unwrap();
-        assert_eq!(view.fact.kind, ChangeKind::Modified);
-        assert_eq!((view.fact.added, view.fact.removed), (1, 1));
+        let fact = set.view("a.txt").unwrap().fact.unwrap();
+        assert_eq!(fact.kind, ChangeKind::Modified);
+        assert_eq!((fact.added, fact.removed), (1, 1));
     }
 
     #[test]
@@ -127,7 +127,7 @@ mod tests {
         let set = ChangeSet::new();
         set.record("a.txt".into(), abs("a.txt"), None, Some("первая\n".into()));
 
-        assert_eq!(set.view("a.txt").unwrap().fact.kind, ChangeKind::Created);
+        assert_eq!(set.view("a.txt").unwrap().fact.unwrap().kind, ChangeKind::Created);
     }
 
     #[test]

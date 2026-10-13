@@ -1,9 +1,9 @@
-//! Проект: корень, границы и реестр прочитанного.
+//! The project: root, boundaries and the registry of what was read.
 //!
-//! Реестр нужен уже сейчас, хотя правки приходят срезом 3: §7.2 требует
-//! регистрировать приложенный через `@` файл как прочитанный, иначе получается
-//! глупость — человек сам приложил файл, а агент обязан перечитать его перед
-//! правкой.
+//! The registry is needed already, although edits arrive in slice 3: §7.2 requires
+//! registering a file attached via `@` as read, otherwise it would be pointless:
+//! the human attached the file, and the agent must re-read it before an
+//! edit.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -13,8 +13,8 @@ use crate::error::{CoreError, ToolError};
 
 pub(crate) mod roots;
 
-/// Отпечаток файла на момент чтения. Слепок, по которому срез 3 проверит
-/// свежесть: файл, изменившийся после чтения, правится вслепую.
+/// The fingerprint of a file at the time it was read. The snapshot slice 3 checks
+/// freshness against: a file that changed after it was read is edited blind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReadRecord {
     pub mtime_ms: u64,
@@ -193,10 +193,10 @@ impl Workspace {
         self.root != self.home
     }
 
-    /// Путь относительно корня — то, что видит человек в ленте.
+    /// The path relative to the root — what the human sees in the feed.
     ///
-    /// Файл в дополнительном корне показывается целиком, абсолютным путём:
-    /// относительная форма могла бы сойти за файл основного корня.
+    /// A file in an additional root is shown whole, by its absolute path:
+    /// a relative form could pass for a file of the main root.
     pub fn display(&self, path: &Path) -> String {
         if let Ok(rel) = path.strip_prefix(&self.root) {
             return rel.to_string_lossy().replace('\\', "/");
@@ -230,32 +230,32 @@ impl Workspace {
             .replace('\\', "/")
     }
 
-    /// Разрешает путь из аргументов тула и проверяет границы воркспейса.
+    /// Resolves a path from a tool's arguments and checks the workspace boundaries.
     ///
-    /// Порядок проверок принципиален: сначала граница, потом существование.
-    /// Наоборот — и `../../secrets.env` вернул бы «не найдено» вместо отказа,
-    /// то есть инвариант превратился бы в отчёт о том, что лежит снаружи.
+    /// The order of the checks matters: the boundary first, then existence.
+    /// The other way round, and `../../secrets.env` would return «не найдено» instead of a refusal,
+    /// so the invariant would turn into a report of what lies outside.
     pub fn resolve_existing(&self, raw: &str) -> Result<PathBuf, ToolError> {
         let candidate = self.bounded(raw)?;
         let canon = std::fs::canonicalize(&candidate)
             .map_err(|_| ToolError::failed(format!("не найдено: {raw}")))?;
-        // Второй раз — уже после разыменования ссылок: символическая ссылка
-        // наружу проходит лексическую проверку и не должна проходить эту.
+        // The second time — after the links are dereferenced: a symbolic link
+        // pointing outside passes the lexical check and must not pass this one.
         self.ensure_inside(&canon, raw)?;
         Ok(canon)
     }
 
-    /// То же для пути, которого может ещё не быть. Нужен тулам записи
-    /// (срез 3); объявлен здесь, чтобы правило границ жило в одном месте.
+    /// The same for a path that may not exist yet. Needed by the write tools
+    /// (slice 3); declared here so that the boundary rule lives in one place.
     pub fn resolve_new(&self, raw: &str) -> Result<PathBuf, ToolError> {
         self.bounded(raw)
     }
 
-    /// Приводит путь к нормальной форме и проверяет, что он внутри проекта.
+    /// Brings the path to a normal form and checks that it is inside the project.
     ///
-    /// Две проверки, и обе нужны. Лексическая ловит `..` у пути, которого ещё
-    /// нет. Канонизация ближайшего существующего предка ловит символическую
-    /// ссылку наружу — лексически такой путь выглядит безупречно.
+    /// Two checks, and both are needed. The lexical one catches `..` in a path that
+    /// does not exist yet. Canonicalising the nearest existing ancestor catches a symbolic
+    /// link pointing outside — lexically such a path looks flawless.
     fn bounded(&self, raw: &str) -> Result<PathBuf, ToolError> {
         let normalized = normalize(&self.join(raw));
         self.ensure_inside(&normalized, raw)?;
@@ -309,7 +309,7 @@ impl Workspace {
         }
     }
 
-    /// Текущий отпечаток файла на диске. `None` — файла нет.
+    /// The file's current fingerprint on disk. `None` — the file does not exist.
     pub fn fingerprint(&self, path: &Path) -> Option<ReadRecord> {
         let meta = std::fs::metadata(path).ok()?;
         let mtime_ms = meta
@@ -324,15 +324,15 @@ impl Workspace {
         })
     }
 
-    /// Отметить файл прочитанным. Вызывается тулом чтения и при вложении `@`.
+    /// Marks the file as read. Called by the read tool and when attached with `@`.
     pub fn mark_read(&self, path: &Path) {
         if let Some(record) = self.fingerprint(path) {
             self.read.lock().unwrap().insert(path.to_path_buf(), record);
         }
     }
 
-    /// Файл создан агентом в текущем наборе: на диске его нет, но содержимое
-    /// агент знает — читать заново незачем.
+    /// The file was created by the agent in the current set: it is not on disk, but
+    /// the agent knows its contents — there is no need to read it again.
     pub fn mark_authored(&self, path: &Path) {
         self.read
             .lock()
@@ -344,7 +344,7 @@ impl Workspace {
             });
     }
 
-    /// Забыть отпечаток: файл изменился извне и должен быть перечитан (§11).
+    /// Forgets the fingerprint: the file changed outside and must be read again (§11).
     pub fn forget(&self, path: &Path) {
         self.read.lock().unwrap().remove(path);
     }
@@ -358,14 +358,14 @@ impl Workspace {
         self.read.lock().unwrap().get(path).copied()
     }
 
-    /// Читался ли файл в этой сессии — инвариант read-before-edit (§8).
+    /// Whether the file was read in this session — the read-before-edit invariant (§8).
     pub fn was_read(&self, path: &Path) -> bool {
         self.read.lock().unwrap().contains_key(path)
     }
 }
 
-/// Свернуть `.` и `..` не трогая диск. Именно поэтому проверка границ
-/// работает и для путей, которых ещё нет.
+/// Collapses `.` and `..` without touching the disk. That is why the boundary check
+/// works for paths that do not exist yet.
 fn normalize(path: &Path) -> PathBuf {
     use std::path::Component;
 
@@ -423,7 +423,7 @@ mod tests {
     #[test]
     fn несуществующий_путь_снаружи_тоже_отклоняется_а_не_теряется() {
         let (_d, ws) = temp_project();
-        // Иначе отказ подменяется отчётом о том, чего снаружи нет.
+        // Otherwise the refusal is replaced by a report of what is not outside.
         let err = ws.resolve_existing("../../secrets.env").unwrap_err();
         assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
     }
@@ -455,8 +455,8 @@ mod tests {
         assert!(ws.read_record(&p).unwrap().len > 0);
     }
 
-    /// Основной корень с `a.txt` и дополнительный с `b.txt`, и третий каталог
-    /// вне обоих.
+    /// The main root with `a.txt` and an additional one with `b.txt`, and a third directory
+    /// outside both.
     fn two_roots() -> (TempDir, TempDir, TempDir, Workspace) {
         let main = TempDir::new();
         main.write("a.txt", "основной\n");
@@ -471,7 +471,7 @@ mod tests {
         (main, extra, outside, ws)
     }
 
-    /// Путь так, как его видит модель: без `\\?\`, с прямыми косыми.
+    /// The path as the model sees it: without `\\?\`, with forward slashes.
     fn as_model_sees(path: &Path) -> String {
         roots::plain(path)
     }
@@ -481,7 +481,7 @@ mod tests {
         let (_m, extra, _o, ws) = two_roots();
         let by_abs = ws.resolve_existing(&extra.path().join("b.txt").to_string_lossy()).unwrap();
         assert!(by_abs.starts_with(extra.path()));
-        // Тот же файл — тот же ключ: реестр прочитанного не расходится.
+        // The same file — the same key: the registry of what was read does not diverge.
         let by_model = ws.resolve_existing(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
         assert_eq!(by_abs, by_model);
         assert!(ws.resolve_new(&as_model_sees(&extra.path().join("новый.txt"))).is_ok());
@@ -490,8 +490,8 @@ mod tests {
     #[test]
     fn относительный_путь_всегда_идёт_в_основной_корень() {
         let (_m, _e, _o, ws) = two_roots();
-        // `b.txt` есть только в дополнительном корне: относительный путь его
-        // не находит, а не подменяет собой.
+        // `b.txt` exists only in the additional root: a relative path does not find it,
+        // rather than standing in for it.
         let err = ws.resolve_existing("b.txt").unwrap_err();
         assert!(err.to_string().contains("не найдено"), "{err}");
         assert!(ws.resolve_existing("a.txt").unwrap().starts_with(ws.root()));
@@ -514,7 +514,7 @@ mod tests {
         let (_m, extra, outside, ws) = two_roots();
         let link = extra.path().join("ссылка.env");
         if make_file_link(&outside.path().join("secret.env"), &link).is_err() {
-            // Хост не даёт создать ссылку: проверка пропущена, а не пройдена.
+            // The host does not allow creating a link: the check is skipped, not passed.
             eprintln!("пропуск: хост не создаёт символические ссылки");
             return;
         }
@@ -533,7 +533,7 @@ mod tests {
         assert_eq!(shown, as_model_sees(&extra_file));
         assert!(!shown.contains(r"\\?\") && !shown.contains('\\'), "{shown}");
         assert!(shown.ends_with("/b.txt"), "{shown}");
-        // Относительная форма была бы неотличима от файла основного корня.
+        // A relative form would be indistinguishable from a file of the main root.
         assert_ne!(shown, "b.txt");
     }
 
@@ -558,7 +558,7 @@ mod tests {
         let (_m, extra, _o, ws) = two_roots();
         let path = ws.resolve_existing(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
         ws.mark_read(&path);
-        // Тем же путём, каким его задаст правка, он узнаётся как прочитанный.
+        // By the same path the edit gives it, it is recognised as read.
         let edit_path = ws.resolve_new(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
         assert!(ws.was_read(&edit_path));
     }
@@ -577,7 +577,7 @@ mod tests {
                 extra.path().to_path_buf(),
             ])
             .unwrap();
-        // Сам корень и то, что внутри него, уже покрыты; дубликат один.
+        // The root itself and what is inside it are already covered; one duplicate.
         assert_eq!(ws.additional(), [extra.path().to_path_buf()]);
         assert_eq!(ws.roots().len(), 2);
     }

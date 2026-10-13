@@ -15,7 +15,7 @@ use crate::tool::take_description;
 use super::accumulator::PendingCall;
 use super::calls::Caller;
 
-/// Место вызова в пачке — для счётчика `2 из 3` (§5.7).
+/// Position of the call within the batch, for the `2 из 3` counter (§5.7).
 #[derive(Clone, Copy)]
 pub(super) struct Queue<'a> {
     pub(super) asked: u32,
@@ -42,7 +42,7 @@ pub(super) enum Answer {
 }
 
 impl Caller {
-    /// Нужно ли спрашивать про этот вызов прямо сейчас.
+    /// Whether this call needs to ask for permission right now.
     ///
     /// Standing rules come before the mode, so a refusal holds under bypass
     /// too: bypass means "stop asking me", not "do what I said no to".
@@ -55,7 +55,7 @@ impl Caller {
         }
     }
 
-    /// Показывает блок §5.7 и ждёт. Таймаута нет — только отмена турна.
+    /// Shows the §5.7 block and waits. There is no timeout, only turn cancellation.
     pub(super) async fn ask(
         &self,
         call_id: &CallId,
@@ -101,7 +101,7 @@ impl Caller {
         self.emit(AgentEvent::PermissionResolved { request_id: id });
 
         match answer {
-            // Правило уже выдал диспетчер — работнику остаётся пропустить.
+            // The dispatcher has already issued the rule; the worker only has to skip.
             Ok(PermissionAnswer::Allow) | Ok(PermissionAnswer::AllowAlways { .. }) => {
                 Answer::Allowed
             }
@@ -114,14 +114,14 @@ impl Caller {
                 reason,
                 standing: true,
             },
-            // Канал закрыт: вопрос отменили вместе с турном.
+            // The channel is closed: the question was cancelled along with the turn.
             Err(_) => Answer::Cancelled,
         }
     }
 
-    /// Сколько ещё вызовов из этой пачки спросят разрешения. Считается
-    /// заново перед каждым вопросом: «разрешать всегда» по дороге может
-    /// снять часть очереди, и счётчик `2 из 3` обязан это учесть.
+    /// How many more calls in this batch will ask for permission. It is counted
+    /// again before each question: «разрешать всегда» along the way may
+    /// clear part of the queue, and the `2 из 3` counter has to account for it.
     fn still_to_ask(&self, queue: &Queue<'_>) -> u32 {
         queue
             .rest

@@ -24,10 +24,8 @@ import { useState } from "react";
 
 import type { Feed } from "../core/feed";
 import { t } from "../i18n";
+import { FULL_RATIO } from "./contextParts";
 import { tokens } from "./format";
-
-/** §6.1.1: полоса появляется, когда контекст занят на 80%. */
-const FULL_RATIO = 0.8;
 
 export function Notices({
   feed,

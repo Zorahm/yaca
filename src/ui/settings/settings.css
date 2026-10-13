@@ -1,8 +1,9 @@
 /*
  * Окно настроек §10.
  *
- * Две колонки: навигация 208 и колонка содержимого. Окно своё (`window.rs`),
- * поэтому верхней панели §3 здесь нет — разделы называют себя сами.
+ * Две колонки: навигация 244 и колонка содержимого. Слой лежит поверх всего
+ * главного окна (`.settings-overlay`), поэтому верхней панели §3 здесь нет —
+ * разделы называют себя сами.
  *
  * Навигация разрезана на две группы, приложение и проект. §10 перечисляет
  * разделы одним списком, но в нём смешаны два уровня правды: провайдеры и
@@ -13,10 +14,38 @@
  * контролы §2. Новый раздел новой формы не заводит.
  */
 
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--bg);
+}
+
+.set-close {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  border: 0;
+  border-radius: var(--radius, 6px);
+  background: transparent;
+  color: var(--text-muted, inherit);
+  font: inherit;
+  cursor: pointer;
+}
+
+.set-close:hover {
+  background: var(--sunk);
+  color: var(--ink);
+}
+
 .settings {
   display: flex;
-  height: 100vh;
-  background: var(--paper);
+  /* Of the layer, not of the viewport: under the window's own title bar the
+     layer is shorter than the window (`titlebar.css`). */
+  height: 100%;
+  background: var(--bg);
   overflow: hidden;
 }
 
@@ -31,9 +60,9 @@
   flex-direction: column;
   gap: 4px;
   padding: 16px 10px;
-  /* The same darker column the session window has on its left (§2). */
-  background: var(--rail-fill);
-  border-right: 1px solid var(--rail-line);
+  /* The same white column the session window has on its left (§2). */
+  background: var(--surface);
+  border-right: 1px solid var(--line);
   overflow-y: auto;
 }
 
@@ -41,7 +70,7 @@
   padding: 0 10px 8px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 /* Вторая группа отбивается воздухом: два уровня правды видно до чтения. */
@@ -52,16 +81,27 @@
 /* Чип проекта — тот же, что в шапке §3 и на домашнем экране §9.1: раздел
    проекта обязан сказать, какого именно. `rtl` обрезает путь слева: в
    `D:\очень\длинный\путь\Kod` важен хвост. */
-.set-project {
+.select.set-project {
+  /* Not `inline-flex`: the chip takes the width of the column, so the list
+     of sections under it starts at the same edge. */
+  display: flex;
+  min-width: 0;
+  height: auto;
   margin: 0 8px 10px;
-  padding: 3px 8px;
+  padding: 3px 6px 3px 8px;
+  border: 0;
   border-radius: var(--radius-s);
-  background: var(--rail-fill-deep);
-  font: 400 11.5px var(--mono);
-  color: var(--ink-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  background: var(--sunk);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.select.set-project:hover,
+.select.set-project[data-state="open"] {
+  color: var(--ink);
+}
+
+.set-project .select-value {
   direction: rtl;
   text-align: left;
 }
@@ -76,7 +116,7 @@
   padding: 0 8px 0 12px;
   border-radius: var(--radius-m);
   font-size: 13px;
-  color: var(--ink-muted);
+  color: var(--muted);
   text-align: left;
   /* Пункт всегда в одну строку: высота у него задана, и вторая строка
      вылезала бы из неё. Словарь, который ещё длиннее, обрежется многоточием. */
@@ -94,22 +134,9 @@
 }
 
 .set-nav-item[aria-current="page"] {
-  background: var(--rail-fill-deep);
-  color: var(--ink);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
   font-weight: 600;
-}
-
-/* Метка «вы здесь» — чернильная и узкая: семь громких строк в колонке
-   перекричали бы главную кнопку раздела (§2). */
-.set-nav-item[aria-current="page"]::before {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 8px;
-  width: 3px;
-  height: 14px;
-  border-radius: var(--radius-s);
-  background: var(--ink);
 }
 
 .set-nav-icon {
@@ -153,15 +180,19 @@
   max-width: 62ch;
   font-size: 12.5px;
   line-height: 18px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 /* --- строка настройки --------------------------------------------------- */
 
-/* Список утверждений о приложении, а не девять карточек: рамка вокруг каждой
-   настройки обещала бы независимость, которой между ними нет. */
+/* Список утверждений о приложении в одной карточке, а не девять карточек:
+   рамка вокруг каждой настройки обещала бы независимость, которой между ними
+   нет. */
 .set-rows {
-  border-top: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  overflow: hidden;
 }
 
 .set-row {
@@ -169,8 +200,12 @@
   align-items: center;
   gap: 24px;
   min-height: 44px;
-  padding: 13px 0;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--line);
+}
+
+.set-row:last-child {
+  border-bottom: 0;
 }
 
 .set-row-text {
@@ -189,7 +224,7 @@
 .set-row-hint {
   font-size: 12.5px;
   line-height: 18px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .set-row-control {
@@ -206,6 +241,64 @@
   margin-top: 18px;
 }
 
+/* --- select -------------------------------------------------------------- */
+/* The trigger is a quiet `.segment`: same height, border and radius, so a row
+   with a select lines up with a row of segments. */
+
+.select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 150px;
+  max-width: 100%;
+  height: var(--h-small-button);
+  padding: 0 8px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  color: var(--ink);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.select:hover,
+.select[data-state="open"] {
+  background: var(--sunk);
+}
+
+/* A model name can be longer than the control column. */
+.select-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.select-caret {
+  flex: none;
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.select-mono,
+.select-mono .pop-item {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+/* Never narrower than what opened it, never taller than the room Radix
+   measured: a long list of models scrolls inside instead of leaving the window. */
+.select-list {
+  min-width: max(var(--radix-select-trigger-width), 150px);
+  max-height: var(--radix-select-content-available-height);
+  overflow-y: auto;
+}
+
+.select-mark {
+  display: inline-flex;
+  margin-left: auto;
+  padding-left: 12px;
+}
+
 /* --- выключатель -------------------------------------------------------- */
 
 .switch {
@@ -215,27 +308,27 @@
   width: 34px;
   height: 20px;
   padding: 2px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-m);
-  background: var(--paper-sunken);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--line);
 }
 
 .switch::after {
   content: "";
   width: 14px;
   height: 14px;
-  border-radius: var(--radius-s);
-  background: var(--ink-muted);
+  border-radius: 50%;
+  background: var(--surface);
 }
 
 .switch[aria-checked="true"] {
   justify-content: flex-end;
-  border-color: var(--ink);
-  background: var(--ink);
+  border-color: var(--accent);
+  background: var(--accent);
 }
 
 .switch[aria-checked="true"]::after {
-  background: var(--paper);
+  background: var(--on-accent);
 }
 
 /* --- списки разделов ---------------------------------------------------- */
@@ -271,31 +364,31 @@
   margin-top: 3px;
   font-size: 12.5px;
   line-height: 18px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .set-empty {
   padding: 10px 0;
   font-size: 12.5px;
   line-height: 18px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .set-foot-note {
   margin: 14px 0 0;
   font-size: 12px;
   line-height: 17px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 /* Ошибка раздела — строка на месте, а не тост: она про то, что на экране. */
 .set-error {
   margin-bottom: 14px;
   padding: 8px 12px;
-  border: 1px solid var(--red-ink);
+  border: 1px solid var(--err);
   border-radius: var(--radius-m);
   font-size: 12.5px;
-  color: var(--red-ink);
+  color: var(--err);
   user-select: text;
 }
 
@@ -309,7 +402,7 @@
   padding: 4px 8px 4px 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
-  background: var(--paper-raised);
+  background: var(--surface);
 }
 
 .rule-kind {
@@ -317,14 +410,14 @@
   width: 92px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 /* Отказ помечен красным: §2 отдаёт его под «сбой, удаление, отказ», и это
    ровно его работа. Разрешения не красятся — зелёный сказал бы «всё хорошо»
    про ту половину списка, которая как раз и рискованная. */
 .rule-deny .rule-kind {
-  color: var(--red-ink);
+  color: var(--err);
 }
 
 .rule-value {
@@ -339,7 +432,7 @@
   flex: none;
   max-width: 45%;
   font-size: 12px;
-  color: var(--ink-muted);
+  color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -366,23 +459,23 @@
   margin: 12px 0;
 }
 
-.chip {
+.chips .chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 3px 4px 3px 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius-s);
-  background: var(--paper-raised);
+  background: var(--surface);
   font: 400 11.5px var(--mono);
   color: var(--ink);
 }
 
 /* `.git` и `.yaca` не обсуждаются: проект, выкинувший их из списка, снимал бы
    снимки со своих снимков (§10). Показаны, но без крестика. */
-.chip-fixed {
+.chips .chip-fixed {
   padding-right: 10px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 /* --- провайдеры §10 ----------------------------------------------------- */
@@ -401,7 +494,7 @@
   padding: 0 12px 0 14px;
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
-  background: var(--paper-raised);
+  background: var(--surface);
 }
 
 .prov:hover {
@@ -419,8 +512,8 @@
 }
 
 .prov-dot-on {
-  border-color: var(--ink);
-  background: var(--ink);
+  border-color: var(--ok);
+  background: var(--ok);
 }
 
 .prov-main {
@@ -448,7 +541,7 @@
 
 .prov-meta {
   font: 400 11.5px var(--mono);
-  color: var(--ink-muted);
+  color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -459,7 +552,7 @@
 .prov-proto {
   flex: none;
   font: 400 11.5px var(--mono);
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .prov-actions {
@@ -478,7 +571,7 @@
   border-top: 1px solid var(--line);
   font-size: 12.5px;
   line-height: 18px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .prov-note .prov-dot {
@@ -507,7 +600,7 @@
   gap: 6px;
   margin-bottom: 9px;
   font-size: 12.5px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .prov-back:hover {
@@ -531,7 +624,7 @@
   margin-bottom: 4px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .prov-input {
@@ -540,14 +633,14 @@
   padding: 0 10px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-s);
-  background: var(--paper-sunken);
+  background: var(--sunk);
   font-size: 12.5px;
   color: var(--ink);
   user-select: text;
 }
 
 .prov-input:focus {
-  border-color: var(--ink);
+  border-color: var(--accent);
   outline: none;
 }
 
@@ -555,16 +648,39 @@
   font-family: var(--mono);
 }
 
-/* id существующего провайдера закрыт: он же имя ключа в кейчейне. */
+/* Закрытое поле: имя сервера MCP, по которому он записан в настройках. */
 .prov-input[readonly] {
-  color: var(--ink-muted);
+  color: var(--muted);
+}
+
+/* What a preset already knows about itself — name, protocol, address,
+   headers — folded away: the one thing it is waiting for is the key. */
+.prov-more > summary {
+  width: fit-content;
+  font-size: 12.5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.prov-more > summary:hover,
+.prov-more > summary:focus-visible {
+  color: var(--ink);
+}
+
+/* The gap is the form's own (`.prov-form`): opened, the fields read as part
+   of it rather than as a box inside it. */
+.prov-more-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 14px;
 }
 
 .prov-hint {
   margin-top: 4px;
   font-size: 12px;
   line-height: 17px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .prov-section {
@@ -597,7 +713,7 @@
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .prov-source-ok {
@@ -605,7 +721,7 @@
 }
 
 .prov-source-warn {
-  color: var(--red-ink);
+  color: var(--err);
 }
 
 .prov-rows {
@@ -624,14 +740,14 @@
 .prov-headers-head {
   font-size: 12px;
   font-weight: 600;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 /* Значение заголовка уезжает в открытый JSON, ключ — нет: место, где стоит
    {key}, помечено им самим (§0). */
 .prov-key-mark {
   font: 500 11.5px var(--mono);
-  color: var(--ink-muted);
+  color: var(--muted);
   text-align: center;
 }
 
@@ -644,7 +760,7 @@
 
 .prov-models-note {
   font-size: 12px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .prov-model-row {
@@ -655,7 +771,7 @@
   padding: 6px 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
-  background: var(--paper-raised);
+  background: var(--surface);
 }
 
 .prov-model-name {
@@ -668,7 +784,7 @@
 
 .prov-model-id {
   font: 400 11.5px var(--mono);
-  color: var(--ink-muted);
+  color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -676,14 +792,14 @@
 
 .prov-model-num {
   font: 400 11.5px var(--mono);
-  color: var(--ink-muted);
+  color: var(--muted);
   text-align: right;
   white-space: nowrap;
 }
 
 .prov-model-flag {
   font-size: 11.5px;
-  color: var(--ink-muted);
+  color: var(--muted);
   text-align: right;
   white-space: nowrap;
 }
@@ -693,7 +809,7 @@
   flex-direction: column;
   gap: 2px;
   font: 400 12.5px var(--mono);
-  color: var(--red-ink);
+  color: var(--err);
   user-select: text;
 }
 
@@ -706,7 +822,7 @@
   gap: 8px;
   padding: 12px 24px;
   border-top: 1px solid var(--line);
-  background: var(--paper);
+  background: var(--bg);
 }
 
 
@@ -727,4 +843,44 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* --- about --------------------------------------------------------------- */
+
+.about-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+  color: var(--ink);
+}
+
+.about-name {
+  margin: 0;
+  font: 600 22px/26px var(--display);
+  color: var(--ink);
+}
+
+.about-version {
+  margin: 2px 0 0;
+  font: 12.5px/18px var(--mono);
+  color: var(--muted);
+  user-select: text;
+}
+
+.about-text {
+  max-width: 62ch;
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.about-text + .set-rows {
+  margin-top: 20px;
+}
+
+.about-value {
+  font-size: 12.5px;
+  color: var(--muted);
 }

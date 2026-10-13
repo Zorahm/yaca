@@ -1,8 +1,8 @@
-//! OpenAI-форма против настоящего сокета.
+//! OpenAI shape against a real socket.
 //!
-//! Тот же харнесс, что у Messages API, и та же причина: между сборкой тела и
-//! разбором потока лежит HTTP, а именно в нём живёт всё, ради чего затевались
-//! произвольные провайдеры — адрес, заголовки, подставленный ключ.
+//! The same harness as for the Messages API, and the same reason: between building the body and
+//! parsing the stream lies HTTP, and that is where everything lives that arbitrary providers
+//! exist for — the address, the headers, the substituted key.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -48,7 +48,7 @@ const SSE_OK: &str = concat!(
     "Content-Type: text/event-stream\r\n",
     "Connection: close\r\n",
     "\r\n",
-    // Первая посылка объявляет роль и не несёт текста.
+    // The first chunk declares the role and carries no text.
     r#"data: {"id":"1","model":"gpt-oss-120b","choices":[{"index":0,"delta":{"role":"assistant","content":""}}]}"#,
     "\n\n",
     r#"data: {"choices":[{"delta":{"reasoning_content":"надо прочесть файл"}}]}"#,
@@ -166,7 +166,7 @@ async fn свой_заголовок_едет_вместе_с_подставле
 async fn шлюз_без_авторизации_не_требует_ключа() {
     let (base, seen) = serve(SSE_OK).await;
     let mut s = spec(base);
-    // Локальный Ollama: заголовок авторизации снят совсем.
+    // A local Ollama: the authorization header is removed altogether.
     s.headers.insert("authorization".into(), String::new());
     assert!(!s.needs_key());
 
@@ -199,8 +199,8 @@ async fn a_local_server_is_reached_without_a_key() {
 #[tokio::test]
 async fn лимит_запросов_доносит_retry_after() {
     let body = r#"{"error":{"message":"rate limit","type":"rate_limit_error"}}"#;
-    // Длина считается, а не пишется руками: разошедшийся `Content-Length`
-    // проверял бы арифметику в тесте, а не провайдера.
+    // The length is counted, not typed in by hand: a `Content-Length` that has drifted
+    // would check the arithmetic in the test, not the provider.
     let too_many = format!(
         "HTTP/1.1 429 Too Many Requests\r\n\
          Content-Type: application/json\r\n\
@@ -228,7 +228,7 @@ async fn лимит_запросов_доносит_retry_after() {
     }
 }
 
-/// Отказ новых моделей OpenAI: код 400 и имя поля прямо в тексте.
+/// The refusal from new OpenAI models: code 400 and the field name right in the text.
 const REFUSES_MAX_TOKENS: &str = concat!(
     "HTTP/1.1 400 Bad Request\r\n",
     "Content-Type: application/json\r\n",
@@ -250,7 +250,7 @@ async fn провайдер_переспрашивает_полем_которо
     let (base, seen) = serve_all(vec![REFUSES_MAX_TOKENS.into(), SSE_OK.into()]).await;
     let provider = Arc::new(OpenAiProvider::new(spec(base), Some("sk-test".into())));
 
-    // Ход не падает: отказ был про имя поля, и имя у провайдера спросили.
+    // The turn does not fail: the refusal was about a field name, and the provider was asked for the name.
     let mut stream = provider.stream(request()).await.unwrap();
     while let Some(item) = stream.next().await {
         item.unwrap();
@@ -259,11 +259,11 @@ async fn провайдер_переспрашивает_полем_которо
     let seen = seen.await.unwrap();
     assert_eq!(seen.len(), 2, "переспросили ровно один раз");
 
-    // Сперва как принято почти везде.
+    // First the way it is accepted almost everywhere.
     assert_eq!(seen[0].body["max_tokens"], 8_000);
     assert!(seen[0].body.get("max_completion_tokens").is_none());
 
-    // Потом тем, что провайдер назвал, — и снова одним полем.
+    // Then with the one the provider named — and again with a single field.
     assert_eq!(seen[1].body["max_completion_tokens"], 8_000);
     assert!(
         seen[1].body.get("max_tokens").is_none(),
@@ -289,7 +289,7 @@ async fn узнанное_поле_держится_до_конца_сессии
     }
 
     let seen = seen.await.unwrap();
-    // Три запроса, а не четыре: второй ход уже знает, чем спрашивать.
+    // Three requests, not four: the second turn already knows what to ask with.
     assert_eq!(seen.len(), 3);
     assert_eq!(seen[2].body["max_completion_tokens"], 8_000);
 }

@@ -1,23 +1,23 @@
-//! Точечная правка по якорю — одна или несколько за раз.
+//! Point edit by anchor — one or several at a time.
 //!
-//! Три инварианта §8 сходятся именно здесь: файл должен быть прочитан, не
-//! должен был измениться после чтения, а якорь должен быть однозначен.
-//! Последнее — не педантизм: «замени первое вхождение» в файле с тремя
-//! одинаковыми строками означает, что модель не знает, что именно правит.
+//! Three invariants of §8 meet here: the file must have been read, must not have
+//! changed since the read, and the anchor must be unambiguous. The last is not
+//! pedantry: «замени первое вхождение» in a file with three
+//! identical lines means the model does not know what it is editing.
 //!
-//! Правок в вызове может быть несколько, и это не удобство, а починка. Модель
-//! читает файл один раз и считает по нему всю пачку сразу; описание тула само
-//! велит ей брать якорь пошире, «добавь окружающих строк». В плотно
-//! закомментированном файле окружение одной правки — это тело соседней, и
-//! четырнадцать отдельных вызовов ложатся на четырнадцать разных версий файла:
-//! первая проходит, у второй якорь исчез вместе со строками, которые первая
-//! переписала. Внутри одного вызова все якоря ищутся в одном тексте — том
-//! самом, по которому модель их считала, — а пересечения диапазонов становятся
-//! названным конфликтом вместо загадочного «не нашёл этот текст».
+//! There can be several edits in one call, and that is not a convenience but a fix. The model
+//! reads the file once and counts the whole batch against it at once; the tool's description
+//! itself tells it to take a wider anchor, «добавь окружающих строк». In a densely
+//! commented file the surroundings of one edit are the body of the neighbouring one, and
+//! fourteen separate calls land on fourteen different versions of the file:
+//! the first passes, the second's anchor is gone along with the lines the first
+//! rewrote. Within one call all anchors are searched in one text — the one the model
+//! counted them against — and overlapping ranges become a named conflict instead of a
+//! cryptic «не нашёл этот текст».
 //!
-//! Вызов атомарен: не сложилась одна правка — не применяется ни одна. «Изменён
-//! файл» при половине непроехавших правок было бы враньём про состояние (§0),
-//! а модели после отказа есть что перечитать и чем повторить.
+//! The call is atomic: if one edit does not apply, none is. «Изменён
+//! файл» with half the edits not landed would be a lie about the state (§0),
+//! and after a refusal the model has something to re-read and something to retry with.
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -38,8 +38,8 @@ impl Tool for EditFile {
         "Edit"
     }
 
-    /// Английское, как у `bash`: это инструкция, которая обязана сработать,
-    /// а не текст для человека (CLAUDE.md, «Язык»).
+    /// English, like `bash`: this is an instruction that has to work, not text
+    /// for a human (CLAUDE.md, «Язык»).
     fn description(&self) -> &'static str {
         "Replace text in a file. `old_string` must occur exactly once — widen it with \
          surrounding lines until it does. Read the file before editing it.\n\
@@ -86,8 +86,8 @@ impl Tool for EditFile {
         })
     }
 
-    /// Только `path`: дальше либо плоская пара, либо `edits`, и «ровно одна из
-    /// двух форм» схемой не выражается. Что пришло, разбирает [`Edit::list`].
+    /// Only `path`: beyond it comes either the flat pair or `edits`, and «ровно одна из
+    /// двух форм» cannot be expressed in the schema. What arrives is parsed by [`Edit::list`].
     fn required(&self) -> &'static [&'static str] {
         &["path"]
     }
@@ -104,9 +104,9 @@ impl Tool for EditFile {
         input["path"].as_str().map(str::to_owned)
     }
 
-    /// Спрашивается в «Ручном» (§8). Счётчиков `+12 −3` здесь нет: они
-    /// известны только после правки, а смысл запроса — остановить агента
-    /// до того, как файл будет тронут.
+    /// Asked in «Ручном» mode (§8). There are no `+12 −3` counters here: they are
+    /// known only after the edit, and the point of the question is to stop the agent
+    /// before the file is touched.
     fn permission(&self, ws: &Workspace, input: &Value) -> Option<PermissionNeed> {
         let raw = input["path"].as_str()?;
         let abs = ws.resolve_new(raw).ok()?;
@@ -138,7 +138,7 @@ impl Tool for EditFile {
     }
 }
 
-/// Одна правка: что заменить и чем.
+/// One edit: what to replace and with what.
 struct Edit {
     old: String,
     new: String,
@@ -146,10 +146,10 @@ struct Edit {
 }
 
 impl Edit {
-    /// Правки вызова — из `edits` или из плоской пары.
+    /// The edits of a call — from `edits` or from the flat pair.
     ///
-    /// Обе формы разом — не удобство, а неоднозначность: непонятно, что
-    /// применять и в каком порядке. Отказ здесь дешевле догадки.
+    /// Both forms at once is not a convenience but an ambiguity: it is unclear what
+    /// to apply and in what order. Refusing here is cheaper than a guess.
     fn list(input: &Value) -> Result<Vec<Edit>, ToolError> {
         let flat = input.get("old_string").is_some() || input.get("new_string").is_some();
 
@@ -193,22 +193,22 @@ impl Edit {
     }
 }
 
-/// Место, которое займёт одна замена, — в координатах исходного текста.
+/// The place one replacement will take, in the coordinates of the original text.
 struct Claim {
     at: std::ops::Range<usize>,
     new: String,
-    /// Чья это замена. В сообщении о конфликте называется по номеру.
+    /// Whose replacement this is. A conflict message names it by number.
     edit: usize,
 }
 
-/// Применяет все правки к одному тексту, отдавая новый текст и число замен.
+/// Applies all edits to one text, returning the new text and the number of replacements.
 ///
-/// Все якоря ищутся в `base` — том тексте, по которому модель их и считала.
-/// Применяются замены справа налево: так ранние диапазоны не съезжают от
-/// поздних, и порядок правок в списке ни на что не влияет.
+/// All anchors are searched in `base` — the text the model counted them against.
+/// Replacements are applied right to left: so early ranges do not shift from
+/// later ones, and the order of edits in the list makes no difference.
 ///
-/// Номер правки в сообщениях — человеческий, с единицы, и только когда правок
-/// больше одной: «правка 1 из 1» ничего не уточняет.
+/// The edit number in messages is for humans, counted from one, and only when
+/// there is more than one edit: «правка 1 из 1» clarifies nothing.
 fn apply(base: &str, edits: &[Edit], rel: &str) -> Result<(String, usize), ToolError> {
     let many = edits.len() > 1;
     let mut claims: Vec<Claim> = Vec::new();
@@ -224,8 +224,8 @@ fn apply(base: &str, edits: &[Edit], rel: &str) -> Result<(String, usize), ToolE
                 )))
             }
             n if n > 1 && !edit.replace_all => {
-                // Инвариант уникальности якоря (§8): §5.9 покажет это
-                // отклонением, а не сбоем, — защита сработала, а не сломалась.
+                // The anchor uniqueness invariant (§8): §5.9 shows this as a
+                // rejection, not a failure — the guard worked, it did not break.
                 return Err(ToolError::rejected(format!(
                     "якорь встречается {n} раз в {rel}{which} — добавь окружающих \
                      строк или поставь replace_all"
@@ -247,10 +247,10 @@ fn apply(base: &str, edits: &[Edit], rel: &str) -> Result<(String, usize), ToolE
     for pair in claims.windows(2) {
         let (left, right) = (&pair[0], &pair[1]);
         if right.at.start < left.at.end {
-            // Ровно тот случай, ради которого правки собраны в один вызов:
-            // порознь вторая молча не нашла бы своего якоря, потому что его
-            // съела первая. Названный конфликт — это то, что модель может
-            // починить, не перечитывая файл заново.
+            // Exactly the case the edits were gathered into one call for: taken
+            // separately, the second would silently not find its anchor, because the
+            // first ate it. A named conflict is something the model can fix without
+            // re-reading the file again.
             return Err(ToolError::rejected(format!(
                 "правки {} и {} меняют один и тот же кусок {rel} — \
                  объедини их в одну",
@@ -267,7 +267,7 @@ fn apply(base: &str, edits: &[Edit], rel: &str) -> Result<(String, usize), ToolE
     Ok((out, claims.len()))
 }
 
-/// `, правка 3` — только когда правок несколько.
+/// `, правка 3` — only when there are several edits.
 fn which(many: bool, index: usize) -> String {
     if many {
         format!(", правка {}", index + 1)
@@ -276,9 +276,9 @@ fn which(many: bool, index: usize) -> String {
     }
 }
 
-/// Хвост подписи: сколько правок и сколько вхождений заменено.
+/// The tail of the caption: how many edits and how many occurrences were replaced.
 ///
-/// Молчит, когда сказать нечего: одна правка, одно вхождение — и так видно.
+/// Stays silent when there is nothing to say: one edit, one occurrence — and it is visible anyway.
 fn tail(edits: usize, replaced: usize) -> String {
     match (edits > 1, replaced > edits) {
         (false, false) => String::new(),
@@ -411,7 +411,7 @@ mod tests {
         let (ctx, ws) = ctx_for(&dir);
         ws.mark_read(&path);
 
-        // Промах модели — не сработавшая защита: §5.9 красит их по-разному.
+        // A model's miss is not a guard that fired: §5.9 colours them differently.
         let err = EditFile
             .run(
                 &ctx,
@@ -444,7 +444,7 @@ mod tests {
             .await
             .unwrap();
 
-        // Вторая правка обязана видеть первую, иначе агент затрёт сам себя.
+        // The second edit must see the first, or the agent overwrites itself.
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
             "один\nвторой\n"
@@ -481,7 +481,7 @@ mod tests {
 three
 "
         );
-        // Один вызов — одна строка действия и один дифф.
+        // One call — one action line and one diff.
         assert!(out.text.contains("правок: 2"), "{}", out.text);
         assert!(out.changed.is_some());
     }
@@ -489,9 +489,9 @@ three
     #[tokio::test]
     async fn якоря_ищутся_в_исходном_тексте_а_не_в_работе_соседа() {
         let dir = TempDir::new();
-        // Порознь это не работает: первая правка создаёт второе вхождение
-        // якоря второй, и та отклоняется как неоднозначная — хотя в файле,
-        // который модель читала, якорь был ровно один.
+        // Taken separately this does not work: the first edit creates a second
+        // occurrence of the second one's anchor, and that one is rejected as ambiguous — though in the file
+        // the model read, the anchor was exactly one.
         let path = dir.write("a.rs", "x = 1;
 y = 2;
 ");
@@ -524,8 +524,8 @@ x = 1;
     #[tokio::test]
     async fn пересекающиеся_правки_называют_друг_друга_и_ничего_не_пишут() {
         let dir = TempDir::new();
-        // Ровно случай из жизни: якорь взят пошире, «добавь окружающих строк»,
-        // и окружение одной правки оказалось телом соседней.
+        // Exactly a case from real life: the anchor was taken wider, «добавь окружающих строк»,
+        // and one edit's surroundings turned out to be the body of its neighbour.
         let path = dir.write("a.rs", "раз
 два
 три
@@ -587,7 +587,7 @@ three" },
             .await
             .unwrap_err();
 
-        // Промах назван номером: иначе непонятно, какую из десяти чинить.
+        // The miss is named by number: otherwise it is unclear which of ten to fix.
         assert!(err.to_string().contains("правка 2"), "{err}");
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "раз
 два
@@ -610,7 +610,7 @@ three" },
             .await
             .unwrap_err();
 
-        // «правка 1 из 1» ничего не уточняет.
+        // «правка 1 из 1» clarifies nothing.
         assert!(!err.to_string().contains("правка"), "{err}");
     }
 

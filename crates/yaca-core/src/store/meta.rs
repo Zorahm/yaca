@@ -27,12 +27,20 @@ pub const TITLE_MAX_CHARS: usize = 60;
 #[serde(rename_all = "camelCase")]
 pub struct SessionMeta {
     pub id: SessionId,
-    /// Generated from the first message (§3), unless renamed.
+    /// The model's name for the session, else cut from the first message
+    /// (§3), unless renamed.
     pub title: String,
     /// Renamed by hand. The first message no longer decides the title, and a
     /// rebuilt index must not quietly take the name back.
     #[serde(default)]
     pub title_custom: bool,
+    /// The model has used its one chance to name the session (`SetTitle`).
+    /// Kept apart from `title_custom`: a human's rename and the model's name
+    /// are different facts, and either one closes the door on the model.
+    /// Not shown to the interface.
+    #[serde(default)]
+    #[ts(skip)]
+    pub title_by_model: bool,
     pub created_at: TsMillis,
     pub updated_at: TsMillis,
     #[serde(default)]
@@ -69,6 +77,7 @@ impl SessionMeta {
             id,
             title: String::new(),
             title_custom: false,
+            title_by_model: false,
             created_at: now,
             updated_at: now,
             provider,
@@ -112,6 +121,20 @@ impl SessionMeta {
         self.title = title_of(text);
     }
 
+    /// §9: a name typed by hand. It sticks — neither the first message nor the
+    /// model takes it back. An empty one hands the title back to them.
+    pub fn rename(&mut self, title: &str) {
+        self.title = title.trim().to_string();
+        self.title_custom = !self.title.is_empty();
+    }
+
+    /// Whether the model may still name the session: neither it nor a human
+    /// has done so yet. Decided here so that the tool's refusal and the fold
+    /// cannot drift apart.
+    pub fn title_open_to_model(&self) -> bool {
+        !self.title_custom && !self.title_by_model
+    }
+
     pub fn note_file(&mut self, path: &str) {
         if !self.files.iter().any(|p| p == path) {
             self.files.push(path.to_string());
@@ -137,6 +160,14 @@ impl SessionMeta {
                 self.cost_usd = usage.cost_usd;
             }
             E::FileChanged { fact, .. } => self.note_file(&fact.path),
+            // The model's name replaces the one cut from the first message,
+            // once: the first `TitleSet` wins, so a rebuilt index agrees with
+            // the live one however many the journal holds. Never one a human
+            // typed.
+            E::TitleSet { title } if self.title_open_to_model() => {
+                self.title = title_of(title);
+                self.title_by_model = true;
+            }
             E::StateChanged { state } => {
                 self.provider = state.provider.clone();
                 self.model = state.model.clone();
@@ -204,6 +235,7 @@ mod tests {
             AgentEvent::TurnFinished {
                 turn_id: turn.clone(),
                 stop_reason: StopReason::EndTurn,
+                at: Default::default(),
             },
         ] {
             m.absorb(&event);
@@ -235,6 +267,49 @@ mod tests {
         m.title_from_message("совсем про другое");
         // A rebuilt index must not quietly take the name back.
         assert_eq!(m.title, "разбор дат");
+    }
+
+    #[test]
+    fn the_models_title_replaces_the_one_cut_from_the_message() {
+        use crate::event::AgentEvent;
+
+        let mut m = meta();
+        m.title_from_message("привет");
+        m.absorb(&AgentEvent::TitleSet {
+            title: "Разбор дат в логах".into(),
+        });
+        assert_eq!(m.title, "Разбор дат в логах");
+
+        // The first message must not take the name back on a later prompt.
+        m.title_from_message("а теперь другое");
+        assert_eq!(m.title, "Разбор дат в логах");
+    }
+
+    #[test]
+    fn the_models_title_does_not_override_a_name_typed_by_hand() {
+        use crate::event::AgentEvent;
+
+        let mut m = meta();
+        m.title = "мой заголовок".into();
+        m.title_custom = true;
+        m.absorb(&AgentEvent::TitleSet {
+            title: "Разбор дат в логах".into(),
+        });
+        assert_eq!(m.title, "мой заголовок");
+    }
+
+    #[test]
+    fn only_the_first_title_from_the_model_counts() {
+        use crate::event::AgentEvent;
+
+        let mut m = meta();
+        for title in ["Первое", "Второе"] {
+            m.absorb(&AgentEvent::TitleSet {
+                title: title.into(),
+            });
+        }
+        assert_eq!(m.title, "Первое");
+        assert!(!m.title_open_to_model());
     }
 
     #[test]

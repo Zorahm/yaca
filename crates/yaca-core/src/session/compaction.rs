@@ -41,19 +41,25 @@ impl Worker {
     /// the whole window — with a 64k answer in a 200k window, 90% of the whole
     /// is already past the point of refusal.
     pub(super) async fn compact_if_full(&mut self, turn: &TurnId, cancel: &CancellationToken) {
-        let room = self.context_max().saturating_sub(self.answer_room());
-        // A window no bigger than the answer it has to hold: nothing a summary
-        // could fix, and compacting at every step would not change that.
-        if room == 0 {
+        let Some(limit) = self.compact_limit() else {
             return;
-        }
-        let limit = (room as f32 * compact::AUTO_RATIO) as u32;
+        };
 
         // Checked before compacting rather than letting `compact` complain:
         // nobody pressed anything, so there is nothing to answer.
         if self.context_needed() >= limit && compact::plan(&self.history).is_some() {
             self.compact(cancel, Some(turn)).await;
         }
+    }
+
+    /// How full the window may get before it is compacted on its own.
+    ///
+    /// `None` for a window no bigger than the answer it has to hold: nothing
+    /// a summary could fix, and compacting at every step would not change
+    /// that.
+    pub(super) fn compact_limit(&self) -> Option<u32> {
+        let room = self.context_max().saturating_sub(self.answer_room());
+        (room > 0).then_some((room as f32 * compact::AUTO_RATIO) as u32)
     }
 
     /// How many tokens the history takes in the next request.
@@ -126,7 +132,7 @@ impl Worker {
         // The ring and §6.1.1's bar both read the context, and both would go
         // on insisting it is full until the next answer without this.
         self.emit(AgentEvent::UsageUpdated {
-            usage: self.usage.snapshot(context_max),
+            usage: self.usage_snapshot(),
         });
         true
     }

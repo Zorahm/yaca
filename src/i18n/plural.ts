@@ -7,8 +7,6 @@
  * функция — её видно в тесте целиком.
  */
 
-export type Locale = "ru" | "en";
-
 /** Формы, которые может потребовать словарь. */
 export type PluralForm = "one" | "few" | "many" | "other";
 
@@ -31,8 +29,4 @@ export function ruForm(n: number): PluralForm {
 
 export function enForm(n: number): PluralForm {
   return Math.abs(n) === 1 ? "one" : "other";
-}
-
-export function formOf(locale: Locale, n: number): PluralForm {
-  return locale === "ru" ? ruForm(n) : enForm(n);
 }

@@ -1,36 +1,36 @@
-//! Режим сессии и то, что из него следует (§7.1, §8).
+//! The session mode and what follows from it (§7.1, §8).
 //!
-//! Человек переключает одну ось — [`Mode`], четыре взаимоисключающих пункта в
-//! меню разрешений. [`Intent`] и [`TrustMode`] из него выводятся и хранимым
-//! состоянием не являются: ядро, умеющее комбинации, которых в окне не
-//! выбрать, — это вторая версия правды, и она разъедется на первом же
-//! переключении.
+//! The human switches one axis — [`Mode`], four mutually exclusive items in the
+//! permissions menu. [`Intent`] and [`TrustMode`] are derived from it and are not
+//! stored state: a core that knew combinations the window cannot select would be
+//! a second version of the truth, and it would drift apart on the first switch.
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Режим сессии. Единственное, что переключает человек (§8).
+/// Session mode. The only thing the human switches (§8).
 ///
-/// План стоит первым: список идёт от осторожного к доверчивому, а план
-/// осторожнее ручного — записывающих тулов в нём нет вовсе, тогда как ручной
-/// про них спрашивает.
+/// Declared from cautious to trusting: plan has no writing tools at all,
+/// manual asks about them. The interface lists them in its own order, with the
+/// default first.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum Mode {
-    /// Читать и планировать. Записывающих тулов модель не получает вовсе.
+    /// Read and plan. The model gets no writing tools at all.
     Plan,
-    /// Ничего без спроса. Дефолт — Yaca работает и со слабыми локальными моделями.
-    #[default]
+    /// Nothing without asking.
     Manual,
-    /// Всё кроме выполнения команд.
+    /// Everything except running commands. The default: edits are checkpointed
+    /// and can be rolled back, and what cannot be — a command — still asks.
+    #[default]
     Auto,
-    /// Применять правки, спрашивать остальное.
+    /// Apply edits, ask about the rest.
     Edits,
 }
 
 impl Mode {
-    /// Какие тулы вообще попадают в схему запроса.
+    /// Which tools make it into the request schema at all.
     pub fn intent(self) -> Intent {
         match self {
             Mode::Plan => Intent::Plan,
@@ -38,13 +38,13 @@ impl Mode {
         }
     }
 
-    /// По какой строке матрицы §8 решается вопрос о разрешении.
+    /// Which row of the §8 matrix decides the permission question.
     ///
-    /// Своей строки у плана нет, а ответ нужен: записывающих тулов там не
-    /// бывает, но `web_fetch` бывает во всех режимах, и разрешение он
-    /// спрашивает. Берётся `Manual` — план это разведка, и вопрос про сеть в
-    /// ней уместен. Помнить доверие, выбранное до плана, значило бы держать
-    /// под чипом состояние, которого на чипе не видно.
+    /// Plan has no row of its own, yet an answer is needed: no writing tools
+    /// occur there, but `web_fetch` occurs in every mode and asks for permission.
+    /// `Manual` is taken — plan is reconnaissance, and a question about the
+    /// network fits in it. Remembering the trust chosen before plan would mean
+    /// keeping under the chip a state that the chip does not show.
     pub fn trust(self) -> TrustMode {
         match self {
             Mode::Plan | Mode::Manual => TrustMode::Manual,
@@ -54,16 +54,16 @@ impl Mode {
     }
 }
 
-/// Ось намерения: какие тулы попадают в схему запроса. Выводится из [`Mode`].
+/// The intent axis: which tools make it into the request schema. Derived from [`Mode`].
 ///
-/// §7.1: «Записывающие тулы не отдаются модели вообще: слабая модель проигнорирует
-/// запрет в промпте и потратит ход на ошибку.» Поэтому это фильтр реестра,
-/// а не строчка в системном промпте.
+/// §7.1: "Writing tools are not handed to the model at all: a weak model ignores
+/// a ban in the prompt and spends a turn on the error." Hence this is a filter on
+/// the registry, not a line in the system prompt.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum Intent {
-    /// Читающие плюс `todo_write` и `exit_plan_mode`.
+    /// Reading tools plus `todo_write` and `exit_plan_mode`.
     Plan,
-    /// Полный набор.
+    /// The full set.
     #[default]
     Agent,
 }
@@ -74,11 +74,11 @@ impl Intent {
     }
 }
 
-/// Строка матрицы доверия §8. Выводится из [`Mode`] и наружу не уезжает:
-/// интерфейс переключает режим, а не эту ось отдельно.
+/// A row of the §8 trust matrix. Derived from [`Mode`] and never sent outside:
+/// the interface switches the mode, not this axis on its own.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum TrustMode {
-    /// Ничего без спроса.
+    /// Nothing without asking.
     #[default]
     Manual,
     /// Всё кроме выполнения команд.
@@ -87,11 +87,11 @@ pub enum TrustMode {
     Edits,
 }
 
-/// Уровень усилия рассуждения (§7.1, правый нижний угол композера).
+/// Reasoning effort level (§7.1, the bottom-right corner of the composer).
 ///
-/// Ложится на `output_config.effort` Messages API один в один. Фиксированный
-/// бюджет токенов (`thinking.budget_tokens`) здесь не при чём: на Opus 5,
-/// Sonnet 5 и Opus 4.7+ он удалён и отдаёт 400.
+/// Maps one to one onto the Messages API's `output_config.effort`. A fixed
+/// token budget (`thinking.budget_tokens`) has nothing to do with it: on Opus 5,
+/// Sonnet 5 and Opus 4.7+ it has been removed and returns 400.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "lowercase")]
@@ -99,14 +99,14 @@ pub enum Effort {
     Low,
     Medium,
     High,
-    /// «Extra» из §7.1. Лучший уровень для кодовых и агентных задач.
+    /// «Extra» from §7.1. The best level for coding and agentic tasks.
     #[default]
     Extra,
     Max,
 }
 
 impl Effort {
-    /// Значение для `output_config.effort`.
+    /// The value for `output_config.effort`.
     pub fn as_api(self) -> &'static str {
         match self {
             Effort::Low => "low",
@@ -141,19 +141,20 @@ mod tests {
 
     #[test]
     fn план_спрашивает_про_сеть() {
-        // Записывающих тулов в плане нет, но `web_fetch` есть, и строка §8 ему
-        // нужна. Взята `Ручной`: план это разведка, и вопрос про сеть уместен.
+        // There are no writing tools in plan, but `web_fetch` is, and the §8 row
+        // is needed for it. `Ручной` is taken: plan is reconnaissance, and a
+        // question about the network fits in it.
         let reach = PermissionKind::FetchUrl;
         assert_eq!(policy(Mode::Plan).verdict(reach), Verdict::Ask);
         assert_eq!(policy(Mode::Manual).verdict(reach), Verdict::Ask);
-        // А «Авто» про сеть не спрашивает: план ведёт себя как «Ручной».
+        // But «Авто» does not ask about the network: plan behaves like «Ручной».
         assert_eq!(policy(Mode::Auto).verdict(reach), Verdict::Allow);
     }
 
     #[test]
     fn план_ведёт_себя_как_ручной_и_в_вопросе_о_правке() {
-        // Записывающих тулов в плане нет, но если бы дошло до вопроса —
-        // ответ тот же, что у «Ручного»: спросить.
+        // There are no writing tools in plan, but if it came to a question, the
+        // answer is the same as for «Ручного»: ask.
         assert_eq!(
             policy(Mode::Plan).verdict(PermissionKind::EditFile),
             Verdict::Ask

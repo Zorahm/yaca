@@ -3,23 +3,23 @@ import type { ContextSource } from "./ContextSource";
 import type { Pricing } from "./Pricing";
 
 /**
- * Модель, доступная в переключателе (§7.1).
+ * A model available in the switcher (§7.1).
  */
 export type ModelInfo = { id: string, providerId: string, displayName: string, contextMax: number, maxOutput: number, pricing: Pricing, 
 /**
- * Умеет ли `output_config.effort`. Старые модели — нет.
+ * Whether it supports `output_config.effort`. Older models do not.
  */
 supportsEffort: boolean, 
 /**
- * Умеет ли адаптивное рассуждение — единственную форму, которую Yaca
- * умеет просить. Отдельно от усилия, потому что провайдер сообщает их
- * отдельно: Haiku 4.5 рассуждает по `budget_tokens`, но `effort` не
- * понимает, и один флаг на двоих отправил бы ей то, чего она не примет.
+ * Whether it supports adaptive reasoning — the only form Yaca knows how to
+ * ask for. Kept apart from effort, because the provider reports them
+ * separately: Haiku 4.5 reasons by `budget_tokens` but does not understand
+ * `effort`, and one flag for both would send it something it refuses.
  *
- * `default` — ради `providers.json`, написанного до того, как поле
- * появилось: битый файл здесь останавливает запуск, и молча уронить
- * чужую настройку на обновлении нельзя. Умолчание `false` — сторона
- * отказа: недосланное рассуждение стоит глубины, лишнее — это 400.
+ * `default` is for `providers.json` written before the field existed: a
+ * broken file stops the start here, and silently dropping someone's setting
+ * on an update is not allowed. The `false` default is the refusing side: a
+ * reasoning that was not sent costs depth, an extra one is a 400.
  */
 supportsThinking: boolean, 
 /**

@@ -144,6 +144,28 @@ impl OutputFile {
     }
 }
 
+/// How long what a command printed as it exited is waited for after its shell
+/// is gone.
+const EXIT_GRACE: Duration = Duration::from_millis(300);
+
+/// The shell has ended: hands over what is still in the pipe and stops at the
+/// first quiet moment.
+///
+/// A command has ended when its shell has, not when every program that
+/// inherited the output pipe lets go of it. `npm run dev &` and
+/// `Start-Process` leave a child holding the pipe open, and waiting for EOF
+/// kept the command `running` in the panel — and a foreground call blocked —
+/// until that child went too, which may be never. The model, meanwhile, was
+/// waiting to be told it had finished.
+pub(super) async fn drain_after_exit(
+    output: &mut mpsc::Receiver<Vec<u8>>,
+    mut each: impl FnMut(Vec<u8>),
+) {
+    while let Ok(Some(raw)) = tokio::time::timeout(EXIT_GRACE, output.recv()).await {
+        each(raw);
+    }
+}
+
 /// Starts the command and leaves it in the process panel (§6.5).
 pub(super) fn background(ctx: &ToolCtx, command: &str, cwd: &Path) -> Result<ToolOutput, ToolError> {
     let spawned = shell::spawn(ctx.shell, command, cwd)
@@ -199,7 +221,29 @@ async fn collect_from(
     mut lines: Lines,
     mut file: Option<OutputFile>,
 ) {
-    while let Some(raw) = output.recv().await {
+    loop {
+        let raw = tokio::select! {
+            raw = output.recv() => match raw {
+                Some(raw) => raw,
+                None => break,
+            },
+            // `wait` may be asked again below: it keeps the status.
+            _ = child.wait() => {
+                let mut rest = Vec::new();
+                drain_after_exit(&mut output, |raw| rest.push(raw)).await;
+                let Some(processes) = processes.upgrade() else {
+                    return;
+                };
+                for raw in rest {
+                    let complete = lines.push(&bytes.push(&raw));
+                    if let Some(file) = file.as_mut() {
+                        file.write(&complete).await;
+                    }
+                    processes.output(id, complete);
+                }
+                break;
+            }
+        };
         let text = bytes.push(&raw);
         let Some(processes) = processes.upgrade() else {
             return;

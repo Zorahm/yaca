@@ -21,7 +21,7 @@
  */
 
 import { Check, Copy } from "@phosphor-icons/react";
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import type { ReactNode } from "react";
 
 import { t } from "../i18n";
@@ -35,11 +35,14 @@ export function CodeBlock({
   text,
   info,
   error = false,
+  plain = false,
 }: {
   text: string;
   /** Язык из ограды — «ts», «rust»… У блока вывода ограды нет. */
   info?: string;
   error?: boolean;
+  /** No well and no frame: the text sits on the page (a command's output). */
+  plain?: boolean;
 }) {
   const { copied, copy } = useCopy();
   const label = t(copied ? "feed.copied" : "feed.copy");
@@ -58,7 +61,14 @@ export function CodeBlock({
 
   return (
     <div className="code-wrap">
-      <pre className={error ? "output output-error" : "output"}>{shown(split, lines)}</pre>
+      <pre
+        className={["output", error && "output-error", plain && "output-plain"]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {shown(split, lines)}
+      </pre>
+      {info && <span className="code-lang">{info}</span>}
       {/* Иконка без подписи, поэтому имя обязательно (§14); `title` даёт то
           же мышью. */}
       <button
@@ -82,7 +92,9 @@ function shown(lines: readonly string[], pieces: readonly Piece[][]): ReactNode 
   const out: ReactNode[] = [];
   for (const [index, line] of lines.entries()) {
     if (index > 0) out.push("\n");
-    out.push(...runsOf(line, pieces[index] ?? []));
+    // One fragment per line: the runs of a line are keyed from zero, and
+    // spread into one list the keys of two lines would collide.
+    out.push(<Fragment key={index}>{runsOf(line, pieces[index] ?? [])}</Fragment>);
   }
   return out;
 }

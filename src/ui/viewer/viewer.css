@@ -4,7 +4,7 @@
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: color-mix(in srgb, var(--paper-sunken) 94%, transparent);
+  background: color-mix(in srgb, var(--sunk) 94%, transparent);
 }
 
 .viewer {
@@ -29,7 +29,7 @@
   min-width: 0;
   overflow: hidden;
   font: 400 12px var(--mono);
-  color: var(--ink-muted);
+  color: var(--muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -66,7 +66,7 @@
   left: 50%;
   transform: translate(-50%, -50%);
   font-size: 13px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .viewer-bar {
@@ -81,7 +81,7 @@
 .viewer-count {
   min-width: 52px;
   font: 400 12px var(--mono);
-  color: var(--ink-muted);
+  color: var(--muted);
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
@@ -98,7 +98,7 @@
 
 /* Размер один, каким бы ни было содержимое: ряд читается списком. */
 .tile {
-  --tile: 112px;
+  --tile: 128px;
   position: relative;
   display: inline-flex;
   flex: none;
@@ -106,9 +106,10 @@
   height: var(--tile);
 }
 
-/* В композере плитки ниже: над полем ввода им не место для разглядывания. */
+/* In the composer the tiles are a step smaller than in the conversation, but
+   large enough to tell one screenshot from another. */
 .tile-small {
-  --tile: 72px;
+  --tile: 120px;
 }
 
 .tile-face {
@@ -120,16 +121,16 @@
   padding: 10px;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  background: var(--paper-sunken);
-  color: var(--ink-muted);
+  border-radius: var(--radius-l);
+  background: var(--sunk);
+  color: var(--muted);
   text-align: left;
   /* Карточка сообщения сохраняет пробелы и переносы; плитке они ни к чему. */
   white-space: normal;
 }
 
 .tile-small .tile-face {
-  padding: 7px;
+  padding: 8px;
 }
 
 .tile-image {
@@ -165,33 +166,38 @@
   line-clamp: 3;
 }
 
-.tile-small .tile-name {
-  font-size: 10.5px;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-}
-
 .tile-gone .tile-name {
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .tile-drop {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 6px;
+  right: 6px;
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   border: 1px solid var(--line);
   border-radius: 50%;
-  background: var(--paper-raised);
-  color: var(--ink-muted);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+/* Shown on hover and on focus: `opacity`, not `display`, so the keyboard
+   still reaches it (§14). */
+.tile-drop {
+  opacity: 0;
+}
+
+.tile:hover .tile-drop,
+.tile:focus-within .tile-drop {
+  opacity: 1;
 }
 
 .tile-drop:hover {
-  border-color: var(--red-ink);
-  color: var(--red-ink);
+  border-color: var(--err);
+  color: var(--err);
 }
 
 /* --- картинка в раскрытой строке `ReadImage` ----------------------------- */
@@ -202,7 +208,7 @@
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
-  background: var(--paper-sunken);
+  background: var(--sunk);
   cursor: zoom-in;
 }
 

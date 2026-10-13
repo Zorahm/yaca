@@ -287,7 +287,7 @@ pub struct PermissionSettings {
 #[serde(default, rename_all = "camelCase")]
 pub struct ShadowSettings {
     /// Directory names the snapshot walk does not enter, on top of the
-    /// built-in list (§10, "исключения теневого репозитория").
+    /// built-in list (§10, "exclusions of the shadow repository").
     ///
     /// Added to, never replacing: `.git` and `.yaca` are not negotiable, and a
     /// project that dropped them from its list would be snapshotting its own
@@ -387,7 +387,7 @@ mod tests {
         let dir = TempDir::new();
         let settings = Settings::load(dir.path()).unwrap();
         assert_eq!(settings, Settings::default());
-        assert_eq!(settings.mode_or_default(), Mode::Manual);
+        assert_eq!(settings.mode_or_default(), Mode::Auto);
     }
 
     #[test]

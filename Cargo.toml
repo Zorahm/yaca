@@ -3,7 +3,8 @@ resolver = "2"
 members = ["crates/yaca-core", "crates/yaca-cli", "crates/yaca-evals", "src-tauri"]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.2-alpha"
+authors = ["ZorahM"]
 edition = "2021"
 license = "MIT"
 rust-version = "1.85"

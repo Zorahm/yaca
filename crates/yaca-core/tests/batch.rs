@@ -1,10 +1,10 @@
-//! Пачка вызовов из одного ответа модели (§5.4), от начала до результатов.
+//! A batch of calls from one model response (§5.4), from start to results.
 //!
-//! Модель зовёт тулы пачкой затем, чтобы они шли разом, и это проверяется по
-//! потоку событий: читающие вызовы обязаны начаться все, прежде чем закончится
-//! первый. Пишущие — наоборот, строго по одному: одновременная правка одного
-//! файла обходит инвариант свежести §8, где обе проверки проходят, а
-//! переживает одна.
+//! The model calls tools in a batch so that they run together, and this is checked
+//! through the event stream: all reading calls must start before the first one
+//! finishes. Writing calls are the opposite, strictly one at a time: editing one
+//! file at the same time gets past the freshness invariant of §8, where both
+//! checks pass but only one of them survives.
 
 mod common;
 
@@ -18,10 +18,10 @@ use serde_json::json;
 
 use common::{ask, calls, is_turn_over, session, until, TempProject};
 
-/// Порядок событий хода: что началось и что закончилось, по идентификаторам.
+/// Order of the turn's events: what started and what finished, by identifier.
 ///
-/// Ход одного сообщения бывает из нескольких ответов модели, и `only` отбирает
-/// ту пачку, про которую тест: чтения-подготовки к делу не относятся.
+/// A turn for one message can span several model responses, and `only` picks
+/// out the batch the test is about: preparatory reads do not count.
 fn timeline(seen: &[AgentEvent], only: &[&str]) -> Vec<String> {
     seen.iter()
         .filter_map(|event| match event {
@@ -34,7 +34,7 @@ fn timeline(seen: &[AgentEvent], only: &[&str]) -> Vec<String> {
         .collect()
 }
 
-/// Идентификаторы результатов в том порядке, в каком они уехали модели.
+/// Identifiers of the results, in the order they were sent to the model.
 fn results(provider: &MockProvider) -> Vec<String> {
     let sent = provider.seen.lock().unwrap().last().unwrap().clone();
     sent.messages
@@ -80,8 +80,8 @@ async fn читающие_вызовы_идут_одновременно() {
         "все три начались раньше, чем кончился первый: {line:?}"
     );
 
-    // Порядок результатов — тот, в каком модель написала вызовы, а не тот,
-    // в каком диск успел ответить.
+    // The order of results is the one the model wrote the calls in, not the one
+    // in which the disk managed to answer.
     assert_eq!(results(&provider), vec!["t1", "t2", "t3"]);
 }
 
@@ -92,7 +92,7 @@ async fn пишущие_вызовы_идут_по_одному() {
     dir.write("b.rs", "два\n");
 
     let provider = Arc::new(MockProvider::new(vec![
-        // Сперва прочитать: без этого §8 не даст править.
+        // Read first: without this §8 would not allow editing.
         Turn::Events(calls(&[
             ("r1", "Read", json!({ "path": "a.rs" })),
             ("r2", "Read", json!({ "path": "b.rs" })),
@@ -131,9 +131,9 @@ async fn читающие_не_обгоняют_пишущего_соседа() 
     dir.write("a.rs", "раз\n");
     dir.write("b.rs", "два\n");
 
-    // Порядок в ответе — это порядок хода, который модель написала. Пустить
-    // чтения вперёд записи значило бы прочитать файл до того, как его
-    // поправили, и отдать модели вчерашний текст.
+    // The order in the response is the order of the turn the model wrote. Letting
+    // reads run ahead of a write would mean reading the file before it was
+    // fixed, and handing the model yesterday's text.
     let provider = Arc::new(MockProvider::new(vec![
         Turn::Events(calls(&[("r0", "Read", json!({ "path": "a.rs" }))])),
         Turn::Events(calls(&[
@@ -159,6 +159,6 @@ async fn читающие_не_обгоняют_пишущего_соседа() 
         &["начал w1", "кончил w1"],
         "правка успевает целиком до чтений: {line:?}"
     );
-    // А два чтения после неё — снова разом.
+    // And the two reads after it run together again.
     assert_eq!(&line[2..4], &["начал r2", "начал r3"], "{line:?}");
 }

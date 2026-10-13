@@ -1,21 +1,12 @@
 /**
- * Мелкие блоки ленты: §5.1, §5.2, §5.3, §5.6, §5.8, §5.10, §5.11.
+ * Мелкие блоки ленты: §5.1, §5.2, §5.6, §5.8, §5.10, §5.11.
  *
  * Каждый из них — несколько строк вёрстки поверх того, что уже посчитал
  * редьюсер, поэтому они лежат вместе. Группа действий и запрос разрешения
  * живут отдельно: там своё состояние.
  */
 
-import {
-  ArrowClockwise,
-  Brain,
-  CaretDown,
-  CaretRight,
-  Check,
-  Circle,
-  Copy,
-  PencilSimple,
-} from "@phosphor-icons/react";
+import { CaretDown, CaretRight, Check, Circle, Copy } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import type { FeedBlock } from "../core/feed";
@@ -25,29 +16,38 @@ import { reasonText, willDo } from "./checkpoint";
 import { timeOf, tokens } from "./format";
 import { Markdown } from "./Markdown";
 import { Attachment } from "./Attachment";
+import { CodeBlock } from "./CodeBlock";
 import { useCopy } from "./useCopy";
 
 /**
- * §5.1. The message stands at the right edge of the column as a slip of
- * lighter paper, with its actions under it: copy, send again, edit.
+ * The row of actions under a message, which today is one: copy its text.
  *
- * Edit is drawn disabled and says why in its title. The core has no command
- * that forks a conversation at a message, and a live button that does nothing
- * would lie about that (§0); a disabled one with a reason does not. It is
- * listed in README under what is missing.
+ * An icon without a caption, so it needs a name (§14); `title` gives the same
+ * to the mouse.
  */
-export function HumanMessage({
-  text,
-  attachments,
-  onResend,
-}: {
-  text: string;
-  attachments: string[];
-  onResend: (text: string, attachments: string[]) => void;
-}) {
+function MessageActs({ text }: { text: string }) {
   const { copied, copy } = useCopy();
   const copyLabel = t(copied ? "feed.copied" : "feed.copy");
 
+  return (
+    <div className="msg-acts">
+      <button
+        className="msg-act"
+        aria-label={copyLabel}
+        title={copyLabel}
+        onClick={() => copy(text)}
+      >
+        {copied ? <Check size={13} weight="bold" /> : <Copy size={13} />}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * §5.1. The message stands at the right edge of the column as a slip of
+ * lighter paper, with copy under it.
+ */
+export function HumanMessage({ text, attachments }: { text: string; attachments: string[] }) {
   return (
     <>
       <div className="label label-you">{t("feed.you")}</div>
@@ -61,69 +61,66 @@ export function HumanMessage({
         )}
         {text}
       </div>
-      {/* Icons without captions, so each needs a name (§14); `title` gives the
-          same to the mouse. */}
-      <div className="human-acts">
-        <button
-          className="human-act"
-          aria-label={copyLabel}
-          title={copyLabel}
-          onClick={() => copy(text)}
-        >
-          {copied ? <Check size={13} weight="bold" /> : <Copy size={13} />}
-        </button>
-        <button
-          className="human-act"
-          aria-label={t("feed.resend")}
-          title={t("feed.resend")}
-          onClick={() => onResend(text, attachments)}
-        >
-          <ArrowClockwise size={13} />
-        </button>
-        <button
-          className="human-act"
-          aria-label={t("feed.edit_missing")}
-          title={t("feed.edit_missing")}
-          disabled
-        >
-          <PencilSimple size={13} />
-        </button>
-      </div>
+      <MessageActs text={text} />
     </>
   );
 }
 
-export function AgentText({ text }: { text: string }) {
-  return <Markdown text={text} />;
+/**
+ * §5.2. `copyable` is set on the text that closes a reply: what gets copied is
+ * the answer as the model wrote it, markdown and all.
+ */
+export function AgentText({ text, copyable }: { text: string; copyable: boolean }) {
+  return (
+    <>
+      <Markdown text={text} />
+      {copyable && <MessageActs text={text} />}
+    </>
+  );
 }
 
 /**
- * §5.3. Свёрнуто в строку; во время стриминга — «рассуждает…» с пульсирующей
- * точкой. Длительности нет: времени начала в потоке событий не приходит, а
- * замерить его часами окна значило бы показать в открытой заново сессии время
- * не того прогона.
+ * A file's text the agent showed (`SendText`): where it is from, then the text.
+ *
+ * The line above is what tells it from the agent's own words, so it is always
+ * there. Markdown is drawn as the answer is; anything else is a file's text
+ * and stands as a code block, in the file's language.
  */
-export function Reasoning({ text, live }: { text: string; live: boolean }) {
-  const [open, setOpen] = useState(false);
+export function ShownText({
+  block,
+  onOpen,
+}: {
+  block: Extract<FeedBlock, { kind: "shown" }>;
+  onOpen: (path: string) => void;
+}) {
+  const whole = block.lines === block.total;
+  const extension = block.path.split(".").pop()?.toLowerCase() ?? "";
   return (
-    <div>
-      <button className="reason-head" onClick={() => setOpen(!open)}>
-        <Brain size={13} className={live ? "pulse" : undefined} />
-        {live ? (
-          <>
-            {t("reason.live")}{" "}
-            <span className="row-dot pulse">
-              <Circle size={7} weight="fill" />
-            </span>
-          </>
-        ) : (
-          t("reason.title")
+    <div className="shown">
+      <div className="shown-head">
+        <button className="shown-path" onClick={() => onOpen(block.path)}>
+          {block.path}
+        </button>
+        {!whole && (
+          <span className="shown-lines">
+            {t("shown.lines", {
+              from: block.firstLine,
+              to: block.firstLine + block.lines - 1,
+              total: block.total,
+            })}
+          </span>
         )}
-      </button>
-      {open && <div className="reason-body">{text}</div>}
+      </div>
+      {MARKDOWN.has(extension) ? (
+        <Markdown text={block.text} />
+      ) : (
+        <CodeBlock text={block.text} info={extension} />
+      )}
     </div>
   );
 }
+
+const MARKDOWN = new Set(["md", "markdown"]);
 
 /** §5.6: обновляется на месте, новый блок не создаётся. */
 export function Todos({ items }: { items: { content: string; status: string }[] }) {
@@ -189,7 +186,7 @@ export function Checkpoint({
           <span className="divider-dot"><Circle size={6} weight="fill" /></span>
           <span>{timeOf(checkpoint.at)}</span>
           <span>·</span>
-          <span>{reasonText(checkpoint.reason)}</span>
+          <span className="divider-reason">{reasonText(checkpoint.reason)}</span>
         </button>
         <span className="divider-line" />
         <button

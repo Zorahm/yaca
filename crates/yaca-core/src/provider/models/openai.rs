@@ -23,7 +23,7 @@ pub(super) async fn openai(
     spec: &ProviderSpec,
     key: Option<&str>,
 ) -> Result<Vec<ModelInfo>, ProviderError> {
-    let page: OpenAiPage = parse(get(client, spec, key, "/v1/models").await?)?;
+    let page: OpenAiPage = parse(get(client, spec, key, "/models").await?)?;
     Ok(openai_models(&page))
 }
 
@@ -41,7 +41,7 @@ pub(super) async fn residency(
     spec: &ProviderSpec,
     key: Option<&str>,
 ) -> Result<HashMap<String, bool>, ProviderError> {
-    let page: OpenAiPage = parse(get(client, spec, key, "/v1/models").await?)?;
+    let page: OpenAiPage = parse(get(client, spec, key, "/models").await?)?;
     Ok(residency_of(&page))
 }
 

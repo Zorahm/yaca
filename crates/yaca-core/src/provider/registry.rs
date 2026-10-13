@@ -41,23 +41,11 @@ const FILE: &str = "providers.json";
 /// The application's own directory inside the platform's config directory.
 const CONFIG_DIR: &str = "Yaca";
 
-/// The preset providers. Always present, even with no file on disk.
-///
-/// Two, because the wire shapes are two: Anthropic serves the Messages API and
-/// the one `/v1/models` that answers with capabilities, and OpenAI's shape is
-/// what everything else speaks. A third preset would be a name, not a shape.
-pub const ANTHROPIC_ID: &str = "anthropic";
-pub const OPENAI_ID: &str = "openai";
+mod presets;
 
-const ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
+pub use presets::{is_preset, ANTHROPIC_ID, OPENAI_ID};
+
 const ANTHROPIC_VERSION: &str = "2023-06-01";
-const OPENAI_BASE_URL: &str = "https://api.openai.com";
-
-/// Is this one of the presets? They stay in the list: a delete that the next
-/// load undoes is a button lying about what it did (§0).
-pub fn is_preset(id: &str) -> bool {
-    id == ANTHROPIC_ID || id == OPENAI_ID
-}
 
 /// What a header value writes to ask for the provider's key.
 pub const KEY_PLACEHOLDER: &str = "{key}";
@@ -71,7 +59,8 @@ pub const KEY_PLACEHOLDER: &str = "{key}";
 #[ts(export)]
 #[serde(rename_all = "lowercase")]
 pub enum Protocol {
-    /// Messages API: `POST {base_url}/v1/messages`.
+    /// Messages API: `POST {base_url}/v1/messages` — see [`ProviderSpec::api`]
+    /// for when the `/v1` is left out.
     #[default]
     Anthropic,
     /// Chat Completions: `POST {base_url}/v1/chat/completions`.
@@ -112,14 +101,9 @@ impl ProviderSpec {
     /// The list arrives when the address answers — see
     /// [`crate::provider::models`].
     pub fn anthropic() -> Self {
-        ProviderSpec {
-            id: ANTHROPIC_ID.to_string(),
-            display_name: "Anthropic".to_string(),
-            protocol: Protocol::Anthropic,
-            base_url: ANTHROPIC_BASE_URL.to_string(),
-            headers: BTreeMap::new(),
-            models: Vec::new(),
-        }
+        // Invariant: `ANTHROPIC_ID` is an entry of the preset table, which
+        // `presets_are_all_there_by_id` checks.
+        presets::get(ANTHROPIC_ID).expect("the Anthropic preset")
     }
 
     /// The preset OpenAI entry.
@@ -131,14 +115,8 @@ impl ProviderSpec {
     /// the entry says plainly that it has no models rather than offering ones
     /// nobody checked.
     pub fn openai() -> Self {
-        ProviderSpec {
-            id: OPENAI_ID.to_string(),
-            display_name: "OpenAI".to_string(),
-            protocol: Protocol::OpenAi,
-            base_url: OPENAI_BASE_URL.to_string(),
-            headers: BTreeMap::new(),
-            models: Vec::new(),
-        }
+        // Invariant: as for `anthropic` above.
+        presets::get(OPENAI_ID).expect("the OpenAI preset")
     }
 
     pub fn model(&self, id: &str) -> Option<&ModelInfo> {
@@ -170,6 +148,21 @@ impl ProviderSpec {
     /// `base_url` without its trailing slash, so joining a path is one rule.
     pub fn endpoint(&self, path: &str) -> String {
         format!("{}{path}", self.base_url.trim_end_matches('/'))
+    }
+
+    /// Where a path of the protocol lives under this provider's address:
+    /// `api("/models")` is `{base_url}/v1/models`.
+    ///
+    /// The `/v1` is left out when the address already names a version. Google
+    /// serves this shape under `/v1beta/openai` and z.ai under `/v4`, and
+    /// neither has a `/v1` below that; the same rule forgives the commonest
+    /// slip in the form, a base URL pasted with its `/v1` on.
+    pub fn api(&self, path: &str) -> String {
+        if names_a_version(&self.base_url) {
+            self.endpoint(path)
+        } else {
+            self.endpoint(&format!("/v1{path}"))
+        }
     }
 
     /// Does any header ask for a key?
@@ -212,6 +205,19 @@ impl ProviderSpec {
     }
 }
 
+/// Is any segment of the address's path a version: `v1`, `v1beta`, `v4`?
+///
+/// The host is skipped, so `v2.example.com` is not one.
+fn names_a_version(base_url: &str) -> bool {
+    let after_scheme = base_url.split_once("://").map_or(base_url, |(_, rest)| rest);
+    after_scheme.split('/').skip(1).any(|segment| {
+        let mut chars = segment.chars();
+        chars.next() == Some('v')
+            && chars.next().is_some_and(|c| c.is_ascii_digit())
+            && chars.all(|c| c.is_ascii_alphanumeric())
+    })
+}
+
 /// What each shape sends when the spec says nothing.
 ///
 /// `content-type` and `accept` are here rather than in the client so that a
@@ -244,7 +250,7 @@ pub struct Providers {
 impl Default for Providers {
     fn default() -> Self {
         Providers {
-            list: vec![ProviderSpec::anthropic(), ProviderSpec::openai()],
+            list: presets::all(),
         }
     }
 }
@@ -292,7 +298,7 @@ impl Providers {
     /// before sessions wrote their provider down, a project file that names
     /// only a model. The model decides then, because it carries its provider.
     /// Filling the gap with Anthropic instead is what sent a local model to
-    /// Anthropic and came back as «у провайдера «anthropic» нет модели».
+    /// Anthropic, which came back with «у провайдера «anthropic» нет модели».
     ///
     /// Neither said — a new chat in a project with no settings — starts on
     /// the first configured provider, the first that answered with its
@@ -384,16 +390,17 @@ impl Providers {
         }
     }
 
-    /// Puts back a preset a hand-written file left out.
+    /// Puts back the presets the file does not have: ones a hand-written file
+    /// left out, and ones that did not exist when it was saved.
     ///
-    /// Anthropic goes first and OpenAI last, so that a file whose author put
-    /// their own gateway on top keeps it there.
+    /// At the end, in their own order. What the file lists stays where its
+    /// author put it — the first provider that answered is what a new chat
+    /// starts on, and a preset arriving with an update must not move that.
     fn ensure_presets(&mut self) {
-        if self.get(ANTHROPIC_ID).is_none() {
-            self.list.insert(0, ProviderSpec::anthropic());
-        }
-        if self.get(OPENAI_ID).is_none() {
-            self.list.push(ProviderSpec::openai());
+        for preset in presets::all() {
+            if self.get(&preset.id).is_none() {
+                self.list.push(preset);
+            }
         }
     }
 }

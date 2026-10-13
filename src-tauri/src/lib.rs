@@ -1,9 +1,9 @@
-//! Оболочка. Тонкая намеренно: вся работа в `yaca-core`, здесь только мост
-//! между потоком событий и вебвью.
+//! Shell. Deliberately thin: all the work is in `yaca-core`, here there is only the bridge
+//! between the event stream and the webview.
 //!
-//! Единственная содержательная вещь тут — склейка дельт по кадру (§12).
-//! Она живёт в мосту, а не в ядре: это забота транспорта, и CLI должен
-//! получать сырой поток.
+//! The only substantive thing here is merging deltas per frame (§12).
+//! It lives in the bridge, not in the core: it is the transport's concern, and the CLI must
+//! receive the raw stream.
 
 mod bridge;
 mod mcp;
@@ -14,7 +14,6 @@ mod project;
 mod providers;
 mod settings;
 mod state;
-mod window;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -30,21 +29,21 @@ use tauri::{Manager, State};
 use settings::AppSettings;
 use state::AppState;
 
-/// Канал, в который уезжают пачки событий. Одно имя на всё: интерфейс —
-/// чистая функция от одного потока, и разводить каналы по типам событий
-/// значило бы размазать эту функцию по нескольким подписчикам.
+/// Channel that event batches travel through. One name for everything: the interface is
+/// a pure function of a single stream, and splitting channels by event type
+/// would spread that function across several subscribers.
 pub const EVENT_CHANNEL: &str = "yaca://events";
 
-/// Каталог глобальных настроек.
+/// Directory of global settings.
 ///
-/// Считает его ядро, а не Tauri: `yaca-cli` читает тот же `providers.json`,
-/// и два разных представления о том, где он лежит, означали бы, что шлюз,
-/// настроенный в окне, из CLI не отвечает.
+/// The core computes it, not Tauri: `yaca-cli` reads the same `providers.json`,
+/// and two different notions of where it lies would mean that a gateway
+/// configured in the window does not answer from the CLI.
 pub(crate) fn config_dir() -> Result<PathBuf, String> {
     registry::config_dir().map_err(|e| e.to_string())
 }
 
-/// Единственное написание пути проекта.
+/// The only spelling of a project path.
 ///
 /// Всё, что приходит снаружи — из диалога папок, из списка настроек, из окна,
 /// — приводится к тому же виду, в какой `Workspace::open` приводит корень
@@ -298,10 +297,20 @@ fn search_sessions(
 }
 
 #[tauri::command]
-fn rename_session(project: String, id: String, title: String) -> Result<(), String> {
-    store(&project)?
-        .rename(&SessionId::from(id), &title)
-        .map_err(|e| e.to_string())
+fn rename_session(
+    state: State<'_, AppState>,
+    project: String,
+    id: String,
+    title: String,
+) -> Result<(), String> {
+    let id = SessionId::from(id);
+    // An open chat owns its index and writes it whole when a turn ends: a
+    // name put into the file behind its back lasts until then.
+    match state.chat(&id) {
+        Some(chat) => chat.rename(&title),
+        None => store(&project)?.rename(&id, &title),
+    }
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -501,7 +510,6 @@ pub fn run() {
             mcp::save_global_mcp_servers,
             mcp::project_mcp_file,
             mcp::session_mcp,
-            window::open_settings,
         ])
         .run(context)
         .expect("не удалось запустить приложение");

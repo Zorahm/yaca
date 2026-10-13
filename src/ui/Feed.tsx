@@ -1,5 +1,5 @@
 /**
- * Лента §4: вертикальный поток блоков §5, отрисованный окном.
+ * Лента: вертикальный поток блоков, отрисованный окном.
  *
  * Виртуализация: `virtua` (VList) рендерит только видимую область и меряет
  * высоты блоков сам, ResizeObserver'ом внутри. Блоки разной высоты — норма,
@@ -17,7 +17,7 @@
  * Дорастающий последний блок при стриминге сдвигает хвост ленты на один кадр
  * измерений: библиотека меряет рост после кадра, лента догоняет следующим
  * дельта-кадром, ошибка ограничена высотой одной пачки и глазом не видна.
- * Скачки по ленте (стрелки §3, кнопка возврата) идут через окно по индексам:
+ * Скачки по ленте (стрелки шапки, кнопка возврата) идут через окно по индексам:
  * блок вне видимой области не размечен, `getElementById` по нему мёртв.
  */
 
@@ -26,27 +26,29 @@ import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "reac
 import { VList, type VListHandle } from "virtua";
 
 import type { PermissionAnswer, QuestionReply } from "../core/client";
-import type { Feed as FeedModel, FeedBlock } from "../core/feed";
+import type { Feed as FeedModel } from "../core/feed";
 import { visible } from "../core/feed";
+import { closesReply, fold, isLiveWork, type FeedItem } from "../core/work";
+import { AgentsPlate } from "./AgentsPlate";
 import { t } from "../i18n";
-import { ActionGroup } from "./ActionGroup";
 import {
   AgentText,
   Checkpoint,
   Compaction,
   ErrorBlock,
   HumanMessage,
-  Reasoning,
+  ShownText,
   Simple,
   Todos,
 } from "./Blocks";
 import { CodeBlock } from "./CodeBlock";
 import { Permission } from "./Permission";
 import { Question } from "./Question";
-import { RouteSign } from "./RouteSign";
 import { timeOf } from "./format";
 import { tp } from "../i18n";
 import { shouldHold, shouldStick, type ScrollState } from "./feedScroll";
+import { Work } from "./Work";
+import { TurnLive, TurnTime } from "./TurnTime";
 
 /** Точка конца ленты, с расчётом на отстающее измерение (см. удержание низа). */
 const END_PAD = 240;
@@ -60,18 +62,18 @@ export type FeedJump = {
 
 export type FeedActions = {
   answer: (answer: PermissionAnswer) => void;
-  /** §5.7-подобный вопрос `AskUser`: ответ или отказ от ответа. */
+  /** Вопрос `AskUser`: ответ или отказ от ответа. */
   answerQuestion: (reply: QuestionReply) => void;
   previewCheckpoint: (id: string) => void;
   restoreCheckpoint: (id: string) => void;
   cancelPreview: () => void;
-  /** §1.1: клик по строке чекпоинта открывает панель со всеми точками. */
+  /** Клик по строке чекпоинта открывает панель со всеми точками. */
   openCheckpoints: () => void;
   editSummary: (text: string) => void;
   openFile: (path: string) => void;
+  /** Opens the agents panel on these subagents, by their `Task` call ids. */
+  openAgents: (ids: string[]) => void;
   retry: () => void;
-  /** §5.1: send a message of this conversation once more, as it was. */
-  resend: (text: string, attachments: string[]) => void;
 };
 
 export function Feed({
@@ -87,7 +89,8 @@ export function Feed({
   const [stuck, setStuck] = useState(true);
   const [seen, setSeen] = useState(0);
 
-  const blocks = visible(feed);
+  // Вызовы и рассуждения между репликами — один элемент ленты (`core/work`).
+  const blocks = fold(visible(feed));
   const busy = feed.state?.busy ?? false;
   const count = blocks.length;
 
@@ -191,7 +194,6 @@ export function Feed({
             id={block.key}
             key={block.key}
           >
-            <RouteSign block={block} live={index === count - 1 && busy} />
             {startsAgent(blocks, index) && (
               <div className="label label-agent">{t("feed.agent")}</div>
             )}
@@ -199,11 +201,17 @@ export function Feed({
               block={block}
               feed={feed}
               actions={actions}
-              last={index === count - 1}
-              busy={busy}
+              live={isLiveWork(blocks, index, busy)}
+              copyable={block.kind === "agent" && closesReply(blocks, index, busy)}
             />
           </div>
         ))}
+        {/* A running turn counts up under everything it has said so far. */}
+        {busy && feed.turn && (
+          <div className="block feed-item" key="turn-live">
+            <TurnLive startedAt={feed.turn.startedAt} />
+          </div>
+        )}
         {/* Воздух между последним блоком и композером. Отдельным элементом
             ленты, а не отступом последнего блока: тот перестаёт быть
             последним с каждым новым, и его высота менялась бы под
@@ -221,16 +229,16 @@ export function Feed({
 }
 
 /** Блоки, которые говорит агент, а не лента и не человек. */
-const AGENT_SIDE = new Set(["agent", "reasoning", "actions", "todos", "plan"]);
+const AGENT_SIDE = new Set(["agent", "work", "agents", "todos", "plan", "shown"]);
 
 /**
  * Лейбл `Yaca` ставится один раз на реплику, а не над каждым блоком: агент,
  * который представляется перед каждой строчкой отчёта, читается как заика.
  *
- * Первый блок реплики — не обязательно текст: чаще всего это рассуждение
- * (§5.3), и лейбл принадлежит ему.
+ * Первый блок реплики — не обязательно текст: чаще всего это работа хода,
+ * и лейбл принадлежит ей.
  */
-function startsAgent(blocks: FeedBlock[], index: number): boolean {
+function startsAgent(blocks: FeedItem[], index: number): boolean {
   if (!AGENT_SIDE.has(blocks[index].kind)) return false;
   const before = blocks[index - 1];
   return before === undefined || !AGENT_SIDE.has(before.kind);
@@ -240,38 +248,36 @@ function Block({
   block,
   feed,
   actions,
-  last,
-  busy,
+  live,
+  copyable,
 }: {
-  block: FeedBlock;
+  block: FeedItem;
   feed: FeedModel;
   actions: FeedActions;
-  last: boolean;
-  busy: boolean;
+  /** Только для работы хода: ход ещё дописывает её. */
+  live: boolean;
+  /** Только для текста агента: им заканчивается ответ. */
+  copyable: boolean;
 }) {
   switch (block.kind) {
     case "human":
-      return (
-        <HumanMessage
-          text={block.text}
-          attachments={block.attachments}
-          onResend={actions.resend}
-        />
-      );
+      return <HumanMessage text={block.text} attachments={block.attachments} />;
 
     case "agent":
-      return <AgentText text={block.text} />;
+      return <AgentText text={block.text} copyable={copyable} />;
 
-    case "reasoning":
-      return <Reasoning text={block.text} live={last && busy} />;
-
-    case "actions":
+    case "work":
       return (
-        <ActionGroup
-          rows={block.rows}
-          onOpenFile={actions.openFile}
+        <Work
+          steps={block.steps}
+          live={live}
+          preview={feed.preview}
+          actions={actions}
         />
       );
+
+    case "agents":
+      return <AgentsPlate rows={block.rows} onOpen={actions.openAgents} />;
 
     case "todos":
       return <Todos items={block.items} />;
@@ -324,6 +330,9 @@ function Block({
         </div>
       );
 
+    case "shown":
+      return <ShownText block={block} onOpen={actions.openFile} />;
+
     case "error":
       return (
         <ErrorBlock
@@ -347,5 +356,8 @@ function Block({
 
     case "stopped":
       return <Simple textKey="err.stopped" />;
+
+    case "turnTime":
+      return <TurnTime startedAt={block.startedAt} endedAt={block.endedAt} />;
   }
 }

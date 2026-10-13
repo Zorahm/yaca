@@ -10,7 +10,7 @@ import type { RequestId } from "./RequestId";
 
 export type Command = { "type": "sendMessage", text: string, 
 /**
- * Файлы, приложенные через `@` (§7.2). Регистрируются как прочитанные:
- * человек сам их приложил, заставлять агента перечитывать — глупость.
+ * Files attached via `@` (§7.2). They are registered as read: the human
+ * attached them, so making the agent read them again would be pointless.
  */
 attachments: Array<string>, } | { "type": "cancel" } | { "type": "setMode", mode: Mode, } | { "type": "setModel", model: string, } | { "type": "setEffort", effort: Effort, } | { "type": "previewCheckpoint", id: CheckpointId, } | { "type": "restoreCheckpoint", id: CheckpointId, } | { "type": "compact" } | { "type": "editSummary", text: string, } | { "type": "answerPermission", requestId: RequestId, answer: PermissionAnswer, } | { "type": "answerQuestion", requestId: RequestId, answer: QuestionReply, } | { "type": "setBypass", on: boolean, } | { "type": "watchProcess", id: ProcessId | null, } | { "type": "stopProcess", id: ProcessId, } | { "type": "readFileView", path: string, } | { "type": "cancelQueued", id: QueuedId, } | { "type": "searchFiles", query: string, } | { "type": "reconnectMcpServer", server: string, } | { "type": "approveMcpServer", server: string, };

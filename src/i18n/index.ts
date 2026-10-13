@@ -10,11 +10,11 @@
  * namespace, backend и suspense — нет. Сто строк против дерева зависимостей.
  */
 
-import { formOf, type Locale, type PluralForm } from "./plural";
-import { ru } from "./ru";
-import { en } from "./en";
+import { isLocale, LOCALES, type Locale } from "./locales";
+import type { PluralForm } from "./plural";
+import type { ru } from "./ru";
 
-export type { Locale } from "./plural";
+export { LOCALES, LOCALE_CODES, type Locale } from "./locales";
 
 /** Все ключи. Русский словарь — источник: английский обязан его покрыть. */
 export type Key = keyof typeof ru;
@@ -30,8 +30,6 @@ type BaseOf<K> = K extends `${infer B}.one` ? B : never;
 export type PluralBase = BaseOf<Key>;
 
 export type Params = Record<string, string | number>;
-
-const dictionaries: Record<Locale, Record<string, string>> = { ru, en };
 
 /**
  * Порядок, в котором ищется форма. Английский просит `other`, которого в
@@ -64,7 +62,13 @@ export let locale: Locale = detect();
  */
 export function setLocale(next: Locale | null): void {
   locale = next ?? detect();
-  if (typeof document !== "undefined") document.documentElement.lang = locale;
+  // Only when it changes. The preferences event arrives for every setting —
+  // the theme, the accent — and writing the same `lang` again is still a
+  // change to the document the webview hears: with a field focused it re-reads
+  // the input language, and the next key typed may be lost.
+  if (typeof document !== "undefined" && document.documentElement.lang !== locale) {
+    document.documentElement.lang = locale;
+  }
 }
 
 function detect(): Locale {
@@ -73,8 +77,7 @@ function detect(): Locale {
   for (const tag of tags) {
     if (typeof tag !== "string") continue;
     const base = tag.toLowerCase().split("-")[0];
-    if (base === "ru") return "ru";
-    if (base === "en") return "en";
+    if (isLocale(base)) return base;
   }
   return "ru";
 }
@@ -91,7 +94,7 @@ export function tp(base: PluralBase, n: number, params?: Params): string {
 
 /** То же, но с явной локалью — этим пользуются тесты. */
 export function translate(target: Locale, key: string, params?: Params): string {
-  const text = dictionaries[target][key] ?? dictionaries.ru[key];
+  const text = LOCALES[target].strings[key] ?? LOCALES.ru.strings[key];
   // Ключ, которого нет ни в одном словаре, виден как ключ. Пустая строка на
   // его месте — это молча пропавшая надпись.
   return text === undefined ? key : fill(text, params);
@@ -103,9 +106,9 @@ export function translatePlural(
   n: number,
   params?: Params,
 ): string {
-  const wanted = formOf(target, n);
+  const wanted = LOCALES[target].plural(n);
   for (const form of FALLBACK[wanted]) {
-    const text = dictionaries[target][`${base}.${form}`];
+    const text = LOCALES[target].strings[`${base}.${form}`];
     if (text !== undefined) return fill(text, { n, ...params });
   }
   return `${base}.${wanted}`;

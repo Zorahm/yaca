@@ -11,9 +11,10 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
 
-import { demoMcp, demoModels, demoScript, demoState, inTauri } from "./demo";
+import { demoFinish, demoMcp, demoModels, demoScript, demoState, inTauri } from "./demo";
 import { DEMO_FILE_PATH, demoFileView } from "./demoFile";
-import { OPENAI_PROVIDER_ID, isPreset, needsKey } from "./provider";
+import { demoSessions } from "./demoSessions";
+import { BUILTIN_PROVIDER_ID, PRESETS, isPreset, needsKey } from "./provider";
 
 import type { AgentEvent } from "./bindings/AgentEvent";
 import type { AttachmentLook } from "./bindings/AttachmentLook";
@@ -323,8 +324,11 @@ export function openProject(
   if (!inTauri) {
     // Поток начинается вместе с чатом, а не с подпиской: окно чистит ленту,
     // когда чат открывают, и записанное до этого было бы стёрто.
+    // Записанная сессия стенда открывается под своим именем и молчит: строка
+    // списка должна стать открытой, а не завести рядом новый разговор.
+    const recorded = resume !== undefined && demoSessions.meta(resume) !== null;
     return Promise.resolve({
-      id: startDemo(path),
+      id: recorded ? resume : startDemo(path),
       state: { ...demoState, projectRoot: path },
       mcp: structuredClone(demoMcp),
       lsp: [],
@@ -366,31 +370,36 @@ export function closeAllChats(): Promise<void> {
  * и у проекта, в котором сейчас никто не разговаривает, а чатов в одном
  * проекте может быть открыто несколько.
  *
- * В стенде записанная сессия нигде не лежит — пустой список и есть его правда,
- * как `sessionMeta() → null` ниже.
+ * В стенде список живёт в памяти процесса (`core/demoSessions`) и отвечает на
+ * правки так же, как ответило бы хранилище. Экспорта там нет: писать файл
+ * некому.
  */
 export const sessions = {
   list: (project: string): Promise<SessionMeta[]> =>
-    inTauri ? invoke<SessionMeta[]>("list_sessions", { project }) : Promise.resolve([]),
+    inTauri
+      ? invoke<SessionMeta[]>("list_sessions", { project })
+      : Promise.resolve(demoSessions.list(project)),
   search: (project: string, query: string, limit?: number): Promise<SearchHit[]> =>
     inTauri
       ? invoke<SearchHit[]>("search_sessions", { project, query, limit })
-      : Promise.resolve([]),
+      : Promise.resolve(demoSessions.search(project, query)),
   rename: (project: string, id: SessionId, title: string): Promise<void> =>
     inTauri
       ? invoke<void>("rename_session", { project, id, title })
-      : Promise.resolve(),
+      : Promise.resolve(demoSessions.rename(project, id, title)),
   remove: (project: string, id: SessionId): Promise<void> =>
-    inTauri ? invoke<void>("delete_session", { project, id }) : Promise.resolve(),
+    inTauri
+      ? invoke<void>("delete_session", { project, id })
+      : Promise.resolve(demoSessions.remove(project, id)),
   duplicate: (project: string, id: SessionId, through?: string): Promise<SessionMeta> =>
     inTauri
       ? invoke<SessionMeta>("duplicate_session", { project, id, through })
-      : Promise.reject("в стенде сессий нет"),
+      : Promise.resolve().then(() => demoSessions.duplicate(project, id)),
   /** Экспорт §9 пишется ядром по выбранному окном пути. */
   exportTo: (project: string, id: SessionId, path: string): Promise<void> =>
     inTauri
       ? invoke<void>("export_session", { project, id, path })
-      : Promise.reject("в стенде сессий нет"),
+      : Promise.reject("в стенде файл записать некому"),
   /**
    * Журнал ленты §9 — им перерисовывается лента открытой заново сессии.
    *
@@ -400,7 +409,9 @@ export const sessions = {
    * всегда, — сложить поток в ленту.
    */
   feed: (project: string, id: SessionId): Promise<AgentEvent[]> =>
-    inTauri ? invoke<AgentEvent[]>("session_feed", { project, id }) : Promise.resolve([]),
+    inTauri
+      ? invoke<AgentEvent[]>("session_feed", { project, id })
+      : Promise.resolve(demoSessions.feed(project, id)),
 };
 
 /**
@@ -428,27 +439,14 @@ export function projectCommands(project: string): Promise<SlashCommand[]> {
  * нет, и ключи он не хранит.
  */
 let demoRegistry: Providers = {
-  list: [
-    {
-      id: "anthropic",
-      displayName: "Anthropic",
-      protocol: "anthropic",
-      baseUrl: "https://api.anthropic.com",
-      headers: {},
-      models: demoModels,
-    },
-    {
-      // Второй предустановленный (`registry::ProviderSpec::openai`). Без
-      // моделей, как и в ядре: их отдаёт `/v1/models`, а в стенде спросить
-      // некого — панель честно скажет, что моделей нет.
-      id: OPENAI_PROVIDER_ID,
-      displayName: "OpenAI",
-      protocol: "openai",
-      baseUrl: "https://api.openai.com",
-      headers: {},
-      models: [],
-    },
-  ],
+  // Предустановленные те же, что в ядре, и тоже без моделей: их отдаёт сам
+  // провайдер, а в стенде спросить некого — панель честно скажет, что моделей
+  // нет. Кроме Anthropic: стенду нужно, на чём показать разговор.
+  list: PRESETS.map((preset) => ({
+    ...preset,
+    headers: {},
+    models: preset.id === BUILTIN_PROVIDER_ID ? demoModels : [],
+  })),
 };
 
 /** Копия наружу: панель получает состояние на момент вызова, а не живую ссылку внутрь стенда. */
@@ -462,18 +460,30 @@ function demoHeaderPairs(spec: ProviderSpec): Array<[string, string]> {
   );
 }
 
+/**
+ * The list after a command that also asked a provider for its models
+ * (`providers::Asked` in the shell).
+ *
+ * `pollError` is separate from the command failing: the key is in the keychain
+ * and the provider is in the file whether or not its address then answered.
+ */
+export type Asked = { providers: Providers; pollError: string | null };
+
 export const providers = {
   list: (): Promise<Providers> =>
     inTauri ? invoke<Providers>("providers") : Promise.resolve(demoProviders()),
-  save: (spec: ProviderSpec): Promise<Providers> => {
+  /** Сохранённый без моделей провайдер оболочка тут же опрашивает сама. */
+  save: (spec: ProviderSpec): Promise<Asked> => {
     if (!inTauri) {
       const at = demoRegistry.list.findIndex((p) => p.id === spec.id);
       if (at === -1) demoRegistry.list.push(spec);
       else demoRegistry.list[at] = spec;
       demoProvidersHandler?.();
-      return Promise.resolve(demoProviders());
+      // Опроса в стенде нет, и ошибки опроса тоже: строка останется
+      // «не опрошен», что и есть правда.
+      return Promise.resolve({ providers: demoProviders(), pollError: null });
     }
-    return invoke<Providers>("save_provider", { spec });
+    return invoke<Asked>("save_provider", { spec });
   },
   remove: (id: string): Promise<Providers> => {
     if (!inTauri) {
@@ -521,7 +531,7 @@ export function sessionState(session: SessionId): Promise<SessionState | null> {
 
 /** Строка чата в списке §9: заголовок, время, стоимость. */
 export function sessionMeta(session: SessionId): Promise<SessionMeta | null> {
-  if (!inTauri) return Promise.resolve(null);
+  if (!inTauri) return Promise.resolve(demoSessions.meta(session));
   return invoke<SessionMeta | null>("session_meta", { session });
 }
 
@@ -530,10 +540,13 @@ export function sessionMeta(session: SessionId): Promise<SessionMeta | null> {
  *
  * Лежит под именем провайдера, и провайдер называется всегда: угаданный
  * записал бы ключ не под тем именем.
+ *
+ * Провайдера из списка оболочка после этого опрашивает сама: ключ — то, чего
+ * не хватало, чтобы спросить. Ответ приезжает сюда же вместе со списком.
  */
-export function setApiKey(key: string, provider: string): Promise<void> {
+export function setApiKey(key: string, provider: string): Promise<Asked> {
   if (!inTauri) return Promise.reject("в стенде кейчейна нет");
-  return invoke<void>("set_api_key", { key, provider });
+  return invoke<Asked>("set_api_key", { key, provider });
 }
 
 export function forgetApiKey(provider: string): Promise<void> {
@@ -609,6 +622,13 @@ export function onEvents(handler: (frame: EventFrame) => void): Promise<Unlisten
  * бы раньше, чем интерфейс успел запомнить запрос.
  */
 function answerInDemo(session: SessionId, command: Command): void {
+  if (command.type === "answerPermission") {
+    // The recorded turn stops on this question; answering it lets the turn
+    // end, as it would with a core behind it.
+    const events = demoFinish();
+    window.setTimeout(() => demoHandler?.({ session, events }), 0);
+    return;
+  }
   if (command.type === "readFileView") {
     const events: AgentEvent[] = [
       { type: "fileViewLoaded", path: command.path, view: demoFileView(command.path) },
@@ -817,21 +837,6 @@ export function onPreferences(
     });
   }
   return listen<Preferences>(PREFS_CHANNEL, (e) => handler(e.payload));
-}
-
-/**
- * Открывает окно настроек (§10), или поднимает уже открытое.
- *
- * В стенде второго окна взять негде, и вместо него открывается та же страница
- * настроек в этой вкладке: кнопка, ведущая туда же, куда ведёт в приложении,
- * честнее погашенной.
- */
-export function openSettings(): Promise<void> {
-  if (!inTauri) {
-    window.location.href = "/settings.html";
-    return Promise.resolve();
-  }
-  return invoke<void>("open_settings");
 }
 
 /** Пустые настройки проекта — форма, с которой начинается несохранённый файл. */

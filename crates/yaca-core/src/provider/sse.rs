@@ -1,14 +1,14 @@
-//! Разбор `text/event-stream`.
+//! Parsing of `text/event-stream`.
 //!
-//! Своё, а не библиотека: нужен ровно один кусок спецификации — накапливать
-//! строки `data:` до пустой строки, — а зависимость тянула бы за собой
-//! собственную модель ошибок поверх нашей.
+//! Our own, not a library: we need exactly one piece of the spec — accumulating
+//! `data:` lines up to an empty line — and a dependency would bring its own
+//! error model on top of ours.
 
-/// Инкрементальный декодер. Скармливай куски байтов, забирай готовые полезные
-/// нагрузки. Разрыв чанка посреди строки или посреди UTF-8 переживает.
+/// Incremental decoder. Feed it chunks of bytes and take the finished payloads.
+/// A chunk boundary in the middle of a line or of a UTF-8 sequence is survived.
 #[derive(Debug, Default)]
 pub struct SseDecoder {
-    /// Сырые байты, не сложившиеся пока в завершённое событие.
+    /// Raw bytes not yet assembled into a completed event.
     buf: Vec<u8>,
 }
 
@@ -17,13 +17,13 @@ impl SseDecoder {
         Self::default()
     }
 
-    /// Возвращает содержимое поля `data` для каждого завершившегося события.
-    /// Комментарии (`:`) и служебные поля отбрасываются.
+    /// Returns the content of the `data` field for each completed event.
+    /// Comments (`:`) and service fields are discarded.
     pub fn push(&mut self, bytes: &[u8]) -> Vec<String> {
         self.buf.extend_from_slice(bytes);
 
         let mut out = Vec::new();
-        // Событие завершается пустой строкой. Ищем её, не трогая хвост.
+        // An event ends with an empty line. Look for it without touching the tail.
         while let Some(end) = find_separator(&self.buf) {
             let (raw, rest) = self.buf.split_at(end.0);
             let block = String::from_utf8_lossy(raw).into_owned();
@@ -37,7 +37,7 @@ impl SseDecoder {
     }
 }
 
-/// Позиция и длина разделителя событий: `\n\n` или `\r\n\r\n`.
+/// Position and length of the event separator: `\n\n` or `\r\n\r\n`.
 fn find_separator(buf: &[u8]) -> Option<(usize, usize)> {
     let mut i = 0;
     while i + 1 < buf.len() {
@@ -98,7 +98,7 @@ mod tests {
     fn переживает_разрыв_посреди_utf8() {
         let mut d = SseDecoder::new();
         let payload = "data: привет\n\n".as_bytes();
-        let (head, tail) = payload.split_at(9); // режем внутри многобайтовой буквы
+        let (head, tail) = payload.split_at(9); // cut inside a multibyte character
         assert!(d.push(head).is_empty());
         assert_eq!(d.push(tail), vec!["привет"]);
     }

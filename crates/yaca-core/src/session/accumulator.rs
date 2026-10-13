@@ -1,11 +1,11 @@
-//! Склейка потока провайдера в блоки ответа и в события ленты.
+//! Assembles the provider stream into response blocks and feed events.
 //!
-//! Отдельно от цикла турна намеренно: это чистое преобразование, у него нет
-//! ни сети, ни файлов, ни времени, и проверяется оно построчно.
+//! Kept apart from the turn loop on purpose: it is a pure transformation, with
+//! no network, no files and no clock, and it is checked line by line.
 //!
-//! Вызовы тулов накопитель не превращает в `ToolCallStarted`: §5.4 требует
-//! подпись в настоящем времени в момент выполнения, а не в момент разбора
-//! ответа. Их выдаёт цикл турна, когда действительно берётся за работу.
+//! The accumulator does not turn tool calls into `ToolCallStarted`: §5.4 requires
+//! a present-tense caption at the moment of execution, not at the moment of parsing
+//! response. The turn loop emits them when it actually starts the work.
 
 use std::collections::BTreeMap;
 
@@ -38,7 +38,7 @@ pub enum Garbled {
 
 #[derive(Debug)]
 pub struct Completion {
-    /// Блоки ответа в том виде, в каком они уедут обратно в историю.
+    /// Response blocks in the form they will be sent back to the history.
     pub blocks: Vec<ContentBlock>,
     pub calls: Vec<PendingCall>,
     pub stop_reason: StopReason,
@@ -84,7 +84,7 @@ impl Accumulator {
         }
     }
 
-    /// Скармливает событие провайдера, отдаёт события ленты.
+    /// Feeds in a provider event, returns the feed events it produces.
     pub fn push(&mut self, event: ProviderEvent) -> Vec<AgentEvent> {
         match event {
             ProviderEvent::MessageStart { usage, .. } => {
@@ -116,8 +116,8 @@ impl Accumulator {
 
             ProviderEvent::TextDelta { index, text } => {
                 let Some(Partial::Text { id, text: buf }) = self.blocks.get_mut(&index) else {
-                    // Дельта без начала блока: провайдер соврал про индексы.
-                    // Терять текст нельзя, поэтому заводим блок на месте.
+                    // A delta without a block start: the provider got the indexes wrong.
+                    // Text must not be lost, so a block is opened on the spot.
                     return self.orphan_text(index, text);
                 };
                 buf.push_str(&text);
@@ -144,8 +144,8 @@ impl Accumulator {
             ProviderEvent::SignatureDelta { index, signature } => {
                 if let Some(Partial::Thinking { signature: sig, .. }) = self.blocks.get_mut(&index)
                 {
-                    // Подпись обязана уехать обратно без изменений, иначе
-                    // следующий запрос будет отвергнут.
+                    // The signature must go back unchanged, otherwise
+                    // the next request will be rejected.
                     sig.get_or_insert_with(String::new).push_str(&signature);
                 }
                 vec![]
@@ -216,7 +216,7 @@ impl Accumulator {
                 }),
                 Partial::Redacted { data } => blocks.push(ContentBlock::RedactedThinking { data }),
                 Partial::ToolUse { id, name, json } => {
-                    // Пустая строка — законный случай: тул без аргументов.
+                    // An empty string is a legal case: a tool with no arguments.
                     let parsed = if json.trim().is_empty() {
                         Ok(serde_json::json!({}))
                     } else {
@@ -247,7 +247,7 @@ impl Accumulator {
         Completion {
             blocks,
             calls,
-            // Оборванный поток без `message_delta` — считаем, что ход кончился.
+            // A stream cut off without a `message_delta` counts as the turn having ended.
             stop_reason: self.stop_reason.unwrap_or(StopReason::EndTurn),
             usage: self.usage,
         }

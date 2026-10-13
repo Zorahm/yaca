@@ -130,10 +130,12 @@ mod tests {
         obs.observe(&AgentEvent::TurnFinished {
             turn_id: TurnId::from("t".to_string()),
             stop_reason: StopReason::EndTurn,
+            at: Default::default(),
         });
         assert_eq!(obs.ending.as_deref(), Some("endTurn"));
         obs.observe(&AgentEvent::TurnCancelled {
             turn_id: TurnId::from("t".to_string()),
+            at: Default::default(),
         });
         assert_eq!(obs.ending.as_deref(), Some("cancelled"));
     }

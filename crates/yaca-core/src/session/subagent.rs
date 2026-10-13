@@ -1,5 +1,8 @@
 //! A subagent: a conversation of its own, held inside a turn by the `Task` tool.
 //!
+//! Inside a call of the turn, or beside it: one sent in the background lets
+//! the agent go on, and is [`background`](super::background)'s to bring back.
+//!
 //! The point is the context. Finding where something lives takes twenty reads
 //! and comes down to three lines; reworking a module is a hundred steps the
 //! agent needs none of once it is done. Held in the agent's own conversation,
@@ -17,10 +20,12 @@
 //! It is not a session. No journal of its own, no line in the session list,
 //! no compaction: its history is worth nothing once the report is written.
 //!
-//! The feed draws a subagent's calls as rows under the `Task` row
-//! (`parent` on [`AgentEvent::ToolCallStarted`]). `docs/ui.md` leaves "where
-//! do subagents go" open; rows it has to be, because an edit a subagent made
-//! is an edit to the human's files and owes them the same diff.
+//! The interface draws a subagent's calls as rows under the `Task` row
+//! (`parent` on [`AgentEvent::ToolCallStarted`]): in the feed the agents sent
+//! together stand as one plate, and the agents panel opens each into its
+//! prompt, its rows and its report. Rows it has to be, because an edit a
+//! subagent made is an edit to the human's files and owes them the same diff.
+//! What each has spent travels as [`AgentEvent::SubagentUsage`].
 //!
 //! [`AgentEvent::ToolCallStarted`]: crate::event::AgentEvent::ToolCallStarted
 
@@ -31,6 +36,7 @@ use futures_util::StreamExt;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::{ProviderError, ToolError};
+use crate::event::AgentEvent;
 use crate::id::{CallId, TurnId};
 use crate::instructions::Instructions;
 use crate::intent::Intent;
@@ -87,10 +93,10 @@ impl Ledger {
 #[derive(Clone)]
 pub struct Subagents {
     /// The agent that is sending it.
-    sender: Caller,
+    pub(super) sender: Caller,
     turn: TurnId,
     /// The `Task` row: the subagent's own rows are drawn under it.
-    row: CallId,
+    pub(super) row: CallId,
 }
 
 impl Subagents {
@@ -114,6 +120,7 @@ impl Subagents {
 
         let mut history = vec![Message::user_text(task)];
         let mut bound_to: Option<Intent> = None;
+        let mut spent = TokenCounts::default();
 
         for step in 1..=MAX_STEPS + 1 {
             if cancel.is_cancelled() {
@@ -154,6 +161,11 @@ impl Subagents {
             };
             let done = self.complete(&me, request, cancel).await?;
             shared.ledger.add(done.usage, model.pricing);
+            spent.add(done.usage);
+            me.emit(AgentEvent::SubagentUsage {
+                call_id: self.row.clone(),
+                tokens: spent,
+            });
 
             let said = text_of(&done.blocks);
             if !done.blocks.is_empty() {

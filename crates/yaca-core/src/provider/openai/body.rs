@@ -1,13 +1,13 @@
-//! Сборка тела Chat Completions.
+//! Building the Chat Completions body.
 //!
-//! Три места, где перевод не механический:
+//! Three places where the translation is not mechanical:
 //!
-//! * `stream_options.include_usage` обязателен. Без него поток не присылает
-//!   `usage` вовсе, и счётчик токенов §7.1 молча остался бы нулём.
-//! * Блоки рассуждения обратно не отправляются. В этой форме нет поля для
-//!   подписи, а рассуждение без подписи — текст, за который никто не отвечает.
-//! * Потолок ответа едет в том поле, которое провайдер принимает, — см.
-//!   [`MaxField`]. Отправить оба нельзя: на новых моделях OpenAI это 400.
+//! * `stream_options.include_usage` is required. Without it the stream does not send
+//!   `usage` at all, and the token counter of §7.1 would silently stay at zero.
+//! * Reasoning blocks are not sent back. This shape has no field for the
+//!   signature, and reasoning without a signature is text nobody vouches for.
+//! * The response ceiling goes in the field the provider accepts — see
+//!   [`MaxField`]. Sending both is not possible: on newer OpenAI models that is a 400.
 
 use serde_json::{json, Value};
 
@@ -15,13 +15,13 @@ use crate::intent::Effort;
 use crate::message::{ContentBlock, Message, Role};
 use crate::provider::{ProviderRequest, ToolSchema};
 
-/// Каким полем едет потолок ответа.
+/// Which field the response ceiling is sent in.
 ///
-/// `max_tokens` понимают Ollama, vLLM, Groq, DeepSeek, OpenRouter и почти всё,
-/// что называет себя OpenAI-совместимым. Новые модели самого OpenAI отвечают
-/// на него 400 и в тексте ошибки прямо называют `max_completion_tokens` —
-/// поэтому выбор не настройка, которую человек должен угадать, а то, что
-/// провайдер сообщает о себе сам (см. [`super::OpenAiProvider::stream`]).
+/// `max_tokens` is understood by Ollama, vLLM, Groq, DeepSeek, OpenRouter and nearly
+/// everything that calls itself OpenAI-compatible. Newer models from OpenAI itself
+/// answer it with a 400 and name `max_completion_tokens` right in the error text —
+/// so the choice is not a setting the human has to guess, but what the
+/// provider reports about itself (see [`super::OpenAiProvider::stream`]).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(super) enum MaxField {
     #[default]
@@ -56,8 +56,8 @@ pub(super) fn build_body(req: &ProviderRequest, max_field: MaxField) -> Value {
     body
 }
 
-/// В этой форме уровней три. `Extra` и `Max` ложатся в верхний: выше здесь
-/// ничего нет, и придумывать четвёртый некуда.
+/// This shape has three levels. `Extra` and `Max` go to the top one: there is nothing
+/// above it here, and nowhere to put a made-up fourth.
 fn reasoning_effort(effort: Effort) -> &'static str {
     match effort {
         Effort::Low => "low",
@@ -95,11 +95,11 @@ fn wire_messages(req: &ProviderRequest) -> Value {
     Value::Array(out)
 }
 
-/// Одно сообщение человека может стать несколькими.
+/// One user message can become several.
 ///
-/// Результаты тулов в этой форме — отдельные сообщения роли `tool`, и они
-/// обязаны идти сразу за вызовом. Поэтому они выкладываются первыми, а текст
-/// человека — после них, даже если в блоках он стоял раньше.
+/// Tool results in this shape are separate messages with the `tool` role, and they
+/// must follow the call directly. So they go first, and the human's text goes after
+/// them, even if it stood earlier in the blocks.
 fn push_user(out: &mut Vec<Value>, msg: &Message) {
     // Text and images in the order they came: the line naming an image
     // stands right before it.
@@ -113,9 +113,9 @@ fn push_user(out: &mut Vec<Value>, msg: &Message) {
                 content,
                 is_error,
             } => {
-                // Флага «неудача» здесь нет, а модель обязана отличить отказ
-                // от результата: без пометки упавшая команда читается как
-                // выполненная. Префикс английский — его читает модель.
+                // There is no failure flag here, and the model must tell a refusal
+                // from a result: without a marker, a failed command reads as
+                // a successful one. The prefix is in English — the model reads it.
                 let content = if *is_error {
                     format!("Error: {content}")
                 } else {
@@ -140,7 +140,7 @@ fn push_user(out: &mut Vec<Value>, msg: &Message) {
                     "image_url": { "url": format!("data:{media_type};base64,{data}") },
                 }));
             }
-            // Рассуждение и вызов тула в сообщении человека не появляются.
+            // A reasoning block and a tool call do not appear in the human's message.
             _ => {}
         }
     }
@@ -176,18 +176,18 @@ fn push_assistant(out: &mut Vec<Value>, msg: &Message) {
                 "type": "function",
                 "function": {
                     "name": name,
-                    // Аргументы здесь — строка, а не объект.
+                    // Arguments here are a string, not an object.
                     "arguments": input.to_string(),
                 },
             })),
-            // Рассуждению в этой форме места нет — см. шапку модуля.
+            // This shape has no place for reasoning — see the module header.
             ContentBlock::Thinking { .. } | ContentBlock::RedactedThinking { .. } => {}
             ContentBlock::ToolResult { .. } | ContentBlock::Image { .. } => {}
         }
     }
 
-    // Ход, в котором было одно рассуждение, отправлять нечем: сообщение
-    // без текста и без вызовов отвергают и OpenAI, и половина шлюзов.
+    // A turn that had only reasoning has nothing to send: a message
+    // with no text and no calls is rejected by OpenAI and by half the gateways.
     if text.is_empty() && calls.is_empty() {
         return;
     }
@@ -274,7 +274,7 @@ mod tests {
         let body = build_body(&r, MaxField::default());
         assert_eq!(body["messages"][1]["role"], "tool");
         assert_eq!(body["messages"][1]["tool_call_id"], "call_1");
-        // Текст человека — после результата, а не перед ним.
+        // The human's text goes after the result, not before it.
         assert_eq!(body["messages"][2]["role"], "user");
         assert_eq!(body["messages"][2]["content"], "спасибо");
     }
@@ -352,7 +352,7 @@ mod tests {
             thinking: "думаю".into(),
             signature: None,
         }])];
-        // Только системный промпт: отправлять было нечего.
+        // Only the system prompt: there was nothing to send.
         assert_eq!(build_body(&r, MaxField::default())["messages"].as_array().unwrap().len(), 1);
     }
 
@@ -362,7 +362,7 @@ mod tests {
         assert_eq!(by_default["max_tokens"], 8_000);
         assert!(by_default.get("max_completion_tokens").is_none());
 
-        // Провайдер попросил другое имя — уезжает другое, и снова одно.
+        // The provider asked for another name — that one goes out, and again only one.
         let asked = build_body(&req(), MaxField::MaxCompletionTokens);
         assert_eq!(asked["max_completion_tokens"], 8_000);
         assert!(

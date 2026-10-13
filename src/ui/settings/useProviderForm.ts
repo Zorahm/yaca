@@ -11,10 +11,15 @@
  * whose headers never mention `{key}` gets neither a required key field nor
  * a warning about a missing key (§10).
  *
- * Models are asked for, not typed: `ask()` sends the draft to the core, which
- * queries the provider's own `/v1/models`. It runs on the button and again the
- * moment a key is saved — that is the moment there is finally something to ask
- * with, and a provider whose list is empty cannot be chosen at all.
+ * Models are asked for, not typed, and mostly not asked for from here. The
+ * shell asks on its own the moment a key is stored (`set_api_key`) and when a
+ * provider is saved without a list (`save_provider`), and this hook only takes
+ * the answer. What is left here is the button: `ask()` sends the draft, so a
+ * lookup after an edit of the address goes to the new one.
+ *
+ * A new provider has no id until it is saved (`newProviderId`), so it has
+ * nothing to keep a key under and nothing to be asked as. Its key travels
+ * with the save, and the shell asks it then.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -24,6 +29,8 @@ import {
   discoverModels,
   forgetApiKey,
   setApiKey,
+  type Asked,
+  type ModelInfo,
   type ProviderSpec,
 } from "../../core/client";
 import {
@@ -35,15 +42,23 @@ import {
   type ProviderDraft,
 } from "./provider";
 
+/** The provider's models in what the shell answered, or `null` if it is not there. */
+function modelsIn(asked: Asked, id: string): Array<ModelInfo> | null {
+  return asked.providers.list.find((p) => p.id === id)?.models ?? null;
+}
+
 export function useProviderForm({
   draft: initial,
   isNew,
+  taken,
   onSave,
   onSaved,
 }: {
   draft: ProviderDraft;
   /** A new provider is not in the registry, so the shell cannot be asked about its key yet. */
   isNew: boolean;
+  /** The ids already in the list: a new provider's own must not land on one. */
+  taken: ReadonlyArray<string>;
   /** Returns whether the spec was saved; the form closes only on success. */
   onSave: (spec: ProviderSpec) => Promise<boolean>;
   onSaved: () => void;
@@ -97,7 +112,11 @@ export function useProviderForm({
   const [keyValue, setKeyValue] = useState("");
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
-  const [askedSource, setAskedSource] = useState<KeyState>({ kind: "loading" });
+  // A new provider is never looked up, so its answer is known from the start:
+  // there is nothing to say yet.
+  const [askedSource, setAskedSource] = useState<KeyState>({
+    kind: isNew ? "unknown" : "loading",
+  });
 
   const loadSource = useCallback(() => {
     if (isNew) return;
@@ -125,14 +144,19 @@ export function useProviderForm({
     if (!value || !id || keyBusy) return;
     setKeyBusy(true);
     setKeyError(null);
+    setModelsError(null);
     try {
-      await setApiKey(value, id);
+      const asked = await setApiKey(value, id);
       // The value has done its job; keeping it in the field would keep a
       // secret on screen for no reason.
       setKeyValue("");
       loadSource();
-      // The key was the thing missing to ask with (§10).
-      void ask(draft);
+      // The key was the thing missing to ask with (§10), and the shell has
+      // asked already. Its refusal belongs to the models, not to the key:
+      // the key is stored either way.
+      const models = modelsIn(asked, id);
+      if (asked.pollError !== null) setModelsError(asked.pollError);
+      else if (models !== null) setDraft((now) => ({ ...now, models }));
     } catch (e) {
       setKeyError(String(e));
     } finally {
@@ -192,7 +216,7 @@ export function useProviderForm({
   // --- submit ----------------------------------------------------------------
 
   async function submit() {
-    const spec = draftToSpec(draft);
+    let spec = draftToSpec(draft, taken);
     if (spec === null || busy) return;
     setBusy(true);
     setError(null);
@@ -200,8 +224,14 @@ export function useProviderForm({
       if (keyValue.trim()) {
         // The key goes first: if the keychain refuses, nothing is saved
         // half-way and the error points at the only thing that failed.
-        await setApiKey(keyValue.trim(), spec.id);
+        const asked = await setApiKey(keyValue.trim(), spec.id);
         setKeyValue("");
+        // A provider already in the list was asked with the new key just now,
+        // and the draft's list is from before it: saving that over the answer
+        // would undo the lookup. A new provider is not in the list yet —
+        // nobody was asked, and the save below asks.
+        const models = modelsIn(asked, spec.id);
+        if (asked.pollError === null && models !== null) spec = { ...spec, models };
       }
       if (await onSave(spec)) onSaved();
     } catch (e) {

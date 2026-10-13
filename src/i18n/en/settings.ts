@@ -1,0 +1,109 @@
+/**
+ * English strings: the settings window, except providers and MCP.
+ */
+
+import type { settings as source } from "../ru/settings";
+
+export const settings = {
+  "set.title": "Settings",
+  "set.nav": "Settings sections",
+  "set.close": "Back to the conversation",
+  "set.group_app": "Application",
+  "set.group_project": "Project",
+  "set.project": "Which project these settings are for",
+
+  "tools.title": "Tools",
+  "tools.lede": "How the agent behaves on the network. Enabling tools and command timeouts are waiting on the core.",
+  "tools.shell": "Shell for commands",
+  "tools.shell_hint":
+    "What the agent runs commands through. Auto takes PowerShell 7 when it is installed. An open chat keeps its shell: the choice applies from the next one.",
+  "tools.shell_auto": "Auto",
+  "tools.shell_pwsh": "PowerShell 7",
+  "tools.shell_windows": "Windows PowerShell",
+  "tools.robots": "Honour robots.txt",
+  "tools.robots_hint":
+    "A page closed by a Disallow rule is not fetched: the agent gets a refusal and the reason. Turn it off when the site closed that way is your own — a Disallow there is often only about search engines.",
+  "tools.search_key": "Tavily key",
+  "tools.search_key_hint":
+    "Goes to the system keychain and never comes back to the screen. Without it web search answers that there is no key.",
+
+  "look.title": "Appearance",
+  "look.lede":
+    "Applied at once, in both windows. There is no Save button here: it would let the window show one thing while the disk holds another.",
+  "look.theme": "Theme",
+  "look.theme_hint": "Paper by default; Night is the dark one.",
+  "look.theme_night": "Dark",
+  "look.theme_paper": "Light",
+  "look.theme_system": "System",
+  "look.line_numbers": "Line numbers in diffs",
+  "look.line_numbers_hint": "A 52 px gutter instead of 14.",
+  "look.compact": "Compact diff",
+  "look.compact_hint": "Line height 20 px instead of 22.",
+
+  "about.title": "About",
+  "about.version": "Version {version}",
+  "about.what":
+    "A desktop agent for working with code. You describe the task; Yaca reads the project, edits files and runs commands, and shows you every irreversible action first.",
+  "about.how":
+    "The conversation goes to the provider you chose yourself; keys stay in the system keychain, and before edits the project's state is saved so you can go back to it.",
+  "about.updates": "Updates",
+  "about.updates_hint":
+    "There are no published builds yet, so there is nothing to compare the version with. The check arrives with the first published release.",
+  "about.updates_none": "no check yet",
+  "about.license": "License",
+
+  "notices.title": "Notifications and language",
+  "notices.lede": "About the window, not the conversation: both outlive any project.",
+  "notices.toasts": "System notifications",
+  "notices.toasts_hint":
+    "When the agent asks for permission and the window is not focused. The question waits without a timeout, and someone looking elsewhere learns about it no other way.",
+  "notices.language": "Language",
+  "notices.language_hint": "Changes in place; no restart needed.",
+  "notices.language_system": "System",
+
+  "models.title": "Models",
+  "models.lede": "What a new session in this project starts on. An open chat keeps its own model to the end.",
+  "models.none": "No models: no provider has answered yet. See Providers, then Ask.",
+  "models.default": "Default model",
+  "models.default_hint": "Its provider is written down with it: a model brings its own.",
+  "models.first_configured": "First of the first configured",
+  "models.compact": "Model that summarizes history",
+  "models.compact_hint": "The summary of the history can go to a cheaper model.",
+  "models.compact_same": "Same as the session",
+  "models.subagent": "Model for subagents",
+  "models.subagent_hint": "Research and jobs handed over through Task can go to a faster model.",
+
+  "rules.title": "Mode and rules",
+  "rules.lede":
+    "Kept in the project's .yaca/settings.json and describes how a session starts. It does not touch a conversation already running — that is what ⇧⇥ in the composer is for.",
+  "rules.mode": "Default mode",
+  "rules.mode_hint": "Unset means Auto: everything but running commands, without asking.",
+  "rules.allowed": "Always allowed",
+  "rules.allowed_hint":
+    "\"Always allow\" in the feed lives until the end of the session. A rule reaches this list from here and nowhere else: what was granted in a hurry should not outlive the hurry.",
+  "rules.allowed_empty": "No standing permissions — the agent asks by the rules of the mode.",
+  "rules.denied": "Always denied",
+  "rules.denied_hint":
+    "A refusal outranks a grant and outranks bypass. The reason travels to the agent with every refusal.",
+  "rules.denied_empty": "No standing refusals.",
+  "rules.reset": "Clear",
+  "rules.allow": "Allow",
+  "rules.deny": "Deny",
+  "rules.remove": "Remove the rule",
+  "rules.kind": "Rule scope",
+  "rules.value": "What the rule covers",
+  "rules.value_placeholder": "npm test",
+  "rules.reason": "Reason for the refusal",
+  "rules.reason_placeholder": "why not",
+  "rules.no_reason": "no reason given",
+  "rules.kind_tool": "Tool",
+  "rules.kind_directory": "Directory",
+  "rules.kind_command": "Command",
+  "rules.kind_domain": "Domain",
+  "rules.kind_mcp": "MCP server",
+  "rules.hint_tool": "every call of it",
+  "rules.hint_directory": "anything inside",
+  "rules.hint_command": "and everything starting with it",
+  "rules.hint_domain": "any page on the host",
+  "rules.hint_mcp": "any of its tools",
+} satisfies Record<keyof typeof source, string>;

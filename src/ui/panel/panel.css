@@ -1,74 +1,129 @@
 /*
- * Выдвижная панель §1.1 и её содержимое: процессы §6.5, файл §6.4,
- * провайдеры §10.
+ * The right panel and what is drawn in it: checkpoints, processes, MCP
+ * servers and a file.
  *
- * Radix держит поведение, здесь только внешний вид из токенов §2. Панель
- * ложится справа поверх ленты: 55% окна, минимум 560 px. Это тот же лист,
- * что и окно, — фон --paper, а не более светлая плашка: светлее листа в окне
- * только то, что на нём лежит (поле, кнопка, меню). От ленты панель отделяют
- * граница слева, тень и приглушённая лента под ней: лента в это время inert
- * (§14), и вид должен говорить то же. Анимации нет.
+ * The panel is a column of the window, to the right of the feed. It is the
+ * same sheet as the feed (`--bg`), not a lighter slab: opening it must not
+ * change how bright the window is. What sets it apart is the frame, a
+ * rounded card with a `--line` border, held 8px off the window's edges. The
+ * gap to its left is where the resize handle lives (splitter.css).
+ *
+ * The column's width is the window's state and arrives as an inline style.
  */
 
+.panel-dock {
+  position: relative;
+  grid-column: 3;
+  grid-row: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 8px;
+  outline: none;
+}
+
 .panel {
-  position: fixed;
-  top: var(--h-top);
-  right: 0;
-  bottom: 0;
-  z-index: 30;
   display: flex;
   flex-direction: column;
-  width: 55%;
-  min-width: 560px;
-  background: var(--paper);
-  border-left: 1px solid var(--line-strong);
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+}
+
+/* The handle follows the card, not the window: it stops where the corners
+   start to turn. */
+.panel-dock > .splitter {
+  top: 20px;
+  bottom: 20px;
+}
+
+/* No room beside the feed: the panel lies over its right side. It floats
+   here, so this is the one place it throws a shadow. */
+.panel-dock-over {
+  grid-column: 2;
+  justify-self: end;
+  z-index: 30;
+  max-width: 100%;
+}
+
+.panel-dock-over .panel {
   box-shadow: var(--shadow-panel);
 }
 
-/* Everything under an open panel. None of it can be used while the panel is
-   up, and a thin wash of ink says so. It covers the whole window, sidebar
-   included; the top bar is lifted above it in app.css because its buttons
-   still work. */
-.panel-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 29;
-  background: color-mix(in srgb, var(--ink) 9%, transparent);
+/* A file opened wide covers the feed column whole, top bar included. */
+.panel-dock-full {
+  grid-column: 2 / -1;
+  z-index: 30;
+  padding: 0;
 }
 
-/* Radix в modal ставит body pointer-events: none, и клик мимо панели тонет
-   о <html>. Триггеры выведены из запрета: §1.1 требует, чтобы панель
-   закрывалась «повторным нажатием той же кнопки». Клик по триггеру при
-   открытой панели доходит до onInteractOutside каркаса, который его
-   игнорирует, а потом до onClick кнопки, которая переключает состояние.
-   Триггеры живут не только в шапке: кнопка провайдеров — на домашнем экране. */
-[data-panel-trigger] {
-  pointer-events: auto;
+.panel-dock-full .panel {
+  border: 0;
+  border-radius: 0;
 }
 
+/* The header is the strip of tabs: the open one is the teal wash, like the
+   current chat in the sidebar. */
 .panel-head {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 10px;
-  height: var(--h-top);
-  padding: 0 10px 0 18px;
+  gap: 4px;
+  /* Its rule continues the top bar's across the gap: the bar's height less
+     the card's inset and border. */
+  height: calc(var(--h-top) - 9px);
+  padding: 0 8px;
   border-bottom: 1px solid var(--line);
 }
 
-.panel-title {
+.panel-tabs {
+  display: flex;
   flex: 1;
+  gap: 2px;
   min-width: 0;
-  font: 700 14px var(--display);
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* A narrow panel scrolls its tabs sideways before it cuts one off. */
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-/* Путь файла в шапке панели §6.4: 12.5 px моноширинным (§2). */
-.panel-title-mono {
-  font: 500 12.5px var(--mono);
+.panel-tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: var(--h-small-button);
+  padding: 0 10px;
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.panel-tab:hover {
+  color: var(--ink);
+}
+
+.panel-tab-on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+/* The one tab named by its content, so the one that gives way. */
+.panel-tab-file {
+  flex: 0 1 auto;
+  min-width: 56px;
+}
+
+.panel-tab-file svg {
+  flex: none;
+}
+
+.panel-tab-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .panel-body {
@@ -81,85 +136,126 @@
 
 .panel-empty {
   padding: 24px 18px;
-  color: var(--ink-muted);
+  color: var(--muted);
   font-size: 13px;
 }
 
 .panel-error {
   margin: 12px 18px;
-  color: var(--red-ink);
+  color: var(--err);
   font: 400 12.5px var(--mono);
   user-select: text;
 }
 
-/* --- §6.4 панель файла ----------------------------------------------------- */
+/* --- панель файла ---------------------------------------------------------- */
 
-.panel-file-head {
+/* The line under the tabs: where the file lies, and what can be done to it. */
+.file-bar {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 10px;
-  padding: 8px 18px;
+  gap: 2px;
+  height: var(--h-bar);
+  padding: 0 8px 0 18px;
   border-bottom: 1px solid var(--line);
-  /* Липкая шапка §6.4: дифф скроллится в своей области под ней, шапка стоит. */
-  background: var(--paper);
 }
 
-.panel-file-moved {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.file-path {
+  flex: 1;
   min-width: 0;
-  font: 400 11.5px var(--mono);
-  color: var(--ink-muted);
+  margin-right: 8px;
+  color: var(--muted);
+  font: 400 12px var(--mono);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  user-select: text;
 }
 
-/* Скроллится сам дифф, а не панель вокруг него: окно §12 меряет тот элемент,
-   у которого есть прокрутка, и он должен быть один и тот же в ленте и здесь. */
-.panel-file-diff {
+.file-search {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px 6px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.file-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.file-search-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.file-search-count {
+  flex: none;
+  min-width: 56px;
+  padding: 0 6px;
+  color: var(--muted);
+  font: 400 12px var(--mono);
+  text-align: right;
+}
+
+/* The file is the page of this panel, not a block on it: no frame, no well,
+   and lines set a step larger and looser than a diff in the feed. */
+.panel-file {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 12px 16px;
   overflow: hidden;
 }
 
-.panel-file-diff .diff {
+.panel-file .diff {
+  --diff-line: 24px;
   flex: 1;
   min-height: 0;
-}
-
-/* Свёрнутый промежуток между ханками: `⋯ 18 строк` (§6.4). */
-/* На той же сетке, что строка диффа: по ней считается окно §12. */
-.diff-gap {
-  box-sizing: border-box;
-  height: var(--diff-line);
-  padding: 2px 0 2px 12px;
-  color: var(--ink-muted);
-  font: 400 11.5px/20px var(--mono);
-  user-select: none;
-}
-
-/* The fold is a button: a click opens the stretch (§6.4). Same grid as a row. */
-.diff-gap-btn {
-  display: block;
-  width: 100%;
+  margin: 0;
+  padding: 10px 0;
   border: 0;
+  border-radius: 0;
   background: transparent;
-  text-align: left;
-  cursor: pointer;
 }
 
-.diff-gap-btn:hover,
-.diff-gap-btn:focus-visible {
+.panel-file .diff-line {
+  grid-template-columns: 60px 1fr;
+  font-size: 13px;
+}
+
+.panel-file .diff-sign {
+  display: none;
+}
+
+.panel-file .diff-gutter {
+  padding-right: 18px;
+  font-size: 12.5px;
+}
+
+/* A line the search found, and the one it stands on. */
+.panel-file .diff-hit {
+  background: var(--accent-soft);
+}
+
+.panel-file .diff-hit-now {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.panel-file .diff-hit-now .diff-gutter {
   color: var(--ink);
 }
 
-/* --- §6.5 панель процессов -------------------------------------------------- */
+/* --- панель процессов -------------------------------------------------- */
 
 .proc-list {
   flex: none;
@@ -184,7 +280,7 @@
 }
 
 .proc[aria-pressed="true"] {
-  background: var(--paper-raised);
+  background: var(--accent-soft);
 }
 
 .proc[aria-pressed="true"] .proc-cmd {
@@ -194,7 +290,7 @@
 .proc-num {
   flex: none;
   font: 400 11.5px var(--mono);
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .proc-cmd {
@@ -208,30 +304,30 @@
 }
 
 /* Состояние — слово, а не измерение, и набрано обычным шрифтом. Красным
-   оно становится только у упавшей команды (§2): работающая — чернильная с
+   оно становится только у упавшей команды: работающая — чернильная с
    пульсом, завершённая — серая. */
 .proc-state {
   flex: none;
   font-size: 11.5px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .proc-state-run {
-  color: var(--ink);
+  color: var(--accent-ink);
 }
 
 .proc-state-ok {
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .proc-state-fail {
-  color: var(--red-ink);
+  color: var(--err);
 }
 
 .proc-time {
   flex: none;
   font: 400 11.5px var(--mono);
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .proc-output {
@@ -253,7 +349,7 @@
 
 .proc-dropped {
   font: 400 11.5px var(--mono);
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .proc-output-text {
@@ -262,7 +358,7 @@
   margin: 0;
   padding: 8px 10px;
   border-top: 1px solid var(--line);
-  background: var(--paper-sunken);
+  background: var(--sunk);
   color: var(--ink);
   font: 400 11.5px/19px var(--mono);
   white-space: pre-wrap;
@@ -271,7 +367,7 @@
   user-select: text;
 }
 
-/* --- панель чекпоинтов §1.1 --------------------------------------------- */
+/* --- панель чекпоинтов --------------------------------------------- */
 
 .ckpt-list {
   flex: 1;
@@ -294,42 +390,47 @@
 }
 
 .ckpt-row[aria-expanded="true"] {
-  background: var(--paper-raised);
+  background: var(--accent-soft);
 }
 
-.ckpt-row[aria-expanded="true"] .ckpt-time {
-  font-weight: 500;
+.ckpt-row[aria-expanded="true"] .ckpt-reason {
+  font-weight: 600;
 }
 
 .ckpt-dot {
   flex: none;
-  display: inline-flex;
-  align-items: center;
-  color: var(--ink-muted);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line);
 }
 
-.ckpt-time {
-  flex: none;
-  font: 400 12.5px var(--mono);
-  color: var(--ink);
+.ckpt-dot-on {
+  background: var(--accent);
 }
 
 .ckpt-reason {
   flex: 1;
   min-width: 0;
-  font-size: 12.5px;
-  color: var(--ink-muted);
+  font-size: 13px;
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Подтверждение §5.8 живёт внутри строки: вопрос стоит там, где спросили. */
+/* Подтверждение отката живёт внутри строки: вопрос стоит там, где спросили. */
 .ckpt .confirm {
-  margin: 0 18px 10px;
+  margin: 4px 16px 12px;
+  border-color: var(--line);
+  background: var(--surface);
 }
 
-/* --- §7.3 панель серверов MCP ------------------------------------------------ */
+.ckpt .error-actions {
+  justify-content: flex-end;
+}
+
+/* --- панель серверов MCP ------------------------------------------------ */
 
 .mcp-server {
   display: flex;
@@ -352,19 +453,19 @@
   color: var(--ink);
 }
 
-/* Состояние — слово, как у процесса §6.5: живое чернильное, сбой красный,
+/* Состояние — слово, как у процесса: живое чернильное, сбой красный,
    остальное серое. */
 .mcp-status {
   font-size: 11.5px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .mcp-status-live {
-  color: var(--ink);
+  color: var(--ok);
 }
 
 .mcp-status-fail {
-  color: var(--red-ink);
+  color: var(--err);
 }
 
 /* Не режется: у сервера, ждущего одобрения, это и есть то, что одобряют. */
@@ -379,7 +480,7 @@
 .mcp-note {
   font-size: 11.5px;
   line-height: 17px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .mcp-note {
@@ -391,7 +492,7 @@
   max-height: 180px;
   overflow: auto;
   font: 400 11.5px/17px var(--mono);
-  color: var(--red-ink);
+  color: var(--err);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
@@ -400,7 +501,7 @@
 .mcp-tools {
   margin-top: 4px;
   font-size: 12px;
-  color: var(--ink-muted);
+  color: var(--muted);
 }
 
 .mcp-tools summary {
@@ -441,11 +542,4 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* Знак протокола перед словом в шапке панели. */
-.panel-title-mark {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
 }
