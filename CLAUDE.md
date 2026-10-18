@@ -31,7 +31,7 @@ npm test                                 # vitest (src/**/*.test.ts)
 npm run build                            # tsc + vite build
 cargo test --workspace --no-fail-fast    # also regenerates src/core/bindings/
 cargo clippy --workspace --all-targets   # must be warning-free
-yaca.bat / dev.bat                       # dev window (vite + core + Tauri)
+npm run tauri dev                        # dev window (starts vite via beforeDevCommand + core + Tauri)
 npx tauri build --bundles nsis           # Windows installer -> target/release/bundle/nsis/
 ```
 

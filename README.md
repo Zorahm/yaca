@@ -51,12 +51,14 @@ Yaca is in beta (`1.0.0-beta`). Installers (Windows NSIS `.exe`, macOS `.dmg`, L
 
 **From source** (all platforms) requires [Node.js](https://nodejs.org/) 20+ and [Rust](https://rustup.rs/).
 
-On Windows, simply double-click `yaca.bat`: it checks the environment, installs dependencies, and opens the window. Or run manually:
+From the project root:
 
 ```bash
 npm install
 npm run tauri dev
 ```
+
+`npm run tauri dev` starts the Vite dev server (`npm run dev`) and opens the desktop window. `npm run dev` alone serves only the frontend, without the window.
 
 The initial build takes a while as cargo compiles the core from scratch.
 
