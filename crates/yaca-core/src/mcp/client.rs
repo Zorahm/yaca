@@ -120,7 +120,7 @@ impl Client {
 
         if !VERSIONS.contains(&result.protocol_version.as_str()) {
             return Err(McpError::Protocol(format!(
-                "сервер говорит на версии протокола {}, а клиент знает {}",
+                "the server speaks protocol version {}, and the client knows {}",
                 result.protocol_version,
                 VERSIONS.join(", ")
             )));
@@ -168,7 +168,7 @@ impl Client {
         let answered = async {
             self.transport.send(envelope(Some(id), method, params)).await?;
             rx.await
-                .unwrap_or_else(|_| Err(McpError::Closed("соединение закрыто".into())))
+                .unwrap_or_else(|_| Err(McpError::Closed("connection closed".into())))
         };
         let gave_up = tokio::select! {
             result = answered => {
@@ -198,7 +198,7 @@ impl Client {
     ) -> Result<T, McpError> {
         let value = self.request(method, params, deadline, cancel).await?;
         serde_json::from_value(value)
-            .map_err(|e| McpError::Protocol(format!("ответ на {method} не разобрать: {e}")))
+            .map_err(|e| McpError::Protocol(format!("cannot parse the answer to {method}: {e}")))
     }
 
     pub(crate) async fn list_tools(&self) -> Result<Vec<RemoteTool>, McpError> {
@@ -320,7 +320,7 @@ async fn read(
         let message = match next {
             Some(Incoming::Message(message)) => message,
             Some(Incoming::Closed(reason)) => break reason,
-            None => break "соединение закрыто".to_string(),
+            None => break "connection closed".to_string(),
         };
 
         let method = message.get("method").and_then(Value::as_str);
@@ -392,7 +392,7 @@ fn answer_of(message: &Value) -> Result<Value, McpError> {
             message: error
                 .get("message")
                 .and_then(Value::as_str)
-                .unwrap_or("ошибка без текста")
+                .unwrap_or("error without text")
                 .to_string(),
         });
     }

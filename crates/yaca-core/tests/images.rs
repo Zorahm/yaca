@@ -104,11 +104,11 @@ async fn an_attached_image_is_shown_and_not_just_named() {
     picture_in(&dir, "shot.png", 64, 48);
     dir.write("notes.md", "# notes\n");
 
-    let provider = Arc::new(MockProvider::text("вижу"));
+    let provider = Arc::new(MockProvider::text("I see"));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    send(&handle, "что здесь?", &["notes.md", "shot.png"]).await;
+    send(&handle, "what is here?", &["notes.md", "shot.png"]).await;
     until(&mut rx, is_turn_over).await;
 
     let message = &sent(&provider, 0)[0];
@@ -116,8 +116,8 @@ async fn an_attached_image_is_shown_and_not_just_named() {
     assert_eq!(shape(message), vec!["text", "text", "image"]);
     let said = texts(message);
     assert!(said[0].contains("- notes.md\n"), "{}", said[0]);
-    assert!(said[0].contains("- shot.png (изображение"), "{}", said[0]);
-    assert!(said[0].ends_with("что здесь?"), "{}", said[0]);
+    assert!(said[0].contains("- shot.png (image"), "{}", said[0]);
+    assert!(said[0].ends_with("what is here?"), "{}", said[0]);
     assert_eq!(said[1], "Image: shot.png");
     assert!(matches!(
         &message.content[2],
@@ -133,12 +133,12 @@ async fn an_image_may_be_attached_from_outside_the_project() {
     std::fs::write(&shot, png(32, 32)).unwrap();
     let text = elsewhere.write("secrets.env", "KEY=1\n");
 
-    let provider = Arc::new(MockProvider::text("вижу"));
+    let provider = Arc::new(MockProvider::text("I see"));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
     let paths = [shot.to_str().unwrap(), text.to_str().unwrap()];
-    send(&handle, "посмотри", &paths).await;
+    send(&handle, "look", &paths).await;
     until(&mut rx, is_turn_over).await;
 
     let message = &sent(&provider, 0)[0];
@@ -146,7 +146,7 @@ async fn an_image_may_be_attached_from_outside_the_project() {
     assert_eq!(images(std::slice::from_ref(message)), 1);
     // That is for images only: the project boundary (§8) holds for the rest.
     let said = texts(message)[0];
-    assert!(said.contains("secrets.env (не найден)"), "{said}");
+    assert!(said.contains("secrets.env (not found)"), "{said}");
     assert!(!said.contains("KEY=1"));
 }
 
@@ -155,11 +155,11 @@ async fn a_file_that_only_claims_to_be_an_image_is_not_sent_as_one() {
     let dir = TempProject::new();
     dir.write("fake.png", "<html>not a picture</html>");
 
-    let provider = Arc::new(MockProvider::text("ок"));
+    let provider = Arc::new(MockProvider::text("ok"));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    send(&handle, "вот", &["fake.png"]).await;
+    send(&handle, "here", &["fake.png"]).await;
     until(&mut rx, is_turn_over).await;
 
     // An image block the provider cannot decode is a 400 on this request and
@@ -178,12 +178,12 @@ async fn an_image_the_agent_reads_follows_the_results_of_the_batch() {
             ("i1", "ReadImage", json!({ "path": "shot.png" })),
             ("r1", "Read", json!({ "path": "a.rs" })),
         ])),
-        Turn::Events(script_text("посмотрел")),
+        Turn::Events(script_text("looked")),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "посмотри на скриншот").await;
+    ask(&handle, "look at the screenshot").await;
     let seen = until(&mut rx, is_turn_over).await;
 
     let results = sent(&provider, 1).pop().unwrap();
@@ -220,12 +220,12 @@ async fn a_model_said_to_be_blind_gets_a_note_instead_of_the_image() {
             "ReadImage",
             json!({ "path": "shot.png" }),
         )),
-        Turn::Events(script_text("не вижу")),
+        Turn::Events(script_text("I do not see it")),
     ]));
     let handle = session_on(&dir, provider.clone(), false);
     let mut rx = handle.subscribe();
 
-    send(&handle, "что здесь?", &["shot.png"]).await;
+    send(&handle, "what is here?", &["shot.png"]).await;
     until(&mut rx, is_turn_over).await;
 
     // Never sent, so never refused: the note stands where the image was.
@@ -259,15 +259,15 @@ async fn a_model_that_refuses_an_image_is_asked_again_without_it() {
 
     let provider = Arc::new(MockProvider::new(vec![
         refusal("image input is not supported by this model"),
-        Turn::Events(script_text("картинку не вижу")),
-        Turn::Events(script_text("по-прежнему")),
+        Turn::Events(script_text("I do not see the picture")),
+        Turn::Events(script_text("still the same")),
     ]));
     // Nothing was said about vision, which is the usual case for a local
     // server: the model is taken to see until it shows otherwise.
     let handle = session_on(&dir, provider.clone(), true);
     let mut rx = handle.subscribe();
 
-    send(&handle, "что здесь?", &["shot.png"]).await;
+    send(&handle, "what is here?", &["shot.png"]).await;
     let seen = until(&mut rx, is_turn_over).await;
 
     // The conversation goes on: an image in the history would otherwise be
@@ -277,7 +277,7 @@ async fn a_model_that_refuses_an_image_is_asked_again_without_it() {
     assert_eq!(images(&sent(&provider, 1)), 0);
 
     // Once is enough to know: the next message does not try the image again.
-    ask(&handle, "а так?").await;
+    ask(&handle, "and like this?").await;
     until(&mut rx, is_turn_over).await;
     assert_eq!(provider.seen.lock().unwrap().len(), 3);
     assert_eq!(images(&sent(&provider, 2)), 0);
@@ -291,12 +291,12 @@ async fn a_request_refused_either_way_fails_with_the_first_answer() {
     let provider = Arc::new(MockProvider::new(vec![
         refusal("messages: roles must alternate"),
         refusal("the same, without images"),
-        Turn::Events(script_text("теперь вижу")),
+        Turn::Events(script_text("now I see it")),
     ]));
     let handle = session_on(&dir, provider.clone(), true);
     let mut rx = handle.subscribe();
 
-    send(&handle, "что здесь?", &["shot.png"]).await;
+    send(&handle, "what is here?", &["shot.png"]).await;
     let seen = until(&mut rx, is_turn_over).await;
 
     // The images were not why, so the error is the one about the request as
@@ -307,7 +307,7 @@ async fn a_request_refused_either_way_fails_with_the_first_answer() {
     )));
 
     // And the model is not written off as blind for it.
-    ask(&handle, "ещё раз").await;
+    ask(&handle, "once more").await;
     until(&mut rx, is_turn_over).await;
     assert_eq!(images(&sent(&provider, 2)), 1);
 }

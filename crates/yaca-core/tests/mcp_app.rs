@@ -115,7 +115,7 @@ async fn an_application_server_is_a_server_like_any_other() {
         Turn::Events(calls(&[(
             "t1",
             "mcp__app__echo",
-            json!({ "text": "привет", "description": "Эхо" }),
+            json!({ "text": "hello", "description": "Echo" }),
         )])),
         Turn::Events(script_text("Done.")),
     ]));
@@ -136,7 +136,7 @@ async fn an_application_server_is_a_server_like_any_other() {
     let events = until_within(&mut rx, ROPE, is_turn_over).await;
     let kinds: Vec<_> = events.iter().map(|e| e.kind()).collect();
     assert!(!kinds.contains(&"permissionRequested"), "{kinds:?}");
-    assert_eq!(tool_result_of(&provider, "t1"), ("привет".to_string(), false));
+    assert_eq!(tool_result_of(&provider, "t1"), ("hello".to_string(), false));
     let system = provider.seen.lock().unwrap()[0].system.clone();
     assert!(system.contains("Use echo to hear a text back."), "{system}");
     assert_eq!(server.opened.load(Ordering::SeqCst), 1);
@@ -184,7 +184,7 @@ async fn a_picture_the_server_returns_is_kept_for_the_feed() {
     let dir = TempProject::new();
     let server = Arc::new(Echo::default());
     let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(calls(&[("t1", "mcp__app__shot", json!({ "description": "Снимок" }))])),
+        Turn::Events(calls(&[("t1", "mcp__app__shot", json!({ "description": "Snapshot" }))])),
         Turn::Events(script_text("Done.")),
     ]));
     let handle = session(&dir, provider, server);

@@ -68,7 +68,7 @@ enum Cmd {
 #[derive(Parser, Debug)]
 #[command(
     name = "yaca",
-    about = "Прогнать один турн ядра Yaca и напечатать события",
+    about = "Run one turn of the Yaca core and print its events",
     args_conflicts_with_subcommands = true
 )]
 struct Args {
@@ -162,14 +162,14 @@ async fn main() -> Result<()> {
     }
     let prompt = args
         .prompt
-        .context("нечего спрашивать: задайте текст или подкоманду")?;
+        .context("nothing to ask: give a text or a subcommand")?;
 
     // `yaca -p dir sessions` parses the subcommand name as the prompt: clap
     // takes the positional once a flag has been seen. Silently sending the
     // word "sessions" to a model is a worse answer than saying so.
     if sessions::is_command_name(&prompt) {
         anyhow::bail!(
-            "`{prompt}` — это подкоманда, а флаги идут после неё: yaca {prompt} -p <проект>"
+            "`{prompt}` is a subcommand, and flags go after it: yaca {prompt} -p <project>"
         );
     }
 
@@ -229,7 +229,7 @@ async fn main() -> Result<()> {
     let allow_everything = match args.permissions.as_str() {
         "allow" => true,
         "deny" => false,
-        other => anyhow::bail!("неизвестный режим разрешений: {other}"),
+        other => anyhow::bail!("unknown permissions mode: {other}"),
     };
 
     let mut out = std::io::stdout().lock();
@@ -297,7 +297,7 @@ fn parse_mode(s: &str) -> Result<Mode> {
         "manual" => Mode::Manual,
         "auto" => Mode::Auto,
         "edits" => Mode::Edits,
-        other => anyhow::bail!("неизвестный режим: {other}"),
+        other => anyhow::bail!("unknown mode: {other}"),
     })
 }
 
@@ -308,7 +308,7 @@ fn parse_effort(s: &str) -> Result<Effort> {
         "high" => Effort::High,
         "extra" => Effort::Extra,
         "max" => Effort::Max,
-        other => anyhow::bail!("неизвестный уровень усилия: {other}"),
+        other => anyhow::bail!("unknown effort level: {other}"),
     })
 }
 
@@ -341,7 +341,7 @@ fn resolve_provider(
         .needs_key()
         .then(|| secrets::api_key(&spec.id))
         .and_then(|(key, source)| {
-            tracing::debug!(?source, provider = %spec.id, "ключ провайдера");
+            tracing::debug!(?source, provider = %spec.id, "provider key");
             key
         });
 
@@ -362,8 +362,8 @@ fn human(event: &AgentEvent) -> Option<String> {
             model,
             ..
         } => format!(
-            "\x1b[2mМаршрут: {} → {provider}/{model}\x1b[0m",
-            route.as_deref().unwrap_or("по умолчанию")
+            "\x1b[2mRoute: {} → {provider}/{model}\x1b[0m",
+            route.as_deref().unwrap_or("default")
         ),
         AgentEvent::ThinkingDelta { text, .. } => format!("\x1b[2m{text}\x1b[0m"),
         AgentEvent::ToolCallStarted {
@@ -372,25 +372,25 @@ fn human(event: &AgentEvent) -> Option<String> {
             target,
             ..
         } => {
-            let подпись = description.clone().unwrap_or_else(|| tool.clone());
-            let цель = target.as_deref().unwrap_or("");
-            format!("\n\x1b[33m● {подпись}\x1b[0m \x1b[2m{цель}\x1b[0m")
+            let label = description.clone().unwrap_or_else(|| tool.clone());
+            let target_text = target.as_deref().unwrap_or("");
+            format!("\n\x1b[33m● {label}\x1b[0m \x1b[2m{target_text}\x1b[0m")
         }
         // Tool output as it arrives — the very point of command streaming:
         // without this branch the CLI would show the agent's work after the
         // tool finished, turning a progress stream into a dump.
         AgentEvent::ToolCallProgress { chunk, .. } => format!("\x1b[2m{chunk}\x1b[0m"),
         AgentEvent::ToolCallFinished { meta, .. } => {
-            format!("\x1b[2m  {} строк · {} мс\x1b[0m", meta.lines, meta.duration_ms)
+            format!("\x1b[2m  {} lines · {} ms\x1b[0m", meta.lines, meta.duration_ms)
         }
         AgentEvent::ToolCallFailed { message, .. } => format!("\x1b[31m  ✕ {message}\x1b[0m"),
         AgentEvent::ToolCallRejected { reason, .. } => format!("\x1b[33m  ⊘ {reason}\x1b[0m"),
         AgentEvent::ToolCallDenied { reason, .. } => {
-            let why = reason.as_deref().unwrap_or("без причины");
-            format!("\x1b[31m  ⊘ Отклонено вами: {why}\x1b[0m")
+            let why = reason.as_deref().unwrap_or("no reason");
+            format!("\x1b[31m  ⊘ Denied by you: {why}\x1b[0m")
         }
         AgentEvent::PermissionRequested { request } => format!(
-            "\n\x1b[33m? {:?} · {} ({} из {})\x1b[0m\n  \x1b[2m{}\x1b[0m",
+            "\n\x1b[33m? {:?} · {} ({} of {})\x1b[0m\n  \x1b[2m{}\x1b[0m",
             request.kind, request.target, request.position, request.total, request.detail
         ),
         AgentEvent::QuestionAsked { request } => {
@@ -411,42 +411,42 @@ fn human(event: &AgentEvent) -> Option<String> {
             of,
             delay_ms,
             ..
-        } => format!("\x1b[2mПовтор через {} с · попытка {attempt} из {of}\x1b[0m", delay_ms / 1000),
-        AgentEvent::Error { code, message, .. } => format!("\x1b[31mОшибка {code}: {message}\x1b[0m"),
-        AgentEvent::PlanProposed { plan } => format!("\n--- план ---\n{plan}\n"),
+        } => format!("\x1b[2mRetry in {} s · attempt {attempt} of {of}\x1b[0m", delay_ms / 1000),
+        AgentEvent::Error { code, message, .. } => format!("\x1b[31mError {code}: {message}\x1b[0m"),
+        AgentEvent::PlanProposed { plan } => format!("\n--- plan ---\n{plan}\n"),
         AgentEvent::TextShown { path, text, .. } => format!("\n--- {path} ---\n{text}\n"),
         AgentEvent::FileChanged { fact, .. } => format!(
             "\x1b[2m  {} +{} −{}\x1b[0m",
             fact.path, fact.added, fact.removed
         ),
         AgentEvent::McpUpdated { servers } => {
-            let строки: Vec<String> = servers
+            let lines: Vec<String> = servers
                 .iter()
                 .map(|s| {
-                    let что = match s.status {
-                        McpStatus::Connecting => "подключается".to_string(),
-                        McpStatus::Ready => format!("готов · {} инстр.", s.tools.len()),
+                    let status_text = match s.status {
+                        McpStatus::Connecting => "connecting".to_string(),
+                        McpStatus::Ready => format!("ready · {} tools", s.tools.len()),
                         McpStatus::Failed => {
-                            format!("сбой: {}", s.reason.as_deref().unwrap_or("причина неизвестна"))
+                            format!("failed: {}", s.reason.as_deref().unwrap_or("reason unknown"))
                         }
-                        McpStatus::Disabled => "выключен".to_string(),
+                        McpStatus::Disabled => "disabled".to_string(),
                         McpStatus::NeedsApproval => {
-                            format!("ждёт одобрения: yaca mcp --approve {}", s.name)
+                            format!("waiting for approval: yaca mcp --approve {}", s.name)
                         }
-                        McpStatus::NeedsLogin => format!("нужен вход: yaca mcp --login {}", s.name),
-                        McpStatus::LoggingIn => "идёт вход".to_string(),
+                        McpStatus::NeedsLogin => format!("login needed: yaca mcp --login {}", s.name),
+                        McpStatus::LoggingIn => "logging in".to_string(),
                     };
-                    format!("  {} · {что}", s.name)
+                    format!("  {} · {status_text}", s.name)
                 })
                 .collect();
-            format!("\n\x1b[2mMCP:\n{}\x1b[0m", строки.join("\n"))
+            format!("\n\x1b[2mMCP:\n{}\x1b[0m", lines.join("\n"))
         }
         AgentEvent::ProcessesUpdated { processes } => {
-            let строки: Vec<String> = processes
+            let lines: Vec<String> = processes
                 .iter()
-                .map(|p| format!("  {} {} · {}", p.id, p.command, состояние(&p.state)))
+                .map(|p| format!("  {} {} · {}", p.id, p.command, state_text(&p.state)))
                 .collect();
-            format!("\n\x1b[2mПроцессы:\n{}\x1b[0m", строки.join("\n"))
+            format!("\n\x1b[2mProcesses:\n{}\x1b[0m", lines.join("\n"))
         }
         // §5.8. The id is printed because the CLI has no panel to click: it is
         // the only way to name a point when driving the core by hand.
@@ -461,11 +461,11 @@ fn human(event: &AgentEvent) -> Option<String> {
         // §5.11. The summary is printed whole: this is the one place it can be
         // read before the next turn, and reading it is the point.
         AgentEvent::ContextCompacted { summary, freed } => format!(
-            "\n\x1b[2m── история сжата · освобождено ~{}k токенов ──\x1b[0m\n{summary}\n",
+            "\n\x1b[2m── history compacted · freed ~{}k tokens ──\x1b[0m\n{summary}\n",
             freed / 1000
         ),
         AgentEvent::SummaryEdited { summary } => {
-            format!("\n\x1b[2m── сводка переписана ──\x1b[0m\n{summary}\n")
+            format!("\n\x1b[2m── summary rewritten ──\x1b[0m\n{summary}\n")
         }
         AgentEvent::ProcessOutputReset { text, .. } => format!("\x1b[2m{text}\x1b[0m"),
         AgentEvent::ProcessOutput { chunk, .. } => format!("\x1b[2m{chunk}\x1b[0m"),
@@ -475,16 +475,16 @@ fn human(event: &AgentEvent) -> Option<String> {
             usage.context_max / 1000,
             usage.cost_usd
         ),
-        AgentEvent::TurnCancelled { .. } => "\n\x1b[2mОстановлено\x1b[0m".into(),
+        AgentEvent::TurnCancelled { .. } => "\n\x1b[2mStopped\x1b[0m".into(),
         _ => return None,
     })
 }
 
-fn состояние(state: &ProcessState) -> String {
+fn state_text(state: &ProcessState) -> String {
     match state {
-        ProcessState::Running => "работает".into(),
-        ProcessState::Exited { code: Some(code) } => format!("код {code}"),
-        ProcessState::Exited { code: None } => "убит сигналом".into(),
-        ProcessState::Stopped => "остановлен".into(),
+        ProcessState::Running => "running".into(),
+        ProcessState::Exited { code: Some(code) } => format!("code {code}"),
+        ProcessState::Exited { code: None } => "killed by signal".into(),
+        ProcessState::Stopped => "stopped".into(),
     }
 }

@@ -225,7 +225,7 @@ fn output(server: &str, result: CallResult, vision: bool, home: &Path) -> Result
     let (text, truncated) = capped(text, RESULT_MAX_BYTES);
     if result.is_error {
         let detail = if text.is_empty() { "The server gave no details.".to_string() } else { text };
-        return Err(ToolError::failed_with(format!("{server}: инструмент вернул ошибку"), detail));
+        return Err(ToolError::failed_with(format!("{server}: the tool returned an error"), detail));
     }
 
     let mut out = ToolOutput::new(text).truncated(truncated);

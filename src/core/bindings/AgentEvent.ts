@@ -29,24 +29,24 @@ import type { UsageSnapshot } from "./UsageSnapshot";
 
 export type AgentEvent = { "type": "userMessage", turnId: TurnId, text: string, 
 /**
- * Файлы, приложенные через `@` (§7.2) — чипы над текстом.
+ * Files attached via `@` (§7.2) — chips above the text.
  */
 attachments: Array<string>, } | { "type": "turnStarted", turnId: TurnId, at: TsMillis, } | { "type": "textDelta", turnId: TurnId, blockId: BlockId, text: string, } | { "type": "thinkingDelta", turnId: TurnId, blockId: BlockId, text: string, } | { "type": "toolCallStarted", turnId: TurnId, callId: CallId, 
 /**
- * Имя тула. В ленте не показывается (§16.6), нужно для иконки и отладки.
+ * Tool name. Not shown in the feed (§16.6); needed for the icon and debugging.
  */
 tool: string, 
 /**
- * Подпись, которую написала модель (§5.4.1). `None` — тул из тех,
- * что подписывает интерфейс, либо модель не заполнила поле.
+ * The label the model wrote (§5.4.1). `None` — a tool the interface labels
+ * itself, or a field the model left empty.
  */
 description: string | null, 
 /**
- * Первая строка раскрытой строки (§5.5.1): полный путь или полная команда.
+ * First line of the expanded row (§5.5.1): the full path or the full command.
  */
 target: string | null, 
 /**
- * Аргументы вызова. Нужны для §5.7 (подробность запроса разрешения).
+ * Call arguments. Needed for §5.7 (the detail of the permission request).
  */
 input: unknown, 
 /**
@@ -56,11 +56,12 @@ input: unknown,
  */
 parent: CallId | null, } | { "type": "toolCallProgress", callId: CallId, chunk: string, } | { "type": "toolCallFinished", callId: CallId, meta: ToolMeta, } | { "type": "toolCallFailed", callId: CallId, message: string, } | { "type": "toolCallRejected", callId: CallId, reason: string, } | { "type": "toolCallDenied", callId: CallId, reason: string | null, 
 /**
- * Вызов уже работал, и человек его остановил, — а не отказал в
- * разрешении до запуска. Род исхода тот же, решение человека, но
- * предложение другое: «Остановлено вами» против «Отклонено вами».
- * Поля в §15 нет; лента без него написала бы про остановленную
- * команду, что человек её отклонил, чего не было.
+ * The call was already running and the human stopped it, rather than
+ * refusing the permission before it started. The kind of outcome is the
+ * same, a human decision, but the wording differs: "Stopped by you"
+ * against "Rejected by you". There is no field for it in §15; without it
+ * the feed would say the human rejected a stopped command, which never
+ * happened.
  */
 stopped: boolean, } | { "type": "permissionRequested", request: PermissionRequest, } | { "type": "permissionResolved", requestId: RequestId, } | { "type": "questionAsked", request: QuestionRequest, } | { "type": "questionResolved", requestId: RequestId, reply: QuestionReply | null, } | { "type": "elicitationRequested", request: ElicitationRequest, } | { "type": "elicitationResolved", requestId: RequestId, reply: ElicitationReply | null, } | { "type": "todosUpdated", items: Array<TodoItem>, } | { "type": "titleSet", title: string, } | { "type": "textShown", 
 /**
@@ -86,8 +87,8 @@ lines: number,
  */
 total: number, text: string, } | { "type": "planProposed", plan: string, } | { "type": "fileChanged", callId: CallId, fact: FileFact, diff: FileDiff, } | { "type": "fileViewLoaded", path: string, view: FileView | null, } | { "type": "queueUpdated", queued: Array<QueuedMessage>, } | { "type": "filesFound", query: string, paths: Array<string>, } | { "type": "processesUpdated", processes: Array<ProcessSummary>, } | { "type": "mcpUpdated", servers: Array<McpServerSummary>, } | { "type": "lspUpdated", servers: Array<LspServerSummary>, } | { "type": "processOutputReset", id: ProcessId, text: string, 
 /**
- * Сколько строк вытеснено из буфера. Панель говорит об этом прямо:
- * молча потерянный вывод неотличим от вывода, которого не было.
+ * How many lines were pushed out of the buffer. The panel says so outright:
+ * output lost in silence cannot be told apart from output that never existed.
  */
 dropped: number, } | { "type": "processOutput", id: ProcessId, chunk: string, } | { "type": "checkpointCreated", checkpoint: CheckpointSummary, } | { "type": "checkpointsUpdated", checkpoints: Array<CheckpointSummary>, } | { "type": "checkpointPreviewed", id: CheckpointId, files: Array<CheckpointChange>, } | { "type": "checkpointRestored", id: CheckpointId, at: TsMillis, files: number, } | { "type": "contextCompacted", summary: string, freed: number, } | { "type": "summaryEdited", summary: string, } | { "type": "subagentUsage", callId: CallId, tokens: TokenCounts, } | { "type": "routeDecided", route: string | null, provider: string, model: string, matched: Array<string>, } | { "type": "usageUpdated", usage: UsageSnapshot, } | { "type": "turnFinished", turnId: TurnId, stopReason: StopReason, 
 /**

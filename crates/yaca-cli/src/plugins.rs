@@ -52,7 +52,7 @@ pub fn run(action: Option<Action>, enable: Option<String>, disable: Option<Strin
         }
         Some(Action::Install { target }) => {
             let summary = install(&installer, &target)?;
-            println!("Установлен и включён:");
+            println!("Installed and enabled:");
             print_plugin(&summary);
             return Ok(());
         }
@@ -62,12 +62,12 @@ pub fn run(action: Option<Action>, enable: Option<String>, disable: Option<Strin
                 None => installer.update_all(),
             };
             if outcomes.is_empty() {
-                println!("Через Yaca ничего не установлено.");
+                println!("Nothing was installed through Yaca.");
             }
             for (id, outcome) in outcomes {
                 match outcome {
                     Ok(o) if o.changed => println!("{id}: {} → {}", o.from, o.to),
-                    Ok(_) => println!("{id}: без изменений"),
+                    Ok(_) => println!("{id}: no changes"),
                     Err(e) => println!("{id}: {e}"),
                 }
             }
@@ -75,7 +75,7 @@ pub fn run(action: Option<Action>, enable: Option<String>, disable: Option<Strin
         }
         Some(Action::Uninstall { id }) => {
             installer.uninstall(&id)?;
-            println!("Удалён {id}. Его данные остались в plugin-data.");
+            println!("Removed {id}. Its data was kept in plugin-data.");
             return Ok(());
         }
     }
@@ -84,7 +84,7 @@ pub fn run(action: Option<Action>, enable: Option<String>, disable: Option<Strin
     for (id, on) in [(enable, true), (disable, false)] {
         if let Some(id) = id {
             if sources.load().get(&id).is_none() {
-                bail!("нет плагина {id}; список — yaca plugins");
+                bail!("no plugin {id}; list them with yaca plugins");
             }
             plugin::set_enabled(&config_dir, &id, on)?;
         }
@@ -92,7 +92,7 @@ pub fn run(action: Option<Action>, enable: Option<String>, disable: Option<Strin
 
     let report = sources.load().report();
     if report.plugins.is_empty() {
-        println!("Плагинов нет.");
+        println!("No plugins.");
     }
     for p in &report.plugins {
         print_plugin(p);
@@ -100,7 +100,7 @@ pub fn run(action: Option<Action>, enable: Option<String>, disable: Option<Strin
     if !report.diagnostics.is_empty() {
         println!();
         for d in &report.diagnostics {
-            println!("не загружен: {} — {}", d.path, d.message);
+            println!("not loaded: {} — {}", d.path, d.message);
         }
     }
     Ok(())
@@ -125,25 +125,25 @@ fn market(installer: &Installer, action: Market) -> Result<()> {
         Market::List => {
             for m in installer.marketplaces() {
                 let origin = match m.origin {
-                    MarketplaceOrigin::Builtin => "встроенный",
-                    MarketplaceOrigin::ClaudeCode => "из Claude Code",
-                    MarketplaceOrigin::Own => "ваш",
+                    MarketplaceOrigin::Builtin => "built-in",
+                    MarketplaceOrigin::ClaudeCode => "from Claude Code",
+                    MarketplaceOrigin::Own => "yours",
                 };
                 let state = match (m.fetched, m.plugins, &m.error) {
-                    (_, _, Some(e)) => format!("ошибка: {e}"),
-                    (true, Some(n), _) => format!("плагинов: {n}"),
-                    _ => "ещё не загружен".to_string(),
+                    (_, _, Some(e)) => format!("error: {e}"),
+                    (true, Some(n), _) => format!("plugins: {n}"),
+                    _ => "not loaded yet".to_string(),
                 };
                 println!("{} ({origin}) — {}, {state}", m.name, m.source);
             }
         }
         Market::Add { source } => {
             let m = installer.add_marketplace(&source)?;
-            println!("Добавлен {}: плагинов {}", m.name, m.plugins.unwrap_or(0));
+            println!("Added {}: plugins {}", m.name, m.plugins.unwrap_or(0));
         }
         Market::Remove { name } => {
             installer.remove_marketplace(&name)?;
-            println!("Убран {name}.");
+            println!("Removed {name}.");
         }
         Market::Update { name } => {
             let names: Vec<String> = match name {
@@ -152,7 +152,7 @@ fn market(installer: &Installer, action: Market) -> Result<()> {
             };
             for name in names {
                 match installer.refresh_marketplace(&name) {
-                    Ok(m) => println!("{}: плагинов {}", m.name, m.plugins.unwrap_or(0)),
+                    Ok(m) => println!("{}: plugins {}", m.name, m.plugins.unwrap_or(0)),
                     Err(e) => println!("{name}: {e}"),
                 }
             }
@@ -170,7 +170,7 @@ fn print_catalog(entries: &[CatalogEntry], query: Option<&str>) {
     };
     for e in entries.iter().filter(|e| matches(e)) {
         let state = match (&e.installed, &e.unavailable) {
-            (Some(v), _) => format!(" [установлен {v}]"),
+            (Some(v), _) => format!(" [installed {v}]"),
             (None, Some(why)) => format!(" [{why}]"),
             _ => String::new(),
         };
@@ -182,14 +182,14 @@ fn print_catalog(entries: &[CatalogEntry], query: Option<&str>) {
 }
 
 fn print_plugin(p: &PluginSummary) {
-    let state = if p.enabled { "вкл" } else { "выкл" };
+    let state = if p.enabled { "on" } else { "off" };
     let origin = match p.origin {
-        PluginOrigin::Yaca => "папка plugins",
-        PluginOrigin::Marketplace => "установлен Yaca",
+        PluginOrigin::Yaca => "plugins folder",
+        PluginOrigin::Marketplace => "installed by Yaca",
         PluginOrigin::ClaudeCode => "Claude Code",
     };
     let format = match p.format {
-        PluginFormat::Claude => "формат Claude",
+        PluginFormat::Claude => "Claude format",
         PluginFormat::AgentPlugins => "Agent Plugins",
     };
     let version = p.version.as_deref().map(|v| format!(" {v}")).unwrap_or_default();
@@ -198,11 +198,11 @@ fn print_plugin(p: &PluginSummary) {
         println!("  {d}");
     }
     println!(
-        "  навыков {}, команд {}, серверов MCP {}, хуков {}",
+        "  skills {}, commands {}, MCP servers {}, hooks {}",
         p.skills, p.commands, p.mcp_servers, p.hooks
     );
     println!("  {}", p.path);
     for note in &p.notes {
-        println!("  внимание: {note}");
+        println!("  warning: {note}");
     }
 }

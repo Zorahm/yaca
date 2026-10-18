@@ -56,7 +56,7 @@ pub fn require() -> Result<ModelInfo, String> {
         Status::Ready(model) => Ok(model),
         Status::Broken(error) => Err(error),
         Status::Absent => Err(format!(
-            "маршрутизатор выбран, но {} не найден: создайте его в настройках",
+            "the router is selected, but {} was not found: create it in the settings",
             file::FILE
         )),
     }
@@ -76,7 +76,7 @@ pub fn routing_text() -> Result<Option<String>, String> {
     match std::fs::read_to_string(&path) {
         Ok(text) => Ok(Some(text)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(format!("не прочитать {}: {e}", path.display())),
+        Err(e) => Err(format!("could not read {}: {e}", path.display())),
     }
 }
 
@@ -105,7 +105,7 @@ pub fn remove_routing(app: tauri::AppHandle) -> Result<(), String> {
     match std::fs::remove_file(&path) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(format!("не удалить {}: {e}", path.display())),
+        Err(e) => return Err(format!("could not delete {}: {e}", path.display())),
     }
     announce(&app);
     Ok(())

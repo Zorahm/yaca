@@ -104,8 +104,8 @@ impl McpServerSettings {
         let command = self.command.as_deref().map(str::trim).unwrap_or("");
         let url = self.url.as_deref().map(str::trim).unwrap_or("");
         match (command.is_empty(), url.is_empty()) {
-            (true, true) => return Err("не задано ни command, ни url".into()),
-            (false, false) => return Err("заданы и command, и url: нужно что-то одно".into()),
+            (true, true) => return Err("neither command nor url is set".into()),
+            (false, false) => return Err("both command and url are set: exactly one is needed".into()),
             _ => {}
         }
         match self.kind.as_deref() {
@@ -117,15 +117,15 @@ impl McpServerSettings {
             // gives a 405 nobody can read anything from.
             Some("sse") => {
                 return Err(
-                    "транспорт «sse» устарел и не поддерживается: нужен сервер со Streamable HTTP"
+                    "the «sse» transport is outdated and not supported: a server with Streamable HTTP is needed"
                         .into(),
                 )
             }
-            Some(other) => return Err(format!("type «{other}» не подходит к этому серверу")),
+            Some(other) => return Err(format!("type «{other}» does not fit this server")),
         }
         let web = url.starts_with("http://") || url.starts_with("https://");
         if !url.is_empty() && !web {
-            return Err(format!("url должен начинаться с http:// или https://, а не «{url}»"));
+            return Err(format!("url must start with http:// or https://, not «{url}»"));
         }
         check_range("startupTimeoutSecs", self.startup_timeout_secs, Self::MAX_STARTUP_SECS)?;
         check_range("toolTimeoutSecs", self.tool_timeout_secs, Self::MAX_TOOL_SECS)
@@ -162,7 +162,7 @@ impl McpServerSettings {
 fn check_range(key: &str, value: Option<u64>, max: u64) -> Result<(), String> {
     match value {
         Some(secs) if !(1..=max).contains(&secs) => {
-            Err(format!("{key} должен быть от 1 до {max} с, а не {secs}"))
+            Err(format!("{key} must be from 1 to {max} s, not {secs}"))
         }
         _ => Ok(()),
     }
@@ -210,13 +210,13 @@ fn read(path: &Path) -> Result<BTreeMap<String, McpServerSettings>, CoreError> {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
         Err(e) => {
-            return Err(CoreError::Config(format!("не прочитать {}: {e}", path.display())))
+            return Err(CoreError::Config(format!("cannot read {}: {e}", path.display())))
         }
     };
     // Stops the session, like a broken `settings.json`: skipping the file
     // would leave a human waiting for tools that were quietly dropped.
     let file: McpFile = serde_json::from_str(&text).map_err(|e| {
-        CoreError::Config(format!("{} разобран не до конца: {e}", path.display()))
+        CoreError::Config(format!("{} could not be parsed: {e}", path.display()))
     })?;
     Ok(file.servers)
 }
@@ -233,14 +233,14 @@ pub fn save_global(
     servers: &BTreeMap<String, McpServerSettings>,
 ) -> Result<(), CoreError> {
     std::fs::create_dir_all(config_dir)
-        .map_err(|e| CoreError::Config(format!("не создать {}: {e}", config_dir.display())))?;
+        .map_err(|e| CoreError::Config(format!("cannot create {}: {e}", config_dir.display())))?;
     let file = McpFile {
         servers: servers.clone(),
     };
     let text = serde_json::to_string_pretty(&file)
-        .map_err(|e| CoreError::Config(format!("не собрать список серверов: {e}")))?;
+        .map_err(|e| CoreError::Config(format!("cannot assemble the server list: {e}")))?;
     std::fs::write(config_dir.join(GLOBAL_FILE), text)
-        .map_err(|e| CoreError::Config(format!("не записать список серверов: {e}")))
+        .map_err(|e| CoreError::Config(format!("cannot write the server list: {e}")))
 }
 
 /// The servers of `<project>/.mcp.json`.
@@ -478,7 +478,7 @@ fn expand_with(text: &str, var: &dyn Fn(&str) -> Lookup) -> Result<String, Strin
             Lookup::Literal => out.push_str(&rest[start..start + 2 + end + 1]),
             _ => match fallback {
                 Some(fallback) => out.push_str(fallback),
-                None => return Err(format!("переменная окружения {name} не задана")),
+                None => return Err(format!("environment variable {name} is not set")),
             },
         }
         rest = &after[end + 1..];

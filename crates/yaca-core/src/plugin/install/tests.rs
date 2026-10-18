@@ -268,7 +268,7 @@ fn a_package_the_loader_refuses_is_not_installed_and_leaves_nothing() {
     i.add_marketplace(&file_url(&path)).unwrap();
 
     let e = i.install("broken@market").unwrap_err();
-    assert!(e.to_string().contains("не принят"), "{e}");
+    assert!(e.to_string().contains("not accepted"), "{e}");
     assert!(!config.path().join("plugin-cache/market").exists());
     assert!(installed(config.path()).is_empty());
     no_leftovers(&config);
@@ -357,7 +357,7 @@ fn yacas_install_comes_before_the_same_plugin_installed_by_claude_code() {
     let catalog = PluginSources::new(config.path(), Some(home.path().to_path_buf())).load();
     let p = catalog.get("p@market").unwrap();
     assert_eq!(p.origin, PluginOrigin::Marketplace);
-    assert!(catalog.diagnostics().iter().any(|d| d.message.contains("уже загружен")));
+    assert!(catalog.diagnostics().iter().any(|d| d.message.contains("already loaded")));
 }
 
 #[test]

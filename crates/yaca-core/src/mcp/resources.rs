@@ -149,7 +149,7 @@ impl Tool for ReadResource {
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let (Some(server), Some(uri)) = (input["server"].as_str(), input["uri"].as_str()) else {
             return Err(ToolError::failed_with(
-                "не заданы server и uri",
+                "server and uri are not set",
                 "Both `server` and `uri` are required: take them from ListMcpResources.",
             ));
         };

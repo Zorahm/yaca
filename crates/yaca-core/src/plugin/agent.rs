@@ -41,41 +41,41 @@ const TOP_LEVEL: [&str; 10] = [
 /// Loads the plugin at `root` (canonical), or says why it is rejected.
 pub fn load(root: &Path) -> Result<Contents, String> {
     let manifest = contained(root, &root.join(MANIFEST))
-        .ok_or_else(|| "plugin.json ведёт за пределы плагина".to_string())?;
-    let text = std::fs::read_to_string(&manifest).map_err(|e| format!("plugin.json не читается: {e}"))?;
-    let value: Value = serde_json::from_str(&text).map_err(|e| format!("plugin.json — не JSON: {e}"))?;
+        .ok_or_else(|| "plugin.json points outside the plugin".to_string())?;
+    let text = std::fs::read_to_string(&manifest).map_err(|e| format!("cannot read plugin.json: {e}"))?;
+    let value: Value = serde_json::from_str(&text).map_err(|e| format!("plugin.json is not JSON: {e}"))?;
     let Value::Object(fields) = value else {
-        return Err("plugin.json — не объект".into());
+        return Err("plugin.json is not an object".into());
     };
 
     let mut notes = Vec::new();
     match fields.get("$schema") {
         Some(Value::String(s)) if s == PLUGIN_SCHEMA => {}
-        Some(Value::String(s)) => return Err(format!("неподдерживаемая версия Agent Plugins: {s}")),
-        _ => return Err("в plugin.json нет $schema".into()),
+        Some(Value::String(s)) => return Err(format!("unsupported Agent Plugins version: {s}")),
+        _ => return Err("plugin.json has no $schema".into()),
     }
     let name = match fields.get("name") {
         Some(Value::String(n)) if is_plugin_name(n) => n.clone(),
-        Some(Value::String(n)) => return Err(format!("имя «{n}» не по правилам Agent Plugins")),
-        _ => return Err("в plugin.json нет name".into()),
+        Some(Value::String(n)) => return Err(format!("name «{n}» does not follow the Agent Plugins rules")),
+        _ => return Err("plugin.json has no name".into()),
     };
     for key in ["version", "description", "homepage", "repository", "license"] {
         if fields.get(key).is_some_and(|v| !v.is_string()) {
-            return Err(format!("поле {key} должно быть строкой"));
+            return Err(format!("field {key} must be a string"));
         }
     }
     check_author(fields.get("author"))?;
     if let Some(keywords) = fields.get("keywords") {
         let ok = keywords.as_array().is_some_and(|a| a.iter().all(Value::is_string));
         if !ok {
-            return Err("keywords должно быть списком строк".into());
+            return Err("keywords must be a list of strings".into());
         }
     }
     if fields.get("extensions").is_some_and(|v| !v.is_object()) {
-        notes.push("extensions — не объект и пропущено".to_string());
+        notes.push("extensions is not an object and was skipped".to_string());
     }
     for key in fields.keys().filter(|k| !TOP_LEVEL.contains(&k.as_str())) {
-        notes.push(format!("неизвестное поле plugin.json «{key}» пропущено"));
+        notes.push(format!("unknown plugin.json field «{key}» was skipped"));
     }
 
     let mut contents = Contents::named(name, string(&fields, "version"), string(&fields, "description"));
@@ -85,8 +85,8 @@ pub fn load(root: &Path) -> Result<Contents, String> {
     if skills.exists() {
         match contained(root, &skills) {
             Some(dir) if dir.is_dir() => contents.skill_dirs.push(dir),
-            Some(_) => contents.notes.push("skills — не каталог, навыки не загружены".into()),
-            None => contents.notes.push("skills ведёт за пределы плагина, навыки не загружены".into()),
+            Some(_) => contents.notes.push("skills is not a directory, its skills were not loaded".into()),
+            None => contents.notes.push("skills points outside the plugin, its skills were not loaded".into()),
         }
     }
 
@@ -97,7 +97,7 @@ pub fn load(root: &Path) -> Result<Contents, String> {
                 contents.mcp_servers = servers;
                 contents.notes.extend(notes);
             }
-            Err(why) => contents.notes.push(format!("mcp.json: {why}; серверы плагина выключены")),
+            Err(why) => contents.notes.push(format!("mcp.json: {why}; the plugin's servers are turned off")),
         }
     }
     Ok(contents)
@@ -119,11 +119,11 @@ pub fn is_plugin_name(name: &str) -> bool {
 fn check_author(author: Option<&Value>) -> Result<(), String> {
     let Some(author) = author else { return Ok(()) };
     let Value::Object(fields) = author else {
-        return Err("author должно быть объектом".into());
+        return Err("author must be an object".into());
     };
     for (key, value) in fields {
         if !["name", "email", "url"].contains(&key.as_str()) || !value.is_string() {
-            return Err(format!("author.{key} не допускается схемой"));
+            return Err(format!("author.{key} is not allowed by the schema"));
         }
     }
     Ok(())
@@ -137,21 +137,21 @@ type Servers = BTreeMap<String, McpServerSettings>;
 
 /// §7.2. An error disables MCP for the plugin; a bad entry skips that server.
 fn load_mcp(root: &Path, path: &Path) -> Result<(Servers, Vec<String>), String> {
-    let path = contained(root, path).ok_or("файл ведёт за пределы плагина")?;
-    let text = std::fs::read_to_string(&path).map_err(|e| format!("не читается: {e}"))?;
-    let Value::Object(fields) = serde_json::from_str::<Value>(&text).map_err(|e| format!("не JSON: {e}"))? else {
-        return Err("не объект".into());
+    let path = contained(root, path).ok_or("file points outside the plugin")?;
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("cannot be read: {e}"))?;
+    let Value::Object(fields) = serde_json::from_str::<Value>(&text).map_err(|e| format!("not JSON: {e}"))? else {
+        return Err("not an object".into());
     };
     match fields.get("$schema") {
         Some(Value::String(s)) if s == MCP_SCHEMA => {}
-        Some(Value::String(s)) => return Err(format!("версия {s} не совпадает с plugin.json")),
-        _ => return Err("нет $schema".into()),
+        Some(Value::String(s)) => return Err(format!("version {s} does not match plugin.json")),
+        _ => return Err("no $schema".into()),
     }
     if let Some(key) = fields.keys().find(|k| *k != "$schema" && *k != "mcpServers") {
-        return Err(format!("лишнее поле «{key}»"));
+        return Err(format!("extra field «{key}»"));
     }
     let Some(Value::Object(servers)) = fields.get("mcpServers") else {
-        return Err("mcpServers должно быть объектом".into());
+        return Err("mcpServers must be an object".into());
     };
 
     let mut out = BTreeMap::new();
@@ -161,8 +161,8 @@ fn load_mcp(root: &Path, path: &Path) -> Result<(Servers, Vec<String>), String> 
             Ok(Some(settings)) => {
                 out.insert(name.clone(), settings);
             }
-            Ok(None) => notes.push(format!("сервер «{name}»: транспорт sse в Yaca не поддерживается")),
-            Err(why) => notes.push(format!("сервер «{name}» пропущен: {why}")),
+            Ok(None) => notes.push(format!("server «{name}»: the sse transport is not supported in Yaca")),
+            Err(why) => notes.push(format!("server «{name}» was skipped: {why}")),
         }
     }
     Ok((out, notes))
@@ -174,27 +174,27 @@ fn load_mcp(root: &Path, path: &Path) -> Result<(Servers, Vec<String>), String> 
 /// (`mcp::config`), and nothing else is expanded there (§9).
 fn server(root: &Path, entry: &Value) -> Result<Option<McpServerSettings>, String> {
     let Value::Object(fields) = entry else {
-        return Err("не объект".into());
+        return Err("not an object".into());
     };
-    let kind = fields.get("type").and_then(Value::as_str).ok_or("нет type")?;
+    let kind = fields.get("type").and_then(Value::as_str).ok_or("no type")?;
     let allowed: &[&str] = match kind {
         "stdio" => &["type", "command", "args", "env", "cwd"],
         "streamable-http" | "sse" => &["type", "url", "headers"],
-        other => return Err(format!("неизвестный type «{other}»")),
+        other => return Err(format!("unknown type «{other}»")),
     };
     if let Some(key) = fields.keys().find(|k| !allowed.contains(&k.as_str())) {
-        return Err(format!("поле «{key}» не из этого транспорта"));
+        return Err(format!("field «{key}» does not belong to this transport"));
     }
     if kind == "sse" {
         return Ok(None);
     }
     if kind == "streamable-http" {
-        let url = fields.get("url").and_then(Value::as_str).ok_or("нет url")?;
+        let url = fields.get("url").and_then(Value::as_str).ok_or("no url")?;
         check_url(url)?;
         let headers = strings(fields.get("headers"), "headers")?;
         let mut seen = HashSet::new();
         if headers.keys().any(|k| !seen.insert(k.to_ascii_lowercase())) {
-            return Err("заголовок повторяется в другом регистре".into());
+            return Err("a header is repeated in a different case".into());
         }
         return Ok(Some(McpServerSettings {
             kind: Some("http".into()),
@@ -204,24 +204,24 @@ fn server(root: &Path, entry: &Value) -> Result<Option<McpServerSettings>, Strin
         }));
     }
 
-    let command = fields.get("command").and_then(Value::as_str).ok_or("нет command")?;
+    let command = fields.get("command").and_then(Value::as_str).ok_or("no command")?;
     let program = program(root, command)?;
     let args = match fields.get("args") {
         None => Vec::new(),
         Some(Value::Array(items)) => items
             .iter()
-            .map(|v| v.as_str().map(str::to_string).ok_or("args должно быть списком строк"))
+            .map(|v| v.as_str().map(str::to_string).ok_or("args must be a list of strings"))
             .collect::<Result<_, _>>()?,
-        Some(_) => return Err("args должно быть списком строк".into()),
+        Some(_) => return Err("args must be a list of strings".into()),
     };
     let env = strings(fields.get("env"), "env")?;
     if env.contains_key("PLUGIN_ROOT") || env.contains_key("PLUGIN_DATA") {
-        return Err("env не может задавать PLUGIN_ROOT и PLUGIN_DATA".into());
+        return Err("env cannot set PLUGIN_ROOT and PLUGIN_DATA".into());
     }
     let cwd = match fields.get("cwd") {
         None => None,
         Some(Value::String(raw)) => Some(cwd(root, raw)?),
-        Some(_) => return Err("cwd должно быть строкой".into()),
+        Some(_) => return Err("cwd must be a string".into()),
     };
     Ok(Some(McpServerSettings {
         kind: Some("stdio".into()),
@@ -238,9 +238,9 @@ fn strings(value: Option<&Value>, what: &str) -> Result<BTreeMap<String, String>
         None => Ok(BTreeMap::new()),
         Some(Value::Object(map)) => map
             .iter()
-            .map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string())).ok_or(format!("{what}.{k} — не строка")))
+            .map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string())).ok_or(format!("{what}.{k} is not a string")))
             .collect(),
-        Some(_) => Err(format!("{what} должно быть объектом строк")),
+        Some(_) => Err(format!("{what} must be an object of strings")),
     }
 }
 
@@ -249,14 +249,14 @@ fn strings(value: Option<&Value>, what: &str) -> Result<BTreeMap<String, String>
 /// decide where a relative program is found.
 fn program(root: &Path, command: &str) -> Result<String, String> {
     if command.is_empty() || command.chars().any(char::is_whitespace) {
-        return Err("command должно быть одним словом".into());
+        return Err("command must be a single word".into());
     }
     if let Some(rel) = command.strip_prefix("./") {
-        let path = contained(root, &root.join(rel)).ok_or("command ведёт за пределы плагина")?;
+        let path = contained(root, &root.join(rel)).ok_or("command points outside the plugin")?;
         return Ok(path.display().to_string());
     }
     if command.contains(['/', '\\']) {
-        return Err("command — либо имя программы, либо путь ./ внутри плагина".into());
+        return Err("command is either a program name or a ./ path inside the plugin".into());
     }
     Ok(command.to_string())
 }
@@ -272,7 +272,7 @@ fn cwd(root: &Path, raw: &str) -> Result<String, String> {
     } else if let Some(rest) = raw.strip_prefix("./") {
         ("${PLUGIN_ROOT}", rest)
     } else {
-        return Err(format!("cwd «{raw}» не из допустимых форм"));
+        return Err(format!("cwd «{raw}» is not one of the allowed forms"));
     };
     let rest = rest.trim_start_matches('/');
     if var == "${PLUGIN_ROOT}" {
@@ -280,20 +280,20 @@ fn cwd(root: &Path, raw: &str) -> Result<String, String> {
         // the lexical check still stops `..`.
         let path = root.join(rest);
         if rest.split('/').any(|p| p == "..") || (path.exists() && contained(root, &path).is_none()) {
-            return Err("cwd ведёт за пределы плагина".into());
+            return Err("cwd points outside the plugin".into());
         }
     }
     Ok(if rest.is_empty() { var.to_string() } else { format!("{var}/{rest}") })
 }
 
 fn check_url(url: &str) -> Result<(), String> {
-    let (scheme, rest) = url.split_once("://").ok_or("url не абсолютный")?;
+    let (scheme, rest) = url.split_once("://").ok_or("url is not absolute")?;
     if url.contains('#') {
-        return Err("url с фрагментом".into());
+        return Err("url with a fragment".into());
     }
     let authority = rest.split(['/', '?']).next().unwrap_or_default();
     if authority.contains('@') {
-        return Err("url с логином в адресе".into());
+        return Err("url with a login in the address".into());
     }
     let host = match authority.strip_prefix('[') {
         Some(v6) => v6.split(']').next().unwrap_or_default(),
@@ -302,8 +302,8 @@ fn check_url(url: &str) -> Result<(), String> {
     match scheme {
         "https" => Ok(()),
         "http" if host == "localhost" || host == "::1" || host.starts_with("127.") => Ok(()),
-        "http" => Err("http разрешён только для localhost, иначе https".into()),
-        _ => Err("url — не http и не https".into()),
+        "http" => Err("http is allowed only for localhost, otherwise https".into()),
+        _ => Err("url is neither http nor https".into()),
     }
 }
 

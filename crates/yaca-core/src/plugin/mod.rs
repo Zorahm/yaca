@@ -275,7 +275,7 @@ impl PluginCatalog {
     ) {
         let shown = plain(dir);
         let Ok(root) = std::fs::canonicalize(dir) else {
-            return self.reject(&shown, "каталог плагина не открывается".into());
+            return self.reject(&shown, "the plugin directory cannot be opened".into());
         };
         let installed_as = installed.as_ref().map(|(id, _)| id.split('@').next().unwrap_or(id).to_string());
         let (format, contents) = match read_package(&root, installed_as.as_deref()) {
@@ -283,7 +283,7 @@ impl PluginCatalog {
             Err(why) => return self.reject(&shown, why),
         };
         if let Some(first) = self.plugins.iter().find(|p| p.name == contents.name) {
-            let why = format!("плагин «{}» уже загружен из {}", contents.name, plain(&first.root));
+            let why = format!("plugin «{}» is already loaded from {}", contents.name, plain(&first.root));
             return self.reject(&shown, why);
         }
 
@@ -337,7 +337,7 @@ pub(crate) fn read_package(root: &Path, installed_as: Option<&str>) -> Result<(P
     } else if installed_as.is_some() {
         Ok((PluginFormat::Claude, claude::load(root, installed_as)?))
     } else {
-        Err("нет манифеста: ни .claude-plugin/plugin.json, ни plugin.json".into())
+        Err("no manifest: neither .claude-plugin/plugin.json nor plugin.json".into())
     }
 }
 

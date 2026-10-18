@@ -142,7 +142,7 @@ fn command(run: &HookRun, owner: &HookOwner) -> Result<tokio::process::Command, 
             cmd
         }
         HookRun::Shell { command, powershell: false } => {
-            let bash = bash().ok_or("не найден bash (на Windows нужен Git Bash)")?;
+            let bash = bash().ok_or("bash was not found (on Windows, Git Bash is needed)")?;
             let mut cmd = std::process::Command::new(bash);
             cmd.arg("-c").arg(command);
             cmd

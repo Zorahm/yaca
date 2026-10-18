@@ -81,14 +81,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn отдаёт_событие_только_после_пустой_строки() {
+    fn yields_an_event_only_after_a_blank_line() {
         let mut d = SseDecoder::new();
         assert!(d.push(b"event: ping\ndata: {\"a\":1}").is_empty());
         assert_eq!(d.push(b"\n\n"), vec![r#"{"a":1}"#]);
     }
 
     #[test]
-    fn несколько_событий_из_одного_чанка() {
+    fn several_events_from_one_chunk() {
         let mut d = SseDecoder::new();
         let got = d.push(b"data: one\n\ndata: two\n\n");
         assert_eq!(got, vec!["one", "two"]);
@@ -104,13 +104,13 @@ mod tests {
     }
 
     #[test]
-    fn понимает_crlf() {
+    fn understands_crlf() {
         let mut d = SseDecoder::new();
         assert_eq!(d.push(b"data: x\r\n\r\n"), vec!["x"]);
     }
 
     #[test]
-    fn комментарии_отбрасываются() {
+    fn comments_are_dropped() {
         let mut d = SseDecoder::new();
         assert!(d.push(b": keep-alive\n\n").is_empty());
     }

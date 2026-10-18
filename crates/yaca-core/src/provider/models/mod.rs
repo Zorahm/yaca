@@ -74,7 +74,7 @@ pub async fn discover(
 /// A refusal leaves the file as it was: the list that was there is what the
 /// provider last said, and an error is not a statement that it serves nothing.
 pub async fn refresh(dir: &Path, id: &str) -> Result<Providers, CoreError> {
-    let missing = || CoreError::Config(format!("провайдера «{id}» нет в списке"));
+    let missing = || CoreError::Config(format!("provider «{id}» is not in the list"));
 
     let spec = Providers::load(dir)?.get(id).cloned().ok_or_else(missing)?;
     let models = discover(&spec, stored_key(&spec).as_deref()).await?;
@@ -153,7 +153,7 @@ async fn get(
 
     serde_json::from_str(&text).map_err(|e| {
         ProviderError::Config(format!(
-            "{} ответил не тем JSON, которого ждёт список моделей: {e}",
+            "{} answered with JSON that the model list does not expect: {e}",
             spec.api(path)
         ))
     })
@@ -161,5 +161,5 @@ async fn get(
 
 fn parse<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, ProviderError> {
     serde_json::from_value(value)
-        .map_err(|e| ProviderError::Config(format!("список моделей разобран не до конца: {e}")))
+        .map_err(|e| ProviderError::Config(format!("the model list could not be parsed: {e}")))
 }

@@ -127,7 +127,7 @@ async fn a_write_outside_both_roots_is_refused_and_writes_nothing() {
 
     let (text, is_error) = tool_result_of(&provider, "w1");
     assert!(is_error, "{text}");
-    assert!(text.contains("вне проекта"), "{text}");
+    assert!(text.contains("outside the project"), "{text}");
     assert!(permission_requests(&events).is_empty(), "a refused path is not a question");
     assert!(!outside.path().join("stolen.txt").exists());
 }

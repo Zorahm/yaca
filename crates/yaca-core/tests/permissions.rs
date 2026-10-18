@@ -104,7 +104,7 @@ async fn denial_travels_to_the_agent_with_its_reason() {
         .send(Command::AnswerPermission {
             request_id: id,
             answer: PermissionAnswer::Deny {
-                reason: Some("не удаляй node_modules, просто пересобери".into()),
+                reason: Some("do not delete node_modules, just rebuild".into()),
             },
         })
         .await
@@ -128,7 +128,7 @@ async fn denial_travels_to_the_agent_with_its_reason() {
     let seen = provider.seen.lock().unwrap();
     let last = format!("{:?}", seen.last().unwrap().messages);
     assert!(
-        last.contains("пересобери"),
+        last.contains("rebuild"),
         "reason never reached the model"
     );
 }
@@ -348,12 +348,12 @@ async fn stopping_a_call_tells_the_model_to_wait_and_ends_the_turn() {
     assert_eq!(
         provider.seen.lock().unwrap().len(),
         1,
-        "модель спросили второй раз после остановки"
+        "the model was asked a second time after the stop"
     );
 
     // The refusal is only visible to the model on the next request, so the
     // human sends one. Its history has to carry the sentence.
-    ask(&handle, "ладно, оставь").await;
+    ask(&handle, "fine, leave it").await;
     until(&mut rx, is_turn_over).await;
 
     let seen = provider.seen.lock().unwrap();
@@ -366,7 +366,7 @@ async fn stopping_a_call_tells_the_model_to_wait_and_ends_the_turn() {
             )
         })
     });
-    assert!(told, "модели не сказали, что человек остановил вызов");
+    assert!(told, "the model was not told that the human stopped the call");
 }
 
 /// The scripted turn behind both edit tests: read the file, then edit it.
@@ -460,7 +460,7 @@ async fn a_standing_refusal_from_the_project_file_needs_no_question() {
             "denies": [
               {
                 "scope": { "type": "directory", "path": "." },
-                "reason": "удалять здесь нечего, просто перечитай"
+                "reason": "there is nothing to delete here, just read it again"
               }
             ]
           }
@@ -469,14 +469,14 @@ async fn a_standing_refusal_from_the_project_file_needs_no_question() {
 
     let provider = Arc::new(MockProvider::new(vec![
         Turn::Events(delete("t1", "junk.rs")),
-        Turn::Events(script_text("Понял.")),
+        Turn::Events(script_text("Got it.")),
     ]));
     // Auto, so that nothing but the refusal could be stopping the call:
     // in Auto a deletion goes through without asking (§8).
     let handle = session(&dir, provider, Mode::Auto);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "снеси мёртвый файл").await;
+    ask(&handle, "delete the dead file").await;
     let events = until(&mut rx, is_turn_over).await;
 
     assert!(
@@ -504,7 +504,7 @@ async fn a_standing_refusal_from_the_project_file_needs_no_question() {
 
 /// A refusal outranks a grant covering the same call, and it is consulted
 /// before the mode — so the two lists in the settings window mean what they
-/// say: "запрещено всегда" wins.
+/// say: "always denied" wins.
 #[tokio::test]
 async fn a_refusal_outranks_a_grant_of_the_same_scope() {
     let dir = TempProject::new();
@@ -521,12 +521,12 @@ async fn a_refusal_outranks_a_grant_of_the_same_scope() {
 
     let provider = Arc::new(MockProvider::new(vec![
         Turn::Events(delete("t1", "junk.rs")),
-        Turn::Events(script_text("Понял.")),
+        Turn::Events(script_text("Got it.")),
     ]));
     let handle = session(&dir, provider, Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "снеси мёртвый файл").await;
+    ask(&handle, "delete the dead file").await;
     let events = until(&mut rx, is_turn_over).await;
 
     assert!(

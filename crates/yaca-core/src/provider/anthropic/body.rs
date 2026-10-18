@@ -133,8 +133,8 @@ mod tests {
     fn req() -> ProviderRequest {
         ProviderRequest {
             model: "claude-opus-5".into(),
-            system: "ты Yaca".into(),
-            messages: vec![Message::user_text("привет")],
+            system: "You are Yaca".into(),
+            messages: vec![Message::user_text("hello")],
             tools: vec![],
             max_tokens: 64_000,
             effort: Some(Effort::Extra),
@@ -143,14 +143,14 @@ mod tests {
     }
 
     #[test]
-    fn рассуждение_просит_видимый_текст() {
+    fn reasoning_asks_for_visible_text() {
         let body = build_body(&req());
         assert_eq!(body["thinking"]["display"], "summarized");
         assert_eq!(body["thinking"]["type"], "adaptive");
     }
 
     #[test]
-    fn усилие_идёт_через_output_config_а_не_бюджет() {
+    fn effort_goes_through_output_config_not_a_budget() {
         let body = build_body(&req());
         assert_eq!(body["output_config"]["effort"], "xhigh");
         assert!(body["thinking"].get("budget_tokens").is_none());
@@ -158,14 +158,14 @@ mod tests {
     }
 
     #[test]
-    fn две_точки_кеша_система_и_хвост_истории() {
+    fn two_cache_points_system_and_the_history_tail() {
         let mut r = req();
         r.messages = vec![
-            Message::user_text("первое"),
+            Message::user_text("first"),
             Message::assistant(vec![ContentBlock::Text {
-                text: "ответ".into(),
+                text: "answer".into(),
             }]),
-            Message::user_text("второе"),
+            Message::user_text("second"),
         ];
         let body = build_body(&r);
         assert_eq!(body["system"][0]["cache_control"]["type"], "ephemeral");
@@ -196,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn подпись_рассуждения_едет_обратно() {
+    fn the_reasoning_signature_goes_back() {
         let block = ContentBlock::Thinking {
             thinking: "…".into(),
             signature: Some("sig123".into()),

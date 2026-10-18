@@ -132,7 +132,7 @@ mod tests {
     }
 
     #[test]
-    fn отказ_с_именем_поля_узнаётся() {
+    fn a_refusal_naming_the_field_is_recognised() {
         assert!(asks_for_completion_tokens(&http(
             400,
             "Unsupported parameter: 'max_tokens' is not supported with this \
@@ -141,7 +141,7 @@ mod tests {
     }
 
     #[test]
-    fn прочие_отказы_не_считаются_просьбой_переспросить() {
+    fn other_refusals_do_not_count_as_a_request_to_ask_again() {
         // A different reason for the same code — there is nothing to ask again with.
         assert!(!asks_for_completion_tokens(&http(
             400,

@@ -21,13 +21,13 @@ const PATH: &str = "a.txt";
 /// Thirty numbered lines. The two edits below sit far enough apart to be two
 /// hunks, not one.
 fn original() -> String {
-    (1..=30).map(|i| format!("строка {i}\n")).collect()
+    (1..=30).map(|i| format!("line {i}\n")).collect()
 }
 
 fn edited() -> String {
     original()
-        .replace("строка 2\n", "правка 2\n")
-        .replace("строка 25\n", "правка 25\n")
+        .replace("line 2\n", "edit 2\n")
+        .replace("line 25\n", "edit 25\n")
 }
 
 /// Reads the file, then rewrites it whole: one write call, two hunks.
@@ -39,7 +39,7 @@ fn read_then_write(content: &str) -> Arc<MockProvider> {
             "Write",
             json!({ "path": PATH, "content": content }),
         )])),
-        Turn::Events(script_text("Готово.")),
+        Turn::Events(script_text("Done.")),
     ]))
 }
 
@@ -62,7 +62,7 @@ async fn the_panel_gets_the_whole_file_with_its_unchanged_lines() {
     dir.write(PATH, &original());
     let handle = session(&dir, read_then_write(&edited()), Mode::Auto);
     let mut rx = handle.subscribe();
-    ask(&handle, "поправь два места").await;
+    ask(&handle, "fix two places").await;
     until(&mut rx, is_turn_over).await;
 
     let view = view_of(&handle, PATH)
@@ -97,7 +97,7 @@ async fn reading_the_view_writes_nothing() {
     dir.write(PATH, &original());
     let handle = session(&dir, read_then_write(&edited()), Mode::Auto);
     let mut rx = handle.subscribe();
-    ask(&handle, "поправь два места").await;
+    ask(&handle, "fix two places").await;
     until(&mut rx, is_turn_over).await;
 
     view_of(&handle, PATH).await.unwrap();
@@ -109,7 +109,7 @@ async fn reading_the_view_writes_nothing() {
 async fn a_file_the_session_never_wrote_is_shown_as_it_is() {
     let dir = TempProject::new();
     dir.write(PATH, &original());
-    let handle = session(&dir, Arc::new(MockProvider::text("ничего")), Mode::Auto);
+    let handle = session(&dir, Arc::new(MockProvider::text("nothing")), Mode::Auto);
 
     let view = view_of(&handle, PATH)
         .await
@@ -128,7 +128,7 @@ async fn a_changed_file_is_found_by_another_spelling_of_its_path() {
     dir.write(PATH, &original());
     let handle = session(&dir, read_then_write(&edited()), Mode::Auto);
     let mut rx = handle.subscribe();
-    ask(&handle, "поправь два места").await;
+    ask(&handle, "fix two places").await;
     until(&mut rx, is_turn_over).await;
 
     // A `Read` row carries the path as the model wrote it.
@@ -140,7 +140,7 @@ async fn a_changed_file_is_found_by_another_spelling_of_its_path() {
 #[tokio::test]
 async fn a_file_that_is_not_there_has_no_view() {
     let dir = TempProject::new();
-    let handle = session(&dir, Arc::new(MockProvider::text("ничего")), Mode::Auto);
+    let handle = session(&dir, Arc::new(MockProvider::text("nothing")), Mode::Auto);
 
     assert!(view_of(&handle, "missing.txt").await.is_none());
 }
@@ -148,7 +148,7 @@ async fn a_file_that_is_not_there_has_no_view() {
 #[tokio::test]
 async fn a_file_outside_the_workspace_has_no_view() {
     let dir = TempProject::new();
-    let handle = session(&dir, Arc::new(MockProvider::text("ничего")), Mode::Auto);
+    let handle = session(&dir, Arc::new(MockProvider::text("nothing")), Mode::Auto);
 
     assert!(view_of(&handle, "../outside.txt").await.is_none());
 }

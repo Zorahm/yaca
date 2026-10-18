@@ -26,9 +26,9 @@ pub(super) fn header_map(
     let mut map = HeaderMap::new();
     for (name, value) in spec.headers_for(key) {
         let name = HeaderName::try_from(name.as_str())
-            .map_err(|e| ProviderError::Config(format!("заголовок «{name}»: {e}")))?;
+            .map_err(|e| ProviderError::Config(format!("header «{name}»: {e}")))?;
         let value = HeaderValue::try_from(value.as_str())
-            .map_err(|e| ProviderError::Config(format!("значение заголовка «{name}»: {e}")))?;
+            .map_err(|e| ProviderError::Config(format!("header value «{name}»: {e}")))?;
         map.insert(name, value);
     }
     Ok(map)
@@ -57,7 +57,7 @@ pub(super) async fn check_status(
     // an empty error block that gives the human nothing to decide on.
     let text = match resp.text().await {
         Ok(t) => t,
-        Err(e) => format!("тело ответа не прочиталось: {e}"),
+        Err(e) => format!("the response body could not be read: {e}"),
     };
     Err(ProviderError::Http {
         status: status.as_u16(),
@@ -80,7 +80,7 @@ fn name_missing_key(
 ) -> String {
     let keyless = key.is_none_or(|k| k.trim().is_empty());
     if keyless && spec.needs_key() && (status == 401 || status == 403) {
-        format!("{message} — ключ API для «{}» не задан", spec.id)
+        format!("{message} — API key for «{}» is not set", spec.id)
     } else {
         message
     }
@@ -106,7 +106,7 @@ pub(super) fn extract_api_message(body: &str) -> String {
     if raw.is_empty() {
         // A cut-off response does happen. An empty line in the error block (§5.10)
         // does not happen: the human would have nothing to read.
-        "провайдер не прислал подробностей".into()
+        "the provider sent no details".into()
     } else {
         raw
     }
@@ -180,7 +180,7 @@ mod tests {
     fn spec(protocol: Protocol) -> ProviderSpec {
         ProviderSpec {
             id: "gateway".into(),
-            display_name: "Шлюз".into(),
+            display_name: "Gateway".into(),
             protocol,
             base_url: "https://gate.example.com".into(),
             headers: BTreeMap::new(),
@@ -189,19 +189,19 @@ mod tests {
     }
 
     #[test]
-    fn достаёт_текст_ошибки_из_тела() {
-        let body = r#"{"type":"error","error":{"type":"invalid_request_error","message":"нет"}}"#;
-        assert_eq!(extract_api_message(body), "нет");
+    fn extracts_the_error_text_from_the_body() {
+        let body = r#"{"type":"error","error":{"type":"invalid_request_error","message":"no"}}"#;
+        assert_eq!(extract_api_message(body), "no");
     }
 
     #[test]
-    fn пустое_тело_не_даёт_пустого_сообщения() {
+    fn an_empty_body_does_not_give_an_empty_message() {
         assert!(!extract_api_message("").is_empty());
         assert_eq!(extract_api_message("Bad Gateway"), "Bad Gateway");
     }
 
     #[test]
-    fn перебитый_заголовок_едет_один_раз() {
+    fn an_overridden_header_is_sent_once() {
         let mut s = spec(Protocol::OpenAi);
         s.headers
             .insert("authorization".into(), "Basic svoj".into());
@@ -211,9 +211,9 @@ mod tests {
     }
 
     #[test]
-    fn негодное_имя_заголовка_это_ошибка_описания() {
+    fn an_invalid_header_name_is_a_config_error() {
         let mut s = spec(Protocol::OpenAi);
-        s.headers.insert("не заголовок".into(), "x".into());
+        s.headers.insert("not a header".into(), "x".into());
         assert!(matches!(
             header_map(&s, Some("k")),
             Err(ProviderError::Config(_))

@@ -5,7 +5,7 @@
 //! names only a model, a session recorded before sessions wrote their provider
 //! down — and check that the model decides rather than the built-in Anthropic
 //! default. The Anthropic default winning is what turned a local model into
-//! «у провайдера «anthropic» нет модели».
+//! «provider «anthropic» has no model».
 //!
 //! Real files on disk throughout: `providers.json`, `.yaca/settings.json` and a
 //! session index in the shape the stand actually has.
@@ -142,7 +142,7 @@ fn with_no_provider_that_answered_nothing_starts() {
 
     // Said plainly, rather than blamed on whichever preset came first.
     assert!(!err.contains("anthropic"), "{err}");
-    assert!(err.contains("опросите"), "{err}");
+    assert!(err.contains("refresh a provider"), "{err}");
 }
 
 /// The four models the Anthropic preset used to ship were written into the

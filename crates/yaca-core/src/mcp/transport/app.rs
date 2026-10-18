@@ -11,7 +11,7 @@ use crate::mcp::app::{AppServer, ServerEnd};
 use crate::mcp::McpError;
 
 /// Why the client lost the server: the application dropped its end.
-const GONE: &str = "приложение закрыло сервер";
+const GONE: &str = "the application closed the server";
 
 pub(crate) struct App {
     to_server: mpsc::UnboundedSender<Value>,

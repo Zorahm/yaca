@@ -35,7 +35,7 @@ fn recorded(
 fn replies(count: usize) -> Arc<MockProvider> {
     Arc::new(MockProvider::new(
         (0..count)
-            .map(|i| Turn::Events(script_text(&format!("ответ {i}"))))
+            .map(|i| Turn::Events(script_text(&format!("answer{i}"))))
             .collect(),
     ))
 }
@@ -68,16 +68,16 @@ async fn a_session_is_in_the_panel_before_it_has_finished() {
     let handle = recorded(&dir, replies(1), None);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "почини разбор дат\nвот трейс").await;
+    ask(&handle, "fix the date parser\nhere is the trace").await;
     until(&mut rx, is_turn_over).await;
 
     let store = dir.store();
     let listed = store.list();
     assert_eq!(listed.len(), 1);
     // §3: the header is generated from the first message.
-    assert_eq!(listed[0].title, "почини разбор дат");
+    assert_eq!(listed[0].title, "fix the date parser");
     assert_eq!(listed[0].messages, 1);
-    assert!(listed[0].cost_usd > 0.0, "стоимость показывается в панели");
+    assert!(listed[0].cost_usd > 0.0, "the cost is shown in the panel");
     assert_eq!(&listed[0].id, handle.id());
 }
 
@@ -87,7 +87,7 @@ async fn a_session_reopens_with_the_conversation_the_model_had() {
 
     let first = recorded(&dir, replies(1), None);
     let mut rx = first.subscribe();
-    ask(&first, "почему падает разбор").await;
+    ask(&first, "why does the parser crash").await;
     until(&mut rx, is_turn_over).await;
     let id = first.id().clone();
     let spent = first.meta().unwrap().cost_usd;
@@ -96,21 +96,21 @@ async fn a_session_reopens_with_the_conversation_the_model_had() {
     let provider = replies(1);
     let again = recorded(&dir, provider.clone(), Some(id.clone()));
     let mut rx = again.subscribe();
-    ask(&again, "а теперь почини").await;
+    ask(&again, "now fix it").await;
     until(&mut rx, is_turn_over).await;
 
     // The model is handed what it said last time, not a blank conversation.
     let sent = last_request(&provider);
     assert_eq!(sent.messages.len(), 3);
-    assert_eq!(text_of(&sent.messages[0]), "почему падает разбор");
+    assert_eq!(text_of(&sent.messages[0]), "why does the parser crash");
     assert_eq!(sent.messages[1].role, Role::Assistant);
-    assert_eq!(text_of(&sent.messages[1]), "ответ 0");
+    assert_eq!(text_of(&sent.messages[1]), "answer0");
 
     // And it is the same session: one line in the panel, one running cost.
     let meta = again.meta().unwrap();
     assert_eq!(meta.id, id);
     assert_eq!(meta.messages, 2);
-    assert!(meta.cost_usd > spent, "{} против {spent}", meta.cost_usd);
+    assert!(meta.cost_usd > spent, "{} against {spent}", meta.cost_usd);
     assert_eq!(dir.store().list().len(), 1);
 }
 
@@ -121,25 +121,25 @@ async fn the_models_title_is_still_the_title_when_the_turn_ends() {
         Turn::Events(script_tool_call(
             "toolu_1",
             "SetTitle",
-            serde_json::json!({ "title": "Обзор проекта" }),
+            serde_json::json!({ "title": "Project overview" }),
         )),
-        Turn::Events(script_text("Готово.")),
+        Turn::Events(script_text("Done.")),
     ]));
     let handle = recorded(&dir, provider, None);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "Привет. Посмотри проект.").await;
+    ask(&handle, "Hi. Look at the project.").await;
     let seen = until(&mut rx, is_turn_over).await;
     assert!(seen
         .iter()
-        .any(|e| matches!(e, AgentEvent::TitleSet { title } if title == "Обзор проекта")));
+        .any(|e| matches!(e, AgentEvent::TitleSet { title } if title == "Project overview")));
 
     // The window re-reads the title from the index when the turn ends (§3). An
     // event that reached the window and not the index would show the name and
     // then take it back.
-    assert_eq!(handle.meta().unwrap().title, "Обзор проекта");
+    assert_eq!(handle.meta().unwrap().title, "Project overview");
     let store = dir.store();
-    assert_eq!(store.list()[0].title, "Обзор проекта");
+    assert_eq!(store.list()[0].title, "Project overview");
 
     // And it is in the journal, so a reopened feed and a rebuilt index have it.
     assert!(store
@@ -153,23 +153,23 @@ async fn a_name_typed_while_the_session_is_open_survives_the_next_turn() {
     let dir = TempProject::new();
     let handle = recorded(&dir, replies(2), None);
     let mut rx = handle.subscribe();
-    ask(&handle, "почини разбор дат").await;
+    ask(&handle, "fix the date parser").await;
     until(&mut rx, is_turn_over).await;
 
-    handle.rename("Мой заголовок").unwrap();
+    handle.rename("My title").unwrap();
     // On disk at once: the panel reads the file, not the session.
     let store = dir.store();
-    assert_eq!(store.list()[0].title, "Мой заголовок");
+    assert_eq!(store.list()[0].title, "My title");
 
     // The session writes its index whole when a turn ends. A name that went
     // into the file past the session would be overwritten here.
-    ask(&handle, "а теперь тесты").await;
+    ask(&handle, "now the tests").await;
     until(&mut rx, is_turn_over).await;
 
     let listed = store.list();
-    assert_eq!(listed[0].title, "Мой заголовок");
+    assert_eq!(listed[0].title, "My title");
     assert!(listed[0].title_custom);
-    assert_eq!(handle.meta().unwrap().title, "Мой заголовок");
+    assert_eq!(handle.meta().unwrap().title, "My title");
 }
 
 #[tokio::test]
@@ -178,7 +178,7 @@ async fn a_reopened_session_gets_its_feed_back() {
 
     let first = recorded(&dir, replies(1), None);
     let mut rx = first.subscribe();
-    ask(&first, "почему падает разбор").await;
+    ask(&first, "why does the parser crash").await;
     until(&mut rx, is_turn_over).await;
     let id = first.id().clone();
     drop(first);
@@ -191,7 +191,7 @@ async fn a_reopened_session_gets_its_feed_back() {
     // showing only the answers would be the agent talking to itself.
     assert!(
         feed.iter().any(|e| matches!(
-            e, AgentEvent::UserMessage { text, .. } if text == "почему падает разбор"
+            e, AgentEvent::UserMessage { text, .. } if text == "why does the parser crash"
         )),
         "{feed:#?}"
     );
@@ -201,11 +201,11 @@ async fn a_reopened_session_gets_its_feed_back() {
     // and no longer is — see `store::replay`.
     assert!(
         journal.iter().any(|e| matches!(e, AgentEvent::StateChanged { .. })),
-        "журнал пишет и состояние"
+        "the journal writes the state too"
     );
     assert!(
         journal.iter().any(|e| matches!(e, AgentEvent::CheckpointCreated { .. })),
-        "и снятые точки"
+        "and the taken checkpoints"
     );
     assert!(!feed.iter().any(|e| matches!(
         e,
@@ -258,7 +258,7 @@ async fn a_duplicate_to_a_point_can_be_continued_from_there() {
     let mut rx = handle.subscribe();
 
     let mut turns = Vec::new();
-    for text in ["раз", "два", "три"] {
+    for text in ["one", "two", "three"] {
         ask(&handle, text).await;
         let seen = until(&mut rx, is_turn_over).await;
         turns.push(
@@ -267,7 +267,7 @@ async fn a_duplicate_to_a_point_can_be_continued_from_there() {
                     AgentEvent::TurnStarted { turn_id, .. } => Some(turn_id.clone()),
                     _ => None,
                 })
-                .expect("турн должен был начаться"),
+                .expect("the turn should have started"),
         );
     }
     let id = handle.id().clone();
@@ -279,16 +279,16 @@ async fn a_duplicate_to_a_point_can_be_continued_from_there() {
     let provider = replies(1);
     let forked = recorded(&dir, provider.clone(), Some(copy.id.clone()));
     let mut rx = forked.subscribe();
-    ask(&forked, "и вот так").await;
+    ask(&forked, "and like this").await;
     until(&mut rx, is_turn_over).await;
 
     // Two exchanges kept, the third left behind, and the new message on top.
     let sent = last_request(&provider);
     assert_eq!(sent.messages.len(), 5);
-    assert_eq!(text_of(&sent.messages[0]), "раз");
-    assert_eq!(text_of(&sent.messages[2]), "два");
-    assert_eq!(text_of(&sent.messages[4]), "и вот так");
-    assert!(sent.messages.iter().all(|m| text_of(m) != "три"));
+    assert_eq!(text_of(&sent.messages[0]), "one");
+    assert_eq!(text_of(&sent.messages[2]), "two");
+    assert_eq!(text_of(&sent.messages[4]), "and like this");
+    assert!(sent.messages.iter().all(|m| text_of(m) != "three"));
 
     // The original is untouched, and both are in the panel.
     assert_eq!(store.meta(&id).unwrap().messages, 3);
@@ -301,26 +301,26 @@ async fn search_finds_a_finished_session_by_what_was_said() {
 
     let one = recorded(&dir, replies(1), None);
     let mut rx = one.subscribe();
-    ask(&one, "почему падает разбор дат").await;
+    ask(&one, "why does the date parser crash").await;
     until(&mut rx, is_turn_over).await;
     drop(one);
 
     let two = recorded(&dir, replies(1), None);
     let mut rx = two.subscribe();
-    ask(&two, "совсем про другое").await;
+    ask(&two, "something else entirely").await;
     until(&mut rx, is_turn_over).await;
     let other = two.id().clone();
     drop(two);
 
     let store = dir.store();
-    let hits = store.search("падает", 10);
+    let hits = store.search("crash", 10);
     assert_eq!(hits.len(), 1);
     assert_ne!(hits[0].session.id, other);
 
     // And the export is the conversation, not the event stream.
     let md = store.export_markdown(&hits[0].session.id).unwrap();
-    assert!(md.contains("почему падает разбор дат"));
-    assert!(md.contains("ответ 0"));
+    assert!(md.contains("why does the date parser crash"));
+    assert!(md.contains("answer0"));
 }
 
 // --- compaction (§5.11) -----------------------------------------------------
@@ -330,7 +330,7 @@ async fn search_finds_a_finished_session_by_what_was_said() {
 fn long(prefix: &str) -> String {
     format!(
         "{prefix}: {}",
-        "разбор дат ломается на границе часового пояса. ".repeat(20)
+        "the date parser breaks at the time zone boundary.".repeat(20)
     )
 }
 
@@ -338,20 +338,20 @@ fn long(prefix: &str) -> String {
 async fn four_exchanges(dir: &TempProject) -> (SessionHandle, Arc<MockProvider>) {
     // Four answers, then one more for the summary itself.
     let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(script_text("ответ 0")),
-        Turn::Events(script_text("ответ 1")),
-        Turn::Events(script_text("ответ 2")),
-        Turn::Events(script_text("ответ 3")),
-        Turn::Events(script_text("Чинили разбор дат; парсер уже поправлен.")),
+        Turn::Events(script_text("answer0")),
+        Turn::Events(script_text("answer1")),
+        Turn::Events(script_text("answer2")),
+        Turn::Events(script_text("answer3")),
+        Turn::Events(script_text("We fixed the date parser; the parser is already patched.")),
     ]));
     let handle = recorded(dir, provider.clone(), None);
     let mut rx = handle.subscribe();
 
-    for text in ["раз", "два"] {
+    for text in ["one", "two"] {
         ask(&handle, &long(text)).await;
         until(&mut rx, is_turn_over).await;
     }
-    for text in ["три", "четыре"] {
+    for text in ["three", "four"] {
         ask(&handle, text).await;
         until(&mut rx, is_turn_over).await;
     }
@@ -373,33 +373,33 @@ async fn compacting_replaces_the_history_with_a_summary() {
     let AgentEvent::ContextCompacted { summary, freed } = seen.last().unwrap() else {
         unreachable!("until() only returns on a match");
     };
-    assert_eq!(summary, "Чинили разбор дат; парсер уже поправлен.");
-    assert!(*freed > 0, "§5.11 показывает освобождённое");
+    assert_eq!(summary, "We fixed the date parser; the parser is already patched.");
+    assert!(*freed > 0, "§5.11 shows what was freed");
 
     // The summarizer is asked about a transcript, with no tools in the way.
     let asked = last_request(&provider);
     assert!(asked.tools.is_empty());
     assert!(!asked.thinking);
     assert_eq!(asked.messages.len(), 1);
-    assert!(text_of(&asked.messages[0]).contains("Human: раз:"));
+    assert!(text_of(&asked.messages[0]).contains("Human: one:"));
 
     // The next turn goes out with the summary in place of what it replaced.
     let provider = replies(1);
     let again = recorded(&dir, provider.clone(), Some(handle.id().clone()));
     let mut rx = again.subscribe();
-    ask(&again, "продолжаем").await;
+    ask(&again, "continue").await;
     until(&mut rx, is_turn_over).await;
 
     let sent = last_request(&provider);
     let head = text_of(&sent.messages[0]);
     assert!(head.starts_with(SUMMARY_HEADER), "{head}");
-    assert!(head.contains("парсер уже поправлен"));
-    // Two exchanges are kept word for word; "раз" and "два" are gone.
+    assert!(head.contains("the parser is already patched"));
+    // Two exchanges are kept word for word; "one" and "two" are gone.
     assert!(sent
         .messages
         .iter()
-        .all(|m| !text_of(m).starts_with("раз:")));
-    assert!(sent.messages.iter().any(|m| text_of(m) == "четыре"));
+        .all(|m| !text_of(m).starts_with("one:")));
+    assert!(sent.messages.iter().any(|m| text_of(m) == "four"));
 }
 
 #[tokio::test]
@@ -416,7 +416,7 @@ async fn the_summary_can_be_rewritten_before_continuing() {
 
     handle
         .send(Command::EditSummary {
-            text: "Парсер поправлен. Часовые пояса ещё не трогали.".into(),
+            text: "The parser is patched. Time zones are not touched yet.".into(),
         })
         .await
         .unwrap();
@@ -424,19 +424,19 @@ async fn the_summary_can_be_rewritten_before_continuing() {
     let AgentEvent::SummaryEdited { summary } = seen.last().unwrap() else {
         unreachable!("until() only returns on a match");
     };
-    assert!(summary.contains("Часовые пояса"));
+    assert!(summary.contains("Time zones"));
 
     // §5.11: edited before continuing, so the next request carries the edit —
     // and so does the session when it is reopened.
     let provider = replies(1);
     let again = recorded(&dir, provider.clone(), Some(handle.id().clone()));
     let mut rx = again.subscribe();
-    ask(&again, "продолжаем").await;
+    ask(&again, "continue").await;
     until(&mut rx, is_turn_over).await;
 
     let head = text_of(&last_request(&provider).messages[0]);
-    assert!(head.contains("Часовые пояса ещё не трогали"), "{head}");
-    assert!(!head.contains("Чинили разбор дат"));
+    assert!(head.contains("Time zones are not touched yet"), "{head}");
+    assert!(!head.contains("We fixed the date parser"));
 }
 
 #[tokio::test]
@@ -445,7 +445,7 @@ async fn compacting_a_short_conversation_says_so_instead_of_doing_nothing() {
     let handle = recorded(&dir, replies(1), None);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "раз").await;
+    ask(&handle, "one").await;
     until(&mut rx, is_turn_over).await;
 
     handle.send(Command::Compact).await.unwrap();

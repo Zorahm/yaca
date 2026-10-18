@@ -26,13 +26,13 @@ pub(super) fn from_entry(market_dir: &Path, manifest: &Manifest, entry: &Entry, 
     let package = staging.join("package");
     let revision = match &entry.source {
         EntrySource::Relative(rel) => {
-            let market = std::fs::canonicalize(market_dir).map_err(|e| format!("маркетплейс не открывается: {e}"))?;
+            let market = std::fs::canonicalize(market_dir).map_err(|e| format!("the marketplace cannot be opened: {e}"))?;
             let base = match &manifest.plugin_root {
                 Some(root) => market.join(trim(root)),
                 None => market.clone(),
             };
             let from = contained(&market, &base.join(trim(rel)))
-                .ok_or_else(|| format!("путь плагина «{rel}» не найден внутри маркетплейса"))?;
+                .ok_or_else(|| format!("plugin path «{rel}» was not found inside the marketplace"))?;
             git::copy_tree(&from, &package)?;
             git::head(&market)
         }
@@ -43,13 +43,13 @@ pub(super) fn from_entry(market_dir: &Path, manifest: &Manifest, entry: &Entry, 
             let root = std::fs::canonicalize(&download).map_err(|e| e.to_string())?;
             let from = match path {
                 Some(p) => contained(&root, &root.join(trim(p)))
-                    .ok_or_else(|| format!("в репозитории нет каталога «{p}»"))?,
+                    .ok_or_else(|| format!("the repository has no directory «{p}»"))?,
                 None => root,
             };
             git::copy_tree(&from, &package)?;
             Some(commit)
         }
-        EntrySource::Unsupported(kind) => return Err(format!("источник «{kind}» в Yaca не поддерживается")),
+        EntrySource::Unsupported(kind) => return Err(format!("source «{kind}» is not supported in Yaca")),
     };
     apply_entry(&package, entry)?;
     Ok(Fetched { package, revision })
@@ -114,5 +114,5 @@ fn apply_entry(package: &Path, entry: &Entry) -> Result<(), String> {
     }
     std::fs::create_dir_all(package.join(claude::MANIFEST_DIR)).map_err(|e| e.to_string())?;
     let text = serde_json::to_string_pretty(&Value::Object(manifest)).map_err(|e| e.to_string())?;
-    std::fs::write(&manifest_path, text).map_err(|e| format!("не записать манифест: {e}"))
+    std::fs::write(&manifest_path, text).map_err(|e| format!("cannot write the manifest: {e}"))
 }

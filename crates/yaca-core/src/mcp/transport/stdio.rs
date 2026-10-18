@@ -63,13 +63,13 @@ impl Stdio {
 
         let mut child = cmd
             .spawn()
-            .map_err(|e| McpError::Transport(format!("не запустить «{program}»: {e}")))?;
+            .map_err(|e| McpError::Transport(format!("cannot start «{program}»: {e}")))?;
         let pid = child.id();
         // All three were asked for as pipes just above.
         let (Some(stdin), Some(stdout), Some(stderr)) =
             (child.stdin.take(), child.stdout.take(), child.stderr.take())
         else {
-            return Err(McpError::Transport(format!("у «{program}» нет стандартных потоков")));
+            return Err(McpError::Transport(format!("«{program}» has no standard streams")));
         };
 
         let tail = Tail::default();
@@ -88,7 +88,7 @@ impl Transport for Stdio {
         // One message is one line: the encoder never writes a raw newline.
         self.out
             .send(message.to_string())
-            .map_err(|_| McpError::Closed("процесс сервера завершился".into()))
+            .map_err(|_| McpError::Closed("the server process exited".into()))
     }
 }
 
@@ -159,8 +159,8 @@ async fn read_lines(mut child: Child, stdout: ChildStdout, tail: Tail, inbox: In
     let said = tail.lock().unwrap().iter().cloned().collect::<Vec<_>>().join("\n");
 
     let mut reason = match code {
-        Some(code) => format!("процесс сервера завершился с кодом {code}"),
-        None => "процесс сервера завершился".to_string(),
+        Some(code) => format!("the server process exited with code {code}"),
+        None => "the server process exited".to_string(),
     };
     if !said.is_empty() {
         reason.push_str(":\n");

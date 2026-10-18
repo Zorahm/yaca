@@ -80,13 +80,13 @@ impl StreamDecoder for Decoder {
         for choice in chunk.choices {
             if let Some(text) = choice.delta.reasoning() {
                 out.extend(self.open_block(Open::Thinking));
-                let index = self.open.expect("блок только что открыт").1;
+                let index = self.open.expect("the block was just opened").1;
                 out.push(ProviderEvent::ThinkingDelta { index, text });
             }
 
             if let Some(text) = choice.delta.content.filter(|t| !t.is_empty()) {
                 out.extend(self.open_block(Open::Text));
-                let index = self.open.expect("блок только что открыт").1;
+                let index = self.open.expect("the block was just opened").1;
                 out.push(ProviderEvent::TextDelta { index, text });
             }
 
@@ -321,11 +321,11 @@ mod tests {
     }
 
     #[test]
-    fn текст_открывает_и_закрывает_один_блок() {
+    fn text_opens_and_closes_one_block() {
         let mut d = Decoder::default();
         let first = decode(
             &mut d,
-            r#"{"model":"gpt-oss","choices":[{"delta":{"content":"при"}}]}"#,
+            r#"{"model":"gpt-oss","choices":[{"delta":{"content":"hel"}}]}"#,
         );
         assert_eq!(
             first,
@@ -340,43 +340,43 @@ mod tests {
                 },
                 ProviderEvent::TextDelta {
                     index: 0,
-                    text: "при".into()
+                    text: "hel".into()
                 },
             ]
         );
 
-        let second = decode(&mut d, r#"{"choices":[{"delta":{"content":"вет"}}]}"#);
+        let second = decode(&mut d, r#"{"choices":[{"delta":{"content":"lo"}}]}"#);
         assert_eq!(
             second,
             vec![ProviderEvent::TextDelta {
                 index: 0,
-                text: "вет".into()
+                text: "lo".into()
             }]
         );
     }
 
     #[test]
-    fn рассуждение_читается_под_обоими_именами() {
+    fn reasoning_is_read_under_both_names() {
         let mut d = Decoder::default();
         decode(
             &mut d,
-            r#"{"choices":[{"delta":{"reasoning_content":"ага"}}]}"#,
+            r#"{"choices":[{"delta":{"reasoning_content":"aha"}}]}"#,
         );
-        let events = decode(&mut d, r#"{"choices":[{"delta":{"reasoning":"угу"}}]}"#);
+        let events = decode(&mut d, r#"{"choices":[{"delta":{"reasoning":"uh-huh"}}]}"#);
         assert_eq!(
             events,
             vec![ProviderEvent::ThinkingDelta {
                 index: 0,
-                text: "угу".into()
+                text: "uh-huh".into()
             }]
         );
     }
 
     #[test]
-    fn рассуждение_и_текст_это_разные_блоки() {
+    fn reasoning_and_text_are_separate_blocks() {
         let mut d = Decoder::default();
-        decode(&mut d, r#"{"choices":[{"delta":{"reasoning":"думаю"}}]}"#);
-        let events = decode(&mut d, r#"{"choices":[{"delta":{"content":"ответ"}}]}"#);
+        decode(&mut d, r#"{"choices":[{"delta":{"reasoning":"I think"}}]}"#);
+        let events = decode(&mut d, r#"{"choices":[{"delta":{"content":"answer"}}]}"#);
         assert_eq!(
             events,
             vec![
@@ -387,16 +387,16 @@ mod tests {
                 },
                 ProviderEvent::TextDelta {
                     index: 1,
-                    text: "ответ".into()
+                    text: "answer".into()
                 },
             ]
         );
     }
 
     #[test]
-    fn вызов_тула_склеивается_из_дельт() {
+    fn a_tool_call_is_assembled_from_deltas() {
         let mut d = Decoder::default();
-        decode(&mut d, r#"{"choices":[{"delta":{"content":"сейчас"}}]}"#);
+        decode(&mut d, r#"{"choices":[{"delta":{"content":"now"}}]}"#);
         let start = decode(
             &mut d,
             r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1",
@@ -435,7 +435,7 @@ mod tests {
     }
 
     #[test]
-    fn два_вызова_получают_разные_блоки() {
+    fn two_calls_get_different_blocks() {
         let mut d = Decoder::default();
         decode(
             &mut d,
@@ -448,9 +448,9 @@ mod tests {
     }
 
     #[test]
-    fn конец_потока_закрывает_блоки_и_сообщение() {
+    fn the_end_of_the_stream_closes_blocks_and_the_message() {
         let mut d = Decoder::default();
-        decode(&mut d, r#"{"choices":[{"delta":{"content":"ответ"}}]}"#);
+        decode(&mut d, r#"{"choices":[{"delta":{"content":"answer"}}]}"#);
         decode(
             &mut d,
             r#"{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}"#,
@@ -484,32 +484,32 @@ mod tests {
     }
 
     #[test]
-    fn поток_без_done_всё_равно_закрывается() {
+    fn a_stream_without_done_still_closes() {
         let mut d = Decoder::default();
-        decode(&mut d, r#"{"choices":[{"delta":{"content":"ответ"}}]}"#);
+        decode(&mut d, r#"{"choices":[{"delta":{"content":"answer"}}]}"#);
         let tail = d.finish();
         assert_eq!(tail.last(), Some(&ProviderEvent::MessageStop));
     }
 
     #[test]
-    fn ошибка_в_потоке_становится_ошибкой() {
+    fn an_error_in_the_stream_becomes_an_error() {
         let mut d = Decoder::default();
         let err = d
-            .payload(r#"{"error":{"message":"перегружено"}}"#)
+            .payload(r#"{"error":{"message":"overloaded"}}"#)
             .unwrap_err();
-        assert!(matches!(err, ProviderError::Protocol(m) if m == "перегружено"));
+        assert!(matches!(err, ProviderError::Protocol(m) if m == "overloaded"));
     }
 
     #[test]
-    fn незнакомое_поле_не_роняет_поток() {
+    fn an_unknown_field_does_not_break_the_stream() {
         let mut d = Decoder::default();
         assert!(d
-            .payload(r#"{"choices":[{"delta":{"refusal":null}}],"чего":1}"#)
+            .payload(r#"{"choices":[{"delta":{"refusal":null}}],"whatever":1}"#)
             .is_ok());
     }
 
     #[test]
-    fn явные_нулы_вместо_структур_и_векторов_не_роняют_разбор() {
+    fn explicit_nulls_in_place_of_structs_and_vectors_do_not_break_parsing() {
         let mut d = Decoder::default();
         // Gateways fill in with nulls everything missing from the chunk: both fields and
         // whole structs with vectors.
@@ -520,19 +520,19 @@ mod tests {
         assert!(d
             .payload(
                 r#"{"choices":[{"delta":{"tool_calls":null,
-                   "content":"ответ"}}]}"#
+                   "content":"answer"}}]}"#
             )
             .is_ok());
     }
 
     #[test]
-    fn посылка_openrouter_с_явными_нулями_разбирается() {
+    fn an_openrouter_chunk_with_explicit_nulls_is_parsed() {
         // Real bytes from a gateway: the full set of fields, filled with explicit
         // nulls — including `tool_calls` and the empty `prompt_tokens_details`.
         let mut d = Decoder::default();
         let events = decode(
             &mut d,
-            r#"{"id":"router-d6d029170e66d258051ba7ea8c2098de","object":"chat.completion.chunk","created":1788115438,"model":"deepseek-v4-flash","choices":[{"index":0,"finish_reason":null,"logprobs":null,"delta":{"role":null,"content":"При","reasoning_content":null,"tool_calls":null}}],"usage":{"prompt_tokens":2858,"completion_tokens":29,"total_tokens":2887,"prompt_tokens_details":{}}}"#,
+            r#"{"id":"router-d6d029170e66d258051ba7ea8c2098de","object":"chat.completion.chunk","created":1788115438,"model":"deepseek-v4-flash","choices":[{"index":0,"finish_reason":null,"logprobs":null,"delta":{"role":null,"content":"Hi","reasoning_content":null,"tool_calls":null}}],"usage":{"prompt_tokens":2858,"completion_tokens":29,"total_tokens":2887,"prompt_tokens_details":{}}}"#,
         );
         assert_eq!(
             events,
@@ -547,7 +547,7 @@ mod tests {
                 },
                 ProviderEvent::TextDelta {
                     index: 0,
-                    text: "При".into()
+                    text: "Hi".into()
                 },
             ]
         );

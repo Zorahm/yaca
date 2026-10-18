@@ -40,7 +40,7 @@ fn runs(id: &str, command: &str) -> Vec<ProviderEvent> {
     calls(&[(
         id,
         "Bash",
-        json!({ "command": command, "description": "Прогнал команду" }),
+        json!({ "command": command, "description": "Ran the command" }),
     )])
 }
 
@@ -258,7 +258,7 @@ async fn a_rolled_back_file_has_to_be_read_again_before_it_is_edited() {
         Turn::Events(calls(&[(
             "t1",
             "Read",
-            json!({ "path": "a.txt", "description": "Прочитал файл" }),
+            json!({ "path": "a.txt", "description": "Read the file" }),
         )])),
         Turn::Events(runs("t2", &write_through_shell("a.txt", "changed"))),
         Turn::Events(script_text("Done.")),

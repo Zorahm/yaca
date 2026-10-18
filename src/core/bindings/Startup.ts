@@ -3,10 +3,11 @@ import type { Effort } from "./Effort";
 import type { Mode } from "./Mode";
 
 /**
- * С чем сессия начинается, когда её ещё нет.
+ * What a session starts with when it does not exist yet.
  *
- * `setMode` и соседи — команды сессии, а композер домашнего экрана (§9.1)
- * выбирает всё это до неё. Отдельный тип, а не три аргумента: они всегда
- * едут вместе и всегда означают одно — «человек выбрал до первого слова».
+ * `setMode` and its neighbours are session commands, but the home screen
+ * composer (§9.1) picks all of this before there is a session. A type of its
+ * own, not three arguments: they always travel together and always mean one
+ * thing — "the person chose before the first word".
  */
 export type Startup = { mode: Mode, provider: string, model: string, effort: Effort, };

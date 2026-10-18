@@ -1,21 +1,22 @@
 [package]
 name = "yaca-desktop"
-description = "Yaca — оболочка приложения"
+description = "Yaca — application shell"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
-# Не `yaca`: так зовётся бинарник `yaca-cli`, и в общем `target/debug` они
-# затирали друг друга — собранная оболочка молча подменяла CLI. Имя должно
-# отличаться и по регистру тоже: на Windows файлы регистронезависимы.
+# Not `yaca`: that is the name of the `yaca-cli` binary, and in the shared
+# `target/debug` they overwrote each other — a built shell silently replaced
+# the CLI. The name must differ in case too: files on Windows are
+# case-insensitive.
 [[bin]]
 name = "yaca-desktop"
 path = "src/main.rs"
 
 [lib]
-# Суффикс `_lib` — соглашение самого Tauri; `main.rs` зовёт `yaca_lib::run`.
+# The `_lib` suffix is Tauri's own convention; `main.rs` calls `yaca_lib::run`.
 name = "yaca_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
@@ -30,14 +31,14 @@ serde_json.workspace = true
 # `unstable` is what lets a window hold a second webview — the browser
 # column's page; `devtools` keeps its DevTools in a release build.
 tauri = { version = "2", features = ["unstable", "devtools"] }
-# Выбор папки проекта в чипе §9.1. Своего диалога у вебвью нет.
+# Choosing the project folder from the chip in §9.1. The webview has no dialog of its own.
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
-# Тосты §15 — напрямую `notify-rust`, не плагин: см. комментарий в `notify.rs`.
+# Toasts §15 — `notify-rust` directly, not a plugin: see the comment in `notify.rs`.
 notify-rust = "4.18"
 tokio.workspace = true
 tokio-util.workspace = true
-# `Startup` уезжает в вебвью, как и типы ядра, и разойтись с ним не должен.
+# `Startup` goes to the webview, like the core's types, and must not drift from them.
 ts-rs.workspace = true
 async-trait.workspace = true
 base64.workspace = true

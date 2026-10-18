@@ -17,7 +17,7 @@ use common::{ask, is_turn_over, session, until, TempProject};
 
 fn replying(turns: usize) -> Arc<MockProvider> {
     Arc::new(MockProvider::new(
-        (0..turns).map(|_| Turn::Events(script_text("ок"))).collect(),
+        (0..turns).map(|_| Turn::Events(script_text("ok"))).collect(),
     ))
 }
 
@@ -53,12 +53,12 @@ async fn the_first_message_carries_the_date_and_the_tree() {
         return;
     }
     dir.write("tracked.txt", "x");
-    dir.write("новый.txt", "y");
+    dir.write("new.txt", "y");
 
     let provider = replying(1);
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
-    ask(&handle, "привет").await;
+    ask(&handle, "hello").await;
     until(&mut rx, is_turn_over).await;
 
     let text = first_text(&provider, 0);
@@ -67,9 +67,9 @@ async fn the_first_message_carries_the_date_and_the_tree() {
     assert!(text.contains("Git branch: ") && text.contains("trunk"), "{text}");
     assert!(text.contains("?? tracked.txt"), "{text}");
     // Not an octal escape: the model would copy it into a path.
-    assert!(text.contains("?? новый.txt"), "{text}");
+    assert!(text.contains("?? new.txt"), "{text}");
     assert!(!text.contains(".yaca"), "{text}");
-    assert!(text.ends_with("привет"), "{text}");
+    assert!(text.ends_with("hello"), "{text}");
 
     let seen = provider.seen.lock().unwrap();
     assert!(
@@ -90,12 +90,12 @@ async fn the_note_is_written_once_and_stays_put() {
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "раз").await;
+    ask(&handle, "one").await;
     until(&mut rx, is_turn_over).await;
     // The tree changes between the messages; the note must not follow it,
     // or the prefix of the second request differs from the first.
     dir.write("later.txt", "z");
-    ask(&handle, "два").await;
+    ask(&handle, "two").await;
     until(&mut rx, is_turn_over).await;
 
     let (first, second) = (first_text(&provider, 0), first_text(&provider, 1));
@@ -119,10 +119,10 @@ async fn outside_a_repository_the_date_is_still_there() {
     let provider = replying(1);
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
-    ask(&handle, "привет").await;
+    ask(&handle, "hello").await;
     until(&mut rx, is_turn_over).await;
 
     let text = first_text(&provider, 0);
     assert!(text.contains("Today's date: 20"), "{text}");
-    assert!(text.ends_with("привет"), "{text}");
+    assert!(text.ends_with("hello"), "{text}");
 }

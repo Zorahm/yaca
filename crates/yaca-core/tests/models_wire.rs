@@ -16,7 +16,7 @@ use common::TempProject;
 fn spec(base: impl Into<String>, protocol: Protocol) -> ProviderSpec {
     ProviderSpec {
         id: "gateway".into(),
-        display_name: "Шлюз".into(),
+        display_name: "Gateway".into(),
         protocol,
         base_url: base.into(),
         headers: BTreeMap::new(),
@@ -32,7 +32,7 @@ fn json(body: &str) -> String {
 }
 
 #[tokio::test]
-async fn список_приезжает_страницами_и_склеивается() {
+async fn list_arrives_in_pages_and_is_joined() {
     let first = json(
         r#"{"data":[{"id":"claude-opus-5","display_name":"Claude Opus 5","max_input_tokens":1000000,"max_tokens":128000,"capabilities":{"effort":{"supported":true},"thinking":{"types":{"adaptive":{"supported":true}}}}}],"has_more":true,"last_id":"claude-opus-5"}"#,
     );
@@ -49,7 +49,7 @@ async fn список_приезжает_страницами_и_склеива�
     assert!(models[0].supports_effort);
 
     let seen = seen.await.unwrap();
-    assert_eq!(seen.len(), 2, "вторая страница спрашивается отдельно");
+    assert_eq!(seen.len(), 2, "the second page is asked for separately");
     // We ask for JSON, not a stream: the protocol's `accept` is for `/v1/messages`.
     assert!(seen[0].has_header("accept", "application/json"), "{}", seen[0].headers);
     assert!(seen[0].headers.contains("GET /v1/models?limit="));
@@ -64,7 +64,7 @@ async fn список_приезжает_страницами_и_склеива�
 }
 
 #[tokio::test]
-async fn страница_без_курсора_не_уходит_в_бесконечность() {
+async fn a_page_without_a_cursor_does_not_loop_forever() {
     // `has_more` without `last_id` — there is nothing to ask with, and the loop ends.
     let (base, _seen) = serve(json(r#"{"data":[{"id":"m"}],"has_more":true}"#)).await;
     let models = discover(&spec(base, Protocol::Anthropic), Some("sk-test"))
@@ -74,7 +74,7 @@ async fn страница_без_курсора_не_уходит_в_беско�
 }
 
 #[tokio::test]
-async fn openai_форма_спрашивает_один_раз() {
+async fn the_openai_shape_is_asked_once() {
     let (base, seen) = serve(json(
         r#"{"object":"list","data":[{"id":"qwen3-coder"},{"id":"llama3.3"}]}"#,
     ))
@@ -93,7 +93,7 @@ async fn openai_форма_спрашивает_один_раз() {
 }
 
 #[tokio::test]
-async fn отказ_доносится_как_отказ_а_не_как_пустой_список() {
+async fn a_refusal_arrives_as_a_refusal_not_as_an_empty_list() {
     let body = r#"{"error":{"message":"invalid x-api-key"}}"#;
     let response = format!(
         "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",

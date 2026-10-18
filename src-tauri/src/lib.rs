@@ -49,14 +49,14 @@ pub(crate) fn config_dir() -> Result<PathBuf, String> {
 
 /// The only spelling of a project path.
 ///
-/// Всё, что приходит снаружи — из диалога папок, из списка настроек, из окна,
-/// — приводится к тому же виду, в какой `Workspace::open` приводит корень
-/// сессии. Иначе `D:\Kod` и `\\?\D:\Kod` были бы двумя разными проектами: у
-/// одного чаты, у другого журналы.
+/// Everything that comes from outside — from the folder dialog, from the settings
+/// list, from the window — is brought to the same form that `Workspace::open`
+/// brings a session's root to. Otherwise `D:\Kod` and `\\?\D:\Kod` would be two
+/// different projects: one with the chats, the other with the journals.
 fn project_path(path: &str) -> Result<PathBuf, String> {
-    let canon = std::fs::canonicalize(path).map_err(|e| format!("не открыть {path}: {e}"))?;
+    let canon = std::fs::canonicalize(path).map_err(|e| format!("could not open {path}: {e}"))?;
     if !canon.is_dir() {
-        return Err(format!("{} — не каталог", canon.display()));
+        return Err(format!("{} — not a directory", canon.display()));
     }
     Ok(canon)
 }
@@ -69,20 +69,20 @@ fn listed(settings: &AppSettings) -> Vec<String> {
         .collect()
 }
 
-/// Проекты, которые знает окно (§9.1), свежий первым.
+/// The projects the window knows (§9.1), most recent first.
 ///
-/// Список переживает запуск, открытые чаты — нет: окно поднимается с пустым
-/// сайдбаром разговоров, а не с попыткой воскресить вчерашние.
+/// The list survives a start, open chats do not: the window comes up with an
+/// empty conversation sidebar, not with an attempt to revive yesterday's.
 #[tauri::command]
 fn projects() -> Result<Vec<String>, String> {
     Ok(listed(&AppSettings::load(&config_dir()?)))
 }
 
-/// Добавляет проект в список, не начиная чата (§9.1).
+/// Adds a project to the list without starting a chat (§9.1).
 ///
-/// Домашний экран показывается до первого сообщения, а `spawn` пишет журнал
-/// сессии сразу — иначе список §9 копил бы пустышку за каждый проект, в
-/// котором ничего не спросили.
+/// The home screen is shown before the first message, and `spawn` writes the
+/// session's journal at once — otherwise the §9 list would pile up an empty
+/// entry for every project in which nothing was asked.
 #[tauri::command]
 fn add_project(path: String) -> Result<Vec<String>, String> {
     let path = project_path(&path)?;
@@ -93,12 +93,13 @@ fn add_project(path: String) -> Result<Vec<String>, String> {
     Ok(listed(&settings))
 }
 
-/// Убирает проект из списка. Папку не трогает: забыть проект — действие окна,
-/// а не правка диска, и журналы §9 остаются в папке чатов приложения.
+/// Removes a project from the list. It does not touch the folder: forgetting a
+/// project is an action of the window, not an edit of the disk, and the §9
+/// journals stay in the app's chats folder.
 #[tauri::command]
 fn forget_project(path: String) -> Result<Vec<String>, String> {
-    // Без `project_path`: забыть надо и тот проект, каталога которого больше
-    // нет, — иначе исчезнувшая папка осталась бы в списке навсегда.
+    // Without `project_path`: a project whose folder is gone must be forgotten
+    // too, or the vanished folder would stay in the list forever.
     let dir = config_dir()?;
     let mut settings = AppSettings::load(&dir);
     settings.forget_project(&PathBuf::from(path));
@@ -106,11 +107,12 @@ fn forget_project(path: String) -> Result<Vec<String>, String> {
     Ok(listed(&settings))
 }
 
-/// С чем сессия начинается, когда её ещё нет.
+/// What a session starts with when it does not exist yet.
 ///
-/// `setMode` и соседи — команды сессии, а композер домашнего экрана (§9.1)
-/// выбирает всё это до неё. Отдельный тип, а не три аргумента: они всегда
-/// едут вместе и всегда означают одно — «человек выбрал до первого слова».
+/// `setMode` and its neighbours are session commands, but the home screen
+/// composer (§9.1) picks all of this before there is a session. A type of its
+/// own, not three arguments: they always travel together and always mean one
+/// thing — "the person chose before the first word".
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
@@ -121,10 +123,11 @@ pub struct Startup {
     pub effort: Effort,
 }
 
-/// Открытый чат: его идентификатор и состояние на момент открытия.
+/// An open chat: its identifier and its state at the moment it was opened.
 ///
-/// Идентификатор возвращается сразу, потому что дальше окно им и адресуется:
-/// чатов много, и команда без имени сессии не знает, кому она.
+/// The identifier comes back at once, because the window addresses everything
+/// by it from then on: there are many chats, and a command without the
+/// session's name does not know who it is for.
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
@@ -159,12 +162,13 @@ pub struct AttachedChat {
     pub events: Vec<AgentEvent>,
 }
 
-/// С чем сессию начал бы сам проект (§10): основа для нижнего ряда §7.1 на
-/// домашнем экране.
+/// What the project itself would start a session with (§10): the base for the
+/// bottom row of §7.1 on the home screen.
 ///
-/// Без этого композер показывал бы встроенные умолчания и молча затирал ими
-/// `.yaca/settings.json` — §10 требует обратного порядка: настройки проекта
-/// основа, выбранное в окне поверх них.
+/// Without this the composer would show the built-in defaults and silently
+/// overwrite `.yaca/settings.json` with them — §10 requires the reverse order:
+/// the project's settings are the base, and what is chosen in the window is
+/// laid over them.
 ///
 /// The pair is settled against the provider list here, not only at the first
 /// message: a project that names nothing starts on the first provider that
@@ -196,11 +200,11 @@ fn project_startup(path: String) -> Result<Startup, String> {
     })
 }
 
-/// Открывает чат в проекте: новый или записанный (§9).
+/// Opens a chat in the project: a new one or a recorded one (§9).
 ///
-/// Чат становится ещё одним живым, а не заменяет предыдущий: разговоров в
-/// окне столько, сколько их открыли, и ход, начатый в одном, идёт дальше,
-/// пока смотрят в другой.
+/// The chat becomes one more live chat rather than replacing the previous one:
+/// there are as many conversations in the window as were opened, and a turn
+/// started in one goes on while the person looks at another.
 #[tauri::command]
 async fn open_project(
     app: tauri::AppHandle,
@@ -212,10 +216,10 @@ async fn open_project(
     let root = project_path(&path)?;
     let providers = Providers::load(&config_dir()?).map_err(|e| e.to_string())?;
 
-    // Настройки проекта — основа, выбранное в окне поверх них (§10).
+    // The project's settings are the base; what is chosen in the window goes on top of them (§10).
     let mut config = SessionConfig::open(root.as_path()).map_err(|e| e.to_string())?;
-    // А это — уровень приложения, и в файле проекта его нет: ядру он приезжает
-    // полем конфига, как режим и усилие.
+    // This one is an application-level setting and is not in the project's
+    // file: it reaches the core as a config field, like the mode and the effort.
     config.respect_robots = state.prefs().respect_robots;
     config.shell = state.prefs().shell;
     // The human's own MCP servers and their approvals of a project's: both
@@ -269,16 +273,17 @@ async fn open_project(
 
         config.provider = spec.id.clone();
         config.model = model;
-        // Окно контекста и цены §7.1 считаются по моделям провайдера, а не по
-        // встроенному каталогу: у чужого провайдера они свои.
+        // The context window and the prices of §7.1 are counted from the
+        // provider's own models, not from the built-in catalogue: a foreign
+        // provider has its own.
         config.models = spec.models.clone();
 
         yaca_core::provider::build(spec)
     };
     let handle = Arc::new(yaca_core::spawn(config, provider).map_err(|e| e.to_string())?);
 
-    // Проект, в котором открыли чат, поднимается наверх списка: сайдбар
-    // читается сверху вниз, и сегодняшняя работа — сверху.
+    // The project the chat was opened in moves to the top of the list: the
+    // sidebar is read from the top down, and today's work is at the top.
     let dir = config_dir()?;
     let mut settings = AppSettings::load(&dir);
     settings.remember_project(root);
@@ -299,9 +304,9 @@ async fn open_project(
     })
 }
 
-/// Закрывает чат: ход останавливается, сессия отпускается, фоновые команды
-/// умирают вместе с ней (§6.5). Журнал §9 остаётся — закрыть не значит
-/// удалить, и закрытый чат открывается заново со своей историей.
+/// Closes a chat: the turn stops, the session is released, and background
+/// commands die with it (§6.5). The §9 journal stays — closing is not deleting,
+/// and a closed chat opens again with its history.
 #[tauri::command]
 async fn close_chat(
     state: State<'_, AppState>,
@@ -313,8 +318,8 @@ async fn close_chat(
     let Some(handle) = state.close(&id) else {
         return Ok(());
     };
-    // Отмена до того, как ручку отпустят: иначе начатый ход доработал бы до
-    // конца и только потом заметил, что его никто не ждёт.
+    // Cancel before the handle is released: otherwise the started turn would
+    // finish its work and only then notice that nobody is waiting for it.
     let _ = handle.send(Command::Cancel).await;
     Ok(())
 }
@@ -355,18 +360,19 @@ async fn attach_chats(
     Ok(attached)
 }
 
-/// Хранилище сессий проекта (§9). Работает с проектом, а не с открытым чатом:
-/// журналы лежат и у проекта, в котором сейчас никто не разговаривает.
+/// The project's session store (§9). It works with the project, not with an
+/// open chat: the journals also live with a project in which nobody is talking
+/// at the moment.
 fn store(project: &str) -> Result<SessionStore, String> {
     let chats = yaca_core::store::chats_dir().map_err(|e| e.to_string())?;
     Ok(SessionStore::open(&chats, &project_path(project)?))
 }
 
-/// Чат, которому адресована команда.
+/// The chat a command is addressed to.
 fn chat(state: &State<'_, AppState>, session: &str) -> Result<Arc<SessionHandle>, String> {
     state
         .chat(&SessionId::from(session.to_owned()))
-        .ok_or_else(|| format!("чат {session} не открыт"))
+        .ok_or_else(|| format!("chat {session} is not open"))
 }
 
 #[tauri::command]
@@ -426,30 +432,32 @@ fn duplicate_session(
         .map_err(|e| e.to_string())
 }
 
-/// Экспорт в Markdown (§9). Путь выбирает окно — диалог сохранения
-/// принадлежит ему, — а собирает и пишет ядро: разговор, прошедший через
-/// вебвью ради того, чтобы вернуться в файл, это лишняя его копия в памяти
-/// страницы.
+/// Export to Markdown (§9). The window chooses the path — the save dialog is
+/// its own — but the core assembles and writes the file: a conversation that
+/// went through the webview only to come back into a file is an extra copy of
+/// it in the page's memory.
 #[tauri::command]
 fn export_session(project: String, id: String, path: String) -> Result<(), String> {
     let text = store(&project)?
         .export_markdown(&SessionId::from(id))
         .map_err(|e| e.to_string())?;
-    std::fs::write(&path, text).map_err(|e| format!("не записать {path}: {e}"))
+    std::fs::write(&path, text).map_err(|e| format!("could not write {path}: {e}"))
 }
 
-/// Лента записанной сессии (§9) — журнал, каким его может проиграть заново
-/// открытое окно. Что из него выпадает и почему — `yaca_core::store::replay`.
+/// The feed of a recorded session (§9) — the journal as an open window can
+/// replay it again. What falls out of it, and why — `yaca_core::store::replay`.
 #[tauri::command]
 fn session_feed(project: String, id: String) -> Result<Vec<AgentEvent>, String> {
     Ok(store(&project)?.feed(&SessionId::from(id)))
 }
 
-/// Слэш-команды проекта (§7.3) — то, чем меню композера дополняет ввод.
+/// The project's slash commands (§7.3) — what the composer's menu completes the
+/// input with.
 ///
-/// Читается по проекту, а не по чату: файлы лежат в `.yaca/commands`, и чатов
-/// в одном проекте открыто может быть несколько. Разворачивает их ядро в
-/// момент отправки, а не окно: что уехало модели, решает ядро.
+/// They are read per project, not per chat: the files live in `.yaca/commands`,
+/// and several chats in one project may be open. The core expands them at the
+/// moment of sending, not the window: what goes to the model is the core's
+/// decision.
 #[tauri::command]
 fn project_commands(project: String) -> Result<Vec<SlashCommand>, String> {
     let mut commands = slash::load(&project_path(&project)?);
@@ -617,16 +625,16 @@ fn session_state(state: State<'_, AppState>, session: String) -> Option<SessionS
     chat(&state, &session).ok().map(|chat| chat.state())
 }
 
-/// Строка чата в списке §9 — заголовок для шапки (§3) и стоимость.
+/// A chat's row in the §9 list — the title for the header (§3) and the cost.
 #[tauri::command]
 fn session_meta(state: State<'_, AppState>, session: String) -> Option<SessionMeta> {
     chat(&state, &session).ok().and_then(|chat| chat.meta())
 }
 
-/// Имя для приветствия §9.1, взятое у операционной системы.
+/// The name for the §9.1 greeting, taken from the operating system.
 ///
-/// Учётных записей у Yaca нет, а спрашивать имя ради одной строки — плохая
-/// плата за неё. Не нашлось — приветствие обходится без обращения.
+/// Yaca has no accounts, and asking for a name for the sake of one line is a
+/// poor price for it. If none is found, the greeting goes without a name.
 #[tauri::command]
 fn user_name() -> Option<String> {
     let var = if cfg!(windows) { "USERNAME" } else { "USER" };
@@ -746,5 +754,5 @@ pub fn run() {
             browser::browser_reset_viewport,
         ]))
         .run(context)
-        .expect("не удалось запустить приложение");
+        .expect("could not start the application");
 }

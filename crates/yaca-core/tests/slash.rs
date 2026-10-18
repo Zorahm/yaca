@@ -25,7 +25,7 @@ fn opening(provider: &MockProvider) -> String {
     let sent = provider.seen.lock().unwrap().last().unwrap().clone();
     sent.messages
         .last()
-        .expect("запрос без сообщений")
+        .expect("a request without messages")
         .content
         .iter()
         .filter_map(|b| match b {
@@ -45,10 +45,10 @@ async fn the_model_gets_the_prompt_and_the_feed_keeps_the_name() {
     let dir = TempProject::new();
     dir.write(
         ".yaca/commands/review.md",
-        "---\ndescription: Просмотреть изменения\n---\nПросмотри $ARGUMENTS и скажи, что не так.\n",
+        "---\ndescription: Review the changes\n---\nReview $ARGUMENTS and say what is wrong.\n",
     );
 
-    let provider = replying("смотрю");
+    let provider = replying("looking");
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
@@ -57,7 +57,7 @@ async fn the_model_gets_the_prompt_and_the_feed_keeps_the_name() {
 
     assert_eq!(
         opening(&provider),
-        "Просмотри src/main.rs и скажи, что не так."
+        "Review src/main.rs and say what is wrong."
     );
 
     // §5.1 draws what the human typed, and §9 replays it — a feed showing the
@@ -68,7 +68,7 @@ async fn the_model_gets_the_prompt_and_the_feed_keeps_the_name() {
             AgentEvent::UserMessage { text, .. } => Some(text.clone()),
             _ => None,
         })
-        .expect("карточка человека должна быть в ленте");
+        .expect("the human's card must be in the feed");
     assert_eq!(card, "/review src/main.rs");
 }
 
@@ -77,8 +77,8 @@ async fn a_command_written_while_the_session_is_open_works_in_it() {
     let dir = TempProject::new();
 
     let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(script_text("раз")),
-        Turn::Events(script_text("два")),
+        Turn::Events(script_text("one")),
+        Turn::Events(script_text("two")),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
@@ -88,10 +88,10 @@ async fn a_command_written_while_the_session_is_open_works_in_it() {
     // Nothing answers to the name yet, so it goes to the model as written.
     assert_eq!(opening(&provider), "/notes");
 
-    dir.write(".yaca/commands/notes.md", "Собери заметки по проекту.");
+    dir.write(".yaca/commands/notes.md", "Gather the project notes.");
 
     ask(&handle, "/notes").await;
     until(&mut rx, is_turn_over).await;
     // The directory is read per message: a file written now works now.
-    assert_eq!(opening(&provider), "Собери заметки по проекту.");
+    assert_eq!(opening(&provider), "Gather the project notes.");
 }

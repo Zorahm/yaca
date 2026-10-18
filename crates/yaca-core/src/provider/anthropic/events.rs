@@ -238,48 +238,48 @@ mod tests {
     use super::*;
 
     #[test]
-    fn незнакомый_тип_блока_не_роняет_поток() {
+    fn an_unknown_block_type_does_not_break_the_stream() {
         let payload = r#"{"type":"content_block_start","index":0,
             "content_block":{"type":"server_tool_use","id":"x","name":"web_search"}}"#;
         assert_eq!(decode_payload(payload).unwrap(), vec![]);
     }
 
     #[test]
-    fn незнакомое_событие_не_роняет_поток() {
+    fn an_unknown_event_does_not_break_the_stream() {
         assert_eq!(decode_payload(r#"{"type":"whatever"}"#).unwrap(), vec![]);
     }
 
     #[test]
-    fn разбирает_дельты_рассуждения_и_текста() {
+    fn parses_reasoning_and_text_deltas() {
         let think = decode_payload(
             r#"{"type":"content_block_delta","index":0,
-                "delta":{"type":"thinking_delta","thinking":"ага"}}"#,
+                "delta":{"type":"thinking_delta","thinking":"aha"}}"#,
         )
         .unwrap();
         assert_eq!(
             think,
             vec![ProviderEvent::ThinkingDelta {
                 index: 0,
-                text: "ага".into()
+                text: "aha".into()
             }]
         );
 
         let text = decode_payload(
             r#"{"type":"content_block_delta","index":1,
-                "delta":{"type":"text_delta","text":"ответ"}}"#,
+                "delta":{"type":"text_delta","text":"answer"}}"#,
         )
         .unwrap();
         assert_eq!(
             text,
             vec![ProviderEvent::TextDelta {
                 index: 1,
-                text: "ответ".into()
+                text: "answer".into()
             }]
         );
     }
 
     #[test]
-    fn читает_счётчики_кеша() {
+    fn reads_cache_counters() {
         let evs = decode_payload(
             r#"{"type":"message_start","message":{"model":"claude-opus-5",
                 "usage":{"input_tokens":10,"output_tokens":0,
@@ -291,7 +291,7 @@ mod tests {
                 assert_eq!(usage.cache_read, 8000);
                 assert_eq!(usage.cache_write, 2);
             }
-            other => panic!("не то событие: {other:?}"),
+            other => panic!("not the expected event: {other:?}"),
         }
     }
 }

@@ -46,10 +46,10 @@ impl Workspace {
     pub fn open(root: impl AsRef<Path>) -> Result<Self, CoreError> {
         let root = root.as_ref();
         let canon = std::fs::canonicalize(root)
-            .map_err(|e| CoreError::Config(format!("не открыть проект {}: {e}", root.display())))?;
+            .map_err(|e| CoreError::Config(format!("could not open project {}: {e}", root.display())))?;
         if !canon.is_dir() {
             return Err(CoreError::Config(format!(
-                "{} — не каталог",
+                "{} is not a directory",
                 canon.display()
             )));
         }
@@ -71,10 +71,10 @@ impl Workspace {
     pub fn in_tree(mut self, tree: impl AsRef<Path>) -> Result<Self, CoreError> {
         let tree = tree.as_ref();
         let canon = std::fs::canonicalize(tree).map_err(|e| {
-            CoreError::Config(format!("не открыть рабочее дерево {}: {e}", tree.display()))
+            CoreError::Config(format!("could not open working tree {}: {e}", tree.display()))
         })?;
         if !canon.is_dir() {
-            return Err(CoreError::Config(format!("{} — не каталог", canon.display())));
+            return Err(CoreError::Config(format!("{} is not a directory", canon.display())));
         }
         self.root = canon;
         Ok(self)
@@ -233,12 +233,12 @@ impl Workspace {
     /// Resolves a path from a tool's arguments and checks the workspace boundaries.
     ///
     /// The order of the checks matters: the boundary first, then existence.
-    /// The other way round, and `../../secrets.env` would return «не найдено» instead of a refusal,
+    /// The other way round, and `../../secrets.env` would return «not found» instead of a refusal,
     /// so the invariant would turn into a report of what lies outside.
     pub fn resolve_existing(&self, raw: &str) -> Result<PathBuf, ToolError> {
         let candidate = self.bounded(raw)?;
         let canon = std::fs::canonicalize(&candidate)
-            .map_err(|_| ToolError::failed(format!("не найдено: {raw}")))?;
+            .map_err(|_| ToolError::failed(format!("not found: {raw}")))?;
         // The second time — after the links are dereferenced: a symbolic link
         // pointing outside passes the lexical check and must not pass this one.
         self.ensure_inside(&canon, raw)?;
@@ -303,7 +303,7 @@ impl Workspace {
             Ok(())
         } else {
             Err(ToolError::rejected(format!(
-                "путь вне проекта: {raw} → {}",
+                "path outside the project: {raw} → {}",
                 canon.display()
             )))
         }
@@ -372,7 +372,7 @@ fn normalize(path: &Path) -> PathBuf {
     let mut components = path.components().peekable();
     let mut out = match components.peek() {
         Some(Component::Prefix(..)) => {
-            let first = components.next().expect("префикс только что подсмотрен");
+            let first = components.next().expect("the prefix has just been peeked at");
             PathBuf::from(first.as_os_str())
         }
         _ => PathBuf::new(),
@@ -380,7 +380,7 @@ fn normalize(path: &Path) -> PathBuf {
 
     for component in components {
         match component {
-            Component::Prefix(..) => unreachable!("префикс бывает только первым"),
+            Component::Prefix(..) => unreachable!("a prefix only ever comes first"),
             Component::RootDir => out.push(component.as_os_str()),
             Component::CurDir => {}
             Component::ParentDir => {
@@ -399,14 +399,14 @@ mod tests {
 
     fn temp_project() -> (TempDir, Workspace) {
         let dir = TempDir::new();
-        dir.write("a.txt", "привет");
+        dir.write("a.txt", "hello");
         dir.mkdir("sub");
         let ws = Workspace::open(dir.path()).unwrap();
         (dir, ws)
     }
 
     #[test]
-    fn относительный_путь_внутри_проекта_разрешается() {
+    fn relative_path_inside_project_resolves() {
         let (_d, ws) = temp_project();
         let p = ws.resolve_existing("a.txt").unwrap();
         assert!(p.ends_with("a.txt"));
@@ -414,39 +414,39 @@ mod tests {
     }
 
     #[test]
-    fn выход_за_корень_отклоняется_как_инвариант() {
+    fn leaving_the_root_is_refused_as_an_invariant() {
         let (_d, ws) = temp_project();
         let err = ws.resolve_existing("../..").unwrap_err();
-        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
+        assert!(matches!(err, ToolError::Rejected(_)), "got {err:?}");
     }
 
     #[test]
-    fn несуществующий_путь_снаружи_тоже_отклоняется_а_не_теряется() {
+    fn nonexistent_path_outside_is_refused_too_not_lost() {
         let (_d, ws) = temp_project();
         // Otherwise the refusal is replaced by a report of what is not outside.
         let err = ws.resolve_existing("../../secrets.env").unwrap_err();
-        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
+        assert!(matches!(err, ToolError::Rejected(_)), "got {err:?}");
     }
 
     #[test]
-    fn точки_внутри_проекта_сворачиваются_и_не_мешают() {
+    fn dots_inside_the_project_collapse_and_do_no_harm() {
         let (_d, ws) = temp_project();
         let p = ws.resolve_existing("sub/../a.txt").unwrap();
         assert_eq!(ws.display(&p), "a.txt");
     }
 
     #[test]
-    fn новый_файл_проверяется_по_существующему_предку() {
+    fn new_file_is_checked_against_its_existing_ancestor() {
         let (_d, ws) = temp_project();
-        assert!(ws.resolve_new("sub/новый.rs").is_ok());
+        assert!(ws.resolve_new("sub/new.rs").is_ok());
         assert!(matches!(
-            ws.resolve_new("../снаружи.rs"),
+            ws.resolve_new("../outside.rs"),
             Err(ToolError::Rejected(_))
         ));
     }
 
     #[test]
-    fn реестр_прочитанного_помнит_файл() {
+    fn read_registry_remembers_the_file() {
         let (_d, ws) = temp_project();
         let p = ws.resolve_existing("a.txt").unwrap();
         assert!(!ws.was_read(&p));
@@ -459,9 +459,9 @@ mod tests {
     /// outside both.
     fn two_roots() -> (TempDir, TempDir, TempDir, Workspace) {
         let main = TempDir::new();
-        main.write("a.txt", "основной\n");
+        main.write("a.txt", "main\n");
         let extra = TempDir::new();
-        extra.write("b.txt", "дополнительный\n");
+        extra.write("b.txt", "extra\n");
         let outside = TempDir::new();
         outside.write("secret.env", "x\n");
         let ws = Workspace::open(main.path())
@@ -477,53 +477,53 @@ mod tests {
     }
 
     #[test]
-    fn файл_дополнительного_корня_открывается_по_абсолютному_пути() {
+    fn extra_root_file_opens_by_absolute_path() {
         let (_m, extra, _o, ws) = two_roots();
         let by_abs = ws.resolve_existing(&extra.path().join("b.txt").to_string_lossy()).unwrap();
         assert!(by_abs.starts_with(extra.path()));
         // The same file — the same key: the registry of what was read does not diverge.
         let by_model = ws.resolve_existing(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
         assert_eq!(by_abs, by_model);
-        assert!(ws.resolve_new(&as_model_sees(&extra.path().join("новый.txt"))).is_ok());
+        assert!(ws.resolve_new(&as_model_sees(&extra.path().join("new.txt"))).is_ok());
     }
 
     #[test]
-    fn относительный_путь_всегда_идёт_в_основной_корень() {
+    fn relative_path_always_goes_to_the_main_root() {
         let (_m, _e, _o, ws) = two_roots();
         // `b.txt` exists only in the additional root: a relative path does not find it,
         // rather than standing in for it.
         let err = ws.resolve_existing("b.txt").unwrap_err();
-        assert!(err.to_string().contains("не найдено"), "{err}");
+        assert!(err.to_string().contains("not found"), "{err}");
         assert!(ws.resolve_existing("a.txt").unwrap().starts_with(ws.root()));
     }
 
     #[test]
-    fn путь_вне_всех_корней_отклоняется_и_существующий_и_нет() {
+    fn path_outside_all_roots_is_refused_whether_it_exists_or_not() {
         let (_m, _e, outside, ws) = two_roots();
         let secret = outside.path().join("secret.env");
         let err = ws.resolve_existing(&as_model_sees(&secret)).unwrap_err();
-        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
+        assert!(matches!(err, ToolError::Rejected(_)), "got {err:?}");
 
-        let missing = outside.path().join("нет.env");
+        let missing = outside.path().join("missing.env");
         let err = ws.resolve_new(&as_model_sees(&missing)).unwrap_err();
-        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
+        assert!(matches!(err, ToolError::Rejected(_)), "got {err:?}");
     }
 
     #[test]
-    fn символическая_ссылка_из_дополнительного_корня_наружу_отклоняется() {
+    fn symlink_from_extra_root_pointing_outside_is_refused() {
         let (_m, extra, outside, ws) = two_roots();
-        let link = extra.path().join("ссылка.env");
+        let link = extra.path().join("link.env");
         if make_file_link(&outside.path().join("secret.env"), &link).is_err() {
             // The host does not allow creating a link: the check is skipped, not passed.
-            eprintln!("пропуск: хост не создаёт символические ссылки");
+            eprintln!("skipped: the host cannot create symbolic links");
             return;
         }
         let err = ws.resolve_existing(&as_model_sees(&link)).unwrap_err();
-        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
+        assert!(matches!(err, ToolError::Rejected(_)), "got {err:?}");
     }
 
     #[test]
-    fn отображение_основного_корня_относительное_а_дополнительного_абсолютное() {
+    fn main_root_display_is_relative_and_extra_root_display_is_absolute() {
         let (_m, extra, _o, ws) = two_roots();
         let main_file = ws.resolve_existing("a.txt").unwrap();
         assert_eq!(ws.display(&main_file), "a.txt");
@@ -538,7 +538,7 @@ mod tests {
     }
 
     #[test]
-    fn корень_файла_и_путь_для_сопоставления_шаблонов() {
+    fn file_root_and_path_for_pattern_matching() {
         let (_m, extra, _o, ws) = two_roots();
         let extra_file = ws.resolve_existing(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
         assert_eq!(ws.root_for(&extra_file), ws.additional()[0].as_path());
@@ -554,7 +554,7 @@ mod tests {
     }
 
     #[test]
-    fn правка_и_чтение_в_дополнительном_корне_держатся_за_один_ключ() {
+    fn edit_and_read_in_an_extra_root_share_one_key() {
         let (_m, extra, _o, ws) = two_roots();
         let path = ws.resolve_existing(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
         ws.mark_read(&path);
@@ -564,7 +564,7 @@ mod tests {
     }
 
     #[test]
-    fn дубликаты_вложенные_и_основной_корень_сокращаются() {
+    fn duplicate_nested_and_main_roots_are_collapsed() {
         let main = TempDir::new();
         let extra = TempDir::new();
         let inside = main.mkdir("sub");
@@ -583,7 +583,7 @@ mod tests {
     }
 
     #[test]
-    fn вложенный_дополнительный_корень_уходит_в_объемлющий() {
+    fn nested_extra_root_is_absorbed_by_the_enclosing_one() {
         let main = TempDir::new();
         let outer = TempDir::new();
         let inner = outer.mkdir("inner");
@@ -595,7 +595,7 @@ mod tests {
     }
 
     #[test]
-    fn корень_содержащий_проект_отклоняется_и_не_молча() {
+    fn root_containing_the_project_is_refused_not_silently() {
         let parent = TempDir::new();
         let project = parent.mkdir("project");
         let ws = Workspace::open(&project).unwrap();
@@ -606,11 +606,11 @@ mod tests {
     }
 
     #[test]
-    fn несуществующий_или_файловый_дополнительный_корень_отклоняется() {
+    fn missing_or_file_extra_root_is_refused() {
         let main = TempDir::new();
         let other = TempDir::new();
         let file = other.write("f.txt", "x\n");
-        let missing = main.path().join("нет");
+        let missing = main.path().join("missing");
         let ws = Workspace::open(main.path()).unwrap();
         assert!(matches!(
             ws.with_roots(&[missing]),
@@ -621,7 +621,7 @@ mod tests {
     }
 
     #[test]
-    fn fork_сохраняет_дополнительные_корни() {
+    fn fork_keeps_extra_roots() {
         let (_m, extra, _o, ws) = two_roots();
         let forked = ws.fork();
         assert_eq!(forked.additional(), ws.additional());

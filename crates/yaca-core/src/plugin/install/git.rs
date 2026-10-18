@@ -15,7 +15,7 @@ use std::process::{Command, Output};
 /// Runs git in `dir` and returns its stdout, or the first line of what it said
 /// went wrong.
 pub(super) fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
-    let out = run(dir, args).map_err(|e| format!("git не запускается: {e}"))?;
+    let out = run(dir, args).map_err(|e| format!("git cannot be started: {e}"))?;
     if out.status.success() {
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     } else {
@@ -24,7 +24,7 @@ pub(super) fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
             .lines()
             .map(str::trim)
             .find(|l| !l.is_empty())
-            .unwrap_or("git завершился с ошибкой");
+            .unwrap_or("git exited with an error");
         Err(format!("git: {line}"))
     }
 }
@@ -49,7 +49,7 @@ fn run(dir: &Path, args: &[&str]) -> std::io::Result<Output> {
 /// one commit of history. `None` means the default branch. Returns the
 /// commit's sha.
 pub(super) fn fetch(url: &str, revision: Option<&str>, dir: &Path) -> Result<String, String> {
-    std::fs::create_dir_all(dir).map_err(|e| format!("не создать {}: {e}", dir.display()))?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
     git(dir, &["init", "--quiet"])?;
     // A sha is fetched by itself; servers that allow it (GitHub does) give
     // exactly that commit, and the shallow depth keeps it one commit.
@@ -69,8 +69,8 @@ pub(super) fn head(dir: &Path) -> Option<String> {
 /// package, and a link inside the copy would point at the download that is
 /// about to be deleted.
 pub(super) fn copy_tree(from: &Path, to: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(to).map_err(|e| format!("не создать {}: {e}", to.display()))?;
-    let read = std::fs::read_dir(from).map_err(|e| format!("не прочитать {}: {e}", from.display()))?;
+    std::fs::create_dir_all(to).map_err(|e| format!("cannot create {}: {e}", to.display()))?;
+    let read = std::fs::read_dir(from).map_err(|e| format!("cannot read {}: {e}", from.display()))?;
     for entry in read.flatten() {
         if entry.file_name() == ".git" {
             continue;
@@ -80,7 +80,7 @@ pub(super) fn copy_tree(from: &Path, to: &Path) -> Result<(), String> {
         if kind.is_dir() {
             copy_tree(&entry.path(), &target)?;
         } else if kind.is_file() {
-            std::fs::copy(entry.path(), &target).map_err(|e| format!("не скопировать {}: {e}", entry.path().display()))?;
+            std::fs::copy(entry.path(), &target).map_err(|e| format!("cannot copy {}: {e}", entry.path().display()))?;
         }
     }
     Ok(())

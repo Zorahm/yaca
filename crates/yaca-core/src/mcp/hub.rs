@@ -326,7 +326,7 @@ impl Mcp {
                 move |server: &mut Server| {
                     server.status = McpStatus::NeedsLogin;
                     server.login_url = None;
-                    server.reason = Some(format!("вход не удался: {why}"));
+                    server.reason = Some(format!("login failed: {why}"));
                 }
             };
             let started = match oauth::start(store, &url, challenge.as_deref()).await {
@@ -383,15 +383,15 @@ impl Mcp {
     /// may take.
     pub(crate) fn client(&self, name: &str) -> Result<(Arc<Client>, Duration), McpError> {
         let servers = self.0.servers.lock().unwrap();
-        let gone = |why: &str| McpError::Closed(format!("сервер «{name}» {why}"));
-        let server = servers.get(name).ok_or_else(|| gone("не объявлен"))?;
+        let gone = |why: &str| McpError::Closed(format!("server «{name}» {why}"));
+        let server = servers.get(name).ok_or_else(|| gone("is not declared"))?;
         match (&server.client, server.status) {
             (Some(client), McpStatus::Ready) => {
                 Ok((client.clone(), server.spec.settings.tool_timeout()))
             }
             _ => Err(match &server.reason {
-                Some(reason) => gone(&format!("не подключён: {reason}")),
-                None => gone("не подключён"),
+                Some(reason) => gone(&format!("is not connected: {reason}")),
+                None => gone("is not connected"),
             }),
         }
     }
@@ -714,13 +714,13 @@ async fn connect(weak: Weak<Inner>, spec: ServerSpec, attempt: u64, shutdown: Ca
                         server.logged_in = false;
                         // The status says a login is needed; a reason is
                         // only worth a line when one was already made.
-                        server.reason = logged_in.then(|| "вход устарел: войдите снова".to_string());
+                        server.reason = logged_in.then(|| "login expired: log in again".to_string());
                     });
                 }
                 return;
             }
             Ok(Err(err)) => Err(err.to_string()),
-            Err(_) => Err(format!("не запустился за {} с", deadline.as_secs())),
+            Err(_) => Err(format!("did not start within {} s", deadline.as_secs())),
         },
     };
 

@@ -20,16 +20,16 @@ use tokio_util::sync::CancellationToken;
 
 /// Toast summary.
 ///
-/// Text a human reads is Russian: the shell has no access to the `src/i18n`
-/// modules (they live in the frontend), and every human-readable string in
-/// `src-tauri` is already Russian — command errors included.
+/// Text a human reads is English: the shell has no access to the `src/i18n`
+/// modules (they live in the frontend), so every human-readable string in
+/// `src-tauri` is a plain English literal — command errors included.
 const TITLE: &str = "Yaca";
 
 /// Toast body up to the target, separator included: the target glues right
-/// after it — «Агент запрашивает разрешение: git commit». `target` of a
+/// after it — "The agent asks for permission: git commit". `target` of a
 /// request is short by construction — a file name, the first word of a
 /// command or a domain (§5.7) — exactly one toast line.
-const BODY: &str = "Агент запрашивает разрешение: ";
+const BODY: &str = "The agent asks for permission: ";
 
 /// The toast's full text: the sentence and the target after the separator.
 fn toast_body(target: &str) -> String {
@@ -37,7 +37,7 @@ fn toast_body(target: &str) -> String {
 }
 
 /// Toast text for a question: the sentence, then the question itself.
-const QUESTION_BODY: &str = "Агент задал вопрос: ";
+const QUESTION_BODY: &str = "The agent asked a question: ";
 
 fn question_toast_body(question: &str) -> String {
     format!("{QUESTION_BODY}{question}")
@@ -237,7 +237,7 @@ mod tests {
             },
             AgentEvent::Error {
                 code: "e".into(),
-                message: "текст".into(),
+                message: "text".into(),
                 retryable: true,
             },
         ];
@@ -271,14 +271,14 @@ mod tests {
             request: QuestionRequest {
                 id: "q1".into(),
                 call_id: "c1".into(),
-                question: "Какой путь?".into(),
+                question: "Which path?".into(),
                 options: Vec::new(),
                 allow_other: true,
                 multi_select: false,
             },
         };
         let asked = unattended(true, false, &event).expect("no toast for a question");
-        assert!(asked.body().ends_with("Какой путь?"));
+        assert!(asked.body().ends_with("Which path?"));
     }
 
     /// The body reads as a sentence and then the target: the separator keeps
@@ -286,7 +286,7 @@ mod tests {
     #[test]
     fn toast_body_separates_sentence_and_target() {
         let body = toast_body("src/main.rs");
-        assert!(body.starts_with("Агент запрашивает разрешение"));
+        assert!(body.starts_with("The agent asks for permission"));
         assert!(body.ends_with("src/main.rs"));
         assert!(body.contains(": "), "no separator between the parts: {body}");
     }

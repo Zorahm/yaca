@@ -37,7 +37,7 @@ pub fn load(dir: &Path) -> Result<Option<RoutingConfig>, CoreError> {
 /// a file and an edit are refused by the same rule and with the same words.
 pub fn parse(text: &str, source: &str) -> Result<RoutingConfig, CoreError> {
     serde_json::from_str(text)
-        .map_err(|e| CoreError::Config(format!("{source} не разобрался: {e}")))
+        .map_err(|e| CoreError::Config(format!("{source} failed to parse: {e}")))
 }
 
 /// Written through a temporary file, as `providers.json` is, so a crash
@@ -63,21 +63,21 @@ pub fn validate(cfg: &RoutingConfig, providers: &Providers) -> Result<(), CoreEr
 /// once, so a nested problem does not carry two prefixes.
 fn check(cfg: &RoutingConfig, providers: &Providers) -> Result<(), String> {
     if cfg.name.trim().is_empty() {
-        return Err("у маршрутизатора не задано имя".into());
+        return Err("the router has no name".into());
     }
     if cfg.decision_model.timeout_ms == 0 {
-        return Err("время ответа модели-решателя 0 мс: вопросы не успеют получить ответ".into());
+        return Err("decision model response time is 0 ms: questions would not get an answer in time".into());
     }
 
     let signals = signals_by_name(&cfg.signals)?;
-    check_model_ref(&cfg.decision_model.model, providers, "модель, отвечающая на вопросы")?;
-    check_model_ref(&cfg.default, providers, "маршрут по умолчанию")?;
+    check_model_ref(&cfg.decision_model.model, providers, "model that answers questions")?;
+    check_model_ref(&cfg.default, providers, "default route")?;
 
     let mut names = BTreeSet::new();
     for decision in &cfg.decisions {
-        let place = format!("решение «{}»", decision.name);
+        let place = format!("decision «{}»", decision.name);
         if !names.insert(decision.name.as_str()) {
-            return Err(format!("{place} описано дважды"));
+            return Err(format!("{place} is described twice"));
         }
         check_rule(&decision.rules, &signals).map_err(|m| format!("{place}: {m}"))?;
         check_model_ref(&decision.model, providers, &place)?;
@@ -90,7 +90,7 @@ fn signals_by_name(signals: &[Signal]) -> Result<BTreeMap<&str, &Signal>, String
     for signal in signals {
         check_signal(signal)?;
         if by_name.insert(signal.name.as_str(), signal).is_some() {
-            return Err(format!("сигнал «{}» описан дважды", signal.name));
+            return Err(format!("signal «{}» is described twice", signal.name));
         }
     }
     Ok(by_name)
@@ -102,7 +102,7 @@ fn check_signal(signal: &Signal) -> Result<(), String> {
     };
     if choices.is_empty() {
         return Err(format!(
-            "у сигнала «{}» с вариантами не указано ни одного варианта",
+            "signal «{}» with choices lists no choices",
             signal.name
         ));
     }
@@ -110,7 +110,7 @@ fn check_signal(signal: &Signal) -> Result<(), String> {
     for choice in choices {
         if !keys.insert(choice.key.as_str()) {
             return Err(format!(
-                "у сигнала «{}» вариант «{}» указан дважды",
+                "signal «{}» has choice «{}» listed twice",
                 signal.name, choice.key
             ));
         }
@@ -131,21 +131,21 @@ fn check_rule(rule: &Rule, signals: &BTreeMap<&str, &Signal>) -> Result<(), Stri
 fn check_condition(condition: &Condition, signals: &BTreeMap<&str, &Signal>) -> Result<(), String> {
     let name = condition.name.as_str();
     let signal = signals.get(name).ok_or_else(|| {
-        format!("правило ссылается на сигнал «{name}», которого нет в signals")
+        format!("rule refers to signal «{name}», which is not in signals")
     })?;
     match (&signal.question, condition.label.as_deref()) {
         (Question::Noul { .. }, None) => Ok(()),
         (Question::Noul { .. }, Some(_)) => Err(format!(
-            "сигнал «{name}» задаёт да/нет, у условия не может быть варианта"
+            "signal «{name}» is yes/no, a condition cannot name a choice"
         )),
         (Question::Choice { .. }, None) => Err(format!(
-            "сигнал «{name}» с вариантами: условие должно назвать вариант"
+            "signal «{name}» has choices: the condition must name a choice"
         )),
         (Question::Choice { choices, .. }, Some(label)) => {
             if choices.iter().any(|choice| choice.key == label) {
                 Ok(())
             } else {
-                Err(format!("у сигнала «{name}» нет варианта «{label}»"))
+                Err(format!("signal «{name}» has no choice «{label}»"))
             }
         }
     }
@@ -156,15 +156,15 @@ fn check_model_ref(model: &ModelRef, providers: &Providers, place: &str) -> Resu
     // and "no such provider" would hide the real mistake.
     if model.provider == ROUTER_ID {
         return Err(format!(
-            "{place} указывает на провайдера «{ROUTER_ID}»: маршрутизатор не может направлять сам на себя"
+            "{place} points at provider «{ROUTER_ID}»: a router cannot route to itself"
         ));
     }
     let spec = providers
         .get(&model.provider)
-        .ok_or_else(|| format!("{place}: провайдера «{}» нет в списке", model.provider))?;
+        .ok_or_else(|| format!("{place}: provider «{}» is not in the list", model.provider))?;
     if spec.model(&model.model).is_none() {
         return Err(format!(
-            "{place}: у провайдера «{}» нет модели «{}»",
+            "{place}: provider «{}» has no model «{}»",
             model.provider, model.model
         ));
     }
@@ -210,7 +210,7 @@ mod tests {
         Providers {
             list: vec![ProviderSpec {
                 id: "gateway".into(),
-                display_name: "Шлюз".into(),
+                display_name: "Gateway".into(),
                 protocol: Protocol::OpenAi,
                 base_url: "https://gate.example.com".into(),
                 headers: BTreeMap::new(),
@@ -310,7 +310,7 @@ mod tests {
     #[test]
     fn a_broken_file_is_an_error_not_no_routing() {
         let dir = TempDir::new("broken");
-        fs::write(dir.0.join(FILE), "{ не json").unwrap();
+        fs::write(dir.0.join(FILE), "{ not json").unwrap();
         assert!(matches!(load(&dir.0), Err(CoreError::Config(_))));
     }
 
@@ -323,21 +323,21 @@ mod tests {
     fn an_empty_name_is_rejected() {
         let mut cfg = valid();
         cfg.name = "  ".into();
-        assert!(rejected(&cfg).contains("не задано имя"));
+        assert!(rejected(&cfg).contains("has no name"));
     }
 
     #[test]
     fn duplicate_signal_names_are_rejected() {
         let mut cfg = valid();
         cfg.signals.push(noul("code"));
-        assert!(rejected(&cfg).contains("сигнал «code» описан дважды"));
+        assert!(rejected(&cfg).contains("signal «code» is described twice"));
     }
 
     #[test]
     fn duplicate_decision_names_are_rejected() {
         let mut cfg = valid();
         cfg.decisions.push(cfg.decisions[0].clone());
-        assert!(rejected(&cfg).contains("решение «code» описано дважды"));
+        assert!(rejected(&cfg).contains("decision «code» is described twice"));
     }
 
     #[test]
@@ -350,7 +350,7 @@ mod tests {
                 choices: vec![],
             },
         };
-        assert!(rejected(&cfg).contains("не указано ни одного варианта"));
+        assert!(rejected(&cfg).contains("lists no choices"));
     }
 
     #[test]
@@ -362,63 +362,63 @@ mod tests {
                 description: "again".into(),
             });
         }
-        assert!(rejected(&cfg).contains("вариант «math» указан дважды"));
+        assert!(rejected(&cfg).contains("choice «math» listed twice"));
     }
 
     #[test]
     fn a_condition_on_an_unknown_signal_is_rejected() {
         let mut cfg = valid();
         cfg.decisions[0].rules = signal_rule("ghost", None);
-        assert!(rejected(&cfg).contains("сигнал «ghost», которого нет"));
+        assert!(rejected(&cfg).contains("signal «ghost», which is not in"));
     }
 
     #[test]
     fn a_label_on_a_yes_no_signal_is_rejected() {
         let mut cfg = valid();
         cfg.decisions[0].rules = signal_rule("code", Some("math"));
-        assert!(rejected(&cfg).contains("задаёт да/нет"));
+        assert!(rejected(&cfg).contains("is yes/no"));
     }
 
     #[test]
     fn a_choice_condition_without_a_label_is_rejected() {
         let mut cfg = valid();
         cfg.decisions[0].rules = signal_rule("topic", None);
-        assert!(rejected(&cfg).contains("должно назвать вариант"));
+        assert!(rejected(&cfg).contains("must name a choice"));
     }
 
     #[test]
     fn a_label_that_is_not_a_choice_is_rejected() {
         let mut cfg = valid();
         cfg.decisions[0].rules = signal_rule("topic", Some("poetry"));
-        assert!(rejected(&cfg).contains("нет варианта «poetry»"));
+        assert!(rejected(&cfg).contains("has no choice «poetry»"));
     }
 
     #[test]
     fn a_model_of_an_unknown_provider_is_rejected() {
         let mut cfg = valid();
         cfg.default = model("elsewhere", "big");
-        assert!(rejected(&cfg).contains("провайдера «elsewhere» нет в списке"));
+        assert!(rejected(&cfg).contains("provider «elsewhere» is not in the list"));
     }
 
     #[test]
     fn a_model_the_provider_does_not_have_is_rejected() {
         let mut cfg = valid();
         cfg.decisions[0].model = model("gateway", "gone");
-        assert!(rejected(&cfg).contains("у провайдера «gateway» нет модели «gone»"));
+        assert!(rejected(&cfg).contains("provider «gateway» has no model «gone»"));
     }
 
     #[test]
     fn a_zero_timeout_is_rejected() {
         let mut cfg = valid();
         cfg.decision_model.timeout_ms = 0;
-        assert!(rejected(&cfg).contains("0 мс"));
+        assert!(rejected(&cfg).contains("0 ms"));
     }
 
     #[test]
     fn a_router_routing_to_itself_is_rejected() {
         let mut cfg = valid();
         cfg.default = model(ROUTER_ID, "auto");
-        assert!(rejected(&cfg).contains("сам на себя"));
+        assert!(rejected(&cfg).contains("to itself"));
     }
 
     #[test]
@@ -426,7 +426,7 @@ mod tests {
         // The walk is recursive: a bad condition under `Not` inside `Any` is still found.
         let mut cfg = valid();
         cfg.decisions[0].rules = Rule::Any(vec![Rule::Not(Box::new(signal_rule("ghost", None)))]);
-        assert!(rejected(&cfg).contains("сигнал «ghost», которого нет"));
+        assert!(rejected(&cfg).contains("signal «ghost», which is not in"));
     }
 
     #[test]

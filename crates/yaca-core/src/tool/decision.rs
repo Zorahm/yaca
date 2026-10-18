@@ -203,7 +203,7 @@ async fn collect_text(
 /// the work it was asked for.
 fn unanswered(why: &str) -> ToolError {
     ToolError::failed_with(
-        format!("Decision-модель не ответила: {why}"),
+        format!("Decision model did not answer: {why}"),
         format!(
             "The Decision model gave no answer ({why}). Decide it yourself and carry on; \
              ask the human only if the choice really matters."

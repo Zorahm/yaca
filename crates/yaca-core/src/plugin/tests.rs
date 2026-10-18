@@ -101,7 +101,7 @@ fn what_yaca_cannot_load_is_a_note_and_the_rest_still_loads() {
     assert_eq!(p.skill_dirs.len(), 1);
     assert!(p.mcp_servers.is_empty());
     let notes = p.notes.join("\n");
-    for expected in ["стили вывода", "Setup", "prompt", "sse"] {
+    for expected in ["output styles", "Setup", "prompt", "sse"] {
         assert!(notes.contains(expected), "{expected}: {notes}");
     }
 }
@@ -114,7 +114,7 @@ fn a_component_path_that_leaves_the_plugin_is_not_followed() {
     let catalog = own(&config);
     let p = only(&catalog);
     assert!(p.skill_dirs.is_empty());
-    assert!(p.notes[0].contains("за пределы"), "{:?}", p.notes);
+    assert!(p.notes[0].contains("outside the plugin"), "{:?}", p.notes);
 }
 
 #[test]
@@ -150,8 +150,8 @@ fn an_agent_plugin_loads_its_skills_and_servers() {
 fn an_agent_manifest_that_breaks_the_schema_is_rejected_whole() {
     let cases = [
         (r#"{ "name": "a" }"#.to_string(), "$schema"),
-        (r#"{ "$schema": "https://agent-plugins.org/schemas/9.0.0/plugin.schema.json", "name": "a" }"#.into(), "версия"),
-        (format!(r#"{{ {SCHEMA}, "name": "Bad_Name" }}"#), "имя"),
+        (r#"{ "$schema": "https://agent-plugins.org/schemas/9.0.0/plugin.schema.json", "name": "a" }"#.into(), "version"),
+        (format!(r#"{{ {SCHEMA}, "name": "Bad_Name" }}"#), "name"),
         (format!(r#"{{ {SCHEMA} }}"#), "name"),
         (format!(r#"{{ {SCHEMA}, "name": "a", "version": 1 }}"#), "version"),
         (format!(r#"{{ {SCHEMA}, "name": "a", "author": {{ "name": "x", "phone": "1" }} }}"#), "author"),
@@ -213,7 +213,7 @@ fn a_directory_without_a_manifest_is_reported() {
     config.write("plugins/empty/README.md", "x");
     let catalog = own(&config);
     assert!(catalog.plugins().is_empty());
-    assert!(catalog.diagnostics()[0].message.contains("манифест"));
+    assert!(catalog.diagnostics()[0].message.contains("manifest"));
 }
 
 #[test]
@@ -223,7 +223,7 @@ fn the_first_plugin_of_a_name_wins() {
     claude_plugin(&config, "b-second", r#"{ "name": "same" }"#);
     let catalog = own(&config);
     assert!(only(&catalog).root.ends_with("a-first"));
-    assert!(catalog.diagnostics()[0].message.contains("уже загружен"));
+    assert!(catalog.diagnostics()[0].message.contains("already loaded"));
 }
 
 /// A Claude Code home with `installs` (id → install path, scope) and its

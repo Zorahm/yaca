@@ -19,20 +19,20 @@ pub fn run(project: &Path) -> Result<()> {
         .report();
 
     if report.skills.is_empty() {
-        println!("Навыков нет.");
+        println!("No skills.");
     }
     for skill in &report.skills {
         let scope = match skill.scope {
-            SkillScope::Project => "проект",
-            SkillScope::User => "ваш",
-            SkillScope::Plugin => "плагин",
+            SkillScope::Project => "project",
+            SkillScope::User => "yours",
+            SkillScope::Plugin => "plugin",
         };
         let mut marks = Vec::new();
         if !skill.model_invocable {
-            marks.push("только /");
+            marks.push("/ only");
         }
         if !skill.user_invocable {
-            marks.push("не в меню");
+            marks.push("not in the menu");
         }
         let marks = if marks.is_empty() {
             String::new()
@@ -47,7 +47,7 @@ pub fn run(project: &Path) -> Result<()> {
     if !report.diagnostics.is_empty() {
         println!();
         for d in &report.diagnostics {
-            let what = if d.skipped { "пропущен" } else { "внимание" };
+            let what = if d.skipped { "skipped" } else { "warning" };
             println!("{what}: {} — {}", d.path, d.message);
         }
     }

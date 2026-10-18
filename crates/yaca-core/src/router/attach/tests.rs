@@ -113,8 +113,8 @@ fn attaching_without_a_file_says_where_to_put_it() {
 
 #[test]
 fn an_edit_is_refused_by_the_same_rule_as_a_file() {
-    let err = file::parse("{ not json", "редактор").unwrap_err().to_string();
-    assert!(err.contains("редактор"), "{err}");
+    let err = file::parse("{ not json", "editor").unwrap_err().to_string();
+    assert!(err.contains("editor"), "{err}");
 }
 
 /// A provider list with the Decision preset, answered or not.

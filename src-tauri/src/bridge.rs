@@ -141,27 +141,27 @@ mod tests {
     }
 
     #[test]
-    fn дельты_одного_блока_склеиваются() {
-        let out = coalesce(vec![delta("b1", "при"), delta("b1", "вет")]);
+    fn deltas_of_one_block_coalesce() {
+        let out = coalesce(vec![delta("b1", "hel"), delta("b1", "lo")]);
         assert_eq!(out.len(), 1);
-        assert!(matches!(&out[0], AgentEvent::TextDelta { text, .. } if text == "привет"));
+        assert!(matches!(&out[0], AgentEvent::TextDelta { text, .. } if text == "hello"));
     }
 
     #[test]
-    fn разные_блоки_не_смешиваются() {
-        let out = coalesce(vec![delta("b1", "раз"), delta("b2", "два")]);
+    fn different_blocks_do_not_mix() {
+        let out = coalesce(vec![delta("b1", "one"), delta("b2", "two")]);
         assert_eq!(out.len(), 2);
     }
 
     #[test]
-    fn порядок_остальных_событий_сохраняется() {
+    fn order_of_other_events_is_kept() {
         let out = coalesce(vec![
             AgentEvent::TurnStarted {
                 turn_id: "t".into(),
                 at: TsMillis(1),
             },
-            delta("b1", "а"),
-            delta("b1", "б"),
+            delta("b1", "a"),
+            delta("b1", "b"),
             AgentEvent::TurnFinished {
                 turn_id: "t".into(),
                 stop_reason: StopReason::EndTurn,
@@ -174,13 +174,13 @@ mod tests {
     }
 
     #[test]
-    fn дельта_после_чужого_события_не_прилипает_к_прошлой() {
+    fn delta_after_another_event_does_not_join_the_earlier_one() {
         let out = coalesce(vec![
-            delta("b1", "а"),
+            delta("b1", "a"),
             AgentEvent::UsageUpdated {
                 usage: Default::default(),
             },
-            delta("b1", "б"),
+            delta("b1", "b"),
         ]);
         assert_eq!(out.len(), 3);
     }

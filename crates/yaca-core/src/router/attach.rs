@@ -60,7 +60,7 @@ pub fn attach(
 ) -> Result<Arc<dyn Provider>, CoreError> {
     let cfg = file::load(config_dir)?.ok_or_else(|| {
         CoreError::Config(format!(
-            "маршрутизатор выбран, но routing.json не найден: создайте его в {} рядом с providers.json",
+            "the router is selected, but routing.json was not found: create it in {} next to providers.json",
             config_dir.display()
         ))
     })?;

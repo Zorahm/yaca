@@ -52,17 +52,17 @@ pub enum McpError {
     #[error("{0}")]
     Protocol(String),
     /// The server answered with a JSON-RPC error.
-    #[error("{message} (код {code})")]
+    #[error("{message} (code {code})")]
     Rpc { code: i64, message: String },
-    #[error("сервер не ответил за {0} с")]
+    #[error("the server did not answer within {0} s")]
     Timeout(u64),
-    #[error("отменено")]
+    #[error("cancelled")]
     Cancelled,
     #[error("{0}")]
     Closed(String),
     /// The server answered 401: it wants a login. Carries its
     /// `WWW-Authenticate`, which may say where to log in.
-    #[error("сервер просит войти")]
+    #[error("the server asks to log in")]
     Unauthorized(Option<String>),
 }
 

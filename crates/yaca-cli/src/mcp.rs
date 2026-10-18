@@ -37,7 +37,7 @@ pub async fn run(
     if let Some(name) = &logout {
         servers.logout(name);
         servers.settled(&CancellationToken::new()).await;
-        println!("вход на сервер {name} забыт");
+        println!("login to server {name} forgotten");
     }
     if let Some(name) = &login {
         log_in(&servers, name).await;
@@ -45,24 +45,24 @@ pub async fn run(
 
     let list = servers.snapshot();
     if list.is_empty() {
-        println!("нет серверов: объявите их в .yaca/settings.json, .mcp.json или mcp.json");
+        println!("no servers: declare them in .yaca/settings.json, .mcp.json or mcp.json");
     }
     for server in list {
         let source = match server.source {
             McpSource::Global => "mcp.json",
             McpSource::ProjectFile => ".mcp.json",
             McpSource::Project => ".yaca/settings.json",
-            McpSource::Plugin => "плагин",
-            McpSource::App => "приложение",
+            McpSource::Plugin => "plugin",
+            McpSource::App => "app",
         };
         let status = match server.status {
-            McpStatus::Connecting => "подключается",
-            McpStatus::Ready => "готов",
-            McpStatus::Failed => "сбой",
-            McpStatus::Disabled => "выключен",
-            McpStatus::NeedsApproval => "ждёт одобрения: yaca mcp --approve <имя>",
-            McpStatus::NeedsLogin => "нужен вход: yaca mcp --login <имя>",
-            McpStatus::LoggingIn => "идёт вход",
+            McpStatus::Connecting => "connecting",
+            McpStatus::Ready => "ready",
+            McpStatus::Failed => "failed",
+            McpStatus::Disabled => "disabled",
+            McpStatus::NeedsApproval => "waiting for approval: yaca mcp --approve <name>",
+            McpStatus::NeedsLogin => "login needed: yaca mcp --login <name>",
+            McpStatus::LoggingIn => "logging in",
         };
         println!("{}  {status}  ({source})  {}", server.name, server.target);
         if let Some(reason) = &server.reason {
@@ -71,13 +71,13 @@ pub async fn run(
             }
         }
         for tool in &server.tools {
-            let mark = if tool.read_only { "читает" } else { "пишет " };
+            let mark = if tool.read_only { "reads " } else { "writes" };
             let about = tool.description.as_deref().unwrap_or("");
             let about = about.lines().next().unwrap_or("");
             println!("    {mark}  {}  {about}", tool.name);
         }
         if server.resources {
-            println!("    есть ресурсы");
+            println!("    has resources");
         }
     }
     Ok(())
@@ -88,7 +88,7 @@ pub async fn run(
 /// again once the login is done.
 async fn log_in(servers: &Mcp, name: &str) {
     if !servers.snapshot().iter().any(|s| s.name == name) {
-        println!("нет сервера {name}");
+        println!("no server {name}");
         return;
     }
     servers.login(name);
@@ -99,27 +99,27 @@ async fn log_in(servers: &Mcp, name: &str) {
             return;
         };
         if let (false, Some(url)) = (opened, &server.login_url) {
-            println!("Войдите в браузере: {url}");
+            println!("Sign in in the browser: {url}");
             open_browser(url);
             opened = true;
         }
         match server.status {
             McpStatus::LoggingIn | McpStatus::Connecting => {}
             McpStatus::Ready => {
-                println!("вход выполнен, сервер {name} готов");
+                println!("login done, server {name} is ready");
                 return;
             }
             _ => {
                 println!(
-                    "вход не выполнен: {}",
-                    server.reason.as_deref().unwrap_or("причина неизвестна")
+                    "login failed: {}",
+                    server.reason.as_deref().unwrap_or("reason unknown")
                 );
                 return;
             }
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
-    println!("вход не дождался браузера");
+    println!("login timed out waiting for the browser");
 }
 
 fn open_browser(url: &str) {

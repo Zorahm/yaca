@@ -57,7 +57,7 @@ yaml-rust2 = { version = "0.13", default-features = false }
 windows-sys = { version = "0.61", features = ["Win32_Globalization", "Win32_System_SystemInformation"] }
 
 [profile.dev]
-# Ядро пересобирается на каждой правке; зависимости — почти никогда.
+# The core rebuilds on every edit; dependencies almost never do.
 opt-level = 0
 
 [profile.dev.package."*"]

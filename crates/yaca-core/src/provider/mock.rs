@@ -62,7 +62,7 @@ impl Provider for MockProvider {
                 .unwrap()
                 .pop_front()
                 .unwrap_or(Turn::Fail(ProviderError::Protocol(
-                    "сценарий исчерпан: ядро сделало больше запросов, чем ожидал тест".into(),
+                    "the script ran out: the core made more requests than the test expected".into(),
                 )));
 
         let events = match turn {

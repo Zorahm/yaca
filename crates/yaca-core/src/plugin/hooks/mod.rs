@@ -119,7 +119,7 @@ struct Condition {
 pub fn parse(doc: &Value, notes: &mut Vec<String>) -> Vec<PluginHook> {
     let events = doc.get("hooks").and_then(Value::as_object).or_else(|| doc.as_object());
     let Some(events) = events else {
-        notes.push("хуки: ожидался объект событий".into());
+        notes.push("hooks: an object of events was expected".into());
         return Vec::new();
     };
     let mut out = Vec::new();
@@ -128,7 +128,7 @@ pub fn parse(doc: &Value, notes: &mut Vec<String>) -> Vec<PluginHook> {
             continue;
         }
         let Some(event) = HookEvent::from_name(name) else {
-            notes.push(format!("хуки {name} в Yaca не поддерживаются"));
+            notes.push(format!("hooks {name} are not supported in Yaca"));
             continue;
         };
         for group in groups.as_array().into_iter().flatten() {
@@ -137,7 +137,7 @@ pub fn parse(doc: &Value, notes: &mut Vec<String>) -> Vec<PluginHook> {
                 Some(m) => match Regex::new(&format!("^(?:{m})$")) {
                     Ok(re) => Some(re),
                     Err(_) => {
-                        notes.push(format!("хук {name}: matcher «{m}» не разбирается и пропущен"));
+                        notes.push(format!("hook {name}: matcher «{m}» cannot be parsed and was skipped"));
                         continue;
                     }
                 },
@@ -145,7 +145,7 @@ pub fn parse(doc: &Value, notes: &mut Vec<String>) -> Vec<PluginHook> {
             for hook in group.get("hooks").and_then(Value::as_array).into_iter().flatten() {
                 match one(event, matcher.clone(), hook) {
                     Ok(hook) => out.push(hook),
-                    Err(why) => notes.push(format!("хук {name}: {why}")),
+                    Err(why) => notes.push(format!("hook {name}: {why}")),
                 }
             }
         }
@@ -156,14 +156,14 @@ pub fn parse(doc: &Value, notes: &mut Vec<String>) -> Vec<PluginHook> {
 fn one(event: HookEvent, matcher: Option<Regex>, hook: &Value) -> Result<PluginHook, String> {
     match hook.get("type").and_then(Value::as_str) {
         Some("command") | None => {}
-        Some(other) => return Err(format!("тип «{other}» не поддерживается")),
+        Some(other) => return Err(format!("type «{other}» is not supported")),
     }
     let command = hook
         .get("command")
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|c| !c.is_empty())
-        .ok_or("нет command")?;
+        .ok_or("no command")?;
     let run = match hook.get("args").and_then(Value::as_array) {
         Some(args) => HookRun::Exec {
             program: command.to_string(),
@@ -180,7 +180,7 @@ fn one(event: HookEvent, matcher: Option<Regex>, hook: &Value) -> Result<PluginH
         .unwrap_or(DEFAULT_TIMEOUT_SECS)
         .clamp(1, MAX_TIMEOUT_SECS);
     let condition = match hook.get("if").and_then(Value::as_str) {
-        Some(rule) => Some(condition(rule).ok_or(format!("условие if «{rule}» не разбирается"))?),
+        Some(rule) => Some(condition(rule).ok_or(format!("if condition «{rule}» cannot be parsed"))?),
         None => None,
     };
     Ok(PluginHook {

@@ -4,12 +4,12 @@ import type { Isolation } from "./Isolation";
 import type { Mode } from "./Mode";
 
 /**
- * Снимок настроек сессии для нижнего ряда композера.
+ * Snapshot of the session settings for the composer's bottom row.
  */
 export type SessionState = { projectRoot: string, provider: string, model: string, mode: Mode, effort: Effort, busy: boolean, 
 /**
- * Обход разрешений (§8). Не пятый режим, а флаг поверх текущего: чип
- * режима и кольцо становятся `--rust`.
+ * Permission bypass (§8). Not a fifth mode but a flag on top of the current one:
+ * the mode chip and the ring turn `--rust`.
  */
 bypass: boolean, 
 /**

@@ -4,7 +4,7 @@ import type { ShellChoice } from "./ShellChoice";
 import type { Theme } from "./Theme";
 
 /**
- * The whole of what §10's "Внешний вид" and "Уведомления и язык" hold.
+ * The whole of what §10's "Appearance" and "Notifications and language" hold.
  *
  * One flat struct rather than one per section: the sections are a way of
  * laying out a window, and the file should not have to be rearranged when

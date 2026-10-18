@@ -15,7 +15,7 @@ use yaca_core::legacy;
 /// Windows only: WebView2 keeps the profile in `%LOCALAPPDATA%\<identifier>`,
 /// a directory this process can move. WKWebView and WebKitGTK keep theirs
 /// where the platform decides, and a draft there stays behind — see
-/// `README.md`, «Чего нет».
+/// `README.md`.
 #[cfg(windows)]
 pub fn adopt(identifier: &str) {
     if let Some(base) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {

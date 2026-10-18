@@ -145,7 +145,7 @@ async fn a_remote_servers_tool_is_called_over_http() {
         Turn::Events(calls(&[(
             "t1",
             "mcp__web__sum",
-            json!({ "a": 2, "b": 3, "description": "Сложил" }),
+            json!({ "a": 2, "b": 3, "description": "Summed" }),
         )])),
         Turn::Events(script_text("Five.")),
     ]));
@@ -209,7 +209,7 @@ async fn an_address_nobody_answers_at_is_a_failed_server() {
 
     let servers = handle.mcp();
     assert_eq!(servers[0].status, McpStatus::Failed);
-    assert!(servers[0].reason.as_deref().unwrap_or_default().contains("сеть"));
+    assert!(servers[0].reason.as_deref().unwrap_or_default().contains("network"));
     let offered = provider.seen.lock().unwrap()[0].tools.clone();
     assert!(offered.iter().all(|tool| !tool.name.starts_with("mcp__")));
 }

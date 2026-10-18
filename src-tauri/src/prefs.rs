@@ -61,7 +61,7 @@ pub enum Language {
     System,
 }
 
-/// The whole of what §10's "Внешний вид" and "Уведомления и язык" hold.
+/// The whole of what §10's "Appearance" and "Notifications and language" hold.
 ///
 /// One flat struct rather than one per section: the sections are a way of
 /// laying out a window, and the file should not have to be rearranged when
@@ -146,7 +146,7 @@ pub fn preferences(state: tauri::State<'_, crate::state::AppState>) -> Preferenc
 ///
 /// The state is updated before the write. A failed write is reported, and what
 /// the human sees is what they picked — a window that snapped back to the old
-/// theme while the error message said "не записать" would be telling two
+/// theme while the error message said "could not write" would be telling two
 /// stories at once.
 #[tauri::command]
 pub fn set_preferences(
@@ -164,7 +164,7 @@ pub fn set_preferences(
     settings.set_prefs(prefs);
     settings
         .save(&dir)
-        .map_err(|e| format!("не записать настройки: {e}"))
+        .map_err(|e| format!("could not write settings: {e}"))
 }
 
 #[cfg(test)]

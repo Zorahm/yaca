@@ -162,15 +162,15 @@ async fn the_agent_goes_on_and_the_turn_waits_for_the_report() {
         write("w1", "b.txt"),
         // The agent, while the subagent's write waits in its turn.
         Turn::Events(script_tool_call("r1", "Read", json!({ "path": "dates.rs" }))),
-        text("жду отчёт"),
+        text("waiting for the report"),
         // The subagent, once it was allowed to write.
         text("Created b.txt."),
-        text("готово"),
+        text("done"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "два файла").await;
+    ask(&handle, "two files").await;
     let mut seen = until_all(&mut rx, &[&asks_about("w0"), &started("w1")]).await;
     allow(&handle, &seen, "w0").await;
 
@@ -224,12 +224,12 @@ async fn a_report_that_is_in_joins_the_results_of_the_batch() {
     let provider = Arc::new(MockProvider::new(vec![
         send_and_write(),
         text("Nothing to create."),
-        text("готово"),
+        text("done"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "два файла").await;
+    ask(&handle, "two files").await;
     let seen = until_all(&mut rx, &[&asks_about("w0"), &finished("t1")]).await;
     allow(&handle, &seen, "w0").await;
     until(&mut rx, is_turn_over).await;
@@ -259,7 +259,7 @@ async fn esc_stops_a_background_subagent_with_the_turn() {
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "два файла").await;
+    ask(&handle, "two files").await;
     until_all(&mut rx, &[&asks_about("w0"), &started("w1")]).await;
     handle.send(Command::Cancel).await.unwrap();
     let seen = until(&mut rx, is_turn_over).await;
@@ -281,12 +281,12 @@ async fn a_background_subagent_that_fails_says_so() {
     let provider = Arc::new(MockProvider::new(vec![
         send_and_write(),
         Turn::Fail(ProviderError::Protocol("boom".into())),
-        text("понял"),
+        text("got it"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "два файла").await;
+    ask(&handle, "two files").await;
     let seen = until_all(&mut rx, &[&asks_about("w0"), &failed("t1")]).await;
     allow(&handle, &seen, "w0").await;
     until(&mut rx, is_turn_over).await;
@@ -308,26 +308,26 @@ async fn the_human_wakes_an_agent_that_waits_for_a_report() {
     let provider = Arc::new(MockProvider::new(vec![
         send_and_write(),
         write("w1", "b.txt"),
-        text("жду отчёт"),
+        text("waiting for the report"),
         // Answering the human, with the subagent still at its question.
-        text("подагент ещё работает"),
+        text("the subagent is still working"),
         text("Created b.txt."),
-        text("готово"),
+        text("done"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "два файла").await;
+    ask(&handle, "two files").await;
     let mut seen = until_all(&mut rx, &[&asks_about("w0"), &started("w1")]).await;
     allow(&handle, &seen, "w0").await;
     seen.extend(until_all(&mut rx, &[&asks_about("w1")]).await);
     asked_times(&provider, 3).await;
 
     // §7.4: said to the agent, so heard now and not when the subagent is done.
-    ask(&handle, "как дела?").await;
+    ask(&handle, "how are you?").await;
     asked_times(&provider, 4).await;
     let said = said_last(&requests(&provider)[3]);
-    assert_eq!(said, vec!["как дела?".to_string()]);
+    assert_eq!(said, vec!["how are you?".to_string()]);
 
     allow(&handle, &seen, "w1").await;
     let rest = until(&mut rx, is_turn_over).await;

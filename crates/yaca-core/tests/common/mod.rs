@@ -209,7 +209,7 @@ pub fn tool_result_of(
     let sent = provider.seen.lock().unwrap().last().unwrap().clone();
     sent.messages
         .last()
-        .expect("запрос без сообщений")
+        .expect("a request without messages")
         .content
         .iter()
         .find_map(|block| match block {

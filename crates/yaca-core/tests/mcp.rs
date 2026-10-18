@@ -91,7 +91,7 @@ async fn a_servers_tool_is_offered_and_called_like_any_other() {
     let dir = TempProject::new();
     declare(&dir, &[], json!({}));
     let provider = Arc::new(MockProvider::new(vec![
-        call("t1", "echo", json!({ "text": "привет", "description": "Проверил эхо" })),
+        call("t1", "echo", json!({ "text": "hello", "description": "Checked echo" })),
         Turn::Events(script_text("Done.")),
     ]));
     let handle = open(&dir, provider.clone(), Mode::Manual);
@@ -130,16 +130,16 @@ async fn a_servers_tool_is_offered_and_called_like_any_other() {
         })
         .expect("the call has no row");
     assert_eq!(started.0, "mcp__fixture__echo");
-    assert_eq!(started.1.as_deref(), Some("Проверил эхо"));
+    assert_eq!(started.1.as_deref(), Some("Checked echo"));
     assert_eq!(started.2.as_deref(), Some("fixture · echo"));
     // The caption is the feed's; the server is sent its own arguments only.
-    assert_eq!(started.3, json!({ "text": "привет" }));
+    assert_eq!(started.3, json!({ "text": "hello" }));
 
     // Read-only by the server's word: nobody was asked.
     let kinds: Vec<_> = events.iter().map(AgentEvent::kind).collect();
     assert!(!kinds.contains(&"permissionRequested"), "{kinds:?}");
     assert!(kinds.contains(&"toolCallFinished"), "{kinds:?}");
-    assert_eq!(tool_result_of(&provider, "t1"), ("привет".to_string(), false));
+    assert_eq!(tool_result_of(&provider, "t1"), ("hello".to_string(), false));
 }
 
 #[tokio::test]
@@ -148,7 +148,7 @@ async fn a_tool_that_writes_asks_first_and_a_refusal_runs_nothing() {
     declare(&dir, &[], json!({}));
     let note = dir.path().join("note.txt");
     let provider = Arc::new(MockProvider::new(vec![
-        call("t1", "write_note", json!({ "path": note, "text": "x", "description": "Записал" })),
+        call("t1", "write_note", json!({ "path": note, "text": "x", "description": "Wrote it" })),
         Turn::Events(script_text("Not written.")),
     ]));
     let handle = open(&dir, provider.clone(), Mode::Manual);
@@ -198,8 +198,8 @@ async fn allowing_a_whole_server_stops_the_questions_about_its_tools() {
     declare(&dir, &[], json!({}));
     let (first, second) = (dir.path().join("a.txt"), dir.path().join("b.txt"));
     let provider = Arc::new(MockProvider::new(vec![
-        call("t1", "write_note", json!({ "path": first, "text": "1", "description": "Первая" })),
-        call("t2", "write_note", json!({ "path": second, "text": "2", "description": "Вторая" })),
+        call("t1", "write_note", json!({ "path": first, "text": "1", "description": "First" })),
+        call("t2", "write_note", json!({ "path": second, "text": "2", "description": "Second" })),
         Turn::Events(script_text("Both written.")),
     ]));
     let handle = open(&dir, provider, Mode::Manual);
@@ -237,7 +237,7 @@ async fn a_tool_error_is_a_failed_call_with_the_servers_words() {
     let dir = TempProject::new();
     declare(&dir, &[], json!({}));
     let provider = Arc::new(MockProvider::new(vec![
-        call("t1", "fail", json!({ "description": "Спросил трекер" })),
+        call("t1", "fail", json!({ "description": "Asked the tracker" })),
         Turn::Events(script_text("It failed.")),
     ]));
     let handle = open(&dir, provider.clone(), Mode::Manual);
@@ -299,7 +299,7 @@ async fn a_server_that_never_answers_is_given_up_on_at_its_deadline() {
 
     let servers = handle.mcp();
     assert_eq!(servers[0].status, McpStatus::Failed);
-    assert!(servers[0].reason.as_deref().unwrap_or_default().contains("1 с"));
+    assert!(servers[0].reason.as_deref().unwrap_or_default().contains("1 s"));
     assert!(offered(&provider, 0).iter().all(|name| !name.starts_with("mcp__")));
 }
 
@@ -400,7 +400,7 @@ async fn a_tool_list_that_changes_applies_from_the_next_turn() {
     let dir = TempProject::new();
     declare(&dir, &[], json!({}));
     let provider = Arc::new(MockProvider::new(vec![
-        call("t1", "grow", json!({ "description": "Добавил инструмент" })),
+        call("t1", "grow", json!({ "description": "Added a tool" })),
         Turn::Events(script_text("Grown.")),
         Turn::Events(script_text("I see it.")),
     ]));
@@ -436,11 +436,11 @@ async fn resources_are_listed_and_read() {
     declare(&dir, &[], json!({}));
     let provider = Arc::new(MockProvider::new(vec![
         Turn::Events(calls(&[
-            ("t1", "ListMcpResources", json!({ "description": "Посмотрел ресурсы" })),
+            ("t1", "ListMcpResources", json!({ "description": "Looked at resources" })),
             (
                 "t2",
                 "ReadMcpResource",
-                json!({ "server": "fixture", "uri": "note://hello", "description": "Прочитал заметку" }),
+                json!({ "server": "fixture", "uri": "note://hello", "description": "Read a note" }),
             ),
         ])),
         Turn::Events(script_text("Read.")),
@@ -492,7 +492,7 @@ async fn a_server_is_told_the_sessions_roots() {
     let dir = TempProject::new();
     declare(&dir, &[], json!({}));
     let provider = Arc::new(MockProvider::new(vec![
-        call("t1", "roots", json!({ "description": "Спросил корни" })),
+        call("t1", "roots", json!({ "description": "Asked for the roots" })),
         Turn::Events(script_text("Known.")),
     ]));
     let handle = open(&dir, provider.clone(), Mode::Manual);
@@ -515,7 +515,7 @@ async fn stopping_the_turn_does_not_wait_for_a_slow_server() {
     let provider = Arc::new(MockProvider::new(vec![call(
         "t1",
         "slow",
-        json!({ "ms": 60_000, "description": "Жду" }),
+        json!({ "ms": 60_000, "description": "Waiting" }),
     )]));
     let handle = open(&dir, provider, Mode::Manual);
     let mut rx = handle.subscribe();
@@ -534,7 +534,7 @@ async fn a_call_that_outlasts_its_deadline_fails_and_the_turn_goes_on() {
     let dir = TempProject::new();
     declare(&dir, &[], json!({ "toolTimeoutSecs": 1 }));
     let provider = Arc::new(MockProvider::new(vec![
-        call("t1", "slow", json!({ "ms": 60_000, "description": "Жду" })),
+        call("t1", "slow", json!({ "ms": 60_000, "description": "Waiting" })),
         Turn::Events(script_text("Gave up.")),
     ]));
     let handle = open(&dir, provider.clone(), Mode::Manual);
@@ -546,7 +546,7 @@ async fn a_call_that_outlasts_its_deadline_fails_and_the_turn_goes_on() {
 
     let (text, failed) = tool_result_of(&provider, "t1");
     assert!(failed);
-    assert!(text.contains("1 с"), "{text}");
+    assert!(text.contains("1 s"), "{text}");
 }
 
 #[tokio::test]
@@ -557,7 +557,7 @@ async fn a_subagent_has_the_servers_tools_too() {
         Turn::Events(calls(&[(
             "t1",
             "Task",
-            json!({ "description": "Отдал подагенту", "prompt": "echo something" }),
+            json!({ "description": "Handed to a subagent", "prompt": "echo something" }),
         )])),
         // The subagent's only answer.
         Turn::Events(script_text("Echoed.")),

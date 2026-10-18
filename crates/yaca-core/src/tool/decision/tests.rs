@@ -70,7 +70,7 @@ async fn a_refusing_model_tells_the_agent_to_carry_on() {
     // What the model reads says what to do next; what the feed shows is Russian.
     let for_model = err.for_model();
     assert!(for_model.contains("Decide it yourself"), "{for_model}");
-    assert!(err.to_string().contains("Decision-модель не ответила"), "{err}");
+    assert!(err.to_string().contains("Decision model did not answer"), "{err}");
 }
 
 #[tokio::test]

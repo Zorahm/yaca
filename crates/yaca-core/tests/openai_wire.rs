@@ -23,7 +23,7 @@ use common::wire::{refusal, serve, serve_all};
 fn spec(base: impl Into<String>) -> ProviderSpec {
     ProviderSpec {
         id: "gateway".into(),
-        display_name: "Шлюз".into(),
+        display_name: "Gateway".into(),
         protocol: Protocol::OpenAi,
         base_url: base.into(),
         headers: BTreeMap::new(),
@@ -34,8 +34,8 @@ fn spec(base: impl Into<String>) -> ProviderSpec {
 fn request() -> ProviderRequest {
     ProviderRequest {
         model: "gpt-oss-120b".into(),
-        system: "ты Yaca".into(),
-        messages: vec![Message::user_text("привет")],
+        system: "you are Yaca".into(),
+        messages: vec![Message::user_text("hello")],
         tools: vec![],
         max_tokens: 8_000,
         effort: Some(Effort::Max),
@@ -51,12 +51,12 @@ const SSE_OK: &str = concat!(
     // The first chunk declares the role and carries no text.
     r#"data: {"id":"1","model":"gpt-oss-120b","choices":[{"index":0,"delta":{"role":"assistant","content":""}}]}"#,
     "\n\n",
-    r#"data: {"choices":[{"delta":{"reasoning_content":"надо прочесть файл"}}]}"#,
+    r#"data: {"choices":[{"delta":{"reasoning_content":"need to read the file"}}]}"#,
     "\n\n",
     ": keep-alive\n\n",
-    r#"data: {"choices":[{"delta":{"content":"Читаю "}}]}"#,
+    r#"data: {"choices":[{"delta":{"content":"Reading "}}]}"#,
     "\n\n",
-    r#"data: {"choices":[{"delta":{"content":"файл."}}]}"#,
+    r#"data: {"choices":[{"delta":{"content":"file."}}]}"#,
     "\n\n",
     r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"Read","arguments":"{\"path\":"}}]}}]}"#,
     "\n\n",
@@ -70,7 +70,7 @@ const SSE_OK: &str = concat!(
 );
 
 #[tokio::test]
-async fn поток_проходит_по_настоящему_сокету() {
+async fn stream_passes_through_a_real_socket() {
     let (base, seen) = serve(SSE_OK).await;
     let provider = Arc::new(OpenAiProvider::new(spec(base), Some("sk-test".into())));
 
@@ -93,7 +93,7 @@ async fn поток_проходит_по_настоящему_сокету() {
             },
             ProviderEvent::ThinkingDelta {
                 index: 0,
-                text: "надо прочесть файл".into(),
+                text: "need to read the file".into(),
             },
             ProviderEvent::BlockStop { index: 0 },
             ProviderEvent::BlockStart {
@@ -102,11 +102,11 @@ async fn поток_проходит_по_настоящему_сокету() {
             },
             ProviderEvent::TextDelta {
                 index: 1,
-                text: "Читаю ".into(),
+                text: "Reading ".into(),
             },
             ProviderEvent::TextDelta {
                 index: 1,
-                text: "файл.".into(),
+                text: "file.".into(),
             },
             ProviderEvent::BlockStop { index: 1 },
             ProviderEvent::BlockStart {
@@ -147,23 +147,23 @@ async fn поток_проходит_по_настоящему_сокету() {
 }
 
 #[tokio::test]
-async fn свой_заголовок_едет_вместе_с_подставленным_ключом() {
+async fn own_header_travels_with_the_substituted_key() {
     let (base, seen) = serve(SSE_OK).await;
     let mut s = spec(base);
     s.headers.insert("x-title".into(), "Yaca".into());
     s.headers.insert("x-token".into(), "prefix-{key}".into());
-    let provider = OpenAiProvider::new(s, Some("sk-живой".into()));
+    let provider = OpenAiProvider::new(s, Some("sk-live".into()));
 
     let mut stream = provider.stream(request()).await.unwrap();
     while stream.next().await.is_some() {}
 
     let seen = seen.await.unwrap();
     assert!(seen.has_header("x-title", "Yaca"));
-    assert!(seen.has_header("x-token", "prefix-sk-живой"));
+    assert!(seen.has_header("x-token", "prefix-sk-live"));
 }
 
 #[tokio::test]
-async fn шлюз_без_авторизации_не_требует_ключа() {
+async fn a_gateway_without_authorization_needs_no_key() {
     let (base, seen) = serve(SSE_OK).await;
     let mut s = spec(base);
     // A local Ollama: the authorization header is removed altogether.
@@ -197,7 +197,7 @@ async fn a_local_server_is_reached_without_a_key() {
 }
 
 #[tokio::test]
-async fn лимит_запросов_доносит_retry_after() {
+async fn rate_limit_carries_retry_after() {
     let body = r#"{"error":{"message":"rate limit","type":"rate_limit_error"}}"#;
     // The length is counted, not typed in by hand: a `Content-Length` that has drifted
     // would check the arithmetic in the test, not the provider.
@@ -224,7 +224,7 @@ async fn лимит_запросов_доносит_retry_after() {
             assert_eq!(message, "rate limit");
             assert_eq!(retry_after_s, Some(30));
         }
-        other => panic!("не та ошибка: {other:?}"),
+        other => panic!("wrong error: {other:?}"),
     }
 }
 
@@ -246,7 +246,7 @@ const REFUSES_FOR_ANOTHER_REASON: &str = concat!(
 );
 
 #[tokio::test]
-async fn провайдер_переспрашивает_полем_которое_сам_назвал() {
+async fn the_provider_asks_again_with_the_field_it_named() {
     let (base, seen) = serve_all(vec![REFUSES_MAX_TOKENS.into(), SSE_OK.into()]).await;
     let provider = Arc::new(OpenAiProvider::new(spec(base), Some("sk-test".into())));
 
@@ -257,7 +257,7 @@ async fn провайдер_переспрашивает_полем_которо
     }
 
     let seen = seen.await.unwrap();
-    assert_eq!(seen.len(), 2, "переспросили ровно один раз");
+    assert_eq!(seen.len(), 2, "asked again exactly once");
 
     // First the way it is accepted almost everywhere.
     assert_eq!(seen[0].body["max_tokens"], 8_000);
@@ -267,12 +267,12 @@ async fn провайдер_переспрашивает_полем_которо
     assert_eq!(seen[1].body["max_completion_tokens"], 8_000);
     assert!(
         seen[1].body.get("max_tokens").is_none(),
-        "на оба поля разом это тот же 400"
+        "both fields at once is the same 400"
     );
 }
 
 #[tokio::test]
-async fn узнанное_поле_держится_до_конца_сессии() {
+async fn a_learned_field_holds_to_the_end_of_the_session() {
     let (base, seen) = serve_all(vec![
         REFUSES_MAX_TOKENS.into(),
         SSE_OK.into(),
@@ -295,7 +295,7 @@ async fn узнанное_поле_держится_до_конца_сессии
 }
 
 #[tokio::test]
-async fn прочий_отказ_не_повторяется() {
+async fn another_refusal_is_not_repeated() {
     let (base, seen) = serve_all(vec![REFUSES_FOR_ANOTHER_REASON.into()]).await;
     let provider = Arc::new(OpenAiProvider::new(spec(base), Some("sk-test".into())));
 
@@ -304,5 +304,5 @@ async fn прочий_отказ_не_повторяется() {
         matches!(err, ProviderError::Http { status: 400, .. }),
         "{err:?}"
     );
-    assert_eq!(seen.await.unwrap().len(), 1, "переспрашивать было нечем");
+    assert_eq!(seen.await.unwrap().len(), 1, "there was nothing to ask again with");
 }

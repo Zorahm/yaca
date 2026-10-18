@@ -188,7 +188,7 @@ async fn a_hook_that_does_not_answer_in_time_is_a_note_not_a_block() {
     let said = fire_one(&dir, "PreToolUse", hook).await;
     assert!(started.elapsed().as_secs() < 5, "{:?}", started.elapsed());
     assert_eq!(said[0].verdict.block, None);
-    assert!(said[0].verdict.notices[0].contains("1 с"), "{:?}", said[0].verdict.notices);
+    assert!(said[0].verdict.notices[0].contains("1 s"), "{:?}", said[0].verdict.notices);
 }
 
 #[tokio::test]
@@ -196,7 +196,7 @@ async fn a_program_that_does_not_exist_is_a_note() {
     let dir = TempDir::new();
     let said = fire_one(&dir, "PreToolUse", json!({ "command": "no-such-program-yaca", "args": [] })).await;
     assert_eq!(said[0].verdict.block, None);
-    assert!(said[0].verdict.notices[0].contains("не запустился"));
+    assert!(said[0].verdict.notices[0].contains("did not start"));
 }
 
 #[tokio::test]

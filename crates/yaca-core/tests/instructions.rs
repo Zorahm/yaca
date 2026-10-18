@@ -16,7 +16,7 @@ use common::{ask, is_turn_over, session, until, TempProject};
 
 fn replying(turns: usize) -> Arc<MockProvider> {
     Arc::new(MockProvider::new(
-        (0..turns).map(|_| Turn::Events(script_text("ок"))).collect(),
+        (0..turns).map(|_| Turn::Events(script_text("ok"))).collect(),
     ))
 }
 
@@ -42,7 +42,7 @@ async fn agents_md_is_in_the_system_prompt_in_every_mode() {
         let provider = replying(1);
         let handle = session(&dir, provider.clone(), mode);
         let mut rx = handle.subscribe();
-        ask(&handle, "привет").await;
+        ask(&handle, "hello").await;
         until(&mut rx, is_turn_over).await;
 
         let system = &systems(&provider)[0];
@@ -66,10 +66,10 @@ async fn the_file_is_read_once_per_session() {
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "раз").await;
+    ask(&handle, "one").await;
     until(&mut rx, is_turn_over).await;
     dir.write("AGENTS.md", "Second version.\n");
-    ask(&handle, "два").await;
+    ask(&handle, "two").await;
     until(&mut rx, is_turn_over).await;
 
     let systems = systems(&provider);
@@ -85,7 +85,7 @@ async fn without_a_file_the_prompt_says_nothing_about_one() {
     let provider = replying(1);
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
-    ask(&handle, "привет").await;
+    ask(&handle, "hello").await;
     until(&mut rx, is_turn_over).await;
 
     let system = &systems(&provider)[0];
@@ -101,7 +101,7 @@ async fn the_prompt_names_the_project_root() {
     let provider = replying(1);
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
-    ask(&handle, "привет").await;
+    ask(&handle, "hello").await;
     until(&mut rx, is_turn_over).await;
 
     let system = &systems(&provider)[0];

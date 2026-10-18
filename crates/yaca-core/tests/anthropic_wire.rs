@@ -34,8 +34,8 @@ fn spec(base: impl Into<String>) -> ProviderSpec {
 fn request() -> ProviderRequest {
     ProviderRequest {
         model: "claude-opus-5".into(),
-        system: "ты Yaca".into(),
-        messages: vec![Message::user_text("привет")],
+        system: "you are Yaca".into(),
+        messages: vec![Message::user_text("hello")],
         tools: vec![],
         max_tokens: 64_000,
         effort: Some(Effort::Extra),
@@ -56,10 +56,10 @@ const SSE_OK: &str = concat!(
     "\n\n",
     ": keep-alive\n\n",
     "event: content_block_delta\n",
-    r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Ядро "}}"#,
+    r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"The core "}}"#,
     "\n\n",
     "event: content_block_delta\n",
-    r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"на Rust."}}"#,
+    r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"is in Rust."}}"#,
     "\n\n",
     "event: content_block_stop\n",
     r#"data: {"type":"content_block_stop","index":0}"#,
@@ -73,7 +73,7 @@ const SSE_OK: &str = concat!(
 );
 
 #[tokio::test]
-async fn поток_проходит_по_настоящему_сокету() {
+async fn stream_passes_through_a_real_socket() {
     let (base, seen) = serve(SSE_OK).await;
     let provider = Arc::new(AnthropicProvider::new(spec(base), Some("sk-test".into())));
 
@@ -92,14 +92,14 @@ async fn поток_проходит_по_настоящему_сокету() {
         kind: BlockKind::Text
     }));
 
-    let текст: String = events
+    let text: String = events
         .iter()
         .filter_map(|e| match e {
             ProviderEvent::TextDelta { text, .. } => Some(text.as_str()),
             _ => None,
         })
         .collect();
-    assert_eq!(текст, "Ядро на Rust.");
+    assert_eq!(text, "The core is in Rust.");
 
     assert!(events.iter().any(|e| matches!(
         e,
@@ -111,7 +111,7 @@ async fn поток_проходит_по_настоящему_сокету() {
     assert_eq!(events.last(), Some(&ProviderEvent::MessageStop));
 
     // An SSE comment (`: keep-alive`) must not turn into an event.
-    assert_eq!(events.len(), 7, "лишние события: {events:#?}");
+    assert_eq!(events.len(), 7, "extra events: {events:#?}");
 
     let seen = seen.await.unwrap();
     let h = seen.headers.to_ascii_lowercase();
@@ -135,7 +135,7 @@ async fn поток_проходит_по_настоящему_сокету() {
 }
 
 #[tokio::test]
-async fn лимит_запросов_доносит_retry_after() {
+async fn rate_limit_carries_retry_after() {
     let body = r#"{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}"#;
     // The length is counted, not typed in by hand. A hand-typed length that has
     // drifted from the body gives exactly the picture the test is written for: an
@@ -165,7 +165,7 @@ async fn лимит_запросов_доносит_retry_after() {
             // Without this the core would wait its half a second and get 429 again.
             assert_eq!(retry_after_s, Some(3));
         }
-        other => panic!("не тот отказ: {other:?}"),
+        other => panic!("wrong refusal: {other:?}"),
     }
     assert!(ProviderError::Http {
         status: 429,

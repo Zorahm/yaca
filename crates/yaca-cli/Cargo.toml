@@ -1,6 +1,6 @@
 [package]
 name = "yaca-cli"
-description = "Безголовый прогон ядра Yaca: события турна как JSONL"
+description = "Headless run of the Yaca core: turn events as JSONL"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

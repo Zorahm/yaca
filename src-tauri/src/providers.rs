@@ -11,7 +11,7 @@ use yaca_core::usage::ModelInfo;
 
 use crate::config_dir;
 
-/// Channel «список провайдеров изменился».
+/// Channel "the provider list has changed".
 ///
 /// They are edited in the settings window (§10), and the model switcher (§7.1)
 /// shows them in the main window. Without this channel the list there would stay
@@ -104,8 +104,8 @@ pub fn delete_provider(app: tauri::AppHandle, id: String) -> Result<Providers, S
 /// have just been corrected, and the question has to go to the one being configured. The key
 /// comes from the keychain under the same id; a provider that does not ask for a key does not need one.
 ///
-/// The list is returned, not saved: until the person presses «Save»,
-/// в реестре ничего меняться не должно.
+/// The list is returned, not saved: until the person presses "Save",
+/// nothing in the registry should change.
 #[tauri::command]
 pub async fn discover_models(spec: ProviderSpec) -> Result<Vec<ModelInfo>, String> {
     models::discover(&spec, models::stored_key(&spec).as_deref())
@@ -152,14 +152,14 @@ pub fn forget_api_key(provider: String) -> Result<(), String> {
 /// Not the key itself. The settings screen has to show that the key is there and where it came from —
 /// and a key that has gone to the webview cannot be fetched back from there.
 ///
-/// A provider that needs no key at all answers `not_needed`: «ключа нет»
+/// A provider that needs no key at all answers `not_needed`: "no key"
 /// would be a warning about nothing for a local gateway.
 #[tauri::command]
 pub fn api_key_source(provider: String) -> Result<&'static str, String> {
     let providers = Providers::load(&config_dir()?).map_err(|e| e.to_string())?;
     let spec = providers
         .get(&provider)
-        .ok_or_else(|| format!("провайдера «{provider}» нет в списке"))?;
+        .ok_or_else(|| format!("provider \"{provider}\" is not in the list"))?;
     if !spec.needs_key() {
         return Ok("not_needed");
     }
@@ -173,7 +173,7 @@ pub fn api_key_source(provider: String) -> Result<&'static str, String> {
 /// Where the web search key came from (§10).
 ///
 /// A separate command, not `api_key_source("tavily")`: Tavily is not a provider and is not
-/// in the registry, so the shared command would answer «нет в списке» about a key that
+/// in the registry, so the shared command would answer "not in the list" about a key that
 /// is quietly sitting in the keychain. It is written and forgotten through the same
 /// `set_api_key` and `forget_api_key` — the storage is one for everyone.
 #[tauri::command]
@@ -206,7 +206,7 @@ pub async fn model_residency(provider: String) -> Result<HashMap<String, bool>, 
     let providers = Providers::load(&config_dir()?).map_err(|e| e.to_string())?;
     let spec = providers
         .get(&provider)
-        .ok_or_else(|| format!("провайдера «{provider}» нет в списке"))?;
+        .ok_or_else(|| format!("provider \"{provider}\" is not in the list"))?;
     models::residency(spec, models::stored_key(spec).as_deref())
         .await
         .map_err(|e| e.to_string())

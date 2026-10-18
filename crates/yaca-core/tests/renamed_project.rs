@@ -15,7 +15,7 @@ use yaca_core::{slash, Mode, SessionConfig};
 fn an_old_project_folder_moves_and_everything_in_it_is_found() {
     let project = TempProject::new();
     project.write(".edoc/settings.json", r#"{"mode":"auto"}"#);
-    project.write(".edoc/commands/review.md", "Просмотри изменения.");
+    project.write(".edoc/commands/review.md", "Review the changes.");
 
     let config = SessionConfig::open(project.path()).unwrap();
 

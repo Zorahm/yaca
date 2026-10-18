@@ -26,7 +26,7 @@ fn task(id: &str, prompt: &str) -> Turn {
     Turn::Events(script_tool_call(
         id,
         "Task",
-        json!({ "prompt": prompt, "description": "Выяснил, где разбираются даты" }),
+        json!({ "prompt": prompt, "description": "Found where dates are parsed" }),
     ))
 }
 
@@ -34,7 +34,7 @@ fn read(id: &str, path: &str) -> Turn {
     Turn::Events(script_tool_call(
         id,
         "Read",
-        json!({ "path": path, "description": "Прочитал разбор дат" }),
+        json!({ "path": path, "description": "Read the date parser" }),
     ))
 }
 
@@ -130,12 +130,12 @@ async fn the_report_comes_back_and_the_steps_stay_behind() {
         task("t1", "Find where dates are parsed."),
         read("r1", "dates.rs"),
         text("Dates are parsed in dates.rs:1."),
-        text("готово"),
+        text("done"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "где разбираются даты?").await;
+    ask(&handle, "where are dates parsed?").await;
     let seen = until(&mut rx, is_turn_over).await;
     let sent = requests(&provider);
     assert_eq!(sent.len(), 4);
@@ -203,12 +203,12 @@ async fn what_the_subagent_read_the_agent_has_not() {
             "Edit",
             json!({ "path": "dates.rs", "old_string": "parse_date", "new_string": "parse" }),
         )),
-        text("не вышло"),
+        text("it failed"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Auto);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "переименуй").await;
+    ask(&handle, "rename it").await;
     let seen = until(&mut rx, is_turn_over).await;
 
     // §8, read-before-edit: the content went to another conversation, so the
@@ -235,12 +235,12 @@ async fn a_subagent_costs_money_without_filling_the_window() {
         task("t1", "Read dates.rs."),
         read("r1", "dates.rs"),
         text("It parses dates."),
-        text("готово"),
+        text("done"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "посмотри").await;
+    ask(&handle, "take a look").await;
     let seen = until(&mut rx, is_turn_over).await;
 
     let usage = seen
@@ -270,12 +270,12 @@ async fn independent_tasks_run_at_the_same_time() {
         ])),
         text("report"),
         text("report"),
-        text("готово"),
+        text("done"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "два вопроса").await;
+    ask(&handle, "two questions").await;
     let seen = until(&mut rx, is_turn_over).await;
 
     let order: Vec<_> = seen
@@ -307,7 +307,7 @@ async fn esc_stops_the_subagent_with_the_turn() {
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "посмотри").await;
+    ask(&handle, "take a look").await;
     until(&mut rx, |e| matches!(e, AgentEvent::ToolCallStarted { .. })).await;
     handle.send(Command::Cancel).await.unwrap();
     let seen = until(&mut rx, is_turn_over).await;
@@ -334,13 +334,13 @@ async fn a_subagent_that_never_reports_runs_out_of_steps() {
     let steps = yaca_core::session::subagent::MAX_STEPS + 1;
     let mut turns = vec![task("t1", "Read dates.rs forever.")];
     turns.extend((0..steps).map(|i| read(&format!("r{i}"), "dates.rs")));
-    turns.push(text("не вышло"));
+    turns.push(text("it failed"));
 
     let provider = Arc::new(MockProvider::new(turns));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "посмотри").await;
+    ask(&handle, "take a look").await;
     let seen = until(&mut rx, is_turn_over).await;
 
     assert!(seen.iter().any(|event| matches!(
@@ -372,14 +372,14 @@ async fn a_reopened_session_shows_what_the_subagent_did() {
         task("t1", "Find where dates are parsed."),
         read("r1", "dates.rs"),
         text("Dates are parsed in dates.rs:1."),
-        text("готово"),
+        text("done"),
     ]));
     let mut cfg = SessionConfig::new(dir.path());
     cfg.journal = Some(dir.chats());
     let handle = yaca_core::spawn(cfg, provider).unwrap();
     let mut rx = handle.subscribe();
 
-    ask(&handle, "где разбираются даты?").await;
+    ask(&handle, "where are dates parsed?").await;
     until(&mut rx, is_turn_over).await;
 
     // The journal is all a reopened session has of the feed.
@@ -408,12 +408,12 @@ async fn the_subagent_model_comes_from_the_project_settings() {
     let provider = Arc::new(MockProvider::new(vec![
         task("t1", "Look around."),
         text("report"),
-        text("готово"),
+        text("done"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "посмотри").await;
+    ask(&handle, "take a look").await;
     until(&mut rx, is_turn_over).await;
 
     let sent = requests(&provider);
@@ -431,15 +431,15 @@ async fn task_runs_the_subagent_on_the_model_id_it_is_given() {
         Turn::Events(script_tool_call(
             "t1",
             "Task",
-            json!({ "prompt": "Look around.", "model": "claude-haiku-4-5", "description": "Отдал субагенту" }),
+            json!({ "prompt": "Look around.", "model": "claude-haiku-4-5", "description": "Handed to a subagent" }),
         )),
         text("report"),
-        text("готово"),
+        text("done"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "посмотри на haiku").await;
+    ask(&handle, "take a look at haiku").await;
     until(&mut rx, is_turn_over).await;
 
     let sent = requests(&provider);
@@ -454,14 +454,14 @@ async fn a_model_id_the_provider_lacks_is_named_back_with_the_ones_there_are() {
         Turn::Events(script_tool_call(
             "t1",
             "Task",
-            json!({ "prompt": "Look around.", "model": "sonnet", "description": "Отдал субагенту" }),
+            json!({ "prompt": "Look around.", "model": "sonnet", "description": "Handed to a subagent" }),
         )),
         text("ok"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "посмотри").await;
+    ask(&handle, "take a look").await;
     until(&mut rx, is_turn_over).await;
 
     // No subagent ran: the next request is the agent's, with the failure.
@@ -480,12 +480,12 @@ async fn a_subagents_edit_asks_first_and_shows_its_diff() {
         task("t1", "Create notes.txt."),
         write("w1", "notes.txt"),
         text("Created notes.txt."),
-        text("готово"),
+        text("done"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "заведи файл").await;
+    ask(&handle, "create a file").await;
     let asking = until(&mut rx, is_asking).await;
 
     // §5.7: decided before anything happens, whoever is asking.
@@ -515,18 +515,18 @@ async fn a_refusal_reaches_the_subagent_and_the_turn_goes_on() {
         task("t1", "Create notes.txt."),
         write("w1", "notes.txt"),
         text("The human refused the write."),
-        text("понял"),
+        text("got it"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "заведи файл").await;
+    ask(&handle, "create a file").await;
     let (request, _) = asked(&until(&mut rx, is_asking).await);
     handle
         .send(Command::AnswerPermission {
             request_id: request,
             answer: PermissionAnswer::Deny {
-                reason: Some("не сейчас".into()),
+                reason: Some("not now".into()),
             },
         })
         .await
@@ -537,7 +537,7 @@ async fn a_refusal_reaches_the_subagent_and_the_turn_goes_on() {
     // The note is the instruction (§5.7), and it is the subagent that needs it.
     let (refusal, is_error) = result_of(&sent[2], "w1");
     assert!(is_error);
-    assert!(refusal.contains("не сейчас"), "{refusal}");
+    assert!(refusal.contains("not now"), "{refusal}");
     assert!(!dir.path().join("notes.txt").exists());
     assert_eq!(result_of(&sent[3], "t1").0, "The human refused the write.");
 }
@@ -555,12 +555,12 @@ async fn two_subagents_ask_one_at_a_time() {
         write("w2", "b.txt"),
         text("done"),
         text("done"),
-        text("готово"),
+        text("done"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "два файла").await;
+    ask(&handle, "two files").await;
     let (first, _) = asked(&until(&mut rx, is_asking).await);
 
     // §5.7 draws one block. Both subagents have their write in hand by now,
@@ -589,12 +589,12 @@ async fn plan_mode_binds_the_subagent_too() {
         task("t1", "Rename the function."),
         write("w1", "notes.txt"),
         text("I can only report what it would take."),
-        text("готово"),
+        text("done"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Plan);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "переименуй").await;
+    ask(&handle, "rename it").await;
     let seen = until(&mut rx, is_turn_over).await;
 
     // §7.1: the writing tools are not offered at all, and one the model makes
@@ -631,12 +631,12 @@ async fn a_subagent_is_given_the_memory_index_the_agent_has() {
     let provider = Arc::new(MockProvider::new(vec![
         task("t1", "Look around."),
         text("report"),
-        text("готово"),
+        text("done"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "посмотри").await;
+    ask(&handle, "take a look").await;
     until(&mut rx, is_turn_over).await;
 
     // The subagent has the Memory tool, so it must also have the index that
@@ -657,12 +657,12 @@ async fn each_subagent_reports_what_it_has_spent_so_far() {
         task("t1", "Find where dates are parsed."),
         read("r1", "dates.rs"),
         text("Dates are parsed in dates.rs:1."),
-        text("готово"),
+        text("done"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "где разбираются даты?").await;
+    ask(&handle, "where are dates parsed?").await;
     let seen = until(&mut rx, is_turn_over).await;
 
     // One event per answer the subagent got, each the total up to then: the
@@ -685,7 +685,7 @@ fn task_as(id: &str, agent: &str, prompt: &str) -> Turn {
     Turn::Events(script_tool_call(
         id,
         "Task",
-        json!({ "prompt": prompt, "agent": agent, "description": "Отдал ревью агенту" }),
+        json!({ "prompt": prompt, "agent": agent, "description": "Handed to the review agent" }),
     ))
 }
 
@@ -697,7 +697,7 @@ async fn a_named_agent_brings_its_instructions_and_only_its_tools() {
     let provider = Arc::new(MockProvider::new(vec![
         task_as("t1", "reviewer", "Review dates.rs."),
         text("No bugs."),
-        text("готово"),
+        text("done"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Auto);
     let mut rx = handle.subscribe();
@@ -751,10 +751,10 @@ async fn a_forked_skill_runs_in_a_subagent_and_reports() {
         Turn::Events(script_tool_call(
             "s1",
             "Skill",
-            json!({ "name": "audit", "args": "src/", "description": "Запустил аудит" }),
+            json!({ "name": "audit", "args": "src/", "description": "Ran the audit" }),
         )),
         text("Nothing unsafe."),
-        text("готово"),
+        text("done"),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Auto);
     let mut rx = handle.subscribe();

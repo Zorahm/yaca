@@ -1,32 +1,32 @@
-//! Поток `AgentEvent` — единственное, что ядро отдаёт наружу (§15).
+//! The `AgentEvent` stream is the only thing the core hands out (§15).
 //!
-//! Интерфейс — чистая функция от этого потока, поэтому здесь не должно быть
-//! ничего, что нельзя отрисовать, и не должно не хватать ничего, что §5 рисует.
+//! The interface is a pure function of this stream, so nothing here may be
+//! something that cannot be drawn, and nothing that §5 draws may be missing.
 //!
-//! Сверх списка §15 добавлены пять событий; каждое закрывает дыру, где §5
-//! требует картинку, а §15 не даёт данных:
+//! Beyond the §15 list, five events are added; each closes a gap where §5
+//! asks for a picture and §15 gives no data:
 //!
-//! * [`AgentEvent::Error`] и [`AgentEvent::RetryScheduled`] — §5.10 рисует блок
-//!   ошибки с кодом и строку `Повтор через 4 с · попытка 2 из 5`.
-//! * [`AgentEvent::ToolCallRejected`] — §5.9: сработавший инвариант красится
-//!   `--vermilion-ink`, не `--rust`, и это не то же самое, что упавший тул.
-//! * [`AgentEvent::TodosUpdated`] — §5.6: список задач обновляется на месте,
-//!   из результата `todo_write` это не вывести.
-//! * [`AgentEvent::PlanProposed`] — §7.1: выход из `Plan` через `exit_plan_mode`
-//!   показывает план и ждёт, пока человек выберет режим.
+//! * [`AgentEvent::Error`] and [`AgentEvent::RetryScheduled`] — §5.10 draws the
+//!   error block with its code and the line `Retry in 4 s · attempt 2 of 5`.
+//! * [`AgentEvent::ToolCallRejected`] — §5.9: a tripped invariant is coloured
+//!   `--vermilion-ink`, not `--rust`, and it is not the same as a failed tool.
+//! * [`AgentEvent::TodosUpdated`] — §5.6: the task list is updated in place;
+//!   it cannot be derived from the `todo_write` result.
+//! * [`AgentEvent::PlanProposed`] — §7.1: leaving `Plan` through `exit_plan_mode`
+//!   shows the plan and waits until the human picks a mode.
 //!
-//! У [`AgentEvent::ToolCallDenied`] появилось поле `stopped`: §5.5
-//! различает отказ в разрешении и остановку работающего вызова, а §15 даёт на
-//! оба один исход.
+//! [`AgentEvent::ToolCallDenied`] gained a `stopped` field: §5.5
+//! tells a refused permission apart from a stopped running call, while §15 gives
+//! both one outcome.
 //!
-//! Со срезом команд добавились три события панели процессов (§6.5), которой в
-//! §15 нет вовсе:
+//! With the command slice, three events for the process panel (§6.5) were added,
+//! which §15 does not have at all:
 //!
-//! * [`AgentEvent::ProcessesUpdated`] — список фоновых команд целиком: панель
-//!   есть функция от последнего такого события, а не сумма предыдущих.
-//! * [`AgentEvent::ProcessOutputReset`] — «выбор показывает вывод»: весь
-//!   кольцевой буфер разом, когда человек выбрал строку.
-//! * [`AgentEvent::ProcessOutput`] — живой хвост выбранной строки.
+//! * [`AgentEvent::ProcessesUpdated`] — the whole list of background commands: the panel
+//!   is a function of the last such event, not a sum of the previous ones.
+//! * [`AgentEvent::ProcessOutputReset`] — "selection shows output": the whole
+//!   ring buffer at once, when the human picks a row.
+//! * [`AgentEvent::ProcessOutput`] — the live tail of the selected row.
 //!
 //! The checkpoint slice adds three more on top of §15's `CheckpointCreated`:
 //!
@@ -36,7 +36,7 @@
 //! * [`AgentEvent::CheckpointPreviewed`] — §5.8 requires a rollback to show the
 //!   files it will touch and be confirmed against them. That list exists only
 //!   in the core, and §15 has no event carrying it.
-//! * [`AgentEvent::CheckpointRestored`] — the `Откачено к 14:32 · 3 файла` line
+//! * [`AgentEvent::CheckpointRestored`] — the `Rolled back to 14:32 · 3 files` line
 //!   of §5.5. `CheckpointCreated` marks the point; nothing in §15 marks the
 //!   return to it.
 //!
@@ -129,7 +129,7 @@
 //! the human said, and §9 reopens a session by replaying this journal: without
 //! it a reopened session is the agent talking to itself. The text is written
 //! down twice — here for the feed, and in the message log for the model — but
-//! the two carry different things, and the feed журнал is the one that has to
+//! the two carry different things, and the feed log is the one that has to
 //! be replayable on its own.
 //!
 //! The model router adds [`AgentEvent::RouteDecided`] beyond §15: which model
@@ -157,23 +157,23 @@ use crate::usage::{TokenCounts, UsageSnapshot};
 #[ts(export)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum AgentEvent {
-    /// Карточка сообщения человека (§5.1).
+    /// The human's message card (§5.1).
     ///
-    /// Приходит от ядра, а не рисуется интерфейсом по факту отправки: иначе
-    /// открытая заново сессия показывала бы ответы без вопросов.
+    /// It comes from the core, not drawn by the interface when the message is sent:
+    /// otherwise a session reopened would show answers without their questions.
     #[serde(rename_all = "camelCase")]
     UserMessage {
         turn_id: TurnId,
         text: String,
-        /// Файлы, приложенные через `@` (§7.2) — чипы над текстом.
+        /// Files attached via `@` (§7.2) — chips above the text.
         attachments: Vec<String>,
     },
 
-    /// Кольцо состояния вращается, кнопка отправки → `■`.
+    /// The state ring spins, the send button becomes `■`.
     #[serde(rename_all = "camelCase")]
     TurnStarted { turn_id: TurnId, at: TsMillis },
 
-    /// Дописывает в текущий текстовый блок.
+    /// Appends to the current text block.
     #[serde(rename_all = "camelCase")]
     TextDelta {
         turn_id: TurnId,
@@ -181,7 +181,7 @@ pub enum AgentEvent {
         text: String,
     },
 
-    /// Дописывает в свёрнутый блок рассуждения (§5.3).
+    /// Appends to the collapsed reasoning block (§5.3).
     #[serde(rename_all = "camelCase")]
     ThinkingDelta {
         turn_id: TurnId,
@@ -189,19 +189,19 @@ pub enum AgentEvent {
         text: String,
     },
 
-    /// Строка в группе действий с точкой `●`, подпись в настоящем времени.
+    /// A row in the action group with a `●` dot, the label in the present tense.
     #[serde(rename_all = "camelCase")]
     ToolCallStarted {
         turn_id: TurnId,
         call_id: CallId,
-        /// Имя тула. В ленте не показывается (§16.6), нужно для иконки и отладки.
+        /// Tool name. Not shown in the feed (§16.6); needed for the icon and debugging.
         tool: String,
-        /// Подпись, которую написала модель (§5.4.1). `None` — тул из тех,
-        /// что подписывает интерфейс, либо модель не заполнила поле.
+        /// The label the model wrote (§5.4.1). `None` — a tool the interface labels
+        /// itself, or a field the model left empty.
         description: Option<String>,
-        /// Первая строка раскрытой строки (§5.5.1): полный путь или полная команда.
+        /// First line of the expanded row (§5.5.1): the full path or the full command.
         target: Option<String>,
-        /// Аргументы вызова. Нужны для §5.7 (подробность запроса разрешения).
+        /// Call arguments. Needed for §5.7 (the detail of the permission request).
         #[ts(type = "unknown")]
         input: serde_json::Value,
         /// The `Task` row this call belongs under: it was made by a subagent,
@@ -211,43 +211,44 @@ pub enum AgentEvent {
         parent: Option<CallId>,
     },
 
-    /// Дописывает вывод в раскрытую строку.
+    /// Appends output to the expanded row.
     #[serde(rename_all = "camelCase")]
     ToolCallProgress { call_id: CallId, chunk: String },
 
-    /// Подпись в прошедшем времени, счётчики, шапка-итог пересобирается.
+    /// The label in the past tense; counters and the summary header are rebuilt.
     #[serde(rename_all = "camelCase")]
     ToolCallFinished { call_id: CallId, meta: ToolMeta },
 
-    /// Форма неудачи вместо описания модели, глагол цветом `--rust`.
+    /// The failure form in place of the model's description, the verb coloured `--rust`.
     #[serde(rename_all = "camelCase")]
     ToolCallFailed { call_id: CallId, message: String },
 
-    /// Инвариант отказал (§5.9). Глагол цветом `--vermilion-ink`: защита сработала,
-    /// человеку делать нечего.
+    /// An invariant refused (§5.9). The verb coloured `--vermilion-ink`: the guard
+    /// worked, the human has nothing to do.
     #[serde(rename_all = "camelCase")]
     ToolCallRejected { call_id: CallId, reason: String },
 
-    /// `Отклонено вами` (§5.5). Третий род исхода: не сбой тула и не
-    /// сработавший инвариант, а решение человека.
+    /// `Rejected by you` (§5.5). A third kind of outcome: neither a tool failure nor
+    /// a tripped invariant, but the human's decision.
     #[serde(rename_all = "camelCase")]
     ToolCallDenied {
         call_id: CallId,
         reason: Option<String>,
-        /// Вызов уже работал, и человек его остановил, — а не отказал в
-        /// разрешении до запуска. Род исхода тот же, решение человека, но
-        /// предложение другое: «Остановлено вами» против «Отклонено вами».
-        /// Поля в §15 нет; лента без него написала бы про остановленную
-        /// команду, что человек её отклонил, чего не было.
+        /// The call was already running and the human stopped it, rather than
+        /// refusing the permission before it started. The kind of outcome is the
+        /// same, a human decision, but the wording differs: "Stopped by you"
+        /// against "Rejected by you". There is no field for it in §15; without it
+        /// the feed would say the human rejected a stopped command, which never
+        /// happened.
         stopped: bool,
     },
 
-    /// Инлайновый блок запроса разрешения (§5.7). Кольцо пульсирует,
-    /// окно поднимается, при свёрнутом окне уходит уведомление.
+    /// Inline block for a permission request (§5.7). The ring pulses, the window
+    /// comes up, and a notification goes out when the window is minimised.
     #[serde(rename_all = "camelCase")]
     PermissionRequested { request: PermissionRequest },
 
-    /// Блок можно убирать: ответ получен либо турн отменён.
+    /// The block can be removed: the answer has arrived or the turn was cancelled.
     #[serde(rename_all = "camelCase")]
     PermissionResolved { request_id: RequestId },
 
@@ -280,7 +281,7 @@ pub enum AgentEvent {
         reply: Option<crate::mcp::ElicitationReply>,
     },
 
-    /// Список задач обновляется на месте, новый блок не создаётся (§5.6).
+    /// The task list is updated in place; no new block is created (§5.6).
     #[serde(rename_all = "camelCase")]
     TodosUpdated { items: Vec<TodoItem> },
 
@@ -309,12 +310,12 @@ pub enum AgentEvent {
         text: String,
     },
 
-    /// `exit_plan_mode`: показать план и ждать, пока человек выберет режим (§7.1).
+    /// `exit_plan_mode`: show the plan and wait until the human picks a mode (§7.1).
     #[serde(rename_all = "camelCase")]
     PlanProposed { plan: String },
 
-    /// Файл изменён в рабочем дереве: строка действия получает счётчики, а
-    /// раскрытие — дифф (§5.5.1).
+    /// The file changed in the working tree: the action row gets its counters, and
+    /// its expansion shows the diff (§5.5.1).
     #[serde(rename_all = "camelCase")]
     FileChanged {
         call_id: CallId,
@@ -343,10 +344,10 @@ pub enum AgentEvent {
     #[serde(rename_all = "camelCase")]
     FilesFound { query: String, paths: Vec<String> },
 
-    /// Панель процессов целиком (§6.5).
+    /// The whole process panel (§6.5).
     ///
-    /// Панель — функция от последнего такого события, а не сумма предыдущих:
-    /// состояние живёт в ядре, которое одно знает, жив ли ещё процесс.
+    /// The panel is a function of the last such event, not a sum of the previous ones:
+    /// the state lives in the core, the only part that knows whether a process is still alive.
     #[serde(rename_all = "camelCase")]
     ProcessesUpdated { processes: Vec<ProcessSummary> },
 
@@ -361,27 +362,26 @@ pub enum AgentEvent {
     #[serde(rename_all = "camelCase")]
     LspUpdated { servers: Vec<crate::lsp::LspServerSummary> },
 
-    /// Человек выбрал строку в панели — показать её вывод целиком (§6.5).
+    /// The human picked a row in the panel: show its output in full (§6.5).
     #[serde(rename_all = "camelCase")]
     ProcessOutputReset {
         id: ProcessId,
         text: String,
-        /// Сколько строк вытеснено из буфера. Панель говорит об этом прямо:
-        /// молча потерянный вывод неотличим от вывода, которого не было.
+        /// How many lines were pushed out of the buffer. The panel says so outright:
+        /// output lost in silence cannot be told apart from output that never existed.
         #[ts(type = "number")]
         dropped: u64,
     },
 
-    /// Живой хвост выбранного процесса.
+    /// The live tail of the selected process.
     ///
-    /// Приходит только для выбранной строки. Вывод остальных лежит в буфере:
-    /// болтливый `npm run dev`, на который никто не смотрит, вытеснил бы
-    /// настоящие события ленты из широковещательного канала, а отставший
-    /// подписчик их теряет.
+    /// Sent only for the selected row. The output of the others stays in the buffer:
+    /// a chatty `npm run dev` nobody watches would push the real feed events out of
+    /// the broadcast channel, and a lagging subscriber loses them.
     #[serde(rename_all = "camelCase")]
     ProcessOutput { id: ProcessId, chunk: String },
 
-    /// A divider line in the feed (§5.8): `── ● 14:32 · перед применением…`.
+    /// A divider line in the feed (§5.8): `── ● 14:32 · before applying…`.
     ///
     /// Only sent when the point is new. A snapshot of a tree that has not moved
     /// since the previous checkpoint is not one, and a divider offering to roll
@@ -406,7 +406,7 @@ pub enum AgentEvent {
         files: Vec<CheckpointChange>,
     },
 
-    /// `Откачено к 14:32 · 3 файла` (§5.5). `at` is the time of the point that
+    /// `Rolled back to 14:32 · 3 files` (§5.5). `at` is the time of the point that
     /// was returned to, which is the time the line names.
     #[serde(rename_all = "camelCase")]
     CheckpointRestored {
@@ -415,7 +415,7 @@ pub enum AgentEvent {
         files: u32,
     },
 
-    /// Разделитель `история сжата · освобождено 84k токенов ▾` (§5.11).
+    /// Divider `history compacted · freed 84k tokens ▾` (§5.11).
     ///
     /// `freed` is an estimate, and the field is one number rather than two
     /// because §5.11 shows one. The exact figure belongs to the provider and
@@ -445,12 +445,12 @@ pub enum AgentEvent {
         matched: Vec<String>,
     },
 
-    /// Заполнение кольца состояния, а в `usage.breakdown` — из чего занятое
-    /// состоит: кольцо раскрывается в список по частям окна.
+    /// Fills the state ring; `usage.breakdown` says what the occupied part consists
+    /// of: the ring expands into a list by part of the window.
     #[serde(rename_all = "camelCase")]
     UsageUpdated { usage: UsageSnapshot },
 
-    /// Кольцо гаснет, группа действий сворачивается в итог.
+    /// The ring goes dark; the action group collapses into a summary.
     #[serde(rename_all = "camelCase")]
     TurnFinished {
         turn_id: TurnId,
@@ -462,7 +462,7 @@ pub enum AgentEvent {
         at: TsMillis,
     },
 
-    /// Строка `Остановлено`, незавершённые тулы в `отменено`.
+    /// A `Stopped` line; unfinished tools in `cancelled`.
     #[serde(rename_all = "camelCase")]
     TurnCancelled {
         turn_id: TurnId,
@@ -471,7 +471,7 @@ pub enum AgentEvent {
         at: TsMillis,
     },
 
-    /// Блок ошибки с кодом, «Повторить» и «Сменить модель» (§5.10).
+    /// Error block with the code, "Retry" and "Switch model" (§5.10).
     #[serde(rename_all = "camelCase")]
     Error {
         code: String,
@@ -479,7 +479,7 @@ pub enum AgentEvent {
         retryable: bool,
     },
 
-    /// `Повтор через 4 с · попытка 2 из 5` (§5.10).
+    /// `Retry in 4 s · attempt 2 of 5` (§5.10).
     #[serde(rename_all = "camelCase")]
     RetryScheduled {
         attempt: u32,
@@ -488,8 +488,8 @@ pub enum AgentEvent {
         reason: String,
     },
 
-    /// Отражение `SetMode` и смены модели: нижний ряд композера всегда
-    /// показывает актуальный режим (§7.1, §8).
+    /// Reflects `SetMode` and model changes: the composer's bottom row always
+    /// shows the current mode (§7.1, §8).
     #[serde(rename_all = "camelCase")]
     StateChanged { state: SessionState },
 
@@ -523,10 +523,9 @@ impl AgentEvent {
         }
     }
 
-    /// Тег события — тот же, что уезжает в JSON, и то, по чему интерфейс
-    /// различает ветки. Живёт здесь, а не в тестах: список из двадцати с
-    /// лишним веток, поддерживаемый в двух местах, расходится на первом же
-    /// добавленном событии.
+    /// The event tag: the same one that goes out in JSON, and the one the interface
+    /// branches on. It lives here, not in the tests: a list of twenty-odd branches
+    /// kept in two places drifts apart at the first event added.
     pub fn kind(&self) -> &'static str {
         match self {
             AgentEvent::UserMessage { .. } => "userMessage",
@@ -577,8 +576,8 @@ impl AgentEvent {
     }
 }
 
-/// Куда ядро складывает события. Тонкая обёртка поверх широковещательного
-/// канала: подписчиков может не быть вовсе — CLI гоняет ядро без них.
+/// Where the core puts events. A thin wrapper over the broadcast channel:
+/// there may be no subscribers at all — the CLI runs the core without them.
 #[derive(Clone)]
 pub struct EventSink {
     tx: tokio::sync::broadcast::Sender<AgentEvent>,
@@ -645,7 +644,7 @@ impl EventSink {
     }
 }
 
-/// Миллисекунды эпохи. В Rust `u64`, в TS обычное `number`.
+/// Epoch milliseconds. A `u64` in Rust, a plain `number` in TS.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS,
 )]
@@ -658,19 +657,19 @@ impl TsMillis {
     }
 }
 
-/// Счётчики завершённого тула. Файловые дельты (`+124 −0`) едут отдельно,
-/// в `FileChanged`: их считает дифф, а не тул.
+/// Counters of a finished tool. File deltas (`+124 −0`) travel separately,
+/// in `FileChanged`: the diff counts them, not the tool.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolMeta {
-    /// Сколько строк вывода ушло в ленту.
+    /// How many output lines went into the feed.
     pub lines: u32,
-    /// Совпадений — для `grep`, файлов — для `glob`.
+    /// Matches for `grep`, files for `glob`.
     pub items: Option<u32>,
-    /// Вывод обрезан, полный доступен по кнопке (§5.5.1).
+    /// The output is cut; the full one is available by a button (§5.5.1).
     pub truncated: bool,
-    /// Сколько заняло, миллисекунды. Мета справа в строке.
+    /// How long it took, in milliseconds. Meta on the right of the row.
     pub duration_ms: u32,
     /// Images the call returned, kept as files of the project and named by
     /// paths relative to it: the row shows them and the viewer opens them.
@@ -706,11 +705,11 @@ pub struct TodoItem {
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub enum TodoStatus {
-    /// `○` цветом `--ink-muted`.
+    /// `○` coloured `--ink-muted`.
     Pending,
-    /// `●` цветом `--vermilion-ink` с пульсом.
+    /// `●` coloured `--vermilion-ink`, pulsing.
     InProgress,
-    /// `✓` цветом `--moss`, текст `line-through`.
+    /// `✓` coloured `--moss`, text `line-through`.
     Completed,
 }
 
@@ -722,16 +721,16 @@ pub enum StopReason {
     MaxTokens,
     StopSequence,
     ToolUse,
-    /// Модель отказалась по соображениям безопасности.
+    /// The model refused on safety grounds.
     Refusal,
-    /// Серверный тул поставил турн на паузу; цикл продолжает сам.
+    /// A server-side tool paused the turn; the loop continues on its own.
     PauseTurn,
-    /// Ход оборвался ошибкой. Сверх набора провайдера: кольцо состояния
-    /// гаснет по `TurnFinished`, поэтому событие обязано прийти и здесь.
+    /// The turn was cut off by an error. Beyond the provider's set: the state ring
+    /// goes dark on `TurnFinished`, so this event has to arrive here too.
     Failed,
 }
 
-/// Снимок настроек сессии для нижнего ряда композера.
+/// Snapshot of the session settings for the composer's bottom row.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
@@ -743,8 +742,8 @@ pub struct SessionState {
     pub mode: Mode,
     pub effort: Effort,
     pub busy: bool,
-    /// Обход разрешений (§8). Не пятый режим, а флаг поверх текущего: чип
-    /// режима и кольцо становятся `--rust`.
+    /// Permission bypass (§8). Not a fifth mode but a flag on top of the current one:
+    /// the mode chip and the ring turn `--rust`.
     pub bypass: bool,
     /// The worktree this chat works in, when it was asked to be isolated
     /// (`isolation`). Absent for a chat in the project's own tree.

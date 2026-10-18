@@ -131,7 +131,7 @@ impl ProviderSpec {
         if wanted.is_empty() {
             return self.models.first().map(|m| m.id.clone()).ok_or_else(|| {
                 CoreError::Config(format!(
-                    "у провайдера «{}» не описано ни одной модели",
+                    "provider «{}» has no models",
                     self.id
                 ))
             });
@@ -140,7 +140,7 @@ impl ProviderSpec {
             return Ok(wanted.to_string());
         }
         Err(CoreError::Config(format!(
-            "у провайдера «{}» нет модели «{wanted}»",
+            "provider «{}» has no model «{wanted}»",
             self.id
         )))
     }
@@ -269,7 +269,7 @@ impl Providers {
         };
 
         let mut providers: Providers = serde_json::from_str(&text)
-            .map_err(|e| CoreError::Config(format!("{} не разобрался: {e}", path.display())))?;
+            .map_err(|e| CoreError::Config(format!("{} could not be parsed: {e}", path.display())))?;
         providers.ensure_presets();
         providers.forget_shipped_catalog();
         Ok(providers)
@@ -298,7 +298,7 @@ impl Providers {
     /// before sessions wrote their provider down, a project file that names
     /// only a model. The model decides then, because it carries its provider.
     /// Filling the gap with Anthropic instead is what sent a local model to
-    /// Anthropic, which came back with «у провайдера «anthropic» нет модели».
+    /// Anthropic, which came back with «provider «anthropic» has no model».
     ///
     /// Neither said — a new chat in a project with no settings — starts on
     /// the first configured provider, the first that answered with its
@@ -310,15 +310,15 @@ impl Providers {
     pub fn resolve(&self, provider: &str, model: &str) -> Result<(&ProviderSpec, String), CoreError> {
         let spec = if !provider.is_empty() {
             self.get(provider)
-                .ok_or_else(|| CoreError::Config(format!("провайдера «{provider}» нет в списке")))?
+                .ok_or_else(|| CoreError::Config(format!("provider «{provider}» is not in the list")))?
         } else if !model.is_empty() {
             self.find_by_model(model).map(|(spec, _)| spec).ok_or_else(|| {
-                CoreError::Config(format!("модели «{model}» нет ни у одного провайдера"))
+                CoreError::Config(format!("no provider has the model «{model}»"))
             })?
         } else {
             self.list.iter().find(|p| !p.models.is_empty()).ok_or_else(|| {
                 CoreError::Config(
-                    "ни один провайдер ещё не ответил списком моделей: опросите провайдера в панели провайдеров".into(),
+                    "no provider has answered with a list of models yet: refresh a provider in the providers panel".into(),
                 )
             })?
         };
@@ -363,7 +363,7 @@ impl Providers {
     pub fn remove(&mut self, id: &str) -> Result<(), CoreError> {
         if is_preset(id) {
             return Err(CoreError::Config(
-                "предустановленный провайдер не удаляется".into(),
+                "a preset provider cannot be removed".into(),
             ));
         }
         self.list.retain(|p| p.id != id);
@@ -434,7 +434,7 @@ pub fn config_dir() -> Result<PathBuf, CoreError> {
         (base.clone(), base)
     };
 
-    let missing = || CoreError::Config("не нашёлся каталог настроек пользователя".into());
+    let missing = || CoreError::Config("the user's settings directory was not found".into());
     let base = base.ok_or_else(missing)?;
     let old_base = old_base.unwrap_or_else(|| base.clone());
     Ok(legacy::adopt_dir(&old_base.join(legacy::NAME), &base.join(CONFIG_DIR)))

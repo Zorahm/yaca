@@ -206,8 +206,8 @@ mod tests {
     fn req() -> ProviderRequest {
         ProviderRequest {
             model: "gpt-oss".into(),
-            system: "ты Yaca".into(),
-            messages: vec![Message::user_text("привет")],
+            system: "You are Yaca".into(),
+            messages: vec![Message::user_text("hello")],
             tools: vec![],
             max_tokens: 8_000,
             effort: Some(Effort::Extra),
@@ -216,14 +216,14 @@ mod tests {
     }
 
     #[test]
-    fn просит_счётчики_явно() {
+    fn asks_for_counters_explicitly() {
         let body = build_body(&req(), MaxField::default());
         assert_eq!(body["stream_options"]["include_usage"], true);
         assert_eq!(body["stream"], true);
     }
 
     #[test]
-    fn верхнее_усилие_складывается_в_high() {
+    fn top_level_effort_maps_to_high() {
         assert_eq!(build_body(&req(), MaxField::default())["reasoning_effort"], "high");
         let mut r = req();
         r.effort = Some(Effort::Low);
@@ -233,15 +233,15 @@ mod tests {
     }
 
     #[test]
-    fn системный_промпт_становится_первым_сообщением() {
+    fn the_system_prompt_becomes_the_first_message() {
         let body = build_body(&req(), MaxField::default());
         assert_eq!(body["messages"][0]["role"], "system");
-        assert_eq!(body["messages"][0]["content"], "ты Yaca");
+        assert_eq!(body["messages"][0]["content"], "You are Yaca");
         assert_eq!(body["messages"][1]["role"], "user");
     }
 
     #[test]
-    fn вызов_тула_становится_tool_calls_а_аргументы_строкой() {
+    fn a_tool_call_becomes_tool_calls_with_arguments_as_a_string() {
         let mut r = req();
         r.messages = vec![Message::assistant(vec![ContentBlock::ToolUse {
             id: "call_1".into(),
@@ -256,18 +256,18 @@ mod tests {
     }
 
     #[test]
-    fn результат_тула_едет_отдельным_сообщением_роли_tool() {
+    fn a_tool_result_goes_as_a_separate_tool_role_message() {
         let mut r = req();
         r.messages = vec![Message {
             role: Role::User,
             content: vec![
                 ContentBlock::ToolResult {
                     tool_use_id: "call_1".into(),
-                    content: "готово".into(),
+                    content: "done".into(),
                     is_error: false,
                 },
                 ContentBlock::Text {
-                    text: "спасибо".into(),
+                    text: "thanks".into(),
                 },
             ],
         }];
@@ -276,7 +276,7 @@ mod tests {
         assert_eq!(body["messages"][1]["tool_call_id"], "call_1");
         // The human's text goes after the result, not before it.
         assert_eq!(body["messages"][2]["role"], "user");
-        assert_eq!(body["messages"][2]["content"], "спасибо");
+        assert_eq!(body["messages"][2]["content"], "thanks");
     }
 
     #[test]
@@ -313,7 +313,7 @@ mod tests {
     }
 
     #[test]
-    fn неудача_тула_помечается_в_тексте() {
+    fn a_failed_tool_is_marked_in_the_text() {
         let mut r = req();
         r.messages = vec![Message {
             role: Role::User,
@@ -328,28 +328,28 @@ mod tests {
     }
 
     #[test]
-    fn рассуждение_не_отправляется_обратно() {
+    fn reasoning_is_not_sent_back() {
         let mut r = req();
         r.messages = vec![Message::assistant(vec![
             ContentBlock::Thinking {
-                thinking: "думаю".into(),
+                thinking: "I think".into(),
                 signature: Some("sig".into()),
             },
             ContentBlock::Text {
-                text: "ответ".into(),
+                text: "answer".into(),
             },
         ])];
         let body = serde_json::to_string(&build_body(&r, MaxField::default())).unwrap();
-        assert!(!body.contains("думаю"));
+        assert!(!body.contains("I think"));
         assert!(!body.contains("sig"));
-        assert!(body.contains("ответ"));
+        assert!(body.contains("answer"));
     }
 
     #[test]
-    fn ход_из_одного_рассуждения_не_даёт_пустого_сообщения() {
+    fn a_turn_of_only_reasoning_gives_no_empty_message() {
         let mut r = req();
         r.messages = vec![Message::assistant(vec![ContentBlock::Thinking {
-            thinking: "думаю".into(),
+            thinking: "I think".into(),
             signature: None,
         }])];
         // Only the system prompt: there was nothing to send.
@@ -357,7 +357,7 @@ mod tests {
     }
 
     #[test]
-    fn потолок_ответа_едет_одним_полем_и_никогда_двумя() {
+    fn the_output_limit_goes_as_one_field_and_never_as_two() {
         let by_default = build_body(&req(), MaxField::MaxTokens);
         assert_eq!(by_default["max_tokens"], 8_000);
         assert!(by_default.get("max_completion_tokens").is_none());
@@ -367,7 +367,7 @@ mod tests {
         assert_eq!(asked["max_completion_tokens"], 8_000);
         assert!(
             asked.get("max_tokens").is_none(),
-            "на оба поля разом это 400"
+            "sending both fields at once is a 400"
         );
     }
 }

@@ -7,7 +7,7 @@
 //! * Anything else, a timeout, a hook that would not start — a note for the
 //!   human, and the work goes on.
 //!
-//! The human-facing words are Russian, like the rest of the feed; the reason a
+//! The human-facing words are English; the reason a
 //! hook gives is passed through as it wrote it.
 
 use serde_json::Value;
@@ -46,22 +46,22 @@ pub fn verdict(event: HookEvent, ran: &Ran) -> Verdict {
         Ran::Exited { code: Some(2), stdout, stderr } => {
             let reason = if stderr.trim().is_empty() { stdout.trim() } else { stderr.trim() };
             v.block = Some(if reason.is_empty() {
-                "хук отказал без объяснения".to_string()
+                "the hook refused without an explanation".to_string()
             } else {
                 reason.to_string()
             });
         }
         Ran::Exited { code, stderr, .. } => {
-            let how = code.map_or("сигналом".to_string(), |c| format!("кодом {c}"));
+            let how = code.map_or("by a signal".to_string(), |c| format!("with code {c}"));
             let tail = if stderr.trim().is_empty() {
                 String::new()
             } else {
                 format!(": {}", clip(stderr.trim()))
             };
-            v.notices.push(format!("завершился {how}{tail}"));
+            v.notices.push(format!("exited {how}{tail}"));
         }
-        Ran::TimedOut(secs) => v.notices.push(format!("не ответил за {secs} с")),
-        Ran::Broken(why) => v.notices.push(format!("не запустился: {why}")),
+        Ran::TimedOut(secs) => v.notices.push(format!("did not answer within {secs} s")),
+        Ran::Broken(why) => v.notices.push(format!("did not start: {why}")),
         Ran::Stopped | Ran::Detached => {}
     }
     v
@@ -80,17 +80,17 @@ fn structured(fields: &serde_json::Map<String, Value>, v: &mut Verdict) {
     let specific = fields.get("hookSpecificOutput").and_then(Value::as_object);
 
     if fields.get("continue").and_then(Value::as_bool) == Some(false) {
-        v.block = Some(text(fields.get("stopReason")).unwrap_or("хук остановил работу").to_string());
+        v.block = Some(text(fields.get("stopReason")).unwrap_or("the hook stopped the work").to_string());
     }
     // `approve` is the older spelling Claude Code still reads; it grants, and
     // so is ignored like `allow`.
     if fields.get("decision").and_then(Value::as_str) == Some("block") {
-        v.block = Some(text(fields.get("reason")).unwrap_or("хук отказал без объяснения").to_string());
+        v.block = Some(text(fields.get("reason")).unwrap_or("the hook refused without an explanation").to_string());
     }
     if let Some(specific) = specific {
         match specific.get("permissionDecision").and_then(Value::as_str) {
             Some("deny") => {
-                let reason = text(specific.get("permissionDecisionReason")).unwrap_or("хук отказал без объяснения");
+                let reason = text(specific.get("permissionDecisionReason")).unwrap_or("the hook refused without an explanation");
                 v.block = Some(reason.to_string());
             }
             Some("ask") => v.ask = true,

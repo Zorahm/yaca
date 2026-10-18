@@ -5,7 +5,7 @@ use crate::usage::unknown_model;
 fn spec(protocol: Protocol) -> ProviderSpec {
     ProviderSpec {
         id: "gateway".into(),
-        display_name: "Шлюз".into(),
+        display_name: "Gateway".into(),
         protocol,
         base_url: "https://gate.example.com/".into(),
         headers: BTreeMap::new(),
@@ -14,7 +14,7 @@ fn spec(protocol: Protocol) -> ProviderSpec {
 }
 
 #[test]
-fn отсутствующий_файл_даёт_оба_предустановленных() {
+fn a_missing_file_gives_both_presets() {
     let dir = TempDir::new();
     let providers = Providers::load(dir.path()).unwrap();
     assert!(providers.get(ANTHROPIC_ID).is_some());
@@ -28,31 +28,31 @@ fn отсутствующий_файл_даёт_оба_предустановл�
 }
 
 #[test]
-fn предустановленный_без_моделей_честно_отказывается_быть_выбранным() {
+fn a_preset_without_models_honestly_refuses_to_be_chosen() {
     // While the list is empty there is nothing to talk to — and that is an error, not silence.
     assert!(ProviderSpec::openai().resolve_model("gpt-5").is_err());
 }
 
 #[test]
-fn предустановленные_не_удаляются_оба() {
+fn both_presets_are_not_removed() {
     let mut providers = Providers::default();
     assert!(providers.remove(ANTHROPIC_ID).is_err());
     assert!(providers.remove(OPENAI_ID).is_err());
 }
 
 #[test]
-fn битый_файл_останавливает_а_не_подменяется_дефолтом() {
+fn a_broken_file_stops_the_load_instead_of_falling_back_to_defaults() {
     let dir = TempDir::new();
-    dir.write(FILE, "{ не json");
+    dir.write(FILE, "{ not json");
     assert!(Providers::load(dir.path()).is_err());
 }
 
 #[test]
-fn встроенный_провайдер_возвращается_в_список() {
+fn a_provider_from_the_file_stays_in_the_list() {
     let dir = TempDir::new();
     dir.write(
         FILE,
-        r#"{"list":[{"id":"gateway","displayName":"Шлюз",
+        r#"{"list":[{"id":"gateway","displayName":"Gateway",
            "protocol":"openai","baseUrl":"https://gate.example.com","models":[]}]}"#,
     );
     let providers = Providers::load(dir.path()).unwrap();
@@ -65,7 +65,7 @@ fn встроенный_провайдер_возвращается_в_спис�
 }
 
 #[test]
-fn список_переживает_запись() {
+fn the_list_survives_a_save() {
     let dir = TempDir::new();
     let mut providers = Providers::default();
     providers.put(spec(Protocol::OpenAi));
@@ -75,30 +75,30 @@ fn список_переживает_запись() {
 }
 
 #[test]
-fn ключ_подставляется_в_заголовок_а_не_лежит_в_файле() {
+fn the_key_goes_into_the_header_and_not_into_the_file() {
     let mut s = spec(Protocol::OpenAi);
     s.headers.insert("x-title".into(), "Yaca".into());
-    let headers = s.headers_for(Some("sk-живой"));
+    let headers = s.headers_for(Some("sk-live"));
 
-    assert!(headers.contains(&("authorization".into(), "Bearer sk-живой".into())));
+    assert!(headers.contains(&("authorization".into(), "Bearer sk-live".into())));
     assert!(headers.contains(&("x-title".into(), "Yaca".into())));
     // The key is not in the description in any form.
-    assert!(!serde_json::to_string(&s).unwrap().contains("sk-живой"));
+    assert!(!serde_json::to_string(&s).unwrap().contains("sk-live"));
 }
 
 #[test]
-fn свой_заголовок_перебивает_умолчание_протокола() {
+fn an_own_header_overrides_the_protocol_default() {
     let mut s = spec(Protocol::Anthropic);
     s.headers
-        .insert("x-api-key".into(), "статичный-токен".into());
+        .insert("x-api-key".into(), "static-token".into());
     let headers = s.headers_for(None);
 
-    assert!(headers.contains(&("x-api-key".into(), "статичный-токен".into())));
+    assert!(headers.contains(&("x-api-key".into(), "static-token".into())));
     assert!(!s.needs_key());
 }
 
 #[test]
-fn без_плейсхолдера_ключ_не_требуется() {
+fn without_a_placeholder_no_key_is_needed() {
     let mut s = spec(Protocol::OpenAi);
     s.headers.insert("authorization".into(), String::new());
     assert!(!s.needs_key());
@@ -121,7 +121,7 @@ fn a_header_waiting_for_a_key_is_left_out_without_one() {
 }
 
 #[test]
-fn модель_не_из_списка_дает_ошибку() {
+fn a_model_not_in_the_list_is_an_error() {
     let mut s = spec(Protocol::OpenAi);
     s.models = vec![ModelInfo {
         id: "qwen3-coder".into(),
@@ -148,12 +148,12 @@ fn модель_не_из_списка_дает_ошибку() {
 }
 
 #[test]
-fn провайдер_без_моделей_нельзя_выбрать() {
-    assert!(spec(Protocol::OpenAi).resolve_model("что-нибудь").is_err());
+fn a_provider_without_models_cannot_be_chosen() {
+    assert!(spec(Protocol::OpenAi).resolve_model("anything").is_err());
 }
 
 #[test]
-fn файл_написанный_до_нового_поля_модели_всё_ещё_читается() {
+fn a_file_written_before_the_model_field_is_still_read() {
     let dir = TempDir::new();
     dir.write(
         FILE,
@@ -169,11 +169,11 @@ fn файл_написанный_до_нового_поля_модели_всё_
     let providers = Providers::load(dir.path()).unwrap();
     let model = &providers.get("ollama").unwrap().models[0];
     assert_eq!(model.id, "qwen3-coder");
-    assert!(!model.supports_thinking, "молчание файла — это «нет»");
+    assert!(!model.supports_thinking, "a silent file means «no»");
 }
 
 #[test]
-fn косая_черта_в_конце_адреса_не_удваивается() {
+fn a_trailing_slash_in_the_address_is_not_doubled() {
     assert_eq!(
         spec(Protocol::OpenAi).endpoint("/v1/chat/completions"),
         "https://gate.example.com/v1/chat/completions"
@@ -181,7 +181,7 @@ fn косая_черта_в_конце_адреса_не_удваивается(
 }
 
 #[test]
-fn удаление_провайдера_убирает_его_из_списка() {
+fn removing_a_provider_takes_it_off_the_list() {
     let mut providers = Providers::default();
     providers.put(spec(Protocol::OpenAi));
     assert!(providers.get("gateway").is_some());
@@ -190,7 +190,7 @@ fn удаление_провайдера_убирает_его_из_списка
 }
 
 #[test]
-fn поиск_модели_и_все_модели() {
+fn finding_a_model_and_all_models() {
     let mut providers = Providers::default();
     let mut s = spec(Protocol::OpenAi);
     s.models = vec![unknown_model("qwen3-coder")];

@@ -59,7 +59,7 @@ impl Http {
     ) -> Result<Self, McpError> {
         let mut map = HeaderMap::new();
         for (name, value) in headers {
-            let bad = |what: &str| McpError::Transport(format!("заголовок «{name}»: {what}"));
+            let bad = |what: &str| McpError::Transport(format!("header «{name}»: {what}"));
             let key = HeaderName::try_from(name.as_str()).map_err(|e| bad(&e.to_string()))?;
             let value = HeaderValue::try_from(value.as_str()).map_err(|e| bad(&e.to_string()))?;
             map.insert(key, value);
@@ -154,13 +154,13 @@ impl Transport for Http {
             .json(&message)
             .send()
             .await
-            .map_err(|e| McpError::Transport(format!("сеть: {e}")))?;
+            .map_err(|e| McpError::Transport(format!("network: {e}")))?;
 
         let status = response.status();
         if status == StatusCode::NOT_FOUND && link.session.lock().unwrap().is_some() {
             // The protocol's way of saying the session is over. Everything
             // after this would get the same answer.
-            let reason = "сервер больше не знает эту сессию".to_string();
+            let reason = "the server no longer knows this session".to_string();
             let _ = link.inbox.send(Incoming::Closed(reason.clone()));
             return Err(McpError::Closed(reason));
         }
@@ -217,7 +217,7 @@ impl Transport for Http {
         let body: Value = response
             .json()
             .await
-            .map_err(|e| McpError::Protocol(format!("ответ не JSON: {e}")))?;
+            .map_err(|e| McpError::Protocol(format!("answer is not JSON: {e}")))?;
         link.deliver(body);
         Ok(())
     }

@@ -5,10 +5,11 @@ import type { SessionId } from "./SessionId";
 import type { SessionState } from "./SessionState";
 
 /**
- * Открытый чат: его идентификатор и состояние на момент открытия.
+ * An open chat: its identifier and its state at the moment it was opened.
  *
- * Идентификатор возвращается сразу, потому что дальше окно им и адресуется:
- * чатов много, и команда без имени сессии не знает, кому она.
+ * The identifier comes back at once, because the window addresses everything
+ * by it from then on: there are many chats, and a command without the
+ * session's name does not know who it is for.
  */
 export type OpenedChat = { id: SessionId, state: SessionState, 
 /**

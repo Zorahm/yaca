@@ -8,7 +8,7 @@
 //! **These settings describe how a session starts.** The core reads the file
 //! at `spawn` and keeps what it read, so a mode or a rule changed here reaches
 //! the next chat, not the one already running — which is why §10 calls it
-//! "режим по умолчанию". Reaching into a live session is what the composer's
+//! "default mode". Reaching into a live session is what the composer's
 //! `⇧⇥` is for.
 
 use std::path::PathBuf;

@@ -123,7 +123,7 @@ impl Installer {
         self.known()
             .into_iter()
             .find(|k| k.name == name)
-            .ok_or_else(|| err(format!("нет маркетплейса {name}; список — yaca plugins marketplace list")))
+            .ok_or_else(|| err(format!("no marketplace {name}; list them with yaca plugins marketplace list")))
     }
 
     pub fn marketplaces(&self) -> Vec<MarketplaceSummary> {
@@ -166,7 +166,7 @@ impl Installer {
                     let target = self.config_dir.join(marketplace::CLONES_DIR).join(&name);
                     git::remove_tree(&target);
                     std::fs::create_dir_all(target.parent().unwrap_or(&self.config_dir)).map_err(|e| err(e.to_string()))?;
-                    std::fs::rename(staging.join("repo"), &target).map_err(|e| err(format!("не перенести клон: {e}")))?;
+                    std::fs::rename(staging.join("repo"), &target).map_err(|e| err(format!("cannot move the clone into place: {e}")))?;
                     Ok(name)
                 })();
                 git::remove_tree(&staging);
@@ -216,7 +216,7 @@ impl Installer {
             let target = known.dir(&self.config_dir);
             git::remove_tree(&target);
             std::fs::create_dir_all(target.parent().unwrap_or(&self.config_dir)).map_err(|e| err(e.to_string()))?;
-            std::fs::rename(staging.join("repo"), &target).map_err(|e| err(format!("не перенести клон: {e}")))
+            std::fs::rename(staging.join("repo"), &target).map_err(|e| err(format!("cannot move the clone into place: {e}")))
         })();
         git::remove_tree(&staging);
         result
@@ -245,7 +245,7 @@ impl Installer {
                     installed: registry.plugins.get(&id).map(|i| i.version.clone()),
                     unavailable: match &e.source {
                         marketplace::EntrySource::Unsupported(kind) => {
-                            Some(format!("источник «{kind}» в Yaca не поддерживается"))
+                            Some(format!("source «{kind}» is not supported in Yaca"))
                         }
                         _ => None,
                     },
@@ -265,14 +265,14 @@ impl Installer {
     pub fn install(&self, id: &str) -> Result<PluginSummary, CoreError> {
         let (entry_name, market) = id
             .split_once('@')
-            .ok_or_else(|| err(format!("«{id}» — не плагин@маркетплейс")))?;
+            .ok_or_else(|| err(format!("«{id}» is not plugin@marketplace")))?;
         let known = self.find(market)?;
         let manifest = self.manifest(&known)?;
         let entry = manifest
             .plugins
             .iter()
             .find(|e| e.name == entry_name)
-            .ok_or_else(|| err(format!("в маркетплейсе {market} нет плагина {entry_name}")))?;
+            .ok_or_else(|| err(format!("marketplace {market} has no plugin {entry_name}")))?;
         let dir = known.dir(&self.config_dir);
         let from = From::Marketplace {
             marketplace: market.to_string(),
@@ -311,7 +311,7 @@ impl Installer {
             .plugins
             .get(id)
             .cloned()
-            .ok_or_else(|| err(format!("{id} не установлен через Yaca")))?;
+            .ok_or_else(|| err(format!("{id} was not installed through Yaca")))?;
         let new = match &old.from {
             From::Marketplace { marketplace, .. } => {
                 let known = self.find(marketplace)?;
@@ -324,7 +324,7 @@ impl Installer {
                 Registry::load(&self.config_dir).plugins.get(id).cloned()
             }
         }
-        .ok_or_else(|| err(format!("{id} пропал из реестра при обновлении")))?;
+        .ok_or_else(|| err(format!("{id} disappeared from the registry during the update")))?;
         Ok(UpdateOutcome {
             id: id.to_string(),
             from: old.version,
@@ -351,7 +351,7 @@ impl Installer {
         let install = registry
             .plugins
             .remove(id)
-            .ok_or_else(|| err(format!("{id} не установлен через Yaca")))?;
+            .ok_or_else(|| err(format!("{id} was not installed through Yaca")))?;
         registry.save(&self.config_dir)?;
         self.remove_install_dir(&install.path);
         crate::plugin::forget_switch(&self.config_dir, id)
@@ -375,7 +375,7 @@ impl Installer {
             let fetched = get(&staging).map_err(err)?;
             let package = std::fs::canonicalize(&fetched.package).map_err(|e| err(e.to_string()))?;
             let (_, contents) = read_package(&package, Some(name))
-                .map_err(|why| err(format!("плагин не принят: {why}")))?;
+                .map_err(|why| err(format!("the plugin was not accepted: {why}")))?;
             let content = registry::content_hash(&package);
             let version = declared_version
                 .or(contents.version.clone())
@@ -394,7 +394,7 @@ impl Installer {
             if changed || previous.as_ref().is_none_or(|p| p.path != target) {
                 git::remove_tree(&target);
                 std::fs::create_dir_all(target.parent().unwrap_or(&self.config_dir)).map_err(|e| err(e.to_string()))?;
-                std::fs::rename(&package, &target).map_err(|e| err(format!("не перенести плагин на место: {e}")))?;
+                std::fs::rename(&package, &target).map_err(|e| err(format!("cannot move the plugin into place: {e}")))?;
                 if let Some(p) = &previous {
                     if p.path != target {
                         self.remove_install_dir(&p.path);
@@ -425,7 +425,7 @@ impl Installer {
             .plugins
             .into_iter()
             .find(|p| p.id == id)
-            .ok_or_else(|| err(format!("{id} установлен, но не загрузился: его имя занято другим плагином")))?;
+            .ok_or_else(|| err(format!("{id} was installed, but did not load: its name is taken by another plugin")))?;
         Ok((summary, changed))
     }
 
@@ -436,7 +436,7 @@ impl Installer {
             .config_dir
             .join(CACHE_DIR)
             .join(format!(".{what}-{}", uuid::Uuid::new_v4().simple()));
-        std::fs::create_dir_all(&dir).map_err(|e| err(format!("не создать {}: {e}", plain(&dir))))?;
+        std::fs::create_dir_all(&dir).map_err(|e| err(format!("cannot create {}: {e}", plain(&dir))))?;
         Ok(dir)
     }
 
@@ -470,8 +470,8 @@ fn now() -> u64 {
 
 pub(super) fn write_json(path: &Path, value: &impl Serialize) -> Result<(), CoreError> {
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| err(format!("не создать {}: {e}", dir.display())))?;
+        std::fs::create_dir_all(dir).map_err(|e| err(format!("cannot create {}: {e}", dir.display())))?;
     }
     let text = serde_json::to_string_pretty(value).map_err(|e| err(e.to_string()))?;
-    std::fs::write(path, text).map_err(|e| err(format!("не записать {}: {e}", plain(path))))
+    std::fs::write(path, text).map_err(|e| err(format!("cannot write {}: {e}", plain(path))))
 }

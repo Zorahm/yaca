@@ -90,7 +90,7 @@ pub fn run(root: &std::path::Path, cmd: Cmd) -> Result<()> {
         Cmd::Sessions => {
             for meta in store.list() {
                 let title = if meta.title.is_empty() {
-                    "(без названия)"
+                    "(untitled)"
                 } else {
                     &meta.title
                 };
@@ -160,7 +160,7 @@ fn key(action: KeyAction, provider: &str) -> Result<()> {
             let mut key = String::new();
             std::io::stdin()
                 .read_line(&mut key)
-                .context("не прочитать ключ со стандартного ввода")?;
+                .context("could not read the key from standard input")?;
             secrets::store_api_key(provider, key.trim())?;
             println!("stored in the keychain");
             ask_for_models(provider)?;

@@ -47,11 +47,11 @@ impl Switches {
 
     pub(super) fn save(&self, config_dir: &Path) -> Result<(), CoreError> {
         std::fs::create_dir_all(config_dir)
-            .map_err(|e| CoreError::Config(format!("не создать {}: {e}", config_dir.display())))?;
+            .map_err(|e| CoreError::Config(format!("cannot create {}: {e}", config_dir.display())))?;
         let text = serde_json::to_string_pretty(self)
-            .map_err(|e| CoreError::Config(format!("не собрать список плагинов: {e}")))?;
+            .map_err(|e| CoreError::Config(format!("cannot assemble the plugin list: {e}")))?;
         std::fs::write(config_dir.join(SWITCHES), text)
-            .map_err(|e| CoreError::Config(format!("не записать список плагинов: {e}")))
+            .map_err(|e| CoreError::Config(format!("cannot write the plugin list: {e}")))
     }
 }
 
@@ -87,7 +87,7 @@ pub(super) fn claude_installs(home: &Path, diagnostics: &mut Vec<PluginDiagnosti
     let Ok(Value::Object(doc)) = serde_json::from_str::<Value>(&text) else {
         diagnostics.push(PluginDiagnostic {
             path: plain(&file),
-            message: "не разбирается, плагины Claude Code не загружены".into(),
+            message: "cannot be parsed, Claude Code plugins are not loaded".into(),
         });
         return Vec::new();
     };

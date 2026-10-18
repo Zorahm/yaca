@@ -1,6 +1,6 @@
 [package]
 name = "yaca-core"
-description = "Безголовое ядро Yaca: агентный цикл, тулы, поток событий"
+description = "Headless Yaca core: agent loop, tools, event stream"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

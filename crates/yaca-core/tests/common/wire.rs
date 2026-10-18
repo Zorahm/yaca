@@ -145,7 +145,7 @@ Connection: close
 /// `ProviderStream` is not `Debug`, so `unwrap_err` does not work on it.
 pub fn refusal(result: Result<ProviderStream, ProviderError>) -> ProviderError {
     match result {
-        Ok(_) => panic!("ожидался отказ, пришёл поток"),
+        Ok(_) => panic!("expected a refusal, got a stream"),
         Err(e) => e,
     }
 }

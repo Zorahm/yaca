@@ -72,7 +72,7 @@ impl MarketplaceSource {
                 });
             }
         }
-        Err(format!("«{raw}» — не папка, не owner/repo и не git-адрес"))
+        Err(format!("«{raw}» is neither a folder, nor owner/repo, nor a git address"))
     }
 
     pub(super) fn url(&self) -> Option<String> {
@@ -272,14 +272,14 @@ pub struct Manifest {
 
 pub fn read(dir: &Path) -> Result<Manifest, String> {
     let file = dir.join(MANIFEST);
-    let text = std::fs::read_to_string(&file).map_err(|_| format!("нет {}", plain(&file)))?;
-    let Value::Object(doc) = serde_json::from_str::<Value>(&text).map_err(|e| format!("marketplace.json — не JSON: {e}"))? else {
-        return Err("marketplace.json — не объект".into());
+    let text = std::fs::read_to_string(&file).map_err(|_| format!("{} is missing", plain(&file)))?;
+    let Value::Object(doc) = serde_json::from_str::<Value>(&text).map_err(|e| format!("marketplace.json is not JSON: {e}"))? else {
+        return Err("marketplace.json is not an object".into());
     };
     let name = match doc.get("name").and_then(Value::as_str) {
         Some(n) if is_namespace(n) => n.to_string(),
-        Some(n) => return Err(format!("имя маркетплейса «{n}» нельзя использовать")),
-        None => return Err("в marketplace.json нет name".into()),
+        Some(n) => return Err(format!("the marketplace name «{n}» cannot be used")),
+        None => return Err("marketplace.json has no name".into()),
     };
     let plugin_root = doc
         .get("metadata")

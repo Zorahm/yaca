@@ -196,7 +196,7 @@ impl RouterProvider {
     ) -> Result<ProviderStream, ProviderError> {
         let target = self.targets.get(pick.target).ok_or_else(|| {
             ProviderError::Config(
-                "маршрут ведёт на модель, которой нет в списке маршрутизатора".into(),
+                "the route leads to a model that is not in the router's list".into(),
             )
         })?;
         if strip {
@@ -246,7 +246,7 @@ impl Provider for RouterProvider {
         // only ever asks for the virtual one.
         if req.model != self.cfg.name {
             return Err(ProviderError::Config(format!(
-                "модель «{}» не принадлежит маршрутизатору «{}»: он выбирает настоящую модель сам",
+                "model «{}» does not belong to router «{}»: it picks the real model itself",
                 req.model, self.cfg.name
             )));
         }
@@ -307,7 +307,7 @@ impl<'a, F: Fn(&ProviderSpec) -> Arc<dyn Provider>> Pool<'a, F> {
     fn spec(&self, provider: &str) -> Result<&'a ProviderSpec, CoreError> {
         self.providers
             .get(provider)
-            .ok_or_else(|| CoreError::Config(format!("провайдера «{provider}» нет в списке")))
+            .ok_or_else(|| CoreError::Config(format!("provider «{provider}» is not in the list")))
     }
 
     fn backend(&mut self, provider: &str) -> Result<Arc<dyn Provider>, CoreError> {
@@ -328,7 +328,7 @@ impl<'a, F: Fn(&ProviderSpec) -> Arc<dyn Provider>> Pool<'a, F> {
         let spec = self.spec(&model.provider)?;
         let mut info = spec.model(&model.model).cloned().ok_or_else(|| {
             CoreError::Config(format!(
-                "у провайдера «{}» нет модели «{}»",
+                "provider «{}» has no model «{}»",
                 spec.id, model.model
             ))
         })?;
@@ -358,7 +358,7 @@ impl<'a, F: Fn(&ProviderSpec) -> Arc<dyn Provider>> Pool<'a, F> {
 fn virtual_model(name: &str, targets: &[Target], default: usize) -> Result<ModelInfo, CoreError> {
     let default = targets
         .get(default)
-        .ok_or_else(|| CoreError::Config("маршрутизатор без маршрута по умолчанию".into()))?;
+        .ok_or_else(|| CoreError::Config("router without a default route".into()))?;
     let smallest = targets
         .iter()
         .min_by_key(|t| t.info.context_max)
@@ -366,7 +366,7 @@ fn virtual_model(name: &str, targets: &[Target], default: usize) -> Result<Model
     Ok(ModelInfo {
         id: name.to_string(),
         provider_id: ROUTER_ID.to_string(),
-        display_name: "Авто".into(),
+        display_name: "Auto".into(),
         context_max: smallest.info.context_max,
         // The window's source travels with the number it gave: a number that is
         // a guess stays a guess, even when it is the one the session uses.
