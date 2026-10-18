@@ -1,33 +1,35 @@
 /**
- * Слэш-команды композера §7.3.
+ * Composer slash commands §7.3.
  *
- * Две породы в одном меню. Встроенные — то, что делает сам интерфейс: в ядро
- * уезжает `Command`, а не текст. Проектные лежат файлами в
- * `.yaca/commands/*.md`, и разворачивает их ядро в момент отправки — окну от
- * них нужны имя и описание, чтобы нарисовать строку.
+ * Two kinds in one menu. Built-ins are what the interface does itself: a
+ * `Command` goes to the core, not text. Project commands are files in
+ * `.yaca/commands/*.md`, and the core expands them at send time; the window
+ * needs only their name and description to draw a row.
  *
- * Встроенных здесь пять из восьми, перечисленных в §7.3. `/init`, `/cost` и
- * `/help` ведут в файл проекта, разбор трат и справку — экраны, которых нет,
- * а команда, которая ничего не открывает, ничем не лучше кнопки, которая
- * ничего не открывает (§0). Приедут вместе со своими подсистемами.
+ * Five of the eight built-ins listed in §7.3 are here. `/init`, `/cost` and
+ * `/help` lead to the project file, the cost breakdown and help, which are
+ * screens that do not exist yet, and a command that opens nothing is no better
+ * than a button that opens nothing (§0). They arrive together with their
+ * subsystems.
  *
- * Меню — функция от текста поля, а не отдельное состояние: закрывается оно
- * тем, что текст перестал быть командой. Флаг «меню открыто» был бы второй
- * версией той же правды и разошёлся бы с ней на первом же `Backspace`.
+ * The menu is a function of the input's text, not a separate state: it closes
+ * when the text stops being a command. A "menu open" flag would be a second
+ * version of the same truth, and it would diverge from it on the first
+ * `Backspace`.
  */
 
 import type { McpServerSummary, SkillInfo, SkillScope, SlashCommand } from "../core/client";
 import { t, type Key } from "../i18n";
 
-/** Встроенная команда — то, что интерфейс умеет сделать сам. */
+/** A built-in command: something the interface can do by itself. */
 export type Builtin = "checkpoints" | "clear" | "compact" | "lsp" | "mcp" | "model";
 
 /**
- * Все имена, занятые встроенными командами.
+ * All names taken by built-in commands.
  *
- * Шире, чем список доступных на экране: на домашнем экране §9.1 сжимать
- * нечего, но `/compact` там не должен вдруг означать чужой файл. Имя команды
- * значит одно и то же везде.
+ * Wider than the list available on screen: the home screen §9.1 has nothing to
+ * compact, but `/compact` there must not suddenly mean someone else's file. A
+ * command's name means the same thing everywhere.
  */
 export const RESERVED: Builtin[] = ["checkpoints", "clear", "compact", "lsp", "mcp", "model"];
 
@@ -46,20 +48,20 @@ export type CommandKind = "command" | "pluginCommand" | "skill" | "mcpPrompt";
 /** A command of the menu that is not built in: a file, a plugin's, a skill. */
 export type MenuCommand = SlashCommand & { kind: CommandKind; scope?: SkillScope };
 
-/** Строка меню. Имя — без слэша, как и у файла. */
+/** A menu row. The name has no slash, the same as for a file. */
 export type SlashItem = {
   name: string;
   description: string;
-  /** `null` у проектной команды: её разворачивает ядро. */
+  /** `null` for a project command: the core expands it. */
   builtin: Builtin | null;
   kind: CommandKind | "builtin";
   scope?: SkillScope;
 };
 
 /**
- * Что показывает меню для набранного текста, или `null`, когда меню не нужно.
+ * What the menu shows for the typed text, or `null` when no menu is needed.
  *
- * Пробел закрывает меню: дальше идут аргументы, и дополнять уже нечего.
+ * A space closes the menu: arguments follow, and there is nothing left to complete.
  */
 export function menuFor(
   text: string,
@@ -78,11 +80,11 @@ export function menuFor(
 }
 
 /**
- * Встроенная команда, которой равна строка, или `null`.
+ * The built-in command the text equals, or `null`.
  *
- * Аргументов встроенные не берут, поэтому `/compact хвост` — не команда, а
- * сообщение, и уезжает модели как есть: ровно так же ядро поступает с
- * `/name`, на которое не отзывается ни один файл.
+ * Built-ins take no arguments, so `/compact tail` is not a command but a
+ * message, and it goes to the model as it is: the core treats a `/name` that no
+ * file answers to in exactly the same way.
  */
 export function builtinFor(text: string, builtins: Builtin[]): Builtin | null {
   const name = text.trim().slice(1);
@@ -91,11 +93,11 @@ export function builtinFor(text: string, builtins: Builtin[]): Builtin | null {
 }
 
 /**
- * Встроенные, затем проектные — обе группы по алфавиту.
+ * Built-ins first, then project commands; each group in alphabetical order.
  *
- * Файл, назвавшийся именем встроенной команды, из меню выпадает — и на том
- * экране, где встроенной нет, тоже: `/compact`, означающий на домашнем экране
- * одно, а в разговоре другое, хуже, чем `/compact`, которого нет.
+ * A file named like a built-in command drops out of the menu, and on the screen
+ * where that built-in is absent too: a `/compact` that means one thing on the
+ * home screen and another in a conversation is worse than no `/compact` at all.
  */
 function all(project: MenuCommand[], builtins: Builtin[]): SlashItem[] {
   const taken = new Set<string>(RESERVED);

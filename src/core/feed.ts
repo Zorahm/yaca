@@ -1,19 +1,19 @@
 /**
- * Лента как чистая функция от потока событий.
+ * The feed as a pure function of the event stream.
  *
- * Ядро обещает, что интерфейс — функция от `AgentEvent`, и вот она. Всё, что
- * рисуется в ленте и панелях, выводится отсюда: копить состояние в компонентах значило бы
- * иметь вторую версию правды, а она расходится с первой на первом же отклонении
- * файла.
+ * The core promises that the interface is a function of `AgentEvent`, and here it is. Everything
+ * drawn in the feed and the panels is derived from here: keeping state in components would mean
+ * having a second version of the truth, and it diverges from the first at the first mismatch
+ * with a file.
  *
- * Два свойства держат остальное.
+ * Two properties keep the rest in place.
  *
- * *Список блоков только растёт.* Блок разрешения не удаляется после ответа, а
- * помечается закрытым и не рисуется: так индексы блоков не съезжают, и лента
- * ведёт себя как журнал, из которого её же и восстанавливают.
+ * *The list of blocks only grows.* A permission block is not removed after its answer; it is
+ * marked closed and not drawn: this way block indices do not shift, and the feed
+ * behaves like a journal from which it is itself rebuilt.
  *
- * *Кадр — одна перерасчёт.* Мост шлёт события пачками по кадру, поэтому
- * `reduceAll` создаёт один новый снимок на пачку, а не на дельту.
+ * *A frame is one recomputation.* The bridge sends events in batches per frame, so
+ * `reduceAll` creates one new snapshot per batch, not per delta.
  */
 
 import type { AgentEvent } from "./bindings/AgentEvent";
@@ -38,10 +38,10 @@ import type { TokenCounts } from "./bindings/TokenCounts";
 import type { ToolMeta } from "./bindings/ToolMeta";
 import type { UsageSnapshot } from "./bindings/UsageSnapshot";
 
-/** Чем кончилось действие. `running` — точка `●` и настоящее время. */
+/** How an action ended. `running` is the `●` dot and the present tense. */
 export type ActionState = "running" | "done" | "failed" | "rejected" | "denied" | "stopped";
 
-/** Одна строка в группе действий. */
+/** One row in an action group. */
 /**
  * Tools whose one call changes many files (`Rename`). Each file arrives as a
  * `fileChanged` of its own under the call, and becomes a row nested under the
@@ -52,25 +52,25 @@ export const MULTI_FILE_TOOLS: ReadonlySet<string> = new Set(["Rename"]);
 
 export type ActionRow = {
   callId: string;
-  /** Имя тула. В ленте не показывается — нужно, чтобы выбрать форму. */
+  /** Tool name. Not shown in the feed; needed to pick the layout. */
   tool: string;
-  /** Подпись модели либо `null` у тулов, которые подписывает лента. */
+  /** The model's caption, or `null` for tools the feed captions itself. */
   description: string | null;
-  /** Первая строка раскрытой строки: полный путь или полная команда. */
+  /** First line of the expanded row: the full path or the full command. */
   target: string | null;
   input: unknown;
   state: ActionState;
-  /** Причина неудачи, отказа инварианта или отказа человека. */
+  /** The reason for a failure, a broken invariant or a refusal by the human. */
   message: string | null;
   meta: ToolMeta | null;
   output: string;
-  /** Заполнено у файловых действий: отсюда подпись и счётчики. */
+  /** Set on file actions: the caption and the counters come from here. */
   fact: FileFact | null;
   diff: FileDiff | null;
   /**
-   * Вызовы подагента — у строки `Task`, которая его отправила. Строки как
-   * строки: правка подагента — правка в файлах человека, и дифф ей положен тот
-   * же. Вложенность одна: подагент подагента не запускает.
+   * Subagent calls, on the `Task` row that sent them. Rows as rows: a subagent's
+   * edit is an edit to the human's files, and it gets the same diff. Nesting is
+   * one level deep: a subagent does not start a subagent.
    */
   children: ActionRow[];
   /**
@@ -82,11 +82,11 @@ export type ActionRow = {
 };
 
 /**
- * Где стоит вопрос `AskUser` (блок, похожий на запрос разрешения).
+ * Where an `AskUser` question stands (a block that looks like a permission request).
  *
- * `open` — ждёт человека; `answered` и `dismissed` — что он сделал; `unanswered` —
- * турн остановили раньше ответа. Блок остаётся в ленте во всех четырёх: вопрос,
- * на который ответили, — это строка разговора, а не запрос, который можно убрать.
+ * `open` waits for the human; `answered` and `dismissed` are what they did; `unanswered`
+ * means the turn was stopped before an answer. The block stays in the feed in all four:
+ * a question that was answered is a line of the conversation, not a request to be dismissed.
  */
 export type QuestionStatus = "open" | "answered" | "dismissed" | "unanswered";
 
@@ -108,7 +108,7 @@ export type FeedBlock =
       key: string;
       request: QuestionRequest;
       status: QuestionStatus;
-      /** Что выбрано, когда ответ есть; `null`, пока открыто или без ответа. */
+      /** What was picked, when there is an answer; `null` while open or unanswered. */
       reply: QuestionReply | null;
     }
   | {
@@ -153,15 +153,15 @@ export type FeedBlock =
 
 export type Feed = {
   blocks: FeedBlock[];
-  /** Нижний ряд композера: режимы, модель, занятость. */
+  /** The composer's bottom row: modes, model, busy state. */
   state: SessionState | null;
-  /** Кольцо контекста. */
+  /** The context ring. */
   usage: UsageSnapshot | null;
-  /** Панель процессов. */
+  /** The processes panel. */
   processes: ProcessSummary[];
   /**
-   * Серверы MCP этого чата, целиком, как их отдало ядро последним
-   * `mcpUpdated`. `null` — список ещё не приезжал.
+   * This chat's MCP servers, whole, as the core last sent them in
+   * `mcpUpdated`. `null` means the list has not arrived yet.
    */
   mcp: McpServerSummary[] | null;
   /**
@@ -170,52 +170,51 @@ export type Feed = {
    */
   lsp: LspServerSummary[] | null;
   /**
-   * Вывод выбранного процесса. Приходит только для той строки, на
-   * которую смотрят: `processOutputReset` кладёт буфер целиком, живые куски
-   * дописываются. Один слот, а не карта: смотреть человек может только один.
+   * Output of the selected process. It arrives only for the row being looked at:
+   * `processOutputReset` puts the whole buffer, live chunks are appended.
+   * One slot, not a map: a human can only look at one.
    */
   processOutput: { id: ProcessId; text: string; dropped: number } | null;
   /**
-   * Последний дифф по каждому пути — индекс панели файла.
+   * The latest diff for each path: the file panel's index.
    *
-   * Стейджинги приходят и без строки действия: при конфликте применения
-   * `callId` пуст, а дифф показывать надо. Последний по пути выигрывает —
-   * панель файла показывает файл, каким он сейчас в наборе, а не его первую
-   * правку.
+   * Stagings arrive without an action row too: when applying conflicts, the
+   * `callId` is empty, yet the diff has to be shown. The last one per path wins:
+   * the file panel shows the file as it now stands in the set, not its first edit.
    */
   diffs: Record<string, FileDiff>;
   /**
-   * Сколько записей файлов пришло за сессию. Панель файла перечитывает
-   * вид, когда число растёт: новая запись меняет то, что она показывает.
+   * How many file writes arrived in the session. The file panel rereads its view
+   * when the number grows: a new write changes what it shows.
    */
   writes: number;
   /**
-   * Полный дифф одного файла для панели, последний пришедший. Один слот:
-   * панель файла одна. `view: null` — в файле ничего не ждёт решения.
+   * The full diff of one file for the panel, the last one to arrive. One slot:
+   * there is one file panel. `view: null` means nothing in the file awaits a decision.
    */
   fileView: { path: string; view: FileView | null } | null;
-  /** Панель чекпоинтов. */
+  /** The checkpoints panel. */
   checkpoints: CheckpointSummary[];
-  /** Активный запрос разрешения, если он есть. */
+  /** The active permission request, if any. */
   request: PermissionRequest | null;
-  /** Открытый вопрос `AskUser`, если он есть: нижний ряд и горячие клавиши ждут его. */
+  /** The open `AskUser` question, if any: the bottom row and the hotkeys wait for it. */
   question: QuestionRequest | null;
   /**
-   * Что тронет откат, если его подтвердить.
+   * What a rollback would touch, if confirmed.
    *
-   * Живёт в ленте, а не в кнопке: список приходит событием, и показать его
-   * должна та же строка чекпоинта, у которой спросили.
+   * It lives in the feed, not in a button: the list arrives as an event, and the
+   * checkpoint row that asked for it is the one that must show it.
    */
   preview: { id: string; files: CheckpointChange[] } | null;
   /**
-   * Сообщения, которые ждут своей очереди в ходе, по порядку. Список
-   * приходит целиком от ядра: отмена и влитие меняют его там, а здесь только
-   * показывается то, что пришло последним.
+   * Messages waiting for their turn in the run, in order. The list arrives whole
+   * from the core: cancelling and merging change it there, and here only the
+   * latest arrival is shown.
    */
   queued: QueuedMessage[];
   /**
-   * Последний ответ на `@`-поиск. Несёт запрос, на который отвечает:
-   * композер показывает его, только когда запрос всё ещё тот, что набран.
+   * The latest answer to an `@` search. It carries the query it answers:
+   * the composer shows it only while the query is still the one typed.
    */
   found: { query: string; paths: string[] } | null;
   /**
@@ -245,7 +244,7 @@ export const emptyFeed: Feed = {
   turn: null,
 };
 
-/** Пачка событий — один снимок ленты. */
+/** A batch of events — one snapshot of the feed. */
 export function reduceAll(feed: Feed, events: AgentEvent[]): Feed {
   if (events.length === 0) return feed;
   const draft: Feed = { ...feed, blocks: feed.blocks.slice() };
@@ -254,7 +253,7 @@ export function reduceAll(feed: Feed, events: AgentEvent[]): Feed {
 }
 
 let sequence = 0;
-/** Ключ блока. Свой, а не индекс: блоки живут дольше, чем перерисовка. */
+/** A block's key. Its own, not an index: blocks outlive a redraw. */
 function key(prefix: string): string {
   sequence += 1;
   return `${prefix}_${sequence}`;
@@ -295,9 +294,9 @@ function apply(feed: Feed, event: AgentEvent): void {
         children: [],
         tokens: null,
       };
-      // Вызов подагента встаёт под свою строку `Task`, где бы та ни была:
-      // между ними мог пройти запрос разрешения, а он группу закрывает.
-      // Родитель, которого в ленте нет, — не повод потерять действие.
+      // A subagent call goes under its own `Task` row, wherever that row is:
+      // a permission request may have come between them, and it closes the group.
+      // A parent that is not in the feed is no reason to lose the action.
       const parent = event.parent;
       const nested =
         parent != null &&
@@ -345,8 +344,8 @@ function apply(feed: Feed, event: AgentEvent): void {
       return;
 
     case "toolCallDenied":
-      // Отказ в разрешении и остановка работающего вызова — один род исхода
-      // (решение человека), но не одно предложение.
+      // A refused permission and a stopped running call are one kind of outcome
+      // (the human's decision), but not one phrase.
       patchRow(feed, event.callId, (row) => ({
         ...row,
         state: event.stopped ? "stopped" : "denied",
@@ -355,8 +354,8 @@ function apply(feed: Feed, event: AgentEvent): void {
       return;
 
     case "fileChanged":
-      // Индекс панели файла держится здесь же: панель показывает
-      // последнее, что ядро прислало по этому пути.
+      // The file panel's index is kept here too: the panel shows
+      // the latest thing the core sent for this path.
       feed.diffs = { ...feed.diffs, [event.fact.path]: event.diff };
       feed.writes += 1;
       patchRow(feed, event.callId, (row) =>
@@ -371,7 +370,7 @@ function apply(feed: Feed, event: AgentEvent): void {
       return;
 
     case "todosUpdated": {
-      // Обновляется на месте, новый блок не создаётся.
+      // Updated in place; no new block is created.
       const at = feed.blocks.findIndex((b) => b.kind === "todos");
       const block: FeedBlock = {
         kind: "todos",
@@ -481,7 +480,7 @@ function apply(feed: Feed, event: AgentEvent): void {
       return;
 
     case "summaryEdited": {
-      // Сводку правят, а не пишут заново — разделитель тот же.
+      // The summary is edited, not written again: the divider stays the same.
       const at = lastIndex(feed, (b) => b.kind === "compacted");
       if (at !== -1) {
         const block = feed.blocks[at];
@@ -537,14 +536,14 @@ function apply(feed: Feed, event: AgentEvent): void {
       return;
 
     case "turnCancelled":
-      // Незавершённые тулы получают «отменено», в ленте строка.
+      // Unfinished tools get "cancelled"; the feed gets a line.
       cancelRunning(feed);
       feed.blocks.push({ kind: "stopped", key: key("stop") });
       endTurn(feed, event.at);
       return;
 
     case "processOutputReset":
-      // Человек выбрал строку — буфер целиком, сбрасывая то, что было до него.
+      // The human picked a row: the whole buffer, dropping whatever was there before.
       feed.processOutput = {
         id: event.id,
         text: event.text,
@@ -553,9 +552,9 @@ function apply(feed: Feed, event: AgentEvent): void {
       return;
 
     case "processOutput":
-      // Живой хвост приходит только для выбранной строки, и выбор всегда
-      // объявляется сбросом. Кусок чужого id не дописываем: он подменил бы
-      // буфер того, на кого смотрят.
+      // The live tail arrives only for the selected row, and a selection is always
+      // announced by a reset. A chunk with someone else's id is not appended: it would
+      // replace the buffer of the one being looked at.
       if (feed.processOutput?.id === event.id) {
         feed.processOutput = {
           ...feed.processOutput,
@@ -596,9 +595,9 @@ function apply(feed: Feed, event: AgentEvent): void {
       feed.found = { query: event.query, paths: event.paths };
       return;
 
-    // Кольцо и кнопка отправки читают `state.busy`, который приходит своим
-    // событием; время хода рисуется отдельно — живым таймером и строкой под
-    // ответом (`endTurn`).
+    // The ring and the send button read `state.busy`, which arrives as its own
+    // event; the turn's time is drawn separately, by a live timer and a line under
+    // the answer (`endTurn`).
     case "turnStarted":
       feed.turn = { startedAt: event.at };
       return;
@@ -641,19 +640,20 @@ function appendThinking(feed: Feed, blockId: string, text: string): void {
     feed.blocks[feed.blocks.length - 1] = { ...last, text: last.text + text };
     return;
   }
-  // Без длительности: строка рассуждения просит «рассуждение · 12 с», но времени начала в
-  // потоке нет, а замерить его часами вебвью — значит показать в открытой
-  // заново сессии время не того прогона.
+  // No duration: the reasoning row asks for "reasoning · 12 s", but the stream has no
+  // start time, and measuring it with the webview's clock would show, in a session
+  // reopened later, the time of a different run.
   feed.blocks.push({ kind: "reasoning", key: key("think"), blockId, text });
 }
 
 /**
- * Действия подряд — одна запись ленты, и только подряд: рассуждение или
- * реплика между вызовами встаёт между ними отдельным блоком.
+ * Actions in a row are one feed entry, and only in a row: reasoning or a reply
+ * between calls stands between them as a separate block.
  *
- * Редьюсер держит хронологию и ничего не сворачивает. В один блок вызовы и
- * рассуждения между репликами собирает `core/work` — уже для показа: ему нужен порядок, в котором всё происходило, а группа, тянущая в
- * себя вызовы через рассуждение, этот порядок теряла.
+ * The reducer keeps the chronology and folds nothing. The calls and the reasoning
+ * between replies are gathered into one block by `core/work`, for display: it needs
+ * the order in which everything happened, and a group that pulled calls across
+ * reasoning would have lost that order.
  */
 function startCall(feed: Feed, row: ActionRow): void {
   const at = feed.blocks.length - 1;
@@ -665,7 +665,7 @@ function startCall(feed: Feed, row: ActionRow): void {
   feed.blocks.push({ kind: "actions", key: key("acts"), rows: [row] });
 }
 
-/** Меняет строку по идентификатору; говорит, нашлась ли она. */
+/** Changes a row by its id; says whether it was found. */
 function patchRow(
   feed: Feed,
   callId: string,
@@ -682,7 +682,7 @@ function patchRow(
   return false;
 }
 
-/** Список с изменённой строкой — своей или вложенной; `null`, если её тут нет. */
+/** The list with the row changed, its own or nested; `null` if it is not here. */
 function patchIn(
   rows: ActionRow[],
   callId: string,
@@ -723,11 +723,11 @@ function cancelled(row: ActionRow): ActionRow {
 }
 
 /**
- * Строки вместе с вложенными, в порядке появления.
+ * Rows together with their nested ones, in order of appearance.
  *
- * Для всего, что считает по действиям, а не рисует их: что тронуто, сколько
- * создано, какой дифф последний. Файл, изменённый подагентом, изменён — и в
- * шапке группы, и в панели файла он стоит наравне с остальными.
+ * For everything that counts actions rather than draws them: what was touched, how
+ * many were created, which diff is the last. A file changed by a subagent is changed,
+ * and both in the group header and in the file panel it stands on a par with the rest.
  */
 /**
  * The rows under a many-file call, with this file's in place: an edit of the
@@ -771,10 +771,10 @@ function closeRequest(feed: Feed, requestId: string): void {
 }
 
 /**
- * Закрывает вопрос ответом, отказом или ничем.
+ * Closes the question with an answer, a refusal, or nothing.
  *
- * Пишет в тот же блок, а не добавляет новый: вопрос один, и его строка в ленте
- * должна стать итогом, а не второй записью про то же.
+ * Writes to the same block rather than adding a new one: there is one question, and
+ * its row in the feed should become the outcome, not a second entry about the same thing.
  */
 function settleQuestion(
   feed: Feed,
@@ -816,23 +816,23 @@ function lastIndex(feed: Feed, match: (b: FeedBlock) => boolean): number {
   return -1;
 }
 
-/** Что видно в ленте: закрытые запросы разрешения из неё уходят. */
+/** What is visible in the feed: closed permission requests leave it. */
 export function visible(feed: Feed): FeedBlock[] {
   return feed.blocks.filter((b) => b.kind !== "permission" || b.open);
 }
 
 /**
- * Дифф файла для панели файла.
+ * The diff of a file for the file panel.
  *
- * Сперва индекс стейджингов — там лежит последнее, что ядро прислало по пути.
- * Панель, открытая по старой строке действия после применения, падает к диффу
- * самой строки: набор уже пуст, но прятать то, что в ленте есть, причин нет.
+ * The staging index comes first: it holds the latest thing the core sent for the path.
+ * A panel opened from an old action row after applying falls back to the diff of that
+ * row itself: the set is already empty, but there is no reason to hide what the feed has.
  */
 /**
- * Файлы, которых сессия касалась, в порядке появления.
+ * Files the session has touched, in order of appearance.
  *
- * По этому списку `⌥←` и `⌥→` листают панель файла. Раньше его давал набор
- * правок; теперь он выводится из ленты, которая и так всё это знает.
+ * `⌥←` and `⌥→` page through the file panel by this list. It used to come from the set
+ * of edits; now it is derived from the feed, which already knows all of this.
  */
 export function touchedFiles(feed: Feed): string[] {
   const out: string[] = [];
@@ -847,10 +847,10 @@ export function touchedFiles(feed: Feed): string[] {
 }
 
 /**
- * Последнее, что ядро сказало про файл: вид изменения и счётчики.
+ * The latest thing the core said about a file: the kind of change and the counters.
  *
- * Ищется там же, где дифф, и по той же причине — набора правок, который знал
- * бы это отдельно, больше нет.
+ * It is looked up where the diff is, for the same reason: the set of edits that would
+ * know this separately no longer exists.
  */
 export function factOf(feed: Feed, path: string): FileFact | null {
   for (let i = feed.blocks.length - 1; i >= 0; i -= 1) {

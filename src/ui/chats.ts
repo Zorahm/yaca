@@ -309,12 +309,13 @@ function born(opened: OpenedChat, project: string, recorded: AgentEvent[] = []):
     id: opened.id,
     project,
     title: "",
-    // Состояние приезжает вместе с чатом, а не первым событием: композер §7.1
-    // рисуется сразу, и окно не проходит через кадр, в котором чат открыт, а
-    // режима и модели у него ещё нет. Оно же перекрывает журнал: режим и
-    // модель у открытой заново сессии свои.
-    // Серверы MCP — так же и по той же причине: они начинают подключаться
-    // вместе с сессией, раньше, чем окно слушает её события.
+    // The state arrives with the chat, not with its first event: the composer
+    // (§7.1) is drawn at once, and the window does not go through a frame in
+    // which the chat is open but has no mode or model yet. It also takes
+    // precedence over the journal: a session reopened again has its own mode
+    // and model.
+    // MCP servers — likewise, and for the same reason: they start connecting
+    // together with the session, earlier than the window listens to its events.
     feed: { ...reduceAll(emptyFeed, recorded), state: opened.state, mcp: opened.mcp, lsp: opened.lsp },
     at: -1,
     watched: null,

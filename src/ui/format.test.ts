@@ -1,44 +1,45 @@
 /**
- * Приведение пути к виду, в котором его показывают (§5.5, §7.2).
+ * Normalising a path into the form the UI shows it in (§5.5, §7.2).
  *
- * Диалог файлов отдаёт абсолютный путь в форме операционной системы, а чип и
- * карточка показывают путь от корня — тот же, что видит модель. Разделители
- * и регистр у двух сторон разные, и на этом проверка и держится.
+ * The file dialog returns an absolute path in the operating system's own form,
+ * while the chip and the card show the path from the project root, the same one
+ * the model sees. Separators and case differ between the two sides, and this
+ * check is about exactly that.
  */
 
 import { describe, expect, it } from "vitest";
 
 import { baseName, relativeTo } from "./format";
 
-describe("путь от корня проекта", () => {
-  it("срезает корень независимо от разделителя", () => {
+describe("path from the project root", () => {
+  it("strips the root regardless of the separator", () => {
     expect(relativeTo("D:\\Kod", "D:\\Kod\\src\\App.tsx")).toBe("src/App.tsx");
     expect(relativeTo("D:/Kod", "D:\\Kod\\src\\App.tsx")).toBe("src/App.tsx");
     expect(relativeTo("/home/z/kod", "/home/z/kod/src/App.tsx")).toBe("src/App.tsx");
   });
 
-  it("не различает регистр: Windows его тоже не различает", () => {
+  it("ignores case: Windows does not distinguish it either", () => {
     expect(relativeTo("D:\\Kod", "d:\\kod\\src\\App.tsx")).toBe("src/App.tsx");
   });
 
-  it("терпит хвостовой разделитель у корня", () => {
+  it("tolerates a trailing separator on the root", () => {
     expect(relativeTo("D:\\Kod\\", "D:\\Kod\\README.md")).toBe("README.md");
   });
 
-  it("оставляет чужой путь абсолютным", () => {
-    // Соврать про то, где лежит файл, хуже, чем показать его длинно.
+  it("leaves a foreign path absolute", () => {
+    // Lying about where a file lives is worse than showing it at length.
     expect(relativeTo("D:\\Kod", "C:\\Temp\\note.md")).toBe("C:/Temp/note.md");
-    // Сосед с общим началом имени — не внутри.
+    // A sibling whose name shares a prefix is not inside.
     expect(relativeTo("D:\\Kod", "D:\\Kodex\\note.md")).toBe("D:/Kodex/note.md");
   });
 
-  it("не считает сам корень путём внутри него", () => {
+  it("does not count the root itself as a path inside it", () => {
     expect(relativeTo("D:\\Kod", "D:\\Kod")).toBe("D:/Kod");
   });
 });
 
-describe("имя файла", () => {
-  it("режет по обоим разделителям", () => {
+describe("file name", () => {
+  it("splits on both separators", () => {
     expect(baseName("src/ui/App.tsx")).toBe("App.tsx");
     expect(baseName("D:\\Kod\\README.md")).toBe("README.md");
     expect(baseName("README.md")).toBe("README.md");

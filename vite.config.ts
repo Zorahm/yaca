@@ -8,8 +8,9 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react()],
 
-  // Редьюсер ленты и словари — чистые функции, им не нужен ни браузер, ни
-  // окно: они проверяются так же, как ядро проверяется без вебвью.
+  // The feed reducer and the dictionaries are pure functions: they need neither
+  // a browser nor a window, and are checked the same way the core is checked
+  // without a webview.
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
@@ -23,9 +24,10 @@ export default defineConfig(async () => ({
   server: {
     port: 1420,
     strictPort: true,
-    // По адресу, а не по имени. `localhost` сначала разрешается в `::1`, vite
-    // садится только на него, а оболочка и браузер идут на 127.0.0.1 и ждут
-    // сервер, который уже поднят. `devUrl` в `tauri.conf.json` — тот же адрес.
+    // By address, not by name. `localhost` resolves to `::1` first and vite
+    // binds only to it, while the shell and the browser go to 127.0.0.1 and
+    // wait for a server that is already up. `devUrl` in `tauri.conf.json` is
+    // the same address.
     host: host || "127.0.0.1",
     hmr: host
       ? {

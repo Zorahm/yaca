@@ -1,14 +1,15 @@
 /**
- * Вопрос с вариантами, `AskUser` (§5.7-подобный блок).
+ * Question with options, `AskUser` (a block like §5.7).
  *
- * Пока ждёт, это тот же красный ящик, что у запроса разрешения: решения ждут
- * оба. Ответ или отказ превращают его в одну строку итога — что выбрано — и
- * ящик уходит. Строка остаётся в разговоре: вопрос и ответ на него — часть
- * того, о чём шла речь.
+ * While it waits, it is the same red box as a permission request: both wait for
+ * a decision. An answer or a refusal turns it into one line of summary — what
+ * was picked — and the box goes. The line stays in the conversation: the
+ * question and its answer are part of what was being discussed.
  *
- * Цифры `1`–`6` выбирают вариант, `⏎` отвечает, `Esc` пропускает. Пока в поле
- * свой ответа печатают, цифры принадлежат полю: это текст, а не выбор. Набор
- * через IME `⏎` не отвечает — им подтверждают слово, а не вопрос.
+ * Digits `1`–`6` pick an option, `⏎` answers, `Esc` skips. While the human types
+ * their own answer in the field, the digits belong to the field: it is text, not
+ * a pick. Composing with an IME, `⏎` does not answer — it confirms a word, not
+ * the question.
  */
 
 import { useEffect, useState } from "react";

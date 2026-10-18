@@ -67,7 +67,7 @@ export function Sidebar({
   onOpenSession: (project: string, id: SessionId) => void;
   onCloseChat: (id: SessionId) => void;
   onForgetProject: (project: string) => void;
-  /** Кнопка подвала ведёт в окно настроек, не в панель. */
+  /** The footer button opens the settings window, not a panel. */
   onOpenSettings: () => void;
   /** A newer release than the running one, once the check has found it. */
   update?: ReleaseInfo | null;
@@ -212,8 +212,8 @@ export function Sidebar({
       )}
 
       <div className="side-foot">
-        {/* Окно, а не панель: настройки переживают разговор, и их
-            открывают, не закрывая ленту. */}
+        {/* A window, not a panel: settings outlive the conversation, and they are
+            opened without closing the feed. */}
         <button className="side-row side-row-large" onClick={onOpenSettings}>
           <span className="side-icon" aria-hidden="true">
             <Gear size={18} />

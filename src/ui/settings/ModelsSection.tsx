@@ -1,18 +1,18 @@
 /**
- * Модели проекта (§10): с чего начинается новая сессия и чем сжимается
- * история.
+ * Project models (§10): what a new session starts with and what the history is
+ * compacted with.
  *
- * Раздел проектный, а не общий: §10 перечисляет «Модели» в одном списке с
- * провайдерами, но лежат они в разных местах — провайдеры в конфиге
- * приложения, а выбор модели в `.yaca/settings.json`. Смешать их значило бы
- * поменять модель «для всех» и не сказать об этом.
+ * The section is per project, not global: §10 lists "Models" in one list with the
+ * providers, but they live in different places — providers in the app config, and
+ * the model choice in `.yaca/settings.json`. Mixing them would mean changing the
+ * model "for everyone" without saying so.
  *
- * «Для подагентов» и «лимиты» §10 тоже называет — их здесь нет: подагентов в
- * ядре нет вовсе, а лимита, который кто-то читает, не существует.
+ * §10 also names "For subagents" and "limits" — they are not here: there are no
+ * subagents in the core at all, and no limit that anyone reads exists.
  *
- * Выбор — из моделей настроенных провайдеров, и только из них. Провайдер без
- * моделей в §7.1 не появляется, и подставлять его сюда значило бы предложить
- * начать разговор, который не начнётся (§10).
+ * The choice is made from the models of configured providers, and only from them.
+ * A provider without models does not appear in §7.1, and offering it here would
+ * suggest starting a conversation that will not start (§10).
  */
 
 import type { ModelInfo, Settings } from "../../core/client";
@@ -20,9 +20,8 @@ import { t } from "../../i18n";
 import { Row, Select } from "./Row";
 
 /**
- * Значение «не задано» в списке. Не пустая строка: её `Select` держит за
- * «ничего не выбрано», а угловые скобки не встречаются в идентификаторах
- * моделей.
+ * The "not set" value in the list. Not an empty string: its `Select` takes that for
+ * "nothing selected", and angle brackets never occur in model identifiers.
  */
 const NONE = "<none>";
 
@@ -56,9 +55,9 @@ export function ModelsSection({
             value={settings.model}
             models={models}
             onChange={(model) => {
-              // Провайдер едет с моделью: §10 говорит, что модель приводит
-              // своего, и записать модель без него значило бы оставить в
-              // файле пару, которая может не сойтись.
+              // The provider travels with the model: §10 says a model brings its own
+              // provider, and writing the model without it would leave a pair in the
+              // file that may not match.
               const provider = models.find((m) => m.id === model)?.providerId ?? null;
               onPatch((now) => ({ ...now, model, provider }));
             }}
@@ -89,7 +88,7 @@ export function ModelsSection({
   );
 }
 
-/** Модель или «не задано»: три строки раздела отличаются только подписями. */
+/** A model or "not set": the section's three rows differ only in their labels. */
 function ModelSelect({
   label,
   unset,
@@ -98,7 +97,7 @@ function ModelSelect({
   onChange,
 }: {
   label: string;
-  /** Как названо «не задано» — у каждой строки оно значит своё. */
+  /** What "not set" is called — each row means something different by it. */
   unset: string;
   value: string | null;
   models: ModelInfo[];

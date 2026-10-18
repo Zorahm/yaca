@@ -1,15 +1,14 @@
 /**
- * Панель процессов: фоновые команды, состояние, время работы, вывод
- * выбранной строки.
+ * Processes panel: background commands, their state, run time, and the output of the
+ * selected row.
  *
- * Список ядро отдаёт целиком событием `processesUpdated` — панель есть функция
- * от него, своего списка тут нет. Выбор строки шлёт `watchProcess`: ядро
- * отвечает `processOutputReset` (буфер целиком) и дальше живыми кусками, и
- * только для выбранной строки.
+ * The core sends the whole list in the `processesUpdated` event, so the panel is a function of
+ * it and keeps no list of its own. Selecting a row sends `watchProcess`: the core answers
+ * `processOutputReset` (the whole buffer) and then live chunks, and only for the selected row.
  *
- * Время работы считает интерфейс: ядро, тикающее событием каждую секунду, не
- * сказало бы ничего нового. Пока панель открыта и есть живые процессы, время
- * тикает; у завершившихся оно посчитано из `finishedAt`.
+ * The run time is counted by the interface: a core ticking an event every second would tell it
+ * nothing new. While the panel is open and there are live processes, the time ticks; for
+ * finished ones it is computed from `finishedAt`.
  */
 
 import { Circle } from "@phosphor-icons/react";
@@ -29,8 +28,8 @@ export function ProcessesPanel({
   onStop,
 }: {
   feed: Feed;
-  /** Выбранная строка. Само состояние выбора живёт в ядре; здесь оно нужно,
-      чтобы вернуть выбор при повторном открытии панели. */
+  /** The selected row. The selection itself lives in the core; the panel needs it here
+      to restore the selection when the panel is reopened. */
   watched: ProcessId | null;
   onWatch: (id: ProcessId) => void;
   onStop: (id: ProcessId) => void;
@@ -39,7 +38,7 @@ export function ProcessesPanel({
   const selected = processes.find((p) => p.id === watched) ?? null;
   const running = processes.some((p) => p.state.type === "running");
 
-  // Раз в секунду, пока есть живые: у завершившихся время стоит.
+  // Once a second while there are live ones: finished processes keep their time.
   const [, setTick] = useState(0);
   useEffect(() => {
     if (!running) return;
@@ -47,7 +46,7 @@ export function ProcessesPanel({
     return () => window.clearInterval(timer);
   }, [running]);
 
-  // Показан ровно тот буфер, который приехал для выбранной строки.
+  // Show exactly the buffer that arrived for the selected row.
   const output =
     watched !== null && feed.processOutput?.id === watched
       ? feed.processOutput

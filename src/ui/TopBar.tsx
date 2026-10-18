@@ -1,15 +1,17 @@
 /**
- * Верхняя панель.
+ * Top bar.
  *
- * Держит навигацию и опознание сессии, а не состояние работы: состояние живёт
- * внизу, рядом с композером, куда и так смотрят. Марки в шапке нет — квадрат с
- * отражённой `C` живёт на домашнем экране и в иконке приложения.
+ * Holds the navigation and the identification of the session, not the state of
+ * the work: the state lives at the bottom, beside the composer, where people look
+ * anyway. There is no mark in the header — the square with a reflected `C` lives
+ * on the home screen and in the app icon.
  *
- * По краям две кнопки одной формы (`yaca-icons`): слева показать или спрятать
- * сайдбар, справа — правую панель. Иконка каждой показывает, открыта ли её
- * колонка; при правой стоит точка, пока работают фоновые команды. Кнопка открывает панель на
- * той вкладке, на которой её закрыли; сами вкладки переключаются в панели.
- * Стрелки листают ленту по сообщениям человека.
+ * At the edges are two buttons of one shape (`yaca-icons`): on the left, show or
+ * hide the sidebar; on the right, the right panel. Each icon shows whether its
+ * column is open; the right one carries a dot while background commands are
+ * running. The button opens the panel on the tab it was closed on; the tabs
+ * themselves are switched inside the panel. The arrows step the feed through
+ * the human's messages.
  *
  * The globe left of the panel's button shows and hides the browser column,
  * in the order the two columns stand. Its teal dot means the model is using
@@ -45,11 +47,11 @@ export function TopBar({
   onBack: () => void;
   onForward: () => void;
   onRename: (title: string) => void;
-  /** Показана ли колонка сайдбара слева. */
+  /** Whether the sidebar column on the left is shown. */
   sidebarOpen: boolean;
-  /** Открыта ли правая панель, на любой вкладке. */
+  /** Whether the right panel is open, on any tab. */
   panelOpen: boolean;
-  /** Точка при кнопке панели — пока есть живые фоновые команды. */
+  /** The dot on the panel button — while there are live background commands. */
   runningProcesses: number;
   onToggleSidebar: () => void;
   onTogglePanel: () => void;

@@ -1,33 +1,33 @@
 /**
- * Клавиатура.
+ * Keyboard.
  *
- * Здесь только те сочетания, за которыми есть действие. `⌘K`, `⌘N`, `⌘F` и
- * `⌘,` ведут в палитру команд, список сессий, поиск и настройки — их в этом
- * срезе нет, и сочетание, которое ничего не делает, ничем не лучше кнопки,
- * которая ничего не делает.
+ * Only the shortcuts that have an action behind them. `⌘K`, `⌘N`, `⌘F` and
+ * `⌘,` lead to the command palette, the session list, search and settings; none
+ * of those is in this slice, and a shortcut that does nothing is no better than
+ * a button that does nothing.
  *
- * `Esc Esc` откатывается к предыдущему сообщению: находит последнюю точку,
- * снятую перед сообщением, и показывает список файлов — сам откат подтверждает
- * человек. `Esc`, нажатый внутри правой панели, сюда не доходит: панель
- * закрывает себя сама и останавливает событие.
+ * `Esc Esc` rolls back to the previous message: it finds the last checkpoint
+ * taken before that message and shows the file list. The person confirms the
+ * rollback itself. `Esc` pressed inside the right panel does not reach here: the
+ * panel closes itself and stops the event.
  */
 
 import { useEffect, useRef } from "react";
 
-/** Сколько времени второй `Esc` считается вторым. */
+/** How soon a second `Esc` must follow the first to count as the second. */
 const DOUBLE_ESC_MS = 600;
 
 export type Shortcuts = {
   stop: () => void;
   rollbackToPreviousMessage: () => void;
   nextMode: () => void;
-  /** Пока висит запрос разрешения, клавиши принадлежат ему. */
+  /** While a permission request is pending, the keys belong to it. */
   suspended: boolean;
-  /** Открыта правая панель. */
+  /** The right panel is open. */
   panelOpen: boolean;
-  /** `⌘⇧O` — закрыть правую панель. */
+  /** `⌘⇧O` — close the right panel. */
   closePanel: () => void;
-  /** `⌥←` / `⌥→` — соседний файл в панели файла. */
+  /** `⌥←` / `⌥→` — the adjacent file in the file panel. */
   prevFile: () => void;
   nextFile: () => void;
 };
@@ -76,8 +76,8 @@ export function useShortcuts(shortcuts: Shortcuts): void {
         }
       }
 
-      // Голый `⇥` не перехватывается: осей стало одна, и отбирать у поля
-      // обычный переход фокуса больше не за что.
+      // A bare `⇥` is not intercepted: only one mode axis is left, so there is
+      // no longer a reason to take the plain focus move away from the field.
       if (event.key === "Tab" && event.shiftKey && inComposer(event.target)) {
         event.preventDefault();
         s.nextMode();
@@ -89,7 +89,7 @@ export function useShortcuts(shortcuts: Shortcuts): void {
   }, []);
 }
 
-/** `⇧⇥` переключает режим только из композера: в списке это обход фокуса. */
+/** `⇧⇥` switches the mode only from the composer: in a list it is focus traversal. */
 function inComposer(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && target.tagName === "TEXTAREA";
 }

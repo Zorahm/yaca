@@ -1,8 +1,8 @@
 /**
- * Меню слэш-команд §7.3 — дополнение над полем композера.
+ * Slash-command menu §7.3 — a completion list above the composer field.
  *
- * Строится теми же классами, что и меню режима и модели: это тот же список
- * над тем же полем, и вторая внешность у него была бы без причины.
+ * Built from the same classes as the mode and model menus: it is the same list
+ * over the same field, and a second look for it would have no reason.
  *
  * Two columns: names on the left, and what the highlighted one does on the
  * right. A skill's description is a paragraph written for the model, and in
@@ -11,9 +11,9 @@
  * mouse moves as well as the arrows, so it explains whatever the next `⏎`
  * would take.
  *
- * Выбор берётся мышью на `mousedown`, а не на `click`: клик сначала уводит
- * фокус из поля, и человек, дополнивший команду мышью, оказывался бы с
- * дополненной строкой и без курсора в ней.
+ * The pick is taken with the mouse on `mousedown`, not on `click`: a click first
+ * moves focus out of the field, and a person who completed a command with the
+ * mouse would be left with the completed line and no cursor in it.
  */
 
 import { useEffect, useRef } from "react";
@@ -28,7 +28,7 @@ export function SlashMenu({
   onHover,
 }: {
   items: SlashItem[];
-  /** Подсвеченная строка: её берут `⇥` и `⏎`. */
+  /** The highlighted row: `⇥` and `⏎` take it. */
   at: number;
   onPick: (item: SlashItem) => void;
   /** The mouse moved the highlight. */

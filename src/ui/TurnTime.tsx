@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 import { t } from "../i18n";
 import { dateTimeOf, durationOf, timeOf } from "./format";
 
-/** `Работал 2 мин 14 с · 13:28`; the full date is in the tooltip. */
+/** `Worked 2 min 14 s · 13:28`; the full date is in the tooltip. */
 export function TurnTime({ startedAt, endedAt }: { startedAt: number; endedAt: number }) {
   return (
     <div className="turn-time" title={dateTimeOf(endedAt)}>
@@ -21,7 +21,7 @@ export function TurnTime({ startedAt, endedAt }: { startedAt: number; endedAt: n
   );
 }
 
-/** `Работает 42 с` while the turn is running. */
+/** `Working 42 s` while the turn is running. */
 export function TurnLive({ startedAt }: { startedAt: number }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {

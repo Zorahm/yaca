@@ -1,18 +1,18 @@
 /**
- * Настройки приложения, приложенные к окну (§10).
+ * App preferences, applied to the window (§10).
  *
- * Весь внешний вид — три атрибута на `<html>`, значения которых разбирает
- * `tokens.css`. Ни один компонент о теме не знает: она меняет
- * токены, а компоненты читают токены. Отсюда и отсутствие React-контекста —
- * перерисовывать нечего.
+ * All appearance is three attributes on `<html>`, whose values `tokens.css`
+ * parses. No component knows about the theme: it changes the tokens, and
+ * components read the tokens. Hence no React context either: there is nothing
+ * to re-render.
  *
- * Умолчание пишется отсутствием атрибута, а не его значением: `:root` — это и
- * есть Бумага (§2), и `data-theme="light"` был бы вторым написанием того же
- * самого. Атрибутом отмечается Ночь.
+ * The default is written as the absence of an attribute, not as its value:
+ * `:root` is already Paper (§2), and `data-theme="light"` would be a second
+ * spelling of the same thing. The attribute marks Night.
  *
- * Окон два (§10), и настройки в них общие. Каждое подписывается на канал
- * `yaca://preferences` и применяет то, что пришло: тема, выбранная в
- * настройках, обязана доехать до ленты, иначе окно врёт про состояние (§0).
+ * There are two windows (§10) and they share the preferences. Each subscribes
+ * to the `yaca://preferences` channel and applies what arrives: a theme chosen
+ * in settings must reach the feed, or the window lies about its state (§0).
  */
 
 import { useEffect, useState } from "react";
@@ -21,26 +21,26 @@ import { DEFAULT_PREFS, onPreferences, preferences, type Preferences } from "../
 import { setLocale } from "../i18n";
 import type { Locale } from "../i18n";
 
-/** Медиазапрос, которым спрашивают систему про тему. */
+/** The media query that asks the system for the theme. */
 const DARK = "(prefers-color-scheme: dark)";
 
 function prefersLight(): boolean {
   return typeof matchMedia === "function" ? !matchMedia(DARK).matches : false;
 }
 
-/** Светлая ли тема при этих настройках. */
+/** Whether the theme is light under these preferences. */
 export function isLight(prefs: Preferences): boolean {
   return prefs.theme === "paper" || (prefs.theme === "system" && prefersLight());
 }
 
-/** Язык окна при этих настройках: `system` спрашивает вебвью (§14). */
+/** The window's language under these preferences: `system` asks the webview (§14). */
 export function localeOf(prefs: Preferences): Locale | null {
   return prefs.language === "system" ? null : prefs.language;
 }
 
 /**
- * Ставит атрибуты на `<html>`. Идемпотентно: зовётся и на старте, и на каждое
- * изменение, своё или из соседнего окна.
+ * Sets the attributes on `<html>`. Idempotent: called on start-up and on every
+ * change, our own or one from the other window.
  */
 export function applyPrefs(prefs: Preferences): void {
   const root = document.documentElement;
@@ -48,8 +48,8 @@ export function applyPrefs(prefs: Preferences): void {
   if (isLight(prefs)) root.removeAttribute("data-theme");
   else root.setAttribute("data-theme", "dark");
 
-  // Номера строк включены по умолчанию, поэтому атрибутом отмечается их
-  // отсутствие — так же, как в `tokens.css`.
+  // Line numbers are on by default, so the attribute marks their absence,
+  // the same way as in `tokens.css`.
   if (prefs.lineNumbers) root.removeAttribute("data-line-numbers");
   else root.setAttribute("data-line-numbers", "off");
 
@@ -58,21 +58,22 @@ export function applyPrefs(prefs: Preferences): void {
 }
 
 /**
- * Читает настройки и прикладывает их до первой отрисовки.
+ * Reads the preferences and applies them before the first render.
  *
- * Зовётся из точки входа окна и ожидается: язык выбирается здесь, а словарь
- * читают при первом же рендере. Окно, нарисованное на одном языке и
- * перерисованное на другом, — это мигание на ровном месте.
+ * Called from the window's entry point and awaited: the language is chosen
+ * here, and the dictionary is read on the very first render. A window drawn in
+ * one language and redrawn in another is a flicker for no reason.
  *
- * Отказ оболочки не останавливает окно: умолчания — это то, чем приложение
- * было до того, как настройка появилась, и показать ленту важнее, чем тему.
+ * A failure from the shell does not stop the window: the defaults are what the
+ * app was before the setting existed, and showing the feed matters more than
+ * the theme.
  */
 export async function bootPrefs(): Promise<Preferences> {
   let prefs = DEFAULT_PREFS;
   try {
     prefs = await preferences();
   } catch (e) {
-    console.error("не прочитать настройки приложения", e);
+    console.error("could not read app preferences", e);
   }
   setLocale(localeOf(prefs));
   applyPrefs(prefs);
@@ -80,14 +81,15 @@ export async function bootPrefs(): Promise<Preferences> {
 }
 
 /**
- * Настройки окна: приложенные к `<html>` и переживающие правку из соседнего
- * окна.
+ * Window preferences: applied to `<html>` and kept in sync with edits made in
+ * the other window.
  *
- * Язык меняется здесь же, вместе с остальным. Словарь — модульная переменная,
- * и перерисовка всего дерева читает уже новый: перезагружать окно ради языка
- * нельзя, в главном от этого закрылись бы открытые чаты (README, «Чего нет»).
- * Работает это ровно потому, что ни один компонент не мемоизирован — память
- * о старом языке жила бы в пропущенном рендере.
+ * The language changes here too, together with the rest. The dictionary is a
+ * module-level variable, and re-rendering the whole tree reads the new one: the
+ * window cannot be reloaded for a language change, because in the main window
+ * that would close open chats (README). This works precisely
+ * because no component is memoised: a memo would keep the old language alive in
+ * a skipped render.
  */
 export function usePreferences(initial: Preferences): Preferences {
   const [prefs, setPrefs] = useState(initial);
@@ -106,7 +108,7 @@ export function usePreferences(initial: Preferences): Preferences {
     };
   }, []);
 
-  // «Как в системе» слушает систему, а не только соседнее окно.
+  // "System" listens to the OS too, not only to the other window.
   useEffect(() => {
     if (prefs.theme !== "system" || typeof matchMedia !== "function") return;
     const query = matchMedia(DARK);

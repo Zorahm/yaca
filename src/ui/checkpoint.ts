@@ -1,16 +1,18 @@
 /**
- * Слова чекпоинта §5.8 — как называется точка и что откат сделает с файлом.
+ * The words of a checkpoint §5.8 — what the point is called and what a rollback
+ * will do to the file.
  *
- * Ядро называет причину структурой (`CheckpointReason`), а предложение пишет
- * интерфейс — то же правило, что у подписи действия §5.4.1. Лежит отдельно от
- * ленты, потому что читателей двое: разделитель §5.8 и панель §1.1, и второй
- * экземпляр этих же слов разошёлся бы с первым на первой же правке.
+ * The core names the reason as a structure (`CheckpointReason`), and the
+ * interface writes the sentence — the same rule as the action caption §5.4.1. It
+ * lives apart from the feed because there are two readers: the divider §5.8 and
+ * the panel §1.1, and a second copy of these same words would drift from the
+ * first at the first edit.
  */
 
 import type { CheckpointChange, CheckpointSummary } from "../core/client";
 import { t } from "../i18n";
 
-/** `перед сообщением`, `перед npm test`, `перед откатом`. */
+/** `before a message`, `before npm test`, `before a rollback`. */
 export function reasonText(reason: CheckpointSummary["reason"]): string {
   switch (reason.type) {
     case "message":
@@ -22,7 +24,7 @@ export function reasonText(reason: CheckpointSummary["reason"]): string {
   }
 }
 
-/** Что откат сделает с этим файлом — будущее время: он ещё не случился. */
+/** What a rollback will do to this file — future tense: it has not happened yet. */
 export function willDo(file: CheckpointChange): string {
   switch (file.kind) {
     case "created":

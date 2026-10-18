@@ -1,11 +1,12 @@
 /*
- * Каркас, шапка, полосы уведомлений, композер.
+ * Frame, top bar, notification bands, composer.
  */
 
-/* Окно целиком: слева колонка сайдбара, посередине лента, справа панель.
-   Крайние колонки `auto` — ширину назначают себе сами сайдбар и панель;
-   спрятанный сайдбар и закрытая панель не занимают ничего. Ряд один и назван
-   явно: развёрнутая панель ложится в ту же ячейку, что и лента, поверх неё. */
+/* The whole window: the sidebar column on the left, the feed in the middle,
+   the panel on the right. The outer columns are `auto` — the sidebar and the
+   panel size themselves; a hidden sidebar and a closed panel take up nothing.
+   The row is one and named explicitly: an opened panel lands in the same cell
+   as the feed, over it. */
 .shell {
   display: grid;
   /* Sidebar, feed, browser, panel. */
@@ -20,8 +21,9 @@
   grid-row: 1;
 }
 
-/* Без этого лента с длинной строкой кода раздувает колонку `1fr` и уезжает
-   за край окна: у грид-элемента `min-width` по умолчанию `auto`. */
+/* Without this, a feed with a long line of code swells the `1fr` column and
+   runs past the edge of the window: a grid item's `min-width` defaults to
+   `auto`. */
 .shell > .app,
 .shell > .home {
   min-width: 0;
@@ -34,14 +36,14 @@
 
 .app {
   display: grid;
-  /* Ряды полос и композера `auto`, поэтому появление полосы не дёргает
-     высоту ленты. */
+  /* The band and composer rows are `auto`, so a band appearing does not
+     jerk the height of the feed. */
   grid-template-rows: var(--h-top) 1fr auto auto;
   height: 100%;
   overflow: hidden;
 }
 
-/* --- верхняя панель -------------------------------------------------- */
+/* --- top bar --------------------------------------------------------- */
 
 .top {
   display: flex;
@@ -126,22 +128,22 @@
   display: inline-flex;
 }
 
-/* --- полосы уведомлений ------------------------------------------ */
+/* --- notification bands ------------------------------------------ */
 
 .bars {
   display: flex;
-  /* Порядок снизу вверх фиксирован. */
+  /* The order from bottom to top is fixed. */
   flex-direction: column;
   gap: 8px;
 }
 
-/* Пустая полоса не занимает ничего; с уведомлениями она ложится на фон окна
-   теми же 24 px полей, что у композера. */
+/* An empty band takes up nothing; with notifications it lies on the window
+   ground with the same 24 px margins as the composer. */
 .bars:not(:empty) {
   padding: 8px 24px 0;
 }
 
-/* Карточка по мерке композера: та же ширина, тот же радиус. */
+/* A card on the composer's measure: the same width, the same radius. */
 .bar {
   display: flex;
   align-items: center;
@@ -188,7 +190,7 @@
   color: var(--ink);
 }
 
-/* --- кнопки ------------------------------------------------------------- */
+/* --- buttons ------------------------------------------------------------- */
 
 .btn {
   display: inline-flex;
@@ -250,8 +252,8 @@
   font-size: 12px;
 }
 
-/* --- переключатель из нескольких ---------------------------- */
-/* Выбранный — мягкой заливкой акцента с рамкой: он и есть «активная метка». */
+/* --- segmented switch ---------------------------------------- */
+/* The chosen one is a soft accent fill with a border: it is the active label. */
 
 .segments {
   display: flex;
@@ -285,7 +287,7 @@
   font-weight: 600;
 }
 
-/* --- бейдж состояния файла ----------------------------------------- */
+/* --- file state badge ----------------------------------------------- */
 
 .badge {
   padding: 1px 6px;
@@ -309,7 +311,7 @@
   color: var(--err);
 }
 
-/* --- композер -------------------------------------------------------- */
+/* --- composer -------------------------------------------------------- */
 
 /* No band of its own: the composer floats on the window ground, and only the
    box and the row under it are drawn. */
@@ -396,7 +398,7 @@
   color: var(--muted);
 }
 
-/* Отправлять некуда, пока не выбран проект. */
+/* There is nowhere to send until a project is chosen. */
 .composer textarea:disabled {
   color: var(--muted);
   cursor: default;
@@ -425,7 +427,7 @@
   color: var(--muted);
 }
 
-/* «отменить» у чипа очереди: текстом, как чип режима, а не кнопкой. */
+/* "cancel" on the queue chip: as text, like the mode chip, not as a button. */
 .queued-cancel {
   color: var(--muted);
   text-decoration: underline;
@@ -437,8 +439,8 @@
   color: var(--ink);
 }
 
-/* Крестик на чипе приложенного файла. */
-/* Чип режима — текстом без рамки. */
+/* The cross on the chip of an attached file. */
+/* The mode chip — as text, without a frame. */
 .chip {
   padding: 2px 4px;
   font-size: 12.5px;
@@ -457,7 +459,7 @@
   color: var(--ink);
 }
 
-/* `＋` вложения: тот же чип, но иконкой. */
+/* The attachment `＋`: the same chip, but as an icon. */
 .chip-icon {
   display: inline-flex;
   align-items: center;
@@ -497,7 +499,7 @@
   background: var(--sunk);
 }
 
-/* Кольцо контекста. */
+/* The context ring. */
 .ring {
   display: block;
   width: 16px;
@@ -625,7 +627,7 @@
   white-space: nowrap;
 }
 
-/* Меню (режим, модель, усилие). */
+/* Menu (mode, model, effort). */
 .menu {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -728,7 +730,7 @@
   color: var(--muted);
 }
 
-/* Меню слэш-команд Над полем, по его ширине, а не по ширине чипа. Names on
+/* The slash-command menu sits above the field, at its width, not the chip's. Names on
    the left, what the highlighted one does on the right; each column scrolls
    on its own, so a long description does not push the list away. */
 .menu-slash {
@@ -807,7 +809,7 @@
   }
 }
 
-/* Подсвеченная строка — та, которую возьмут `⇥` и `⏎`. */
+/* The highlighted row — the one `⇥` and `⏎` will take. */
 .menu-item[aria-selected="true"] {
   background: var(--accent-soft);
   color: var(--accent-ink);
@@ -819,11 +821,11 @@
   color: var(--muted);
 }
 
-/* Список, у которого каждая строка с пояснением-фразой, шире обычного меню:
-   260 px хватало названию, но не подписи под ним. Ширину задаёт самая длинная
-   подпись «Применять правки, спрашивать остальное» — 246 px текста плюс
-   паддинги, цифра и галка активной строки. Меньше — и подпись снова
-   переносится, а перенос здесь и был тем, от чего уходили. */
+/* A list whose every row has an explanatory phrase is wider than an ordinary
+   menu: 260 px was enough for the name but not for the note under it. The width
+   is set by the longest note, "Apply edits, ask about the rest" — 246 px of
+   text plus the padding, the figure and the tick of the active row. Narrower,
+   and the note wraps again, and wrapping is what this was meant to get rid of. */
 /* Its only user is the mode chip, the first thing in the composer row: the
    menu opens from the chip's left edge. Hung from the right edge, as `.menu`
    does by default, it ran under the sidebar. */
@@ -833,11 +835,11 @@
   min-width: 340px;
 }
 
-/* Пояснение под названием, а не справа от него. Справа оно отъедает
-   ширину у самого списка и рвётся на две ломаные строки, из-за чего меню
-   читается по диагонали вместо того, чтобы читаться сверху вниз. Колонкой
-   идут только списки, где пояснение — фраза; там, где справа стоит действие
-   («Обход разрешений — Включить»), строка остаётся строкой. */
+/* The note goes under the name, not to its right. To the right it eats into
+   the width of the list itself and breaks into two broken lines, so the menu
+   is read diagonally instead of top to bottom. Only lists where the note is a
+   phrase go in a column; where an action stands on the right ("Permission
+   bypass — Enable"), the row stays a row. */
 .menu-text {
   display: flex;
   flex: 1;
@@ -862,5 +864,5 @@
   background: var(--line);
 }
 
-/* --- заставка до открытия проекта --------------------------------------- */
+/* --- splash before a project is opened ---------------------------------- */
 

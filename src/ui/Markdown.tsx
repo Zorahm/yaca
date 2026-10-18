@@ -1,17 +1,18 @@
 /**
- * Markdown в тексте агента (§5.2).
+ * Markdown in the agent's text (§5.2).
  *
- * Свой разбор, и не из принципа: он строит узлы React, а не HTML, поэтому
- * `dangerouslySetInnerHTML` тут нет вовсе — а с ним не нужен и санитайзер для
- * текста, который пришёл от модели.
+ * Its own parser, and not out of principle: it builds React nodes, not HTML, so
+ * there is no `dangerouslySetInnerHTML` here at all — and so no sanitiser is
+ * needed for text that came from the model.
  *
- * §12 требует, чтобы незакрытый блок кода рендерился как код: текст приходит
- * дельтами, и открывающая ограда живёт на экране раньше закрывающей. Здесь это
- * не оговорка, а обычный случай — блок кода закрывается концом текста.
+ * §12 requires an unclosed code block to render as code: the text arrives in
+ * deltas, and the opening fence lives on the screen before the closing one. Here
+ * this is not a caveat but an ordinary case — a code block is closed by the end of
+ * the text.
  *
- * Ссылки не разбираются намеренно. Открыть их некуда: браузер из окна дёргает
- * оболочка, и пока такой команды нет, подчёркнутый текст, который никуда не
- * ведёт, — это интерфейс, врущий про состояние (§0).
+ * Links are deliberately not parsed. There is nowhere to open them: the browser in
+ * the window is driven by the shell, and until such a command exists, underlined
+ * text that leads nowhere is an interface lying about the state (§0).
  */
 
 import type { CSSProperties, ReactNode } from "react";
@@ -54,8 +55,8 @@ function blocks(text: string): ReactNode[] {
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
 
-    // Ограда: собираем до закрывающей или до конца — незакрытый блок всё
-    // равно код, и мигать он не должен (§12).
+    // A fence: collect up to the closing one or to the end — an unclosed block is
+    // still code, and it must not flicker (§12).
     const fence = /^\s*```(\S*)\s*$/.exec(line);
     if (fence) {
       flush();
@@ -152,10 +153,10 @@ function alignStyle(align: Align): CSSProperties | undefined {
   return align ? { textAlign: align } : undefined;
 }
 
-/** Инлайн-код, полужирный, курсив. Остальное — текст как есть. */
+/** Inline code, bold, italics. Everything else is text as it is. */
 function inline(text: string): ReactNode[] {
   const out: ReactNode[] = [];
-  // Порядок важен: код первым, чтобы `**` внутри него остались собой.
+  // The order matters: code first, so that `**` inside it stays as itself.
   const pattern = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*(?!\s)[^*\n]*[^*\s]\*)|((?<!\w)_(?!\s)[^_\n]*[^_\s]_(?!\w))/g;
 
   let at = 0;

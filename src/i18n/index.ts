@@ -1,13 +1,14 @@
 /**
- * Перевод интерфейса (§14).
+ * UI translation (§14).
  *
- * Ни одной строки текста в компонентах — только ключи. Ключи типизированы по
- * русскому словарю, поэтому опечатка и забытый перевод ловятся компилятором,
- * а не человеком, который однажды увидит английское слово посреди ленты. Ровно
- * то же правило, по которому типы ядра генерируются из Rust.
+ * Not a single line of text in the components — keys only. Keys are typed from
+ * the Russian dictionary, so a typo or a forgotten translation is caught by the
+ * compiler, not by a person who one day sees an English word in the middle of
+ * the feed. It is the same rule by which the core's types are generated from Rust.
  *
- * Своё вместо `i18next`: нужны ключи, подстановка и склонение (§14), а
- * namespace, backend и suspense — нет. Сто строк против дерева зависимостей.
+ * Our own instead of `i18next`: we need keys, substitution and plural forms
+ * (§14), and no namespaces, backend or suspense. A hundred lines against a
+ * dependency tree.
  */
 
 import { isLocale, LOCALES, type Locale } from "./locales";
@@ -16,15 +17,15 @@ import type { ru } from "./ru";
 
 export { LOCALES, LOCALE_CODES, type Locale } from "./locales";
 
-/** Все ключи. Русский словарь — источник: английский обязан его покрыть. */
+/** All keys. The Russian dictionary is the source: English must cover it. */
 export type Key = keyof typeof ru;
 
 /**
- * Основы групп склонения: `bar.summary.one` даёт `bar.summary`.
+ * Bases of plural groups: `bar.summary.one` gives `bar.summary`.
  *
- * Через параметр типа, а не напрямую от `Key`: условный тип распределяется по
- * объединению только когда слева стоит параметр. Написанное в лоб дало бы
- * `never`, и склонения молча перестали бы проверяться.
+ * Through a type parameter, not directly from `Key`: a conditional type distributes
+ * over a union only when the parameter sits on the left. Written head-on it would
+ * give `never`, and plural forms would silently stop being checked.
  */
 type BaseOf<K> = K extends `${infer B}.one` ? B : never;
 export type PluralBase = BaseOf<Key>;
@@ -32,8 +33,8 @@ export type PluralBase = BaseOf<Key>;
 export type Params = Record<string, string | number>;
 
 /**
- * Порядок, в котором ищется форма. Английский просит `other`, которого в
- * словаре нет: там та же строка лежит под `many`.
+ * The order in which a form is looked up. English asks for `other`, which is not in
+ * the dictionary: the same string lies under `many` there.
  */
 const FALLBACK: Record<PluralForm, PluralForm[]> = {
   one: ["one", "many", "few", "other"],
@@ -43,22 +44,23 @@ const FALLBACK: Record<PluralForm, PluralForm[]> = {
 };
 
 /**
- * Язык окна (§14).
+ * Window language (§14).
  *
- * Живая привязка, а не константа: окно настроек §10 даёт выбрать язык, и
- * выбранный ставится [`setLocale`] из точки входа — до первого рендера, пока
- * словарь ещё никто не прочитал. Менять его после рендера нельзя: половина
- * надписей уже нарисована, и вторая половина приехала бы на другом языке.
+ * A live binding, not a constant: the settings window §10 lets the user pick a
+ * language, and the chosen one is set by [`setLocale`] from the entry point —
+ * before the first render, while no one has read the dictionary yet. It cannot
+ * be changed after rendering: half the labels are already drawn, and the other
+ * half would come out in another language.
  */
 export let locale: Locale = detect();
 
 /**
- * Ставит язык окна. `null` — «как в системе», то есть тот же вопрос к вебвью,
- * который задавался до появления настройки.
+ * Sets the window language. `null` means «as the system», i.e. the same question
+ * to the webview that was asked before the setting existed.
  *
- * Зовётся ровно из одного места — `bootPrefs` в `src/ui/prefs.ts`, — и до
- * `createRoot`. Заодно проставляет `lang` на разметке: скринридер должен
- * знать, на каком языке читает (§14).
+ * Called from exactly one place — `bootPrefs` in `src/ui/prefs.ts` — and before
+ * `createRoot`. It also sets `lang` on the markup: a screen reader must know which
+ * language it is reading (§14).
  */
 export function setLocale(next: Locale | null): void {
   locale = next ?? detect();
@@ -82,21 +84,21 @@ function detect(): Locale {
   return "ru";
 }
 
-/** Строка по ключу. Отсутствие ключа — ошибка компиляции, не пустой экран. */
+/** String by key. A missing key is a compile error, not an empty screen. */
 export function t(key: Key, params?: Params): string {
   return translate(locale, key, params);
 }
 
-/** Строка со склонением: `tp("bar.summary", 3)` → «3 файла». */
+/** Plural string: `tp("bar.summary", 3)` → «3 файла». */
 export function tp(base: PluralBase, n: number, params?: Params): string {
   return translatePlural(locale, base, n, params);
 }
 
-/** То же, но с явной локалью — этим пользуются тесты. */
+/** Same, but with an explicit locale — the tests use this. */
 export function translate(target: Locale, key: string, params?: Params): string {
   const text = LOCALES[target].strings[key] ?? LOCALES.ru.strings[key];
-  // Ключ, которого нет ни в одном словаре, виден как ключ. Пустая строка на
-  // его месте — это молча пропавшая надпись.
+  // A key that is in no dictionary shows as the key. An empty string in its place
+  // would be a label that vanished silently.
   return text === undefined ? key : fill(text, params);
 }
 
@@ -114,7 +116,7 @@ export function translatePlural(
   return `${base}.${wanted}`;
 }
 
-/** Подстановка `{name}`. Незаполненное место остаётся видимым по той же причине. */
+/** Substitutes `{name}`. An unfilled slot stays visible for the same reason. */
 function fill(text: string, params?: Params): string {
   if (!params) return text;
   return text.replace(/\{(\w+)\}/g, (whole, name: string) => {
@@ -123,7 +125,7 @@ function fill(text: string, params?: Params): string {
   });
 }
 
-/** Первая буква прописной, с учётом языка (§5.4: шапка-итог начинается с неё). */
+/** Uppercases the first letter by the language's rules (§5.4: the summary header starts with it). */
 export function capitalize(text: string): string {
   if (!text) return text;
   return text[0].toLocaleUpperCase(locale) + text.slice(1);

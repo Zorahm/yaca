@@ -1,9 +1,9 @@
 /**
- * Мелкие блоки ленты: §5.1, §5.2, §5.6, §5.8, §5.10, §5.11.
+ * Small blocks of the feed: §5.1, §5.2, §5.6, §5.8, §5.10, §5.11.
  *
- * Каждый из них — несколько строк вёрстки поверх того, что уже посчитал
- * редьюсер, поэтому они лежат вместе. Группа действий и запрос разрешения
- * живут отдельно: там своё состояние.
+ * Each of them is a few lines of markup over what the reducer has already
+ * computed, so they live together. The action group and the permission request
+ * live apart: they have state of their own.
  */
 
 import { CaretDown, CaretRight, Check, Circle, Copy } from "@phosphor-icons/react";
@@ -137,7 +137,7 @@ export function ShownText({
 
 const MARKDOWN = new Set(["md", "markdown"]);
 
-/** §5.6: обновляется на месте, новый блок не создаётся. */
+/** §5.6: updated in place, no new block is created. */
 export function Todos({ items }: { items: { content: string; status: string }[] }) {
   return (
     <div className="todos">
@@ -169,7 +169,7 @@ export function Todos({ items }: { items: { content: string; status: string }[] 
   );
 }
 
-/** §5.8: тонкая строка-разделитель с предложением откатиться. */
+/** §5.8: a thin divider line with an offer to roll back. */
 export function Checkpoint({
   block,
   preview,
@@ -183,8 +183,9 @@ export function Checkpoint({
   onPreview: (id: string) => void;
   onRestore: (id: string) => void;
   onCancel: () => void;
-  /** §1.1: сама строка ведёт в панель со всеми точками, кнопка справа —
-      в откат к этой. Две цели на одной строке, как их и рисует §5.8. */
+  /** §1.1: the line itself leads to the panel with all the points, the button on
+      the right — to the rollback to this one. Two targets on one line, as §5.8
+      draws them. */
   onOpenPanel: () => void;
 }) {
   const { checkpoint } = block;
@@ -212,8 +213,8 @@ export function Checkpoint({
         </button>
       </div>
 
-      {/* §5.8: откат показывает список затрагиваемых файлов и требует
-          подтверждения — до того, как что-либо произошло. */}
+      {/* §5.8: a rollback shows the list of affected files and requires
+          confirmation — before anything has happened. */}
       {asking && (
         <div className="confirm">
           <div className="confirm-title">
@@ -248,7 +249,7 @@ export function Checkpoint({
   );
 }
 
-/** §5.11: разделитель, под ним сводка, которую можно поправить. */
+/** §5.11: a divider, with the summary under it that can be corrected. */
 export function Compaction({
   summary,
   freed,
@@ -304,7 +305,7 @@ export function Compaction({
   );
 }
 
-/** §5.10: заголовок, техническая деталь моноширинным, действия. */
+/** §5.10: title, the technical detail in monospace, actions. */
 export function ErrorBlock({
   code,
   message,

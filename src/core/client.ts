@@ -1,9 +1,9 @@
 /**
- * Типизированный клиент ядра.
+ * Typed client of the core.
  *
- * Единственное место, где фронтенд знает про Tauri. Типы приходят из Rust
- * через ts-rs, поэтому разойтись с ядром они не могут: несовпадение ловит
- * компилятор, а не человек, читающий ленту.
+ * The only place where the frontend knows about Tauri. Types come from Rust
+ * via ts-rs, so they cannot drift from the core: a mismatch is caught by the
+ * compiler, not by a person reading the feed.
  */
 
 import { invoke } from "@tauri-apps/api/core";
@@ -167,40 +167,41 @@ export type {
   UpdateCheck,
 };
 
-/** Мост шлёт события пачками по кадру, а не по одному (§12). */
+/** The bridge sends events in batches per frame, not one by one (§12). */
 const EVENT_CHANNEL = "yaca://events";
 
 /**
- * Окно, открытое без оболочки, проигрывает записанный поток (`core/demo`).
+ * A window opened without the shell plays back a recorded stream (`core/demo`).
  *
- * Это стенд для глаз и ничего больше: в настоящем окне `inTauri` истинно, и ни
- * одна строчка ниже не выполняется. Подменять живые события записанными там,
- * где они живые, значило бы врать про состояние (§0).
+ * The stand is for looking at and nothing more: in a real window `inTauri` is true,
+ * and not one line below runs. Replacing live events with recorded ones where they
+ * are live would mean lying about the state (§0).
  */
 const DEMO_FRAME_MS = 90;
 
-/** Куда стенд шлёт кадры. Ставится подпиской, запускается открытием проекта. */
+/** Where the stand sends its frames. Set by a subscription, started by opening a project. */
 let demoHandler: ((frame: EventFrame) => void) | null = null;
 
 /**
- * Проигрыватели открытых чатов стенда: по одному на разговор.
+ * Players for the stand's open chats: one per conversation.
  *
- * Запись одна, а открыть её можно сколько угодно раз — каждый чат играет свою
- * копию под своим именем. Один проигрыватель на всех означал бы, что окно с
- * двумя разговорами в браузере не посмотреть, а именно это стенд и проверяет.
+ * There is one recording, but it can be opened any number of times: each chat plays
+ * its own copy under its own name. A single player for all of them would mean that a
+ * window with two conversations could not be looked at in a browser, and that is
+ * exactly what the stand checks.
  */
 const demoTimers = new Map<SessionId, number>();
 let demoNext = 1;
 
 /**
- * Проекты, которые знает окно (§9.1), свежий первым.
+ * Projects the window knows (§9.1), freshest first.
  *
- * Список лежит в глобальных настройках приложения: в самом проекте его
- * хранить негде, он нужен раньше, чем известен хоть один проект.
+ * The list lives in the app's global settings: a project has nowhere to keep it,
+ * since it is needed before any project is known.
  *
- * В стенде список живёт в памяти процесса и отвечает на правки так же, как
- * ответила бы оболочка, — иначе добавленный проект выглядел бы добавленным,
- * а список оставался прежним (§0).
+ * In the stand the list lives in process memory and answers edits the way the shell
+ * would — otherwise an added project would look added while the list stayed the
+ * same (§0).
  */
 let demoProjects: string[] = [demoState.projectRoot];
 
@@ -208,7 +209,7 @@ export function projects(): Promise<string[]> {
   return inTauri ? invoke<string[]>("projects") : Promise.resolve([...demoProjects]);
 }
 
-/** Добавляет проект в список, не начиная чата (§9.1). Отдаёт список целиком. */
+/** Adds a project to the list without starting a chat (§9.1). Returns the whole list. */
 export function addProject(path: string): Promise<string[]> {
   if (!inTauri) {
     demoProjects = [path, ...demoProjects.filter((known) => known !== path)];
@@ -217,7 +218,7 @@ export function addProject(path: string): Promise<string[]> {
   return invoke<string[]>("add_project", { path });
 }
 
-/** Убирает проект из списка. Папку и журналы §9 не трогает. */
+/** Removes a project from the list. Leaves the folder and the §9 journals alone. */
 export function forgetProject(path: string): Promise<string[]> {
   if (!inTauri) {
     demoProjects = demoProjects.filter((known) => known !== path);
@@ -227,15 +228,15 @@ export function forgetProject(path: string): Promise<string[]> {
 }
 
 /**
- * Есть ли кому открыть диалог файлов — выбора папки, файлов или сохранения.
+ * Whether anything can open a file dialog: for choosing a folder, files or a save path.
  *
- * В стенде некому: диалоги принадлежат оболочке. Чип проекта и `＋` вложений
- * спрашивают об этом и гасятся, а не притворяются кнопками, за которыми
- * ничего нет (§0).
+ * In the stand nothing can: dialogs belong to the shell. The project chip and the
+ * attachment `＋` ask about this and switch off, rather than pretending to be buttons
+ * with nothing behind them (§0).
  */
 export const hasFileDialogs = inTauri;
 
-/** Диалог выбора папки для чипа проекта (§9.1). `null` — человек передумал. */
+/** Folder picker for the project chip (§9.1). `null` means the person changed their mind. */
 export function chooseFolder(title: string): Promise<string | null> {
   if (!hasFileDialogs) return Promise.resolve(null);
   return open({ directory: true, multiple: false, title }).then((picked) =>
@@ -244,11 +245,11 @@ export function chooseFolder(title: string): Promise<string | null> {
 }
 
 /**
- * Диалог сохранения файла (§9). `null` — человек передумал.
+ * Save-file dialog (§9). `null` means the person changed their mind.
  *
- * Путь возвращается наружу, а не пишется здесь: писать умеет ядро, у которого
- * и лежит то, что сохраняют. Вебвью выбирает место, а не носит содержимое
- * туда и обратно.
+ * The path is returned rather than written here: writing belongs to the core, which
+ * holds what is being saved. The webview chooses the place and does not carry the
+ * content there and back.
  */
 export function chooseSavePath(
   defaultName: string,
@@ -264,10 +265,10 @@ export function chooseSavePath(
 }
 
 /**
- * Диалог выбора файлов для `＋` (§7.2). Пустой список — человек передумал.
+ * File picker for `＋` (§7.2). An empty list means the person changed their mind.
  *
- * Начинает с корня проекта: прикладывают почти всегда его файлы, и диалог,
- * открывающийся в домашнем каталоге, заставляет идти туда самому.
+ * Starts at the project root: attachments almost always come from there, and a dialog
+ * that opens in the home folder makes the person walk there by hand.
  */
 export function chooseFiles(root: string, title: string): Promise<string[]> {
   if (!hasFileDialogs) return Promise.resolve([]);
@@ -277,11 +278,12 @@ export function chooseFiles(root: string, title: string): Promise<string[]> {
 }
 
 /**
- * Что лежит по пути вложения — и миниатюра, если это картинка.
+ * What lies at an attachment's path — and a thumbnail if it is a picture.
  *
- * Путь тот, что записан в ленте: от корня проекта либо абсолютный, если файл
- * лежит снаружи. Смотрит ядро — вебвью диска не видит. В стенде смотреть
- * некому, и всё, кроме пути с косой чертой на конце, считается файлом.
+ * The path is the one recorded in the feed: relative to the project root, or absolute
+ * if the file lies outside it. The core looks, since the webview cannot see the disk.
+ * In the stand nothing looks, so everything except a path with a slash at the end
+ * counts as a file.
  */
 export function attachmentLook(project: string, path: string): Promise<AttachmentLook> {
   if (!inTauri) {
@@ -291,28 +293,29 @@ export function attachmentLook(project: string, path: string): Promise<Attachmen
 }
 
 /**
- * Картинка целиком, `data:`-адресом, — для просмотрщика. Миниатюры хватает
- * узнать картинку, но не рассмотреть её.
+ * The whole picture as a `data:` address, for the viewer. A thumbnail is enough to
+ * recognise a picture, but not to look at it.
  */
 export function imageFull(project: string, path: string): Promise<string> {
-  if (!inTauri) return Promise.reject("в стенде картинку прочитать некому");
+  if (!inTauri) return Promise.reject("in the stand there is no one to read the picture");
   return invoke<string>("image_full", { project, path });
 }
 
 /**
- * Сохранить вставленную картинку (base64 без префикса) и вернуть её путь от
- * корня проекта. У вставленного файла пути нет, а всё дальше — чип, журнал,
- * карточка открытой заново сессии — говорит путями.
+ * Saves a pasted picture (base64 without the prefix) and returns its path from the
+ * project root. A pasted file has no path of its own, and everything after it — the
+ * chip, the journal, the card of a reopened session — speaks in paths.
  */
 export function stashImage(project: string, data: string): Promise<string> {
-  if (!inTauri) return Promise.reject("в стенде вставленное сохранить некуда");
+  if (!inTauri) return Promise.reject("in the stand there is nowhere to save a pasted image");
   return invoke<string>("stash_image", { project, data });
 }
 
 /**
- * Тащит ли человек файлы над окном прямо сейчас: `true` с первого входа и
- * пока они над окном, `false` — когда ушли или брошены. Нужно, чтобы окно
- * успело сказать, куда они упадут, до того как их отпустят. Возвращает отписку.
+ * Whether the person is dragging files over the window right now: `true` from the
+ * first entry while they hover over it, `false` once they leave or drop them. The
+ * window needs to say where they will land before they are released. Returns an
+ * unsubscribe.
  */
 export function onFilesDragging(listener: (over: boolean) => void): () => void {
   if (!inTauri) return () => {};
@@ -335,10 +338,10 @@ export function onFilesDragging(listener: (over: boolean) => void): () => void {
 }
 
 /**
- * Файлы, брошенные в окно. Возвращает отписку.
+ * Files dropped on the window. Returns an unsubscribe.
  *
- * Оболочка перехватывает перетаскивание сама и отдаёт пути, а не содержимое:
- * событие `drop` до страницы не доходит, зато и читать файл странице незачем.
+ * The shell intercepts the drag itself and hands over paths, not contents: the `drop`
+ * event never reaches the page, and the page has no reason to read the file anyway.
  */
 export function onFilesDropped(listener: (paths: string[]) => void): () => void {
   if (!inTauri) return () => {};
@@ -358,16 +361,16 @@ export function onFilesDropped(listener: (paths: string[]) => void): () => void 
   };
 }
 
-/** Имя для приветствия §9.1. Взято у ОС; не нашлось — обращения не будет. */
+/** Name for the greeting (§9.1). Taken from the OS; if none is found, the greeting has no name. */
 export function userName(): Promise<string | null> {
   return inTauri ? invoke<string | null>("user_name") : Promise.resolve(null);
 }
 
 /**
- * С чем сессию начал бы сам проект (§10).
+ * What the project itself would start a session with (§10).
  *
- * Композер домашнего экрана показывает это до первого слова, иначе он молча
- * затирал бы `.yaca/settings.json` встроенными умолчаниями.
+ * The home screen composer shows this before the first word; otherwise it would
+ * silently overwrite `.yaca/settings.json` with the built-in defaults.
  */
 export function projectStartup(path: string): Promise<Startup> {
   if (!inTauri) {
@@ -378,10 +381,10 @@ export function projectStartup(path: string): Promise<Startup> {
 }
 
 /**
- * `resume` продолжает записанную сессию (§9), а не начинает новую.
+ * `resume` continues a recorded session (§9) instead of starting a new one.
  *
- * `startup` — то, что композер домашнего экрана выбрал до первого слова.
- * Без него сессия берёт настройки проекта (§10).
+ * `startup` is what the home screen composer chose before the first word.
+ * Without it the session takes the project's settings (§10).
  */
 export function openProject(
   path: string,
@@ -389,10 +392,10 @@ export function openProject(
   startup?: Startup,
 ): Promise<OpenedChat> {
   if (!inTauri) {
-    // Поток начинается вместе с чатом, а не с подпиской: окно чистит ленту,
-    // когда чат открывают, и записанное до этого было бы стёрто.
-    // Записанная сессия стенда открывается под своим именем и молчит: строка
-    // списка должна стать открытой, а не завести рядом новый разговор.
+    // The stream starts with the chat, not with the subscription: the window clears
+    // the feed when a chat is opened, and anything recorded before that would be wiped.
+    // A recorded session of the stand opens under its own name and stays silent: the
+    // list row must become open, not start a new conversation next to it.
     const recorded = resume !== undefined && demoSessions.meta(resume) !== null;
     return Promise.resolve({
       id: recorded ? resume : startDemo(path),
@@ -405,9 +408,9 @@ export function openProject(
 }
 
 /**
- * Закрывает чат: ход останавливается, фоновые команды умирают вместе с
- * сессией (§6.5), журнал §9 остаётся. Закрытый чат открывается заново со
- * своей историей — закрыть не значит удалить.
+ * Closes the chat: the turn stops, and background commands die with the session
+ * (§6.5); the §9 journal stays. A closed chat reopens with its own history: closing
+ * is not deleting.
  */
 export function closeChat(session: SessionId): Promise<void> {
   if (!inTauri) {
@@ -434,13 +437,12 @@ export function attachChats(): Promise<AttachedChat[]> {
 }
 
 /**
- * Список сессий §9. Работает с проектом, а не с открытым чатом: журналы лежат
- * и у проекта, в котором сейчас никто не разговаривает, а чатов в одном
- * проекте может быть открыто несколько.
+ * The §9 session list. It works with the project, not with an open chat: journals
+ * also live with a project in which nobody is talking right now, and several chats of
+ * one project may be open at once.
  *
- * В стенде список живёт в памяти процесса (`core/demoSessions`) и отвечает на
- * правки так же, как ответило бы хранилище. Экспорта там нет: писать файл
- * некому.
+ * In the stand the list lives in process memory (`core/demoSessions`) and answers
+ * edits the way the store would. There is no export there: nothing can write a file.
  */
 export const sessions = {
   list: (project: string): Promise<SessionMeta[]> =>
@@ -463,18 +465,18 @@ export const sessions = {
     inTauri
       ? invoke<SessionMeta>("duplicate_session", { project, id, through })
       : Promise.resolve().then(() => demoSessions.duplicate(project, id)),
-  /** Экспорт §9 пишется ядром по выбранному окном пути. */
+  /** The §9 export is written by the core to the path the window picked. */
   exportTo: (project: string, id: SessionId, path: string): Promise<void> =>
     inTauri
       ? invoke<void>("export_session", { project, id, path })
-      : Promise.reject("в стенде файл записать некому"),
+      : Promise.reject("in the stand there is no one to write the file"),
   /**
-   * Журнал ленты §9 — им перерисовывается лента открытой заново сессии.
+   * The §9 feed journal — the feed of a reopened session is redrawn from it.
    *
-   * Ядро отдаёт его уже подчищенным: процессы прошлого прогона, его состояние
-   * и чекпоинты, к которым новый прогон вернуться не может, в поток не
-   * попадают (`yaca_core::store::replay`). Интерфейсу остаётся то же, что и
-   * всегда, — сложить поток в ленту.
+   * The core hands it over already cleaned up: processes of the previous run, and its
+   * state and checkpoints that a new run cannot return to, do not reach the stream
+   * (`yaca_core::store::replay`). The interface still does what it always did — folds
+   * the stream into the feed.
    */
   feed: (project: string, id: SessionId): Promise<AgentEvent[]> =>
     inTauri
@@ -483,13 +485,13 @@ export const sessions = {
 };
 
 /**
- * Слэш-команды проекта §7.3 — то, чем меню композера дополняет ввод.
+ * The project's slash commands (§7.3), which the composer menu completes input with.
  *
- * По проекту, а не по чату: файлы лежат в `.yaca/commands`, а чатов в одном
- * проекте открыто может быть несколько. Разворачивает их ядро при отправке —
- * окну список нужен только чтобы нарисовать меню.
+ * They belong to the project, not to a chat: the files live in `.yaca/commands`, and
+ * several chats of one project may be open. The core expands them when a message is
+ * sent; the window needs the list only to draw the menu.
  *
- * В стенде их нет: команды живут файлами проекта, а проекта у стенда нет.
+ * The stand has none: commands live as project files, and the stand has no project.
  */
 export function projectCommands(project: string): Promise<SlashCommand[]> {
   return inTauri
@@ -566,18 +568,18 @@ export function setPluginEnabled(id: string, enabled: boolean): Promise<PluginRe
 }
 
 /**
- * Провайдеры §10: список и правка.
+ * Providers (§10): the list and edits.
  *
- * В стенде реестр живёт в памяти процесса и повторяет семантику ядра
- * (`Providers::put`/`remove`): замена по id, отказ на удалении
- * предустановленного. Иначе правка выглядела бы сработавшей, а список
- * оставался прежним — интерфейс, врущий про состояние (§0). Кейчейна у стенда
- * нет, и ключи он не хранит.
+ * In the stand the registry lives in process memory and repeats the core's semantics
+ * (`Providers::put`/`remove`): replacement by id, and a refusal to remove a preset.
+ * Otherwise an edit would look successful while the list stayed the same — an interface
+ * lying about the state (§0). The stand has no keychain, and it stores no keys.
  */
 let demoRegistry: Providers = {
-  // Предустановленные те же, что в ядре, и тоже без моделей: их отдаёт сам
-  // провайдер, а в стенде спросить некого — панель честно скажет, что моделей
-  // нет. Кроме Anthropic: стенду нужно, на чём показать разговор.
+  // Presets are the same as in the core, and also have no models: the provider itself
+  // supplies them, and in the stand there is no one to ask — the panel will honestly say
+  // there are no models. Anthropic is the exception: the stand needs a provider to show
+  // a conversation with.
   list: PRESETS.map(({ keyless, ...preset }) => ({
     ...preset,
     // A server that never asks for a key drops the default `authorization`.
@@ -586,7 +588,7 @@ let demoRegistry: Providers = {
   })),
 };
 
-/** Копия наружу: панель получает состояние на момент вызова, а не живую ссылку внутрь стенда. */
+/** A copy outwards: the panel gets the state as of the call, not a live reference into the stand. */
 function demoProviders(): Providers {
   return JSON.parse(JSON.stringify(demoRegistry)) as Providers;
 }
@@ -609,15 +611,15 @@ export type Asked = { providers: Providers; pollError: string | null };
 export const providers = {
   list: (): Promise<Providers> =>
     inTauri ? invoke<Providers>("providers") : Promise.resolve(demoProviders()),
-  /** Сохранённый без моделей провайдер оболочка тут же опрашивает сама. */
+  /** The shell itself polls a saved provider that has no models straight away. */
   save: (spec: ProviderSpec): Promise<Asked> => {
     if (!inTauri) {
       const at = demoRegistry.list.findIndex((p) => p.id === spec.id);
       if (at === -1) demoRegistry.list.push(spec);
       else demoRegistry.list[at] = spec;
       demoProvidersHandler?.();
-      // Опроса в стенде нет, и ошибки опроса тоже: строка останется
-      // «не опрошен», что и есть правда.
+      // The stand has no polling, and no polling errors either: the row stays
+      // "not polled", which is the truth.
       return Promise.resolve({ providers: demoProviders(), pollError: null });
     }
     return invoke<Asked>("save_provider", { spec });
@@ -625,7 +627,7 @@ export const providers = {
   remove: (id: string): Promise<Providers> => {
     if (!inTauri) {
       if (isPreset(id)) {
-        return Promise.reject("предустановленный провайдер не удаляется");
+        return Promise.reject("a preset provider cannot be removed");
       }
       demoRegistry.list = demoRegistry.list.filter((p) => p.id !== id);
       demoProvidersHandler?.();
@@ -635,26 +637,27 @@ export const providers = {
   },
 };
 
-/** Команда адресована чату: их несколько, и безымянная не знает, кому она. */
+/** The command is addressed to a chat: there are several, and a nameless one would not know which. */
 /**
- * Спросить у провайдера, какие модели он обслуживает (§10).
+ * Asks a provider which models it serves (§10).
  *
- * Описание уезжает из формы, а не берётся из реестра: адрес и заголовки могли
- * только что поправить, и спрашивать надо у того, кого настраивают. Ключ
- * оболочка берёт в кейчейне сама — сюда он не попадает ни в каком виде.
+ * The description is taken from the form, not from the registry: the address and the
+ * headers may have just been corrected, and the question must go to the one being
+ * configured. The shell takes the key from the keychain itself — it never arrives here
+ * in any form.
  *
- * В стенде спрашивать некого: реестр живёт в памяти страницы, и провайдера за
- * ним нет. Пустой список был бы ответом «моделей нет», а это неправда, —
- * поэтому отказ.
+ * In the stand there is no one to ask: the registry lives in the page's memory, and no
+ * provider stands behind it. An empty list would be an answer "no models", which is not
+ * true, so this is a refusal.
  */
 export function discoverModels(spec: ProviderSpec): Promise<ModelInfo[]> {
-  if (!inTauri) return Promise.reject("в стенде провайдера за реестром нет");
+  if (!inTauri) return Promise.reject("in the stand there is no provider behind the registry");
   return invoke<ModelInfo[]>("discover_models", { spec });
 }
 
 export function sendCommand(session: SessionId, command: Command): Promise<void> {
   if (!inTauri) {
-    console.info("[стенд] команда", command);
+    console.info("[stand] command", command);
     answerInDemo(session, command);
     return Promise.resolve();
   }
@@ -666,45 +669,45 @@ export function sessionState(session: SessionId): Promise<SessionState | null> {
   return invoke<SessionState | null>("session_state", { session });
 }
 
-/** Строка чата в списке §9: заголовок, время, стоимость. */
+/** A chat row in the §9 list: title, time, cost. */
 export function sessionMeta(session: SessionId): Promise<SessionMeta | null> {
   if (!inTauri) return Promise.resolve(demoSessions.meta(session));
   return invoke<SessionMeta | null>("session_meta", { session });
 }
 
 /**
- * §10: ключ уезжает в системный кейчейн. Обратно он не возвращается.
+ * §10: the key goes into the system keychain. It is never returned.
  *
- * Лежит под именем провайдера, и провайдер называется всегда: угаданный
- * записал бы ключ не под тем именем.
+ * It is stored under the provider's name, and the provider is always named: a guessed
+ * one would store the key under the wrong name.
  *
- * Провайдера из списка оболочка после этого опрашивает сама: ключ — то, чего
- * не хватало, чтобы спросить. Ответ приезжает сюда же вместе со списком.
+ * The shell itself polls the provider from the list afterwards: the key is what was
+ * missing to ask. The answer comes back here together with the list.
  */
 export function setApiKey(key: string, provider: string): Promise<Asked> {
-  if (!inTauri) return Promise.reject("в стенде кейчейна нет");
+  if (!inTauri) return Promise.reject("in the stand there is no keychain");
   return invoke<Asked>("set_api_key", { key, provider });
 }
 
 export function forgetApiKey(provider: string): Promise<void> {
-  if (!inTauri) return Promise.reject("в стенде кейчейна нет");
+  if (!inTauri) return Promise.reject("in the stand there is no keychain");
   return invoke<void>("forget_api_key", { provider });
 }
 
 /**
- * Откуда взят ключ — но не сам ключ.
+ * Where the key came from — but not the key itself.
  *
- * `notNeeded` — провайдер, который ключа не просит: локальный шлюз. «Ключа
- * нет» было бы предупреждением ни о чём.
+ * `notNeeded` is a provider that does not ask for a key: a local gateway. "No key"
+ * would be a warning about nothing.
  */
 export type KeySource = "keychain" | "environment" | "none" | "not_needed";
 
 export function apiKeySource(provider: string): Promise<KeySource> {
   if (!inTauri) {
     const spec = demoRegistry.list.find((p) => p.id === provider);
-    if (!spec) return Promise.reject(`провайдера «${provider}» нет в списке`);
-    // У стенда нет ни кейчейна, ни переменных окружения, и врать про
-    // «environment» нечестно: честные ответы два — «нет» и «не нужен».
+    if (!spec) return Promise.reject(`provider "${provider}" is not in the list`);
+    // The stand has neither a keychain nor environment variables, and claiming
+    // "environment" would be dishonest: the honest answers are two — "none" and "not needed".
     return Promise.resolve(
       needsKey(spec.protocol, demoHeaderPairs(spec)) ? "none" : "not_needed",
     );
@@ -767,19 +770,19 @@ export function modelResidency(provider: string): Promise<Record<string, boolean
 }
 
 /**
- * Подписка на поток событий. Обработчик получает кадр целиком: применять его
- * надо одной перерисовкой, иначе экономия на IPC уходит в рендер.
+ * Subscription to the event stream. The handler gets a whole frame: it must be applied
+ * in one redraw, otherwise the saving on IPC is lost in rendering.
  *
- * Канал один на все чаты, и кадр приезжает с именем сессии: подписка на чат
- * означала бы отписку на каждое закрытие — лишний повод потерять события
- * того, кто работает в фоне.
+ * There is one channel for all chats, and each frame arrives with its session name: a
+ * subscription per chat would mean an unsubscribe on every close — one more chance to
+ * lose the events of whoever is working in the background.
  */
 export function onEvents(handler: (frame: EventFrame) => void): Promise<UnlistenFn> {
   if (!inTauri) {
     demoHandler = handler;
     return Promise.resolve(() => {
-      // Только своего: React в разработке подписывается дважды, и отписка
-      // первой подписки приходит уже после второй.
+      // Only its own: React subscribes twice in development, and the unsubscribe of
+      // the first subscription arrives after the second one.
       if (demoHandler !== handler) return;
       demoHandler = null;
       stopAllDemos();
@@ -789,13 +792,13 @@ export function onEvents(handler: (frame: EventFrame) => void): Promise<Unlisten
 }
 
 /**
- * Ответы стенда на команды, на которые у ядра есть ответ событием.
+ * The stand's answers to commands the core answers with an event.
  *
- * Панель файла (§6.4) висела бы на «Читаю файл…», и `@` висел бы на «ищем…»,
- * если бы стенд молчал, — а это интерфейс, врущий о состоянии. Поэтому стенд
- * отвечает, но только тем, что знает: единственным файлом демо. Кадр уходит
- * следующим тиком, как приходит от ядра: ответ в том же стеке вызова прошёл
- * бы раньше, чем интерфейс успел запомнить запрос.
+ * The file panel (§6.4) would hang on "Reading file…", and `@` would hang on "searching…"
+ * if the stand stayed silent — an interface lying about the state. So the stand answers,
+ * but only with what it knows: the demo's one file. The frame goes out on the next tick,
+ * as it does from the core: an answer within the same call stack would arrive before the
+ * interface had remembered the request.
  */
 function answerInDemo(session: SessionId, command: Command): void {
   if (command.type === "answerPermission") {
@@ -822,8 +825,8 @@ function answerInDemo(session: SessionId, command: Command): void {
     return;
   }
   if (command.type === "approveMcpServer" || command.type === "reconnectMcpServer") {
-    // Одобренный сервер стенда «запускается»; переподключённый остаётся тем,
-    // чем был, — упавший упадёт снова, как и настоящий с той же командой.
+    // An approved server of the stand "starts"; a reconnected one stays what it was —
+    // a crashed one will crash again, as a real one with the same command would.
     const approved = command.type === "approveMcpServer" ? command.server : null;
     const servers = (demoMcpNow.get(session) ?? structuredClone(demoMcp)).map(
       (server): McpServerSummary =>
@@ -845,10 +848,10 @@ function answerInDemo(session: SessionId, command: Command): void {
   }
 }
 
-/** Серверы MCP каждого чата стенда — после того, что с ними сделали. */
+/** The MCP servers of each stand chat — after whatever was done to them. */
 const demoMcpNow = new Map<SessionId, McpServerSummary[]>();
 
-/** Заводит проигрыватель записи и отдаёт имя чата, которым тот назвался. */
+/** Starts playing the recording and returns the name of the chat it went by. */
 function startDemo(path: string): SessionId {
   const session: SessionId = `ses_demo${demoNext}`;
   demoNext += 1;
@@ -886,7 +889,7 @@ function stopAllDemos(): void {
   demoTimers.clear();
 }
 
-/** Удобные обёртки над командами §15. */
+/** Convenience wrappers over the §15 commands. */
 export const commands = {
   send: (text: string, attachments: string[] = []): Command => ({
     type: "sendMessage",
@@ -938,21 +941,21 @@ export const commands = {
   editSummary: (text: string): Command => ({ type: "editSummary", text }),
 };
 
-// --- обновления -------------------------------------------------------------
+// --- updates -------------------------------------------------------------
 
-/** Канал ответа проверки обновлений: см. `update.rs`. Слушают оба экрана. */
+/** Channel for the update check's answer: see `update.rs`. Both screens listen to it. */
 const UPDATE_CHANNEL = "yaca://update";
 
 /**
- * Спрашивает GitHub, есть ли версия новее. Отказ — это код (`offline`,
- * `rate_limited`, `status:502`, `bad_response`), а не фраза: слова ему подбирает
- * окно, на языке человека.
+ * Asks GitHub whether a newer version exists. A refusal is a code (`offline`,
+ * `rate_limited`, `status:502`, `bad_response`), not a phrase: the window picks the
+ * words for it, in the person's language.
  */
 export function checkForUpdates(): Promise<UpdateCheck> {
   return inTauri ? invoke<UpdateCheck>("check_for_updates") : Promise.resolve(DEMO_UPDATE);
 }
 
-/** В стенде оболочки нет, и «найденный» релиз — образец для глаз. */
+/** The stand has no shell, and the "found" release is a sample to look at. */
 const DEMO_UPDATE: UpdateCheck = {
   current: "1.0.0-beta",
   latest: {
@@ -977,31 +980,31 @@ const DEMO_UPDATE: UpdateCheck = {
   },
 };
 
-/** Что нашла последняя проверка; `null`, пока первая не закончилась. */
+/** What the last check found; `null` until the first one has finished. */
 export function updateStatus(): Promise<UpdateCheck | null> {
   return inTauri ? invoke<UpdateCheck | null>("update_status") : Promise.resolve(DEMO_UPDATE);
 }
 
-/** Подписка на ответ проверки: фоновой и той, что запущена кнопкой. */
+/** Subscription to the check's answer: both the background check and the one started by the button. */
 export function onUpdate(handler: (check: UpdateCheck) => void): Promise<UnlistenFn> {
   if (!inTauri) return Promise.resolve(() => undefined);
   return listen<UpdateCheck>(UPDATE_CHANNEL, (e) => handler(e.payload));
 }
 
-// --- настройки §10 ----------------------------------------------------------
+// --- settings §10 ----------------------------------------------------------
 
-/** Канал настроек приложения. Одно имя на оба окна: см. `prefs.rs`. */
+/** Channel for the app's settings. One name for both windows: see `prefs.rs`. */
 const PREFS_CHANNEL = "yaca://preferences";
 
-/** Канал «список провайдеров изменился» — см. `providers.rs`. */
+/** Channel for "the provider list has changed" — see `providers.rs`. */
 const PROVIDERS_CHANNEL = "yaca://providers";
 
 /**
- * Подписка на правку провайдеров в соседнем окне.
+ * Subscription to a provider edit made in the other window.
  *
- * Полезной нагрузки нет: список перечитывается целиком. Слать его событием
- * значило бы завести второй путь, которым он попадает в окно, и первое же
- * расхождение между путями стало бы разницей в переключателе моделей.
+ * There is no payload: the list is read again in full. Sending it as an event would open
+ * a second path into the window, and the first mismatch between the two paths would show
+ * up as a difference in the model switcher.
  */
 export function onProviders(handler: () => void): Promise<UnlistenFn> {
   if (!inTauri) {
@@ -1016,12 +1019,12 @@ export function onProviders(handler: () => void): Promise<UnlistenFn> {
 let demoProvidersHandler: (() => void) | null = null;
 
 /**
- * Умолчания настроек приложения — те же, что в `prefs.rs`.
+ * The app's settings defaults — the same as in `prefs.rs`.
  *
- * Нужны стенду и первому кадру: окно рисуется до того, как оболочка ответит,
- * и рисовать его нечем было бы. Значения повторены здесь не от хорошей жизни —
- * ts-rs переносит типы, но не `impl Default`, — поэтому они обязаны совпадать
- * с Rust, и тест `prefs.test.ts` за этим следит.
+ * The stand and the first frame need them: the window is drawn before the shell answers,
+ * and there would be nothing to draw it with. The values are repeated here not by choice —
+ * ts-rs carries types but not `impl Default` — so they must match Rust, and the test
+ * `prefs.test.ts` checks that.
  */
 export const DEFAULT_PREFS: Preferences = {
   theme: "paper",
@@ -1035,16 +1038,17 @@ export const DEFAULT_PREFS: Preferences = {
 };
 
 /**
- * Шеллы, из которых на этой машине есть что выбирать (§10), кроме «авто».
+ * Shells that can be chosen on this machine (§10), except "auto".
  *
- * Пусто везде, кроме Windows: шелл там один, и строки с выбором, которого
- * нет, окно настроек не рисует (§0). В стенде оболочки нет — и выбирать нечего.
+ * Empty everywhere except Windows: there is one shell there, and the settings window
+ * does not draw rows for a choice that does not exist (§0). The stand has no shell —
+ * and nothing to choose.
  */
 export function installedShells(): Promise<ShellChoice[]> {
   return inTauri ? invoke<ShellChoice[]>("installed_shells") : Promise.resolve([]);
 }
 
-/** В стенде оболочки нет, и настройки живут в памяти страницы. */
+/** The stand has no shell, and the settings live in the page's memory. */
 let demoPrefs: Preferences = { ...DEFAULT_PREFS };
 let demoPrefsHandler: ((prefs: Preferences) => void) | null = null;
 
@@ -1052,7 +1056,7 @@ export function preferences(): Promise<Preferences> {
   return inTauri ? invoke<Preferences>("preferences") : Promise.resolve({ ...demoPrefs });
 }
 
-/** Пишет настройки и рассылает их по окнам — обоим (§0). */
+/** Writes the settings and broadcasts them to the windows — both of them (§0). */
 export function setPreferences(prefs: Preferences): Promise<void> {
   if (!inTauri) {
     demoPrefs = { ...prefs };
@@ -1062,7 +1066,7 @@ export function setPreferences(prefs: Preferences): Promise<void> {
   return invoke<void>("set_preferences", { prefs });
 }
 
-/** Подписка на чужую правку настроек: второе окно меняет вид этого. */
+/** Subscription to an edit of the settings made elsewhere: the second window changes the look of this one. */
 export function onPreferences(
   handler: (prefs: Preferences) => void,
 ): Promise<UnlistenFn> {
@@ -1075,7 +1079,7 @@ export function onPreferences(
   return listen<Preferences>(PREFS_CHANNEL, (e) => handler(e.payload));
 }
 
-/** Пустые настройки проекта — форма, с которой начинается несохранённый файл. */
+/** Empty project settings — the form an unsaved file starts from. */
 export function emptySettings(): Settings {
   return {
     mode: null,
@@ -1090,16 +1094,16 @@ export function emptySettings(): Settings {
   };
 }
 
-/** В стенде настройки проекта живут в памяти страницы, как и список проектов. */
+/** In the stand the project settings live in the page's memory, like the project list. */
 let demoSettings: Settings = emptySettings();
 
-/** Настройки проекта (§10). Битый файл приезжает отказом, а не пустотой. */
+/** Project settings (§10). A broken file arrives as a refusal, not as an empty result. */
 export function projectSettings(project: string): Promise<Settings> {
   if (!inTauri) return Promise.resolve(structuredClone(demoSettings));
   return invoke<Settings>("project_settings", { project });
 }
 
-/** Пишет `.yaca/settings.json` целиком. */
+/** Writes `.yaca/settings.json` whole. */
 export function saveProjectSettings(project: string, settings: Settings): Promise<void> {
   if (!inTauri) {
     demoSettings = structuredClone(settings);
@@ -1109,30 +1113,30 @@ export function saveProjectSettings(project: string, settings: Settings): Promis
 }
 
 /**
- * Каталоги, в которые снимок §5.8 не заходит никогда.
+ * Directories the §5.8 snapshot never enters.
  *
- * Спрашиваются у ядра, а не записаны здесь: список его, и копия во фронтенде
- * разошлась бы с ним на первом же добавлении.
+ * They are asked of the core rather than written here: the list is its own, and a copy
+ * in the frontend would diverge from it at the first addition.
  */
 export function shadowExcludedDirs(): Promise<string[]> {
   if (!inTauri) return Promise.resolve([".yaca", ".git", "node_modules", "target"]);
   return invoke<string[]>("shadow_excluded_dirs");
 }
 
-/** Какой файл инструкций у проекта в силе (§10), или `null`. */
+/** Which instructions file is in force for the project (§10), or `null`. */
 export function projectInstructions(project: string): Promise<string | null> {
   if (!inTauri) return Promise.resolve("CLAUDE.md");
   return invoke<string | null>("project_instructions", { project });
 }
 
-/** Ключ веб-поиска лежит в кейчейне под этим именем — см. `secrets.rs`. */
+/** The web search key lies in the keychain under this name — see `secrets.rs`. */
 export const SEARCH_KEY_ITEM = "tavily";
 
 /**
- * Откуда взялся ключ веб-поиска (§10).
+ * Where the web search key came from (§10).
  *
- * Своя команда, не `apiKeySource`: Tavily не провайдер, и общая ответила бы
- * «нет в списке» про ключ, который лежит в кейчейне.
+ * Its own command, not `apiKeySource`: Tavily is not a provider, and the shared one
+ * would answer "not in the list" about a key that lies in the keychain.
  */
 export function searchKeySource(): Promise<KeySource> {
   if (!inTauri) return Promise.resolve("none");
@@ -1143,21 +1147,21 @@ export function searchKeySource(): Promise<KeySource> {
 
 type McpServers = { [key in string]?: McpServerSettings };
 
-/** В стенде общий список серверов живёт в памяти страницы. */
+/** In the stand the shared server list lives in the page's memory. */
 let demoOwnMcp: McpServers = {};
 
 /**
- * Свои серверы MCP — `mcp.json` в каталоге настроек, общие для всех проектов.
- * Битый файл приезжает отказом: окно не должно предлагать перезаписать
- * серверы, которые не сумело прочитать (§0).
+ * The person's own MCP servers — `mcp.json` in the settings folder, shared by all projects.
+ * A broken file arrives as a refusal: the window must not offer to overwrite servers it
+ * failed to read (§0).
  */
 export function globalMcpServers(): Promise<McpServers> {
   if (!inTauri) return Promise.resolve(structuredClone(demoOwnMcp));
   return invoke<McpServers>("global_mcp_servers");
 }
 
-/** Пишет общий список целиком. До открытого чата он не доходит: тот работает
-    с серверами, с которыми начал. */
+/** Writes the shared list whole. It does not reach an open chat: that one works
+    with the servers it started with. */
 export function saveGlobalMcpServers(servers: McpServers): Promise<void> {
   if (!inTauri) {
     demoOwnMcp = structuredClone(servers);
@@ -1166,22 +1170,22 @@ export function saveGlobalMcpServers(servers: McpServers): Promise<void> {
   return invoke<void>("save_global_mcp_servers", { servers });
 }
 
-/** Что объявляет `.mcp.json` проекта. Только для показа: файл не наш. */
+/** What the project's `.mcp.json` declares. For display only: the file is not ours. */
 export function projectMcpFile(project: string): Promise<McpServers> {
   if (!inTauri) return Promise.resolve({});
   return invoke<McpServers>("project_mcp_file", { project });
 }
 
 /**
- * Серверы открытого чата как они есть сейчас. Обычно их приносит событие
- * `mcpUpdated`; это — для окна, которое в тот момент не слушало.
+ * The servers of an open chat as they are now. Usually they arrive with the
+ * `mcpUpdated` event; this is for a window that was not listening at that moment.
  */
 export function sessionMcp(session: SessionId): Promise<McpServerSummary[]> {
   if (!inTauri) return Promise.resolve(demoMcpNow.get(session) ?? structuredClone(demoMcp));
   return invoke<McpServerSummary[]>("session_mcp", { session });
 }
 
-/** Отказ без причины: `null`, а не пустая строка — так пишет ядро. */
+/** A refusal without a reason: `null`, not an empty string — that is how the core writes it. */
 export function refusal(scope: ScopeKey, reason: string): Refusal {
   const trimmed = reason.trim();
   return { scope, reason: trimmed === "" ? null : trimmed };

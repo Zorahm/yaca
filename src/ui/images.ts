@@ -1,9 +1,9 @@
 /**
- * Картинки в композере: вставка из буфера и перетаскивание в окно (§7.2).
+ * Images in the composer: paste from the clipboard and drag into the window (§7.2).
  *
- * Отдельно от экранов, потому что композер один, а экранов два — сессия и
- * домашний, — и оба дают ему одно и то же: корень проекта, от которого
- * считаются пути.
+ * Kept apart from the screens, because there is one composer and two screens —
+ * the session and the home screen — and both give it the same thing: the project
+ * root that paths are counted from.
  */
 
 import { hasFileDialogs, onFilesDragging, onFilesDropped, stashImage } from "../core/client";
@@ -13,21 +13,20 @@ import { relativeTo } from "./format";
 type ImageActions = Pick<ComposerActions, "stashImage" | "onDropped" | "onDragging">;
 
 /**
- * Один набор на корень. Композер подписывается на перетаскивание эффектом,
- * и действие, которое на каждой перерисовке новое, переподписывало бы его
- * на каждой перерисовке.
+ * One set per root. The composer subscribes to dragging in an effect, and an
+ * action that is new on every render would resubscribe it on every render.
  */
 const made = new Map<string, ImageActions>();
 
-/** Без проекта и без оболочки действий нет — и вставка остаётся обычной. */
+/** Without a project or the shell there are no actions, and paste stays plain. */
 export function imageActions(root: string | null): ImageActions {
   if (root === null || !hasFileDialogs) return {};
   let actions = made.get(root);
   if (actions === undefined) {
     actions = {
       stashImage: (data) => stashImage(root, data),
-      // Пути от корня, как у `＋`: чип и карточка §5.1 показывают то же, что
-      // видит модель. Файл снаружи проекта остаётся абсолютным.
+      // Paths are relative to the root, as with `＋`: the chip and the card in
+      // §5.1 show what the model sees. A file outside the project stays absolute.
       onDropped: (listener) =>
         onFilesDropped((paths) => listener(paths.map((path) => relativeTo(root, path)))),
       onDragging: onFilesDragging,

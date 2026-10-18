@@ -148,7 +148,7 @@
   user-select: text;
 }
 
-/* --- панель файла ---------------------------------------------------------- */
+/* --- file panel ------------------------------------------------------------ */
 
 /* The line under the tabs: where the file lies, and what can be done to it. */
 .file-bar {
@@ -256,7 +256,7 @@
   color: var(--ink);
 }
 
-/* --- панель процессов -------------------------------------------------- */
+/* --- processes panel --------------------------------------------------- */
 
 .proc-list {
   flex: none;
@@ -274,8 +274,8 @@
   text-align: left;
 }
 
-/* Те же два шага, что у строки действия в ленте: наведение — лёгкая тень
-   чернил, выбранное — светлая плашка и вес. Цветного канта слева нет. */
+/* The same two steps as an action row in the feed: hover is a faint ink shadow,
+   selected is a light plate and weight. There is no coloured edge on the left. */
 .proc:hover {
   background: color-mix(in srgb, var(--ink) 4%, transparent);
 }
@@ -304,9 +304,8 @@
   text-overflow: ellipsis;
 }
 
-/* Состояние — слово, а не измерение, и набрано обычным шрифтом. Красным
-   оно становится только у упавшей команды: работающая — чернильная с
-   пульсом, завершённая — серая. */
+/* State is a word, not a measure, set in the regular font. It turns red only for a failed
+   command: a running one is ink with a pulse, a finished one is grey. */
 .proc-state {
   flex: none;
   font-size: 11.5px;
@@ -368,7 +367,7 @@
   user-select: text;
 }
 
-/* --- панель чекпоинтов --------------------------------------------- */
+/* --- checkpoints panel --------------------------------------------- */
 
 .ckpt-list {
   flex: 1;
@@ -420,7 +419,7 @@
   text-overflow: ellipsis;
 }
 
-/* Подтверждение отката живёт внутри строки: вопрос стоит там, где спросили. */
+/* The rollback confirmation lives inside its row: the question sits where it was asked. */
 .ckpt .confirm {
   margin: 4px 16px 12px;
   border-color: var(--line);
@@ -431,7 +430,7 @@
   justify-content: flex-end;
 }
 
-/* --- панель серверов MCP ------------------------------------------------ */
+/* --- MCP servers panel -------------------------------------------------- */
 
 .mcp-server {
   display: flex;
@@ -454,8 +453,7 @@
   color: var(--ink);
 }
 
-/* Состояние — слово, как у процесса: живое чернильное, сбой красный,
-   остальное серое. */
+/* State is a word, as for a process: live is ink, a failure is red, the rest is grey. */
 .mcp-status {
   font-size: 11.5px;
   color: var(--muted);
@@ -469,7 +467,7 @@
   color: var(--err);
 }
 
-/* Не режется: у сервера, ждущего одобрения, это и есть то, что одобряют. */
+/* Not clipped: for a server waiting for approval, this is exactly what gets approved. */
 .mcp-target {
   font: 400 12px/18px var(--mono);
   color: var(--ink);

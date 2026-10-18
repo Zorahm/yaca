@@ -1,16 +1,16 @@
 /**
- * Что нужно знать, чтобы показать картинку из любого места окна.
+ * What is needed to show a picture from anywhere in the window.
  *
- * Отдельным файлом, потому что нужно это двоим, и друг другу тоже: плитка
- * открывает просмотрщик, просмотрщик спрашивает тот же корень, что и плитка.
+ * It lives in its own file because two parts need it, and each other too: a tile opens the
+ * viewer, and the viewer asks for the same root as the tile.
  */
 
 import { createContext, useContext } from "react";
 
-/** Корень проекта, от которого записаны пути в ленте и в композере. */
+/** The project root that paths in the feed and the composer are written relative to. */
 export const PreviewRoot = createContext<string | null>(null);
 
-/** Открыть картинку в просмотрщике. Вне него — ничего не делает. */
+/** Open a picture in the viewer. Outside it, does nothing. */
 export const OpenImage = createContext<(path: string) => void>(() => {});
 
 export function useOpenImage(): (path: string) => void {

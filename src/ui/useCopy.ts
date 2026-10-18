@@ -1,9 +1,10 @@
 /**
- * Копирование в буфер обмена с коротким «Скопировано».
+ * Copy to the clipboard with a short "Copied".
  *
- * Буфер может быть недоступен: молчать об этом честнее, чем рисовать успех
- * над неудачей (§0). Одна на все панели и блок вывода — логика с таймером
- * сброса не должна жить в трёх копиях; сам таймер — в `useFlash`.
+ * The clipboard may be unavailable: it is more honest to say nothing than to
+ * draw success over a failure (§0). One hook for all the panels and the output
+ * block: the reset-timer logic must not live in three copies, and the timer
+ * itself lives in `useFlash`.
  */
 
 import { useCallback } from "react";
@@ -20,7 +21,7 @@ export function useCopy(resetMs = 1200): {
     (text: string) => {
       void navigator.clipboard.writeText(text).then(
         flash,
-        // Недоступность буфера не исправить отсюда — и нечего показывать.
+        // An unavailable clipboard cannot be fixed from here, and there is nothing to show.
         () => {},
       );
     },

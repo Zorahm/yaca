@@ -1,17 +1,18 @@
 /**
- * Инструменты (§10).
+ * Tools (§10).
  *
- * Сегодня в разделе три настоящие строки: шелл команд, `robots.txt` и ключ
- * веб-поиска. Шелл выбирают только там, где есть из чего: на Windows, между
- * PowerShell 7 и Windows PowerShell. Где он один, строки нет.
- * Включение тулов, таймаут команд и деньлист §10 тоже называет, но за ними нет
- * ничего в ядре: набор тулов — фиксированный `Tools::standard()`, а таймаут
- * команды приходит от модели в `timeout_ms`. Переключатель, за которым нет
- * команды, — это интерфейс, врущий про состояние (§0), поэтому их здесь и нет.
+ * Today the section has three real rows: the command shell, `robots.txt` and the
+ * web search key. The shell is chosen only where there is a choice: on Windows,
+ * between PowerShell 7 and Windows PowerShell. Where there is only one, there is no row.
+ * Tool toggles, the command timeout and the spending limit §10 also names, but
+ * nothing in the core stands behind them: the tool set is the fixed
+ * `Tools::standard()`, and the command timeout comes from the model in `timeout_ms`.
+ * A toggle with no command behind it is an interface lying about its state (§0), so
+ * there are none here.
  *
- * Ключ ведёт себя ровно как ключ провайдера: поле только на запись, значение
- * уезжает в кейчейн под своим именем и на экран не возвращается, а показан
- * источник — кейчейн, переменная окружения или «нет».
+ * The key behaves exactly like a provider key: a write-only field, the value goes
+ * into the keychain under its own name and never comes back to the screen, and the
+ * source is shown — the keychain, an environment variable, or "none".
  */
 
 import { Check } from "@phosphor-icons/react";
@@ -30,8 +31,8 @@ import {
 import { t, type Key } from "../../i18n";
 import { Row, Segments, Switch } from "./Row";
 
-/** Как каждый шелл назван в строке выбора. Имена собственные, но через словарь:
-    «Авто» рядом с ними — слово, и в компоненте строк не бывает (§14). */
+/** How each shell is named in the choice row. Proper names, but through the dictionary:
+    "auto" next to them is a word, and components have no literal text (§14). */
 const SHELL_NAME: Record<ShellChoice, Key> = {
   auto: "tools.shell_auto",
   pwsh: "tools.shell_pwsh",
@@ -49,7 +50,7 @@ export function ToolsSection({
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** Шеллы этой машины. Пока не ответили и где их нет — строки нет. */
+  /** The shells of this machine. Until they answer, and where there are none, there is no row. */
   const [shells, setShells] = useState<ShellChoice[]>([]);
 
   useEffect(() => {

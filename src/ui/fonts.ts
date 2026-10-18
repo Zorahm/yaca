@@ -1,13 +1,13 @@
 /**
- * Шрифты §2: Onest для интерфейса, JetBrains Mono для моноширинного.
+ * Fonts §2: Onest for the interface, JetBrains Mono for monospace.
  *
- * Своим файлом, а не списком импортов в каждой точке входа: окон два (§10), и
- * второе, забывшее половину начертаний, рисовалось бы системным шрифтом — той
- * же плотности, да не той.
+ * In a file of their own, not as a list of imports at each entry point: there
+ * are two windows (§10), and a second one that forgot half of the faces would
+ * be drawn in the system font — of the same density, but the wrong one.
  *
- * Начертания ровно те, что называет §2: 400/500/600/700 у текстового и
- * 400/500/600 у моноширинного. Заголовочного шрифта нет. Лишнее начертание —
- * это лишний файл в каждой загрузке.
+ * The faces are exactly those §2 names: 400/500/600/700 for the text font and
+ * 400/500/600 for the monospace. There is no display font. An extra face is an
+ * extra file in every load.
  */
 
 import "@fontsource/onest/400.css";

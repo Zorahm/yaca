@@ -1,18 +1,16 @@
 /**
- * Панель файла: файл целиком, как он лежит сейчас, на всю высоту.
+ * File panel: the file whole, as it lies now, at full height.
  *
- * Открывается кликом по имени файла в строке действия — созданного,
- * изменённого или только прочитанного. Диффа здесь нет: что именно поменял
- * вызов, показывает его раскрытая строка в ленте, а панель отвечает на другой
- * вопрос — что в файле в итоге.
+ * Opened by clicking the file name in an action row, whether the file was created, changed or
+ * only read. There is no diff here: what exactly the call changed is shown by its expanded row
+ * in the feed, while the panel answers a different question: what is in the file in the end.
  *
- * Это просмотр, а не редактор: номера строк и подсветка, без сворачивания
- * блоков и без курсора. Имя файла стоит на вкладке панели; под шапкой — строка
- * с путём и тремя действиями над файлом: поиск по тексту, копирование и
- * раскрытие панели на всё окно.
+ * This is a viewer, not an editor: line numbers and highlighting, no folding of blocks and no
+ * cursor. The file name sits on the panel's tab; under the header is a line with the path and
+ * three actions on the file: search by text, copy, and expanding the panel to the whole window.
  *
- * Текст приходит от ядра (`fileViewLoaded`) в виде сегментов с ханками; из них
- * берутся строки новой стороны, удалённые отбрасываются.
+ * The text comes from the core (`fileViewLoaded`) as segments with hunks; the lines of the new
+ * side are taken from them, and removed lines are dropped.
  */
 
 import {
@@ -45,13 +43,13 @@ export function FilePanel({
 }: {
   path: string;
   feed: Feed;
-  /** Просит ядро отдать файл целиком. */
+  /** Asks the core for the whole file. */
   onRead: (path: string) => void;
 }) {
-  // Запрос уходит, когда панель показала другой файл и когда агент записал
-  // файл ещё раз: `writes` растёт с каждой записью, и вид должен идти за ней.
-  // Колбэк читается через ref, чтобы перерисовка родителя не
-  // слала запрос заново — иначе ответ ядра и перерисовка кормили бы друг друга.
+  // The request goes out when the panel shows another file and when the agent writes the file
+  // again: `writes` grows with every write, and the view has to follow it. The callback is read
+  // through a ref so that a parent re-render does not send the request again: otherwise the
+  // core's answer and the re-render would feed each other.
   const readRef = useRef(onRead);
   useEffect(() => {
     readRef.current = onRead;
@@ -60,12 +58,12 @@ export function FilePanel({
     readRef.current(path);
   }, [path, feed.writes]);
 
-  // `undefined` — ядро ещё не ответило за этот файл; `null` — показать
-  // нечего: файла нет, он двоичный или лежит вне проекта.
+  // `undefined`: the core has not answered for this file yet; `null`: nothing to show, the file
+  // is missing, binary, or lies outside the project.
   const viewed = feed.fileView;
   const shown = viewed !== null && viewed.path === path ? viewed.view : undefined;
   const lines = useMemo(() => (shown ? currentLines(shown) : []), [shown]);
-  // Удалённый файл приходит видом из одних удалённых строк: файла больше нет.
+  // A deleted file arrives as a view of deleted lines only: the file is gone.
   const gone = shown === null || (shown !== undefined && lines.length === 0);
   const ready = shown !== undefined && shown !== null && !gone;
 
@@ -78,12 +76,12 @@ export function FilePanel({
   const text = useMemo(() => lines.map((line) => line.text).join("\n"), [lines]);
   const { copied, copy } = useCopy();
 
-  // `null` — поиск закрыт. Открытый с пустой строкой ничего не находит.
+  // `null`: search is closed. An open search with an empty string finds nothing.
   const [query, setQuery] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const found = useMemo(() => find(lines, query ?? ""), [lines, query]);
-  // Другой запрос или другой файл — другой список находок; шаг по старому
-  // списку в нём ничего не значит.
+  // A different query or a different file means a different list of hits; a step taken on the
+  // old list means nothing in the new one.
   useEffect(() => setStep(0), [found]);
   const hits = useMemo(() => new Set(found), [found]);
   const move = (by: number) =>

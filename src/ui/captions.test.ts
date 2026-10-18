@@ -86,8 +86,8 @@ describe("the question about deleting a directory", () => {
   });
 });
 
-describe("шапка группы с подагентом", () => {
-  it("считает то, что подагент сделал с проектом", () => {
+describe("group header with a subagent", () => {
+  it("counts what the subagent did to the project", () => {
     const created = { path: "a.txt", kind: "created" as const, movedFrom: null, added: 3, removed: 0 };
     const task = row({
       tool: "Task",
@@ -100,7 +100,8 @@ describe("шапка группы с подагентом", () => {
     });
 
     const head = summary([task]);
-    // Файл создан, команда выполнена — кем, шапке всё равно: она про проект.
+    // The file was created and the command run — by whom does not matter to the
+    // header: it is about the project.
     expect(head.parts).toHaveLength(3);
     expect(head.added).toBe(3);
   });

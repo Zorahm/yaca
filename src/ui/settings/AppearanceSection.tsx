@@ -1,14 +1,14 @@
 /**
- * Внешний вид (§10): тема, акцент, жёлоб и высота строки диффа.
+ * Appearance (§10): theme, accent, gutter and diff row height.
  *
- * Всё здесь — уровень приложения, и всё применяется сразу и во всех окнах:
- * `setPreferences` пишет файл и рассылает настройки, а `usePreferences` в
- * каждом окне ставит атрибуты на `<html>`. Тема, сменившаяся только там, где
- * её выбрали, была бы интерфейсом, врущим про состояние (§0).
+ * Everything here is app-level, and everything applies at once in every window:
+ * `setPreferences` writes the file and broadcasts the settings, and
+ * `usePreferences` in each window sets the attributes on `<html>`. A theme that
+ * changed only where it was picked would be an interface lying about its state (§0).
  *
- * Размера шрифтов тут нет, хотя §10 его называет: типографика §2 записана
- * пиксельными размерами, а не шкалой, и строка «Размер текста» ничего бы не
- * поменяла — см. README, «Чего нет».
+ * There is no font size here, though §10 names it: the typography in §2 is written
+ * in pixel sizes, not a scale, so a "Text size" row would change nothing — see
+ * README.
  */
 
 import type { Preferences, Theme } from "../../core/client";

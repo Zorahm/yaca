@@ -1,9 +1,10 @@
 /**
- * Все картинки разговора по порядку — то, что листает просмотрщик.
+ * All the pictures of the conversation in order — what the viewer pages through.
  *
- * И свои, и модели: приложенное человеком, открытое агентом через
- * `ReadImage` и возвращённое инструментом картинкой (скриншот браузера). Для листания разницы нет — это одна лента, и картинка, на
- * которую агент посмотрел в ответ на скриншот, стоит сразу за скриншотом.
+ * Both the user's and the model's: what the person attached, what the agent opened via
+ * `ReadImage`, and pictures a tool returned (a browser screenshot). For paging there is no
+ * difference — it is one strip, and a picture the agent looked at in answer to a screenshot
+ * stands right after the screenshot.
  */
 
 import { flatRows, type Feed } from "../../core/feed";
@@ -11,11 +12,11 @@ import { flatRows, type Feed } from "../../core/feed";
 const IMAGE = /\.(png|jpe?g|gif|webp|bmp)$/i;
 
 /**
- * Похож ли путь на картинку — по расширению.
+ * Whether a path looks like a picture — by its extension.
  *
- * Только здесь, где спросить ядро нельзя: список для листания собирается из
- * ленты чистой функцией. Чем файл является на самом деле, решают байты, и
- * плитка спрашивает об этом ядро (`look`).
+ * Only here, where the core cannot be asked: the paging list is built from the feed by a pure
+ * function. What a file really is, the bytes decide, and the tile asks the core about that
+ * (`look`).
  */
 export function isImagePath(path: string): boolean {
   return IMAGE.test(path);
@@ -25,7 +26,7 @@ export function galleryOf(feed: Feed | null): string[] {
   if (feed === null) return [];
   const out: string[] = [];
   const add = (path: string) => {
-    // Один путь — одна остановка: скриншот, приложенный дважды, тот же файл.
+    // One path, one stop: a screenshot attached twice is the same file.
     if (isImagePath(path) && !out.includes(path)) out.push(path);
   };
 
@@ -34,7 +35,7 @@ export function galleryOf(feed: Feed | null): string[] {
       block.attachments.forEach(add);
     } else if (block.kind === "actions") {
       for (const row of flatRows(block.rows)) {
-        // Только то, что открылось: у упавшего вызова показывать нечего.
+        // Only what opened: a failed call has nothing to show.
         if (row.state !== "done") continue;
         if (row.tool === "ReadImage" && row.target) add(row.target);
         // Images a tool returned, such as a page's screenshot, in the order

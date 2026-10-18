@@ -1,15 +1,16 @@
 /**
- * Проект (§10): файл инструкций, исключения теневого хранилища, свои команды,
- * навыки.
+ * Project (§10): the instructions file, shadow-store exclusions, own commands,
+ * skills.
  *
- * Инструкции и команды показаны, но не правятся: это файлы в дереве, и место,
- * где их меняют, — редактор, а не окно настроек. Окно говорит, какой файл в
- * силе, — а спорит оно только за то, чего в дереве нет.
+ * Instructions and commands are shown but not edited: they are files in the tree,
+ * and the place where they are changed is the editor, not the settings window. The
+ * window says which file is in force — and it argues only about what is not in the
+ * tree.
  *
- * Исключения снимка §5.8 добавляются к встроенным, а не заменяют их: проект,
- * выкинувший `.git` и `.yaca`, снимал бы снимки со своих снимков. Поэтому они
- * и показаны — чипами без крестика, чтобы «а почему их тут нет» не приходилось
- * выяснять чтением исходников.
+ * Snapshot exclusions from §5.8 are added to the built-in ones, not replacing them:
+ * a project that dropped `.git` and `.yaca` would snapshot its own snapshots. That
+ * is why they are shown — as chips without a cross, so that "why are they not here"
+ * does not have to be worked out by reading the source.
  */
 
 import { Plus, X } from "@phosphor-icons/react";
@@ -48,8 +49,8 @@ export function ProjectSection({
   const [fixed, setFixed] = useState<string[]>([]);
   const [adding, setAdding] = useState("");
 
-  // Встроенный список спрашивается у ядра один раз: он не меняется, пока
-  // приложение живёт.
+  // The built-in list is asked of the core once: it does not change while the app
+  // is alive.
   useEffect(() => {
     let live = true;
     void shadowExcludedDirs().then(

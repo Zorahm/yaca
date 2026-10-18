@@ -1,19 +1,20 @@
 /**
- * Дифф §6.3 в раскрытой строке действия — и тот же блок строк без диффа в
- * панели файла (§6.4), которая показывает файл как он есть.
+ * Diff §6.3 in the expanded action row — and the same block of lines without the
+ * diff in the file panel (§6.4), which shows the file as it is.
  *
- * Ханки, номера строк и пословные диапазоны считает ядро (§12): результат
- * одинаков везде, где дифф показывается, и разбирать текст в вебвью параллельно
- * дельтам всё равно не выйдет.
+ * The hunks, line numbers and word ranges are computed by the core (§12): the
+ * result is the same everywhere a diff is shown, and parsing the text in the
+ * webview in parallel with the deltas would not work anyway.
  *
- * Дифф показывается целиком: раскрытие, за которым нужен второй клик, — это
- * не раскрытие (§16.34). Длинный дифф рисуется окном (§12), а не режется:
- * скролл у самого блока, и за его краями строк в разметке просто нет.
+ * The diff is shown whole: a disclosure that needs a second click is not a
+ * disclosure (§16.34). A long diff is drawn with a window (§12), not cut: the
+ * scroll is on the block itself, and beyond its edges there are simply no rows in
+ * the markup.
  *
- * Синтаксис подсвечивается построчно (§6.3): грамматика выбирается по
- * расширению файла и подгружается лениво из бандла (`languages.ts`), пока не
- * приехала — строка рендерится обычным текстом. Подсветка не режет строку на
- * разные высоты: окно §12 по-прежнему считает по токену `--diff-line`.
+ * Syntax is highlighted line by line (§6.3): the grammar is picked by the file's
+ * extension and loaded lazily from the bundle (`languages.ts`) until it arrives —
+ * a line is rendered as plain text until then. Highlighting does not cut a line
+ * into different heights: the §12 window still counts by the `--diff-line` token.
  */
 
 import {
@@ -35,12 +36,12 @@ import { useHighlight, type LineHighlighter } from "./useHighlight";
 import { windowOf } from "./window";
 
 /**
- * Короче этого дифф рисуется целиком: спейсеры и слушатель прокрутки на
- * дифф в десять строк — расход без выигрыша.
+ * Shorter than this, the diff is drawn whole: spacers and a scroll listener on a
+ * ten-line diff are a cost with no gain.
  */
 const WINDOW_FROM = 200;
 
-/** Сколько строк держать нарисованными за краями окна. */
+/** How many rows to keep drawn beyond the edges of the window. */
 const OVERSCAN = 8;
 
 /**
@@ -68,9 +69,9 @@ export function Diff({
   diff?: FileDiff;
   /** The whole file, for the panel. Absent in the feed. */
   body?: FileBody;
-  /** В строке действия подложка мягче, чем в панели (§2). */
+  /** In an action row the backing is softer than in the panel (§2). */
   soft?: boolean;
-  /** Путь файла: из него выбирается грамматика подсветки (§6.3). */
+  /** The file path: the highlighting grammar is picked from it (§6.3). */
   path?: string;
 }) {
   const language = useMemo(() => (path === undefined ? null : languageOf(path)), [path]);
@@ -163,23 +164,23 @@ export function Diff({
 }
 
 /**
- * Высота строки берётся из токена, а не из константы: §2 обещает 20 px в
- * компактном режиме, и окно, посчитанное по 24, промахнётся мимо экрана.
- * Читается с самого блока: панель файла ставит строкам свою высоту.
+ * The row height comes from the token, not from a constant: §2 promises 20 px in
+ * compact mode, and a window counted with 24 would miss the screen. It is read
+ * from the block itself: the file panel sets its own height on the rows.
  */
 function rowHeight(node: HTMLElement): number {
   return parseFloat(getComputedStyle(node).getPropertyValue("--diff-line"));
 }
 
 /**
- * Дифф одним плоским списком строк одинаковой высоты.
+ * The diff as one flat list of rows of the same height.
  *
- * Плоским — потому что окно считает по индексу, и вложенность ханков ему
- * мешала бы; одинаковой высоты — потому что заголовок ханка лежит на той же
- * сетке, что строки (§6.3).
+ * Flat — because the window counts by index, and nested hunks would get in its
+ * way; of the same height — because a hunk's header sits on the same grid as the
+ * lines (§6.3).
  *
- * Грамматика резолвится один раз на весь дифф, а не на строку: у hook'а одна
- * подписка, и строки не перерисовывают друг друга наперегонки.
+ * The grammar is resolved once for the whole diff, not per line: the hook has one
+ * subscription, and the lines do not re-render each other in a race.
  */
 function rows(
   diff: FileDiff,
@@ -213,13 +214,13 @@ function Line({
   line: DiffLine;
   /** Found by the panel's search; `now` is the hit it stands on. */
   mark?: "hit" | "now" | null;
-  /** Пока грамматика не приехала — `null`, и строка рендерится без подсветки. */
+  /** Until the grammar arrives — `null`, and the line is rendered without highlighting. */
   highlight: LineHighlighter | null;
 }) {
   const kind =
     line.kind === "add" ? "diff-add" : line.kind === "del" ? "diff-del" : "diff-ctx";
   const sign = line.kind === "add" ? "+" : line.kind === "del" ? "−" : " ";
-  // Жёлоб показывает ту сторону, к которой строка относится (§6.3).
+  // The gutter shows the side the line belongs to (§6.3).
   const number = line.kind === "del" ? line.oldLine : line.newLine;
 
   return (
@@ -232,11 +233,11 @@ function Line({
 }
 
 /**
- * Текст строки: синтаксическая подсветка Lezer (§6.3) под пословной.
+ * The text of a line: Lezer syntax highlighting (§6.3) under the word-level one.
  *
- * Пословные диапазоны ядра считаются в кодточках, а не в байт-единицах:
- * их границы переводятся в UTF-16, чтобы сходиться с диапазонами Lezer —
- * иначе суррогатная пара разрезала бы и слово, и токен.
+ * The core's word ranges are counted in code points, not in byte units: their
+ * bounds are converted to UTF-16 to agree with the Lezer ranges — otherwise a
+ * surrogate pair would cut both the word and the token.
  */
 function styled(text: string, spans: Span[], highlight: LineHighlighter | null): ReactNode {
   const pieces = highlight === null ? plainLine(text) : highlight(text);

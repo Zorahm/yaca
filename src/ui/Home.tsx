@@ -43,12 +43,12 @@ export function Home({
   onOpenSettings,
 }: {
   models: ModelInfo[];
-  /** Слэш-команды проекта §7.3 — тот же композер, то же меню. */
+  /** The project's slash commands §7.3 — the same composer, the same menu. */
   commands: MenuCommand[];
   onRefreshCommands: () => void;
-  /** Проект, выбранный в окне: список сессий рядом читает его же (§9.1). */
+  /** The project picked in the window: the session list beside it reads the same one (§9.1). */
   project: string | null;
-  /** Ошибка старта сессии: она приходит от окна, а не отсюда. */
+  /** A session start error: it comes from the window, not from here. */
   error: string | null;
   onStart: (
     project: string,
@@ -56,9 +56,9 @@ export function Home({
     startup: Startup,
     attachments: string[],
   ) => void;
-  /** Диалог выбора папки принадлежит окну — проект живёт там. */
+  /** The folder picker dialog belongs to the window — the project lives there. */
   onPickProject: () => void;
-  /** Кнопка «Настроить провайдера» ведёт в окно настроек §10. */
+  /** The "Set up a provider" button leads to the settings window §10. */
   onOpenSettings: () => void;
 }) {
   const [name, setName] = useState<string | null>(null);
@@ -104,7 +104,7 @@ export function Home({
     provider: startup?.provider ?? "",
     model: startup?.model ?? "",
     effort: startup?.effort ?? "extra",
-    // Обход разрешений — решение о работающей сессии, а обходить здесь нечего.
+    // Bypassing permissions is a decision about a running session, and there is nothing to bypass here.
     bypass: false,
   };
 
@@ -118,14 +118,14 @@ export function Home({
         onStart(project, text, startup, attachments);
       }
     },
-    // Кнопки остановки здесь нет: `busy` на домашнем экране всегда ложь.
+    // There is no stop button here: `busy` on the home screen is always false.
     stop: () => {},
     setMode: (mode) => change({ mode }),
     setModel: (model, providerId) =>
       change(providerId ? { model, provider: providerId } : { model }),
     setEffort: (effort) => change({ effort }),
-    // §7.2: тот же `＋`, что и в сессии. Корень известен и здесь — папку
-    // выбирают до первого сообщения.
+    // §7.2: the same `＋` as in a session. The root is known here too — the folder
+    // is picked before the first message.
     pickFiles: hasFileDialogs
       ? async () => {
           if (project === null) return [];
@@ -134,9 +134,9 @@ export function Home({
         }
       : undefined,
     ...imageActions(project),
-    // §7.3: `/compact` и `/clear` — про идущий разговор, а его здесь ещё нет.
-    // Проектные команды работают: их разворачивает ядро, и первое сообщение
-    // заводит сессию уже развёрнутым.
+    // §7.3: `/compact` and `/clear` are about the conversation in progress, and
+    // there is none here yet. Project commands work: the core expands them, and the
+    // first message starts the session already expanded.
     refreshCommands: onRefreshCommands,
   };
 

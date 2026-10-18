@@ -321,10 +321,11 @@ function dayLabel(ms: number): string {
 }
 
 /**
- * Имя файла для экспорта: заголовок сессии без того, чего не бывает в именах.
+ * File name for export: the session title minus the characters that cannot appear
+ * in names.
  *
- * Диалог покажет его как предложенное — человек всё равно решает сам, поэтому
- * тут достаточно не подсунуть ему заведомо непринимаемое имя.
+ * The dialog shows it as the suggestion — the person decides anyway, so it is enough
+ * not to offer a name that is certainly unacceptable.
  */
 function fileName(title: string): string {
   const clean = title.replace(/[\\/:*?"<>|]/g, "-").trim();

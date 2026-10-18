@@ -1,19 +1,19 @@
 /**
- * Плитка вложения (§7.2, §5.1) — одна на всё, что прикладывают: картинку,
- * файл, папку.
+ * Attachment tile (§7.2, §5.1) — one for everything that is attached: a picture,
+ * a file, a folder.
  *
- * Размер у плитки один, каким бы ни было содержимое. Ряд из картинок разной
- * ширины читается как коллаж, а не как список приложенного: взгляд цепляется
- * за самую широкую, и узкий скриншот рядом с ней теряется.
+ * The tile has one size, whatever the content. A row of pictures of different
+ * widths reads as a collage, not as a list of what was attached: the eye catches
+ * on the widest, and a narrow screenshot next to it gets lost.
  *
- * Картинка занимает плитку целиком и открывается в просмотрщике (`viewer/`).
- * У файла и папки — значок и имя; путь целиком — в подсказке. Того, чего на
- * диске уже нет, плитка не прячет: вложение было, и карточка сообщения §5.1
- * говорит о том, что было приложено, а не о том, что лежит там сейчас.
+ * A picture fills the tile and opens in the viewer (`viewer/`). A file or a
+ * folder has an icon and a name; the full path is in the hint. The tile does not
+ * hide what is already gone from disk: the attachment was there, and the message
+ * card (§5.1) speaks of what was attached, not of what lies there now.
  *
- * Один компонент на композер и на карточку: это одно и то же вложение до
- * отправки и после. Разница одна — `onRemove`: убрать можно только то, что
- * ещё не отправлено.
+ * One component for the composer and the card: it is the same attachment before
+ * and after sending. There is one difference — `onRemove`: only what has not been
+ * sent yet can be removed.
  */
 
 import { FileDashed, FileText, Folder, X } from "@phosphor-icons/react";
@@ -45,8 +45,9 @@ export function Attachment({ path, onRemove }: { path: string; onRemove?: () => 
           className={look?.kind === "missing" ? "tile-face tile-gone" : "tile-face"}
           title={look?.kind === "missing" ? t("attachment.gone", { path }) : path}
         >
-          {/* Пока ответ едет, плитка уже на месте и уже с именем: ряд не
-              прыгает, а чем она окажется, видно через мгновение. */}
+          {/* While the answer is on its way the tile is already in place and
+              already named: the row does not jump, and what it turns out to be
+              shows a moment later. */}
           {look !== undefined && <Icon kind={look.kind} size={small ? 16 : 20} />}
           <span className="tile-name">{name}</span>
         </span>

@@ -1,25 +1,25 @@
 /**
- * Композер §7 и его нижний ряд §7.1.
+ * Composer §7 and its bottom row §7.1.
  *
- * Поле не блокируется, пока агент работает (§7.4): отправленное встаёт в
- * очередь ядра и показывается чипом над полем. Чипы — список ядра целиком:
- * каждый показывает ожидающее сообщение, а `отменить` шлёт команду с его id.
- * Ядро отвечает новым списком, поэтому чип говорит только то, что правда.
+ * The field is not locked while the agent works (§7.4): what is sent goes into
+ * the core's queue and is shown as a chip above the field. The chips are the
+ * core's whole list: each shows a waiting message, and "cancel" sends the command
+ * with its id. The core answers with a new list, so a chip says only what is true.
  *
- * Настройки нижнего ряда приходят пропсом, а не берутся из `SessionState`:
- * §9.1 ставит тот же композер на домашний экран, где сессии ещё нет, а
- * выбранное там уезжает в неё вместе с первым сообщением.
+ * The bottom row's settings come in as a prop, not taken from `SessionState`:
+ * §9.1 puts the same composer on the home screen, where there is no session yet,
+ * and what is picked there rides into the session with the first message.
  *
- * Чего здесь нет из §7.1: кнопки диктовки. Распознавания речи нет, а кнопка,
- * молча ничего не делающая, это интерфейс, врущий про состояние. `＋` есть:
- * диалог файлов у оболочки нашёлся. `@` (§7.2) есть: меню файлов проекта
- * (`./MentionMenu`) открывается, когда `@` начинает слово; выбранный файл
- * становится чипом над полем, как и приложенный через `＋`. На домашнем экране
- * поиска нет, и меню там не открывается вовсе.
+ * What is not here from §7.1: the dictation button. There is no speech
+ * recognition, and a button that silently does nothing is an interface lying
+ * about the state. `＋` is here: the shell's file dialog was found. `@` (§7.2) is
+ * here: the project's file menu (`./MentionMenu`) opens when `@` starts a word;
+ * the chosen file becomes a chip above the field, as one attached via `＋` does.
+ * On the home screen there is no search, and the menu does not open there at all.
  *
- * `/` в начале строки открывает меню команд §7.3 (`./slash`). Меню не
- * состояние, а функция от текста поля: `⇥` и `⏎` берут подсвеченное,
- * пробел закрывает — дальше идут аргументы.
+ * `/` at the start of a line opens the command menu §7.3 (`./slash`). The menu is
+ * not a state but a function of the field's text: `⇥` and `⏎` take the
+ * highlighted item, a space closes it — what follows are arguments.
  */
 
 import { ArrowUp, Plus, Stop } from "@phosphor-icons/react";
@@ -48,68 +48,70 @@ export type ComposerActions = {
   stop: () => void;
   setMode: (mode: Mode) => void;
   /**
-   * Обход разрешений (§8) — решение о работающей сессии. Там, где сессии нет,
-   * действия нет тоже, и меню режима не показывает строку, которой некуда
-   * приложиться.
+   * Bypassing permissions (§8) is a decision about a running session. Where there
+   * is no session, there is no action either, and the mode menu shows no row that
+   * has nowhere to attach.
    */
   setBypass?: (on: boolean) => void;
   setModel: (model: string, providerId?: string) => void;
   setEffort: (effort: Effort) => void;
   /**
-   * `/compact` (§5.11) и `/clear` — про идущий разговор, и на домашнем экране
-   * §9.1 их нет: меню не показывает строк, которым некуда приложиться.
+   * `/compact` (§5.11) and `/clear` are about the conversation in progress, and on
+   * the home screen (§9.1) they are absent: the menu shows no rows that have
+   * nowhere to go.
    */
   compact?: () => void;
   newChat?: () => void;
-  /** `/checkpoints` (§7.3, §1.1) — точки этого разговора, а не проекта. */
+  /** `/checkpoints` (§7.3, §1.1) — the points of this conversation, not of the project. */
   openCheckpoints?: () => void;
-  /** `/mcp` (§7.3) — серверы этого разговора и состояние каждого. */
+  /** `/mcp` (§7.3) — the servers of this conversation and the state of each. */
   openMcp?: () => void;
   openLsp?: () => void;
   /**
-   * `＋` (§7.2): спросить файлы и вернуть пути от корня проекта.
+   * `＋` (§7.2): ask for files and return the paths from the project root.
    *
-   * Диалог принадлежит оболочке, а корень — экрану: композер один и тот же в
-   * сессии и на домашнем экране, и знать про корень ему незачем. Нет
-   * действия — нет и кнопки.
+   * The dialog belongs to the shell, and the root to the screen: the composer is
+   * the same in a session and on the home screen, and it has no need to know about
+   * the root. No action — no button either.
    */
   pickFiles?: () => Promise<string[]>;
   /**
-   * Сохранить вставленную из буфера картинку (base64) и вернуть её путь.
-   * У вставленного пути нет, а вложение — это путь (§7.2). Нет действия —
-   * вставка картинки остаётся обычной вставкой, то есть ничем.
+   * Save the picture pasted from the clipboard (base64) and return its path.
+   * A pasted picture has no path, and an attachment is a path (§7.2). No action —
+   * pasting a picture stays an ordinary paste, that is, nothing.
    */
   stashImage?: (data: string) => Promise<string>;
   /**
-   * Подписаться на файлы, брошенные в окно; пути приходят уже от корня
-   * проекта. Возвращает отписку.
+   * Subscribe to files thrown into the window; the paths already come from the
+   * project root. Returns the unsubscribe.
    */
   onDropped?: (listener: (paths: string[]) => void) => () => void;
   /**
-   * Подписаться на «файлы сейчас над окном». Пока они там, окно закрывается
-   * пеленой с подсказкой: бросать можно в любое место, и человеку нужно видеть,
-   * что бросок будет принят.
+   * Subscribe to "files now over the window". While they are there, the window is
+   * covered by a veil with a hint: a drop may go anywhere, and the person needs to
+   * see that the drop will be accepted.
    */
   onDragging?: (listener: (over: boolean) => void) => () => void;
   /**
-   * Перечитать список команд проекта. Зовётся, когда строка становится
-   * командой: файл, написанный минуту назад, должен быть в меню, а не только
-   * в ядре, которое читает каталог на каждом сообщении.
+   * Re-read the project's command list. Called when a line becomes a command: a
+   * file written a minute ago must be in the menu, not only in the core, which
+   * reads the catalog on every message.
    */
   refreshCommands?: () => void;
   /**
-   * `@` (§7.2): спросить ядро о файлах проекта по запросу. Ответ приходит в
-   * ленту, а не сюда. Нет действия — на экране нет сессии, и меню не открывается.
+   * `@` (§7.2): ask the core about the project's files by a query. The answer comes
+   * into the feed, not here. No action — there is no session on the screen, and the
+   * menu does not open.
    */
   searchFiles?: (query: string) => void;
   /**
-   * `отменить` у чипа очереди (§7.4): убрать сообщение, которое ещё не влито в
-   * ход. Нет действия — кнопки нет, чип только показывает, что ждёт.
+   * "cancel" on the queue chip (§7.4): remove the message that has not yet been
+   * merged into the turn. No action — no button; the chip only shows that it waits.
    */
   cancelQueued?: (id: string) => void;
 };
 
-/** Что показывает и переключает нижний ряд §7.1. */
+/** What the bottom row of §7.1 shows and switches. */
 export type ComposerSettings = {
   mode: Mode;
   provider?: string;
@@ -134,19 +136,19 @@ export function Composer({
   busy: boolean;
   usage: UsageSnapshot | null;
   models: ModelInfo[];
-  /** Слэш-команды проекта (§7.3) — вторая половина меню над полем. */
+  /** The project's slash commands (§7.3) — the second half of the menu above the field. */
   commands: MenuCommand[];
-  /** Сообщения, которые ждут очереди ядра (§7.4), по порядку. */
+  /** Messages waiting for the core's queue (§7.4), in order. */
   queued: QueuedMessage[];
-  /** Последний ответ `@`-поиска (§7.2); показывается, только если запрос тот же. */
+  /** The last `@` search reply (§7.2); shown only if the query is the same. */
   found: Feed["found"];
   actions: ComposerActions;
   /**
-   * Отправлять некуда: на домашнем экране (§9.1) — пока не выбран проект.
-   * Поле молчит, а не принимает текст, которому не во что уехать.
+   * There is nowhere to send: on the home screen (§9.1), until a project is picked.
+   * The field stays silent and does not accept text that has nowhere to go.
    */
   disabled?: boolean;
-  /** Черновик запоминается на сессию и переживает перезапуск (§7.4). */
+  /** The draft is remembered per session and survives a restart (§7.4). */
   draftKey: string;
 }) {
   const [text, setText] = useState(() => localStorage.getItem(draftKey) ?? "");
@@ -166,9 +168,9 @@ export function Composer({
     return () => document.removeEventListener("pointerdown", close, true);
   }, [menu]);
   const [slashAt, setSlashAt] = useState(0);
-  /** Приложенные файлы §7.2 — чипы над полем, уезжают с сообщением. */
+  /** Attached files §7.2 — chips above the field; they travel with the message. */
   const [attached, setAttached] = useState<string[]>([]);
-  /** Вложение прикладывается один раз, сколько бы раз его ни бросили. */
+  /** An attachment is attached once, however many times it is dropped. */
   const attach = (paths: string[]) =>
     setAttached((now) => [...now, ...paths.filter((p) => !now.includes(p))]);
 
@@ -187,7 +189,7 @@ export function Composer({
     return onDragging(setDragging);
   }, [onDragging, disabled]);
 
-  /** Картинки из буфера — во вложения; остальное вставляется как обычно. */
+  /** Pictures from the clipboard become attachments; the rest is pasted as usual. */
   function pasteImages(event: ClipboardEvent<HTMLTextAreaElement>) {
     const stash = actions.stashImage;
     if (stash === undefined) return;
@@ -195,23 +197,23 @@ export function Composer({
       f.type.startsWith("image/"),
     );
     if (images.length === 0) return;
-    // Иначе в поле ляжет имя файла или ничего: текста в таком буфере нет.
+    // Otherwise a file name or nothing would land in the field: there is no text in such a clipboard.
     event.preventDefault();
     for (const image of images) {
       void encoded(image)
         .then(stash)
         .then(
           (path) => attach([path]),
-          // Что не сохранилось, то не приложено: чипа нет, и это видно.
+          // What was not saved is not attached: there is no chip, and that is visible.
           () => {},
         );
     }
   }
   const field = useRef<HTMLTextAreaElement>(null);
 
-  // Что известно о выбранной модели: имя для чипа и умеет ли она усилие
-  // (§7.1). `undefined` — модели нет в списке провайдера, и это не
-  // то же самое, что «не умеет».
+  // What is known about the selected model: the name for the chip and whether it
+  // takes effort (§7.1). `undefined` — the model is not in the provider's list, and
+  // that is not the same as "does not take effort".
   const activeModel =
     models.find(
       (m) =>
@@ -219,9 +221,9 @@ export function Composer({
         (!settings.provider || !m.providerId || m.providerId === settings.provider),
     ) ?? models.find((m) => m.id === settings.model);
 
-  // Встроенные команды §7.3 — только те, за которыми в этом экране есть
-  // действие: на домашнем экране разговора ещё нет, сжимать и начинать заново
-  // нечего.
+  // The built-in commands §7.3 — only those that have an action on this screen: on
+  // the home screen there is no conversation yet, so there is nothing to compact or
+  // start over.
   const builtins: Builtin[] = ["model"];
   if (actions.compact) builtins.push("compact");
   if (actions.newChat) builtins.push("clear");
@@ -232,9 +234,9 @@ export function Composer({
   const slash = menuFor(text, commands, builtins);
   const slashIndex = slash === null ? 0 : Math.min(slashAt, slash.length - 1);
 
-  /** Где каретка: `@` читает текст до неё (§7.2). */
+  /** Where the caret is: `@` reads the text up to it (§7.2). */
   const [caret, setCaret] = useState(0);
-  /** Куда поставить каретку, когда поле получит текст, который её сдвигает. */
+  /** Where to put the caret when the field gets text that shifts it. */
   const pendingCaret = useRef<number | null>(null);
   const mentions = useMentions({
     text,
@@ -249,15 +251,15 @@ export function Composer({
     else localStorage.removeItem(draftKey);
   }, [text, draftKey]);
 
-  // Список команд перечитывается, когда строка стала командой, а не на каждом
-  // нажатии: каталог проекта могли пополнить, пока окно открыто.
+  // The command list is re-read when the line has become a command, not on every
+  // keypress: the project's catalog could have been added to while the window was open.
   const typing = text.startsWith("/");
   const refresh = actions.refreshCommands;
   useEffect(() => {
     if (typing) refresh?.();
   }, [typing, refresh]);
 
-  // Автовысота до двенадцати строк, дальше внутренний скролл (§7).
+  // Auto-height up to twelve lines, then an internal scroll (§7).
   useEffect(() => {
     const node = field.current;
     if (!node) return;
@@ -271,12 +273,12 @@ export function Composer({
   }, [text]);
 
   /**
-   * Опустошить поле после отправки или встроенной команды.
+   * Empty the field after sending or a built-in command.
    *
-   * Черновик стирается здесь же, а не эффектом выше: и `/clear`, и первое
-   * сообщение с домашнего экрана уводят окно на другой экран, а эффект
-   * размонтированного композера уже не выполнится, и отправленное осталось бы
-   * лежать черновиком (§7.4).
+   * The draft is erased here, not by the effect above: both `/clear` and the first
+   * message from the home screen take the window to another screen, and the effect
+   * of an unmounted composer no longer runs, so the sent text would stay in the
+   * draft (§7.4).
    */
   function clear() {
     setText("");
@@ -284,7 +286,7 @@ export function Composer({
     localStorage.removeItem(draftKey);
   }
 
-  /** Встроенное делает интерфейс; в ядро уезжает команда, а не текст. */
+  /** The built-in is done by the interface; what goes to the core is a command, not text. */
   function run(builtin: Builtin) {
     if (builtin === "compact") actions.compact?.();
     if (builtin === "clear") actions.newChat?.();
@@ -296,10 +298,10 @@ export function Composer({
   }
 
   /**
-   * Взять подсвеченную строку меню.
+   * Take the highlighted line of the menu.
    *
-   * Встроенная выполняется — аргументов она не берёт. Проектная дописывается
-   * в поле: за именем может идти всё, что человек хочет ей передать.
+   * A built-in one runs — it takes no arguments. A project one is written into the
+   * field: anything the person wants to pass to it may follow the name.
    */
   function pick(item: SlashItem) {
     setSlashAt(0);
@@ -311,8 +313,9 @@ export function Composer({
   }
 
   /**
-   * Взять файл из меню `@` (§7.2): `@запрос` уходит из поля, файл становится
-   * чипом над ним — тем же, что приложенный через `＋`, и уедет с сообщением.
+   * Take a file from the `@` menu (§7.2): `@query` leaves the field, and the file
+   * becomes a chip above it — the same one as attached via `＋`, and it goes with
+   * the message.
    */
   function pickFile(path: string, mention: Mention) {
     const next = withoutMention(text, mention, caret);
@@ -324,8 +327,8 @@ export function Composer({
 
   function send() {
     if (disabled || !text.trim()) return;
-    // §7.3: встроенная команда не уезжает модели текстом. Проектная уезжает —
-    // её разворачивает ядро, у которого и лежат файлы.
+    // §7.3: a built-in command does not go to the model as text. A project command
+    // does: the core expands it, and it is the core that holds the files.
     const builtin = builtinFor(text, builtins);
     if (builtin !== null) {
       run(builtin);
@@ -389,8 +392,8 @@ export function Composer({
             onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
             onPaste={pasteImages}
             onKeyDown={(e) => {
-              // Пока открыто меню команд §7.3, стрелки, `⇥` и `⏎` принадлежат
-              // ему. `⇧⇥` не трогаем: это переключатель режима §13.
+              // While the command menu §7.3 is open, the arrows, `⇥` and `⏎` belong
+              // to it. `⇧⇥` is not touched: it is the mode switch §13.
               if (slash !== null) {
                 if (e.key === "ArrowDown") {
                   e.preventDefault();
@@ -409,12 +412,12 @@ export function Composer({
                 }
               }
 
-              // `@` (§7.2): пока открыто меню файлов, стрелки, ⏎ и ⇥ его, а
-              // Esc закрывает его, не останавливая агента.
+              // `@` (§7.2): while the file menu is open, the arrows, ⏎ and ⇥ belong to
+              // it, and Esc closes it without stopping the agent.
               if (mentions.keyDown(e)) return;
 
-              // Пока висит запрос разрешения, цифры принадлежат ему (§5.7),
-              // а поле всё равно остаётся живым.
+              // While a permission request hangs, the digits belong to it (§5.7), and
+              // the field stays live all the same.
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 send();
@@ -447,8 +450,9 @@ export function Composer({
           the message, the row is how the message will be sent. Its own click
           must not reach the wrap, which closes the menus. */}
       <div className="composer-row" onClick={(e) => e.stopPropagation()}>
-          {/* §7.1: `＋` вложения стоит первым, чип режима — за ним. Нет действия — нет и
-              кнопки: экран без корня проекта прикладывать нечего. */}
+          {/* §7.1: the `＋` attach button comes first, the mode chip after it. No
+              action — no button either: a screen without a project root has nothing
+              to attach. */}
           {actions.pickFiles && (
             <button
               className="chip chip-icon"
@@ -461,8 +465,8 @@ export function Composer({
                       ...now,
                       ...picked.filter((path) => !now.includes(path)),
                     ]),
-                  // Диалог, который не открылся, ничего не приложил: показывать
-                  // тут нечего, а ошибку экрана заводить ради этого — много.
+                  // A dialog that did not open attached nothing: there is nothing to
+                  // show here, and raising a screen error for it would be too much.
                   () => {},
                 );
               }}
@@ -508,14 +512,14 @@ export function Composer({
             }}
           />
 
-          {/* §7.1 ставит усилие рядом с моделью, но у модели без reasoning
-              выбирать нечего: ядро поле не отправляет вовсе, потому что
-              `reasoning_effort` там, где его не ждут, — это 400. Чип, который
-              переключается и ничего не меняет, врёт про состояние (§0).
+          {/* §7.1 puts effort next to the model, but a model without reasoning has
+              nothing to choose: the core does not send the field at all, because
+              `reasoning_effort` where it is not expected is a 400. A chip that
+              switches and changes nothing lies about the state (§0).
 
-              Прячется только по явному «нет»: модели, которой нет в списке,
-              усилие могло быть и доступно, и спрятать существующий уровень
-              молча хуже, чем показать лишний чип. */}
+              It is hidden only by an explicit "no": a model that is not in the list
+              may have had effort available, and hiding an existing level silently is
+              worse than showing an extra chip. */}
           {activeModel?.supportsEffort !== false && (
             <EffortMenu
               effort={settings.effort}
@@ -552,7 +556,7 @@ export function Composer({
   );
 }
 
-/** Файл как base64 без префикса `data:` — в том виде, в каком его ждёт ядро. */
+/** The file as base64 without the `data:` prefix — in the form the core expects. */
 function encoded(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

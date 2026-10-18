@@ -1,17 +1,17 @@
 /*
- * Окно настроек §10.
+ * Settings window §10.
  *
- * Две колонки: навигация 244 и колонка содержимого. Слой лежит поверх всего
- * главного окна (`.settings-overlay`), поэтому верхней панели §3 здесь нет —
- * разделы называют себя сами.
+ * Two columns: navigation at 244 and the content column. The layer sits over the
+ * whole main window (`.settings-overlay`), so the top bar of §3 is not here — the
+ * sections name themselves.
  *
- * Навигация разрезана на две группы, приложение и проект. §10 перечисляет
- * разделы одним списком, но в нём смешаны два уровня правды: провайдеры и
- * внешний вид — общие, режим и правила — этого проекта. Плоским списком
- * человек менял бы «Режим» и не знал, где именно.
+ * Navigation is split into two groups, app and project. §10 lists the sections in one
+ * list, but it mixes two levels of truth in it: providers and appearance are shared,
+ * mode and rules belong to this project. With a flat list a person would change "Mode"
+ * and not know which one exactly.
  *
- * Форм в окне четыре: строка настройки, строка списка, пункт навигации и
- * контролы §2. Новый раздел новой формы не заводит.
+ * The window has four forms: a settings row, a list row, a navigation item and the §2
+ * controls. A new section does not introduce a new form.
  */
 
 .settings-overlay {
@@ -49,12 +49,12 @@
   overflow: hidden;
 }
 
-/* --- навигация ---------------------------------------------------------- */
+/* --- navigation ---------------------------------------------------------- */
 
 .set-nav {
   flex: none;
-  /* По самой длинной строке, а не по русской: «Notifications and language»
-     в 208 px переносилось на вторую строку и рвало ровный шаг колонки. */
+  /* Sized by the longest line, not the Russian one: "Notifications and language"
+     at 208 px wrapped onto a second line and broke the column's even step. */
   width: 244px;
   display: flex;
   flex-direction: column;
@@ -73,14 +73,14 @@
   color: var(--muted);
 }
 
-/* Вторая группа отбивается воздухом: два уровня правды видно до чтения. */
+/* The second group is set off by air: the two levels of truth are visible before reading. */
 .set-nav-item + .set-group {
   margin-top: 20px;
 }
 
-/* Чип проекта — тот же, что в шапке §3 и на домашнем экране §9.1: раздел
-   проекта обязан сказать, какого именно. `rtl` обрезает путь слева: в
-   `D:\очень\длинный\путь\Kod` важен хвост. */
+/* The project chip — the same as in the §3 header and on the home screen §9.1: the
+   project section must say which project. `rtl` cuts the path on the left: in
+   `D:\очень\длинный\путь\Kod` the tail matters. */
 .select.set-project {
   /* Not `inline-flex`: the chip takes the width of the column, so the list
      of sections under it starts at the same edge. */
@@ -118,8 +118,8 @@
   font-size: 13px;
   color: var(--muted);
   text-align: left;
-  /* Пункт всегда в одну строку: высота у него задана, и вторая строка
-     вылезала бы из неё. Словарь, который ещё длиннее, обрежется многоточием. */
+  /* The item is always on one line: its height is fixed, and a second line would
+     spill out of it. A dictionary that is even longer is cut with an ellipsis. */
   white-space: nowrap;
 }
 
@@ -144,7 +144,7 @@
   display: inline-flex;
 }
 
-/* --- колонка содержимого ------------------------------------------------ */
+/* --- content column ------------------------------------------------ */
 
 .set-pane {
   flex: 1;
@@ -183,11 +183,10 @@
   color: var(--muted);
 }
 
-/* --- строка настройки --------------------------------------------------- */
+/* --- settings row --------------------------------------------------- */
 
-/* Список утверждений о приложении в одной карточке, а не девять карточек:
-   рамка вокруг каждой настройки обещала бы независимость, которой между ними
-   нет. */
+/* A list of claims about the app in one card, not nine cards: a frame around each
+   setting would promise an independence that does not exist between them. */
 .set-rows {
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
@@ -235,8 +234,8 @@
   max-width: 320px;
 }
 
-/* Раздел, идущий сразу за списком строк, отбивается воздухом: иначе он
-   прилипает к последнему разделителю и читается его продолжением. */
+/* A section that follows straight after a list of rows is set off by air: otherwise
+   it sticks to the last divider and reads as its continuation. */
 .set-rows + .prov-section {
   margin-top: 18px;
 }
@@ -299,7 +298,7 @@
   padding-left: 12px;
 }
 
-/* --- выключатель -------------------------------------------------------- */
+/* --- switch -------------------------------------------------------- */
 
 .switch {
   flex: none;
@@ -331,7 +330,7 @@
   background: var(--on-accent);
 }
 
-/* --- списки разделов ---------------------------------------------------- */
+/* --- section lists ---------------------------------------------------- */
 
 .set-list {
   display: flex;
@@ -381,7 +380,7 @@
   color: var(--muted);
 }
 
-/* Ошибка раздела — строка на месте, а не тост: она про то, что на экране. */
+/* A section error is a line in place, not a toast: it is about what is on screen. */
 .set-error {
   margin-bottom: 14px;
   padding: 8px 12px;
@@ -392,7 +391,7 @@
   user-select: text;
 }
 
-/* --- правила §5.7 ------------------------------------------------------- */
+/* --- rules §5.7 ------------------------------------------------------- */
 
 .rule {
   display: flex;
@@ -413,9 +412,9 @@
   color: var(--muted);
 }
 
-/* Отказ помечен красным: §2 отдаёт его под «сбой, удаление, отказ», и это
-   ровно его работа. Разрешения не красятся — зелёный сказал бы «всё хорошо»
-   про ту половину списка, которая как раз и рискованная. */
+/* A refusal is marked red: §2 gives it "failure, deletion, refusal", and this is exactly
+   its job. Allowances are not coloured — green would say "all is well" about the half
+   of the list that is precisely the risky one. */
 .rule-deny .rule-kind {
   color: var(--err);
 }
@@ -450,7 +449,7 @@
   min-width: 140px;
 }
 
-/* --- чипы исключений теневого хранилища §10 ----------------------------- */
+/* --- shadow-store exclusion chips §10 ----------------------------- */
 
 .chips {
   display: flex;
@@ -471,14 +470,14 @@
   color: var(--ink);
 }
 
-/* `.git` и `.yaca` не обсуждаются: проект, выкинувший их из списка, снимал бы
-   снимки со своих снимков (§10). Показаны, но без крестика. */
+/* `.git` and `.yaca` are not up for discussion: a project that dropped them from the list
+   would snapshot its own snapshots (§10). Shown, but without a cross. */
 .chips .chip-fixed {
   padding-right: 10px;
   color: var(--muted);
 }
 
-/* --- провайдеры §10 ----------------------------------------------------- */
+/* --- providers §10 ----------------------------------------------------- */
 
 .prov-list {
   display: flex;
@@ -501,8 +500,8 @@
   border-color: var(--line-strong);
 }
 
-/* Залитый — провайдер ответил списком моделей, пустой — его не спрашивали.
-   Не красным: неопрошенный не сломан (§10, «настроен — значит, ответил»). */
+/* Filled — the provider answered with a list of models, empty — it was not asked.
+   Not red: an unasked one is not broken (§10, "configured — means answered"). */
 .prov-dot {
   flex: none;
   width: 7px;
@@ -526,7 +525,7 @@
 }
 
 .prov-name {
-  /* Знак провайдера стоит в строке имени; режется текст, а не знак. */
+  /* The provider's mark sits in the name row; the text is cut, not the mark. */
   display: flex;
   align-items: center;
   gap: 7px;
@@ -547,8 +546,8 @@
   text-overflow: ellipsis;
 }
 
-/* Форма протокола — меткой справа, а не в строке меты: её одну нельзя
-   угадать по адресу, и §10 на этом настаивает. */
+/* The protocol form is a label on the right, not in the meta line: it alone cannot be
+   guessed from the address, and §10 insists on that. */
 .prov-proto {
   flex: none;
   font: 400 11.5px var(--mono);
@@ -578,7 +577,7 @@
   margin-top: 5px;
 }
 
-/* --- форма провайдера --------------------------------------------------- */
+/* --- provider form --------------------------------------------------- */
 
 .prov-form {
   display: flex;
@@ -648,7 +647,7 @@
   font-family: var(--mono);
 }
 
-/* Закрытое поле: имя сервера MCP, по которому он записан в настройках. */
+/* A closed field: the name of the MCP server it is recorded under in the settings. */
 .prov-input[readonly] {
   color: var(--muted);
 }
@@ -689,8 +688,8 @@
   gap: 8px;
 }
 
-/* Ключ прибит к таблице заголовков: он и есть значение заголовка — весь смысл
-   `{key}` в том, что они связаны (§10). */
+/* The key is pinned to the table of headers: it is the header's value — the whole point
+   of `{key}` is that they are linked (§10). */
 .prov-key {
   margin-top: 2px;
   padding-top: 12px;
@@ -743,15 +742,15 @@
   color: var(--muted);
 }
 
-/* Значение заголовка уезжает в открытый JSON, ключ — нет: место, где стоит
-   {key}, помечено им самим (§0). */
+/* The header's value goes into the open JSON, the key does not: the place where {key}
+   stands is marked by it (§0). */
 .prov-key-mark {
   font: 500 11.5px var(--mono);
   color: var(--muted);
   text-align: center;
 }
 
-/* Список моделей §10: строки не правятся — их прислал провайдер. */
+/* The model list §10: rows are not edited — the provider sent them. */
 .prov-models-head {
   display: flex;
   align-items: center;
@@ -813,8 +812,8 @@
   user-select: text;
 }
 
-/* Подвал прибит к низу колонки: длинный список моделей не должен утаскивать
-   «Сохранить» под сгиб. */
+/* The footer is pinned to the bottom of the column: a long list of models must not pull
+   "Save" below the fold. */
 .prov-form-foot {
   flex: none;
   display: flex;
@@ -826,8 +825,8 @@
 }
 
 
-/* Многострочное поле формы сервера MCP: аргументы, окружение, заголовки —
-   по одному на строку. Высоту задаёт число строк, а не `--h-small-button`. */
+/* The multi-line field of the MCP server form: arguments, environment, headers — one per
+   line. The number of lines sets the height, not `--h-small-button`. */
 .prov-area {
   height: auto;
   padding: 6px 10px;
@@ -1064,7 +1063,7 @@
   overflow-wrap: anywhere;
 }
 
-/* --- маршрутизатор ------------------------------------------------------ */
+/* --- router ------------------------------------------------------ */
 
 /* The one multi-line field of the window: `prov-input` is a single line tall. */
 .routing-editor {

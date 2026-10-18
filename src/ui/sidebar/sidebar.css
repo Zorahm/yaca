@@ -132,8 +132,8 @@
   text-align: left;
 }
 
-/* Наведение — серая подложка, текущий чат — бирюзовая (см. `.sess-current`):
-   наведённая строка не путается с текущей. */
+/* Hover is a grey backing, the current chat is teal (see `.sess-current`):
+   a hovered row is not mistaken for the current one. */
 .side-row:hover:not(:disabled) {
   background: var(--bg);
   color: var(--ink);
@@ -229,7 +229,7 @@
   user-select: text;
 }
 
-/* --- проект ---------------------------------------------------------------- */
+/* --- project --------------------------------------------------------------- */
 
 .side-group {
   padding-top: 2px;
@@ -266,14 +266,14 @@
   color: var(--muted);
 }
 
-/* Значок внутри строки наводится и на самой колонке, и на наведённой строке:
-   подложка тут `line`, она заметна на обеих. */
+/* The icon inside a row lights up both on the column itself and on a hovered row:
+   the backing here is `line`, and it shows on both. */
 .side-project-act:hover:not(:disabled) {
   background: var(--line);
   color: var(--ink);
 }
 
-/* --- сессии ------------------------------------------------------------- */
+/* --- sessions ----------------------------------------------------------- */
 
 /* A row is 28 px, the height of every other row of the column: the list is
    scanned by title, and air between titles is fewer of them on the screen. */

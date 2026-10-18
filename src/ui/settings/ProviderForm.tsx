@@ -97,8 +97,8 @@ export function ProviderForm({
           spellCheck={false}
           onChange={(e) => form.patch({ baseUrl: e.target.value })}
         />
-        {/* Частая ошибка — адрес сайта вместо адреса API: запрос уходит на
-            веб-сервер и отвечает HTML-страницей 404. */}
+        {/* A common mistake is the website address instead of the API address: the
+            request goes to the web server and gets an HTML 404 page back. */}
         <span className="prov-hint">{t("prov.form_base_url_hint")}</span>
       </label>
 

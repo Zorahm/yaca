@@ -184,8 +184,8 @@ function validate(
                 .map((header) => [header.name.trim(), header.value])
                 .filter(([name]) => name !== ""),
             ),
-            // Как приехали от провайдера: перепроверять его же ответ
-            // означало бы иметь про модели своё мнение (§0).
+            // Stored as the provider sent them: re-checking its own answer would mean
+            // holding an opinion of our own about the models (§0).
             models: draft.models,
           },
   };

@@ -1,14 +1,13 @@
 /**
- * Записанный поток событий для окна без оболочки.
+ * Recorded event stream for a window without the shell.
  *
- * Существует по той же причине, что `MockProvider` в ядре: интерфейс обещан
- * чистой функцией от потока `AgentEvent`, и проверить это должно быть можно без
- * Tauri, без ключа и без денег. `npm run dev` открывает окно в браузере и
- * проигрывает вот это.
+ * It exists for the same reason as `MockProvider` in the core: the interface is promised
+ * as a pure function of the `AgentEvent` stream, and that must be checkable without
+ * Tauri, without a key and without money. `npm run dev` opens the window in a browser and
+ * plays this back.
  *
- * Включается только когда Tauri рядом нет. В настоящем окне не участвует
- * ничем: подмена живых событий записанными — это ровно тот интерфейс, который
- * врёт про состояние.
+ * It is switched on only when Tauri is absent. It takes no part in a real window:
+ * replacing live events with recorded ones is exactly the interface that lies about its state.
  */
 
 import type { AgentEvent } from "./bindings/AgentEvent";
@@ -31,8 +30,8 @@ export const demoState: SessionState = {
 };
 
 /**
- * Серверы MCP стенда: по одному на каждое состояние, которое панель `/mcp`
- * умеет рисовать с кнопкой, — готовый, ждущий одобрения и упавший.
+ * The stand's MCP servers: one for each state the `/mcp` panel can draw with a button —
+ * ready, waiting for approval, and failed.
  */
 /** The stand's language servers: one up, one that never started. */
 export const demoLsp: LspServerSummary[] = [
@@ -112,7 +111,7 @@ export const demoMcp: McpServerSummary[] = [
     transport: "stdio",
     target: "tracker-mcp --workspace yaca",
     status: "failed",
-    reason: "процесс сервера завершился с кодом 1:\nerror: TRACKER_TOKEN is not set",
+    reason: "the server process exited with code 1:\nerror: TRACKER_TOKEN is not set",
     label: null,
     tools: [],
     resources: false,
@@ -219,7 +218,7 @@ function diff(added: string[], removed: string[]) {
   };
 }
 
-/** Сценарий: всё, что лента умеет рисовать, по одному разу. */
+/** Script: everything the feed can draw, once each. */
 export const demoScript: AgentEvent[] = [
   state({}),
   {
@@ -240,7 +239,7 @@ export const demoScript: AgentEvent[] = [
   {
     type: "userMessage",
     turnId: "t1",
-    text: "почини разбор дат в сегментах — падает на границе часового пояса",
+    text: "fix date parsing in segments — it fails at the time zone boundary",
     attachments: ["src/segments.ts"],
   },
   // The stand has no core behind it, so the turn starts when the window does:
@@ -251,15 +250,15 @@ export const demoScript: AgentEvent[] = [
     type: "thinkingDelta",
     turnId: "t1",
     blockId: "b0",
-    text: "Похоже, дата парсится в UTC, а сравнивается в локальной зоне.",
+    text: "Looks like the date is parsed in UTC but compared in the local zone.",
   },
   {
     type: "textDelta",
     turnId: "t1",
     blockId: "b1",
-    text: "Смотрю на `parseSegment` — скорее всего дело в том, что дата\nразбирается в UTC, а сравнивается уже локальной.\n\n",
+    text: "Looking at `parseSegment` — most likely the date\nis parsed as UTC, but then compared as local time.\n\n",
   },
-  call("c1", "Read", "src/segments.ts", "Прочитал разбор сегментов"),
+  call("c1", "Read", "src/segments.ts", "Read the segment parser"),
   {
     type: "toolCallProgress",
     callId: "c1",
@@ -272,7 +271,7 @@ export const demoScript: AgentEvent[] = [
     callId: "c1",
     meta: { lines: 3, items: null, truncated: false, durationMs: 8 },
   },
-  call("c2", "Grep", "rg parseSegment src/", "Нашёл три места, где это зовут"),
+  call("c2", "Grep", "rg parseSegment src/", "Found three places that call it"),
   {
     type: "toolCallFinished",
     callId: "c2",
@@ -285,11 +284,11 @@ export const demoScript: AgentEvent[] = [
     turnId: "t1",
     callId: "a1",
     tool: "Task",
-    description: "Выяснил, где ещё разбираются даты",
+    description: "Working out where else dates are parsed",
     target: null,
     input: {
       prompt:
-        "Найди все места в src/, где строка превращается в дату: Date.parse, new Date(строка), свои разборщики.\n\nПо каждому месту скажи, в какой зоне получается результат — UTC или локальной. Ничего не меняй.\n\nВ отчёте: список path:line и одна строка о каждом.",
+        "Find all places in src/ where a string becomes a date: Date.parse, new Date(string), custom parsers.\n\nFor each place, say which zone the result comes out in — UTC or local. Change nothing.\n\nIn the report: a list of path:line and one line about each.",
     },
     parent: null,
   },
@@ -298,9 +297,9 @@ export const demoScript: AgentEvent[] = [
     turnId: "t1",
     callId: "a2",
     tool: "Task",
-    description: "Проверяет, как зону считают тесты",
+    description: "Checking how the tests compute the zone",
     target: null,
-    input: { prompt: "Посмотри тесты сегментов: в какой зоне они запускаются и где она задаётся." },
+    input: { prompt: "Look at the segment tests: which zone they run in and where it is set." },
     parent: null,
   },
   {
@@ -308,9 +307,9 @@ export const demoScript: AgentEvent[] = [
     turnId: "t1",
     callId: "a3",
     tool: "Task",
-    description: "Искал описание формата в документации",
+    description: "Looking up the date format in the docs",
     target: null,
-    input: { prompt: "Найди в docs/ описание формата даты сегмента." },
+    input: { prompt: "Find the description of the segment date format in docs/." },
     parent: null,
   },
   {
@@ -318,7 +317,7 @@ export const demoScript: AgentEvent[] = [
     turnId: "t1",
     callId: "a1c1",
     tool: "Grep",
-    description: "Нашёл разборы дат",
+    description: "Found the date parsers",
     target: "rg \"Date.parse|new Date\\(\" src/",
     input: {},
     parent: "a1",
@@ -357,7 +356,7 @@ export const demoScript: AgentEvent[] = [
     type: "toolCallProgress",
     callId: "a1",
     chunk:
-      "Даты разбираются в двух местах, оба дают UTC:\n\n- `src/segments.ts:13` — `Date.parse(raw)`\n- `src/zone.ts:1` — `offset` всегда возвращает 0\n\nСвоих разборщиков нет.",
+      "Dates are parsed in two places, both give UTC:\n\n- `src/segments.ts:13` — `Date.parse(raw)`\n- `src/zone.ts:1` — `offset` always returns 0\n\nThere are no parsers of its own.",
   },
   {
     type: "toolCallFinished",
@@ -384,7 +383,7 @@ export const demoScript: AgentEvent[] = [
     callId: "a3",
     tokens: { input: 3100, output: 90, cacheWrite: 0, cacheRead: 0 },
   },
-  { type: "toolCallFailed", callId: "a3", message: "подагент ничего не ответил" },
+  { type: "toolCallFailed", callId: "a3", message: "the subagent returned nothing" },
   call("c3", "Edit", "src/segments.ts", null),
   {
     type: "fileChanged",
@@ -410,7 +409,7 @@ export const demoScript: AgentEvent[] = [
   {
     type: "toolCallProgress",
     callId: "c3d",
-    chunk: "Удалён каталог src/legacy, файлов: 14\n",
+    chunk: "Deleted directory src/legacy, files: 14\n",
   },
   {
     type: "toolCallFinished",
@@ -418,19 +417,19 @@ export const demoScript: AgentEvent[] = [
     meta: { lines: 1, items: 14, truncated: false, durationMs: 23 },
   },
   call("c4", "Edit", "src/app.rs", null),
-  { type: "toolCallFailed", callId: "c4", message: "якорь встречается дважды" },
+  { type: "toolCallFailed", callId: "c4", message: "anchor occurs twice" },
   call("c5", "Write", "src/segments.test.ts", null),
   {
     type: "toolCallRejected",
     callId: "c5",
-    reason: "src/segments.test.ts не прочитан в этой сессии",
+    reason: "src/segments.test.ts has not been read in this session",
   },
   {
     type: "todosUpdated",
     items: [
-      { content: "Найти, где дата теряет зону", status: "completed" },
-      { content: "Починить parseSegment", status: "inProgress" },
-      { content: "Прогнать тесты", status: "pending" },
+      { content: "Find where the date loses its zone", status: "completed" },
+      { content: "Fix parseSegment", status: "inProgress" },
+      { content: "Run the tests", status: "pending" },
     ],
   },
   {
@@ -438,13 +437,13 @@ export const demoScript: AgentEvent[] = [
     turnId: "t1",
     blockId: "b2",
     text:
-      "## Что изменилось\n\nПоправил `parseSegment`: смещение зоны теперь **прибавляется** после разбора.\n\n" +
+      "## What changed\n\nFixed `parseSegment`: the zone offset is now **added** after parsing.\n\n" +
       "```ts\nconst at = Date.parse(raw);\nreturn new Date(at + offset(raw));\n```\n\n" +
       '```python\ndef count_lines(path: str) -> int:\n    with open(path, encoding="utf-8") as f:\n        return sum(1 for _ in f)\n```\n\n' +
-      "- `segments.ts` — сам разбор\n- `app.rs` — правка не прошла\n\n" +
-      "| Файл | Строк | Статус |\n| :-- | --: | :-: |\n" +
-      "| `segments.ts` | 86 | **готово** |\n| `app.rs` | 412 | не прошла |\n| `a \\| b` | 3 | _ждёт_ |\n\n" +
-      "Прогоню тесты.\n",
+      "- `segments.ts` — the parser itself\n- `app.rs` — the edit did not go through\n\n" +
+      "| File | Lines | Status |\n| :-- | --: | :-: |\n" +
+      "| `segments.ts` | 86 | **done** |\n| `app.rs` | 412 | not applied |\n| `a \\| b` | 3 | _waiting_ |\n\n" +
+      "Running the tests.\n",
   },
   {
     type: "textShown",
@@ -459,7 +458,7 @@ export const demoScript: AgentEvent[] = [
       "  return new Date(at + offset(raw));\n" +
       "}",
   },
-  call("c6", "Bash", "npm test -- segments", "Прогнал тесты сегментов"),
+  call("c6", "Bash", "npm test -- segments", "Ran the segment tests"),
   {
     type: "permissionRequested",
     request: {
@@ -528,20 +527,20 @@ export function demoFinish(): AgentEvent[] {
     {
       type: "toolCallProgress",
       callId: "a2",
-      chunk: "Тесты идут в UTC: зона задана в `vitest.config.ts:4` через `TZ`.",
+      chunk: "The tests run in UTC: the zone is set in `vitest.config.ts:4` via `TZ`.",
     },
     {
       type: "toolCallFinished",
       callId: "a2",
       meta: { lines: 1, items: null, truncated: false, durationMs: 21000 },
     },
-    { type: "toolCallProgress", callId: "c6", chunk: "Тесты: 12 из 12 прошли.\n" },
+    { type: "toolCallProgress", callId: "c6", chunk: "Tests: 12 of 12 passed.\n" },
     {
       type: "toolCallFinished",
       callId: "c6",
       meta: { lines: 1, items: null, truncated: false, durationMs: 3_200 },
     },
-    { type: "textDelta", turnId: "t1", blockId: "b3", text: "Тесты проходят: 12 из 12." },
+    { type: "textDelta", turnId: "t1", blockId: "b3", text: "Tests pass: 12 of 12." },
     state({ busy: false }),
     { type: "turnFinished", turnId: "t1", stopReason: "endTurn", at: Date.now() },
   ];

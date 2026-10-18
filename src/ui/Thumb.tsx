@@ -1,10 +1,10 @@
 /**
- * Картинка, на которую посмотрела модель, — в раскрытой строке `ReadImage`.
+ * The picture the model looked at, in an opened `ReadImage` row.
  *
- * Не плитка вложения (`Attachment`): та одного размера и стоит в ряду, а
- * здесь картинка одна и показана так, чтобы её было видно, — то, что прочла
- * модель, человек должен мочь проверить, не открывая файл. Щелчок открывает
- * тот же просмотрщик, что и вложения.
+ * Not an attachment tile (`Attachment`): those are one size and stand in a row,
+ * whereas here there is one picture, shown so that it can be seen — what the
+ * model read, the person must be able to check without opening the file. A click
+ * opens the same viewer as the attachments.
  */
 
 import { t } from "../i18n";
@@ -16,7 +16,7 @@ export function Thumb({ path }: { path: string }) {
   const look = useLook(path);
   const open = useOpenImage();
 
-  // Файла уже нет или это не картинка — строка остаётся при своём тексте.
+  // The file is gone or is not a picture — the row stays with its own text.
   if (look === undefined || look.kind !== "image" || look.preview === null) return null;
   return (
     <button

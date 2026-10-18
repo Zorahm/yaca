@@ -1,10 +1,10 @@
 /**
  * The chip above the composer for a message that waits for the agent (§7.4):
- * `в очереди · <text> · отменить`.
+ * `queued · <text> · cancel`.
  *
  * One per queued message, in the order the core holds them. The chip is the
  * core's list drawn as it is: it appears and goes when the core says so, never
- * because the interface guessed. `отменить` is a real button, so it is reached
+ * because the interface guessed. `cancel` is a real button, so it is reached
  * with `Tab` and pressed with `Enter`, and it sends the cancel with this
  * message's id; the core answers with the list that results.
  */

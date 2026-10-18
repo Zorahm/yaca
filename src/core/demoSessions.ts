@@ -38,28 +38,28 @@ type Seed = {
  */
 const SEEDS: Seed[] = [
   {
-    title: "Найди все файлы с русскими комментариями и составь список",
+    title: "Find all files with Russian comments and make a list",
     ago: 20 * 60_000,
     messages: 6,
     costUsd: 0.42,
     files: [],
   },
   {
-    title: "Продолжай.",
+    title: "Continue.",
     ago: 3 * HOUR,
     messages: 14,
     costUsd: 1.87,
     files: ["src/ui/sidebar/SessionList.tsx", "src/ui/sidebar/sidebar.css"],
   },
   {
-    title: "Привет!",
+    title: "Hi!",
     ago: DAY + 2 * HOUR,
     messages: 2,
     costUsd: 0.03,
     files: [],
   },
   {
-    title: "Кнопка копирования у ответа модели",
+    title: "Copy button on the model's reply",
     ago: DAY + 5 * HOUR,
     messages: 4,
     costUsd: 0.31,
@@ -74,21 +74,21 @@ const SEEDS: Seed[] = [
     files: [],
   },
   {
-    title: "Спланируй новую функцию: черновики сообщений в композере",
+    title: "Plan a new feature: message drafts in the composer",
     ago: 24 * DAY,
     messages: 9,
     costUsd: 0.94,
     files: ["src/ui/Composer.tsx"],
   },
   {
-    title: "Отредактируй .md файл в папке проекта",
+    title: "Edit the .md file in the project folder",
     ago: 42 * DAY,
     messages: 3,
     costUsd: 0.12,
     files: ["README.md"],
   },
   {
-    title: "Почему падает cargo test на Windows",
+    title: "Why cargo test fails on Windows",
     ago: 43 * DAY,
     messages: 11,
     costUsd: 2.4,
@@ -197,7 +197,7 @@ export const demoSessions = {
         type: "textDelta",
         turnId: "t1",
         blockId: "b1",
-        text: "Это записанная сессия стенда: журнала за ней нет, только строка в списке.",
+        text: "This is a recorded session of the stand: there is no journal for it, only a row in the list.",
       },
     ];
   },

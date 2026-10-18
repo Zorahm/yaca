@@ -1,14 +1,15 @@
 /**
- * Чужие знаки: логотипы провайдеров и протокола MCP.
+ * Other people's marks: the logos of the providers and of the MCP protocol.
  *
- * Свои иконки интерфейса — Phosphor, и у них один штрих на всё окно. Логотип
- * нарисован не нами, и перерисовывать его тем же штрихом значило бы показать
- * знак, которого у его владельца нет. Поэтому знаки берутся из Devicons, из
- * одноцветного набора: он красится `currentColor` и встаёт на бумагу теми же
- * чернилами, что и всё остальное (§2), без фирменных цветов посреди списка.
+ * The interface's own icons are Phosphor, with one stroke across the whole
+ * window. A logo was drawn by someone else, and redrawing it with that same
+ * stroke would show a mark its owner does not have. So the marks come from
+ * Devicons, from its single-colour set: it is painted in `currentColor` and sits
+ * on the paper in the same ink as everything else (§2), with no brand colours in
+ * the middle of a list.
  *
- * Все они проходят через этот файл, чтобы второй набор иконок не расползся по
- * окну: где знак уместен, решается здесь, а не в каждом разделе.
+ * All of them pass through this file, so that a second icon set does not spread
+ * across the window: where a mark fits is decided here, not in each section.
  */
 
 // The `…Icon` components are the marks; the bare names are wordmarks, which at
@@ -38,17 +39,18 @@ const PROVIDER_MARKS = new Map<string, typeof OpenaiIcon>([
   ["zai", Zai],
 ]);
 
-/** Знак протокола MCP. Декоративный: рядом всегда стоит подпись. */
+/** The MCP protocol mark. Decorative: a label always stands beside it. */
 export function McpMark({ size }: { size: number }) {
   return <McpIcon size={size} aria-hidden="true" />;
 }
 
 /**
- * Знак предустановленного провайдера, или `null` у своего.
+ * The mark of a preset provider, or `null` for one's own.
  *
- * По идентификатору, а не по адресу или названию: предустановленные
- * узнаются ровно так же, как их узнаёт ядро. Свой шлюз с адресом OpenAI
- * остаётся без знака — он чей-то ещё, и чужой логотип над ним соврал бы.
+ * By identifier, not by address or name: presets are recognised exactly the way
+ * the core recognises them. One's own gateway with the OpenAI address stays
+ * without a mark — it belongs to someone else, and someone else's logo over it
+ * would lie.
  */
 export function ProviderMark({ id, size }: { id: string; size: number }) {
   const Mark = PROVIDER_MARKS.get(id);
@@ -56,15 +58,15 @@ export function ProviderMark({ id, size }: { id: string; size: number }) {
 }
 
 /**
- * Протокол так, как его пишет владелец. Имена собственные и не переводятся,
- * поэтому они здесь, а не в словарях: в обоих языках это одно и то же слово.
+ * The protocol as its owner writes it. Proper names are not translated, so they
+ * live here and not in the dictionaries: it is the same word in both languages.
  */
 export const PROTOCOL_NAME: Record<Protocol, string> = {
   anthropic: "Anthropic",
   openai: "OpenAI",
 };
 
-/** Знак протокола: у формы запроса тот же владелец, что у знака. */
+/** The protocol mark: the request form has the same owner as the mark. */
 export function ProtocolMark({ protocol, size }: { protocol: Protocol; size: number }) {
   return protocol === "anthropic" ? (
     <AnthropicIcon size={size} aria-hidden="true" />

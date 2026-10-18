@@ -1,14 +1,14 @@
 /**
- * Режим и правила проекта (§5.7, §8, §10).
+ * Mode and project rules (§5.7, §8, §10).
  *
- * Два списка, а не один со знаком. Вопросы у них разные: «что случится без
- * меня» и «что не случится никогда», — и отказ несёт причину, которой у
- * разрешения нет. Отказ сильнее разрешения и сильнее обхода: порядок живёт в
- * `Broker::standing`, здесь он только назван словами.
+ * Two lists, not one with a sign. The questions differ: "what happens without me"
+ * and "what never happens" — and a refusal carries a reason, which an allowance does
+ * not have. A refusal is stronger than an allowance and stronger than a bypass: the
+ * order lives in `Broker::standing`, here it is only named in words.
  *
- * Сюда правило попадает единственным путём — отсюда. «Разрешать всегда» и «Не
- * разрешать никогда» в ленте живут до конца сессии: принятое второпях не
- * должно спешку пережить (§5.7).
+ * A rule reaches this list by one path only — from here. "Allow always" and "Never
+ * allow" in the feed live until the end of the session: what was accepted in a hurry
+ * must not outlive the hurry (§5.7).
  */
 
 import { Plus, X } from "@phosphor-icons/react";
@@ -19,8 +19,8 @@ import { t, type Key } from "../../i18n";
 import type { Mode } from "../../core/client";
 import { Row, Segments } from "./Row";
 
-/** Виды области §5.7 плюс домен и сервер MCP — оба сверх спеки, и
-    `permission/mod.rs` это помечает. */
+/** Scope kinds from §5.7 plus domain and MCP server — both beyond the spec, and
+    `permission/mod.rs` marks that. */
 const KINDS = ["tool", "directory", "commandPrefix", "domain", "mcpServer"] as const;
 type Kind = (typeof KINDS)[number];
 
@@ -40,7 +40,7 @@ const KIND_HINTS: Record<Kind, Key> = {
   mcpServer: "rules.hint_mcp",
 };
 
-/** Значение области — одно поле у всех пяти, только зовётся по-разному. */
+/** The scope's value — one field in all five, only named differently. */
 function valueOf(scope: ScopeKey): string {
   switch (scope.type) {
     case "tool":
@@ -216,8 +216,8 @@ export function RulesSection({
             ...now,
             permissions: {
               ...now.permissions,
-              // Повтор той же области заменяет причину, а не добавляет вторую
-              // строку: последнее слово о ней и есть то, что прочтёт агент.
+              // A repeat of the same scope replaces the reason rather than adding a
+              // second line: the last word on it is what the agent will read.
               denies: [
                 ...now.permissions.denies.filter((o: Refusal) => !same(o.scope, scope)),
                 refusal(scope, reason),
@@ -263,8 +263,8 @@ function RuleRow({
 }
 
 /**
- * Добавление правила. Своя форма у каждого списка, и знака «разрешить или
- * запретить» в ней нет: его говорит список, над которым она стоит.
+ * Adding a rule. Each list has its own form, and there is no "allow or deny" switch
+ * in it: the list above it says that.
  */
 function AddRule({
   submit,

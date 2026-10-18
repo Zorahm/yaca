@@ -1,4 +1,4 @@
-/* Просмотрщик картинок: на всё окно, поверх ленты и панелей. */
+/* Image viewer: the whole window, above the feed and the panels. */
 
 .viewer-overlay {
   position: fixed;
@@ -34,7 +34,7 @@
   white-space: nowrap;
 }
 
-/* Рамка, в которой живёт картинка: сдвиг и масштаб считаются от её центра. */
+/* The frame the picture lives in: pan and scale are measured from its centre. */
 .viewer-stage {
   position: relative;
   flex: 1;
@@ -55,7 +55,7 @@
   left: 50%;
   max-width: none;
   transform-origin: center;
-  /* Увеличенный скриншот должен остаться резким: в нём читают текст. */
+  /* An enlarged screenshot must stay sharp: text is read in it. */
   image-rendering: auto;
   pointer-events: none;
 }
@@ -94,9 +94,9 @@
   font: 500 11px var(--mono);
 }
 
-/* --- плитка вложения: картинка, файл, папка (§7.2, §5.1) ---------------- */
+/* --- attachment tile: picture, file, folder (§7.2, §5.1) ---------------- */
 
-/* Размер один, каким бы ни было содержимое: ряд читается списком. */
+/* One size, whatever the content: a row reads as a list. */
 .tile {
   --tile: 128px;
   position: relative;
@@ -125,7 +125,7 @@
   background: var(--sunk);
   color: var(--muted);
   text-align: left;
-  /* Карточка сообщения сохраняет пробелы и переносы; плитке они ни к чему. */
+  /* A message card keeps spaces and line breaks; a tile has no use for them. */
   white-space: normal;
 }
 
@@ -150,7 +150,7 @@
   object-fit: cover;
 }
 
-/* Того, что приложили, на диске уже нет. */
+/* What was attached is no longer on disk. */
 .tile-gone {
   border-style: dashed;
 }
@@ -200,7 +200,7 @@
   color: var(--err);
 }
 
-/* --- картинка в раскрытой строке `ReadImage` ----------------------------- */
+/* --- picture in an expanded `ReadImage` row ----------------------------- */
 
 .thumb {
   display: block;

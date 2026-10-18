@@ -1,9 +1,8 @@
 /**
- * Короткая отметка «получилось» на кнопке.
+ * A short "it worked" mark on a button.
  *
- * Живёт отдельно от `useCopy`, потому что читателей у неё двое: буфер обмена
- * и сохранение файла (§9). Таймер сброса в двух копиях разошёлся бы на первой
- * же правке.
+ * Lives apart from `useCopy` because it has two readers: the clipboard and file
+ * saving (§9). A reset timer kept in two copies would diverge on the first edit.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";

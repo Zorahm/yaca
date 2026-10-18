@@ -1,9 +1,9 @@
 /**
- * Словари и склонение (§14).
+ * Dictionaries and plural forms (§14).
  *
- * Главная проверка — покрытие: английский обязан знать каждый ключ русского.
- * Компилятор ловит отсутствующий ключ, но не ловит скопированную русскую
- * строку, оставленную в английском словаре, — это ловится здесь.
+ * The main check is coverage: English must know every key Russian has.
+ * The compiler catches a missing key, but not a Russian string copied and left
+ * in the English dictionary — this test catches that.
  */
 
 import { describe, expect, it } from "vitest";
@@ -15,30 +15,30 @@ import { ru, sections as ruSections } from "./ru";
 import { ruForm, enForm, singleForm, zeroOneForm } from "./plural";
 import { translate, translatePlural } from "./index";
 
-/** Каждый словарь, кроме русского: он источник, с ним и сверяют. */
+/** Every dictionary except Russian: it is the source, and the others are checked against it. */
 const translated = Object.entries(LOCALES).filter(([code]) => code !== "ru");
 
-describe("словари", () => {
-  it("покрывают друг друга ключ в ключ", () => {
+describe("dictionaries", () => {
+  it("cover each other key for key", () => {
     for (const [code, info] of translated) {
       expect(Object.keys(info.strings).sort(), code).toEqual(Object.keys(ru).sort());
     }
   });
 
-  it("не объявляют ключ в двух разделах", () => {
-    // Склейка разделов отдала бы победу последнему и промолчала.
+  it("do not declare a key in two sections", () => {
+    // Merging sections would let the last one win and say nothing.
     expect(duplicates(ruSections)).toEqual([]);
     expect(duplicates(enSections)).toEqual([]);
   });
 
-  it("называют каждый язык", () => {
-    // Пустое имя — пустая строка в списке языков §10.
+  it("name every language", () => {
+    // An empty name is an empty line in the language list (§10).
     for (const [code, info] of Object.entries(LOCALES)) {
       expect(info.name.trim(), code).not.toBe("");
     }
   });
 
-  it("не оставляют кириллицу в переводах", () => {
+  it("leave no Cyrillic in translations", () => {
     for (const [code, info] of translated) {
       const russian = Object.entries(info.strings)
         .filter(([, value]) => /[А-Яа-яЁё]/.test(value))
@@ -47,8 +47,8 @@ describe("словари", () => {
     }
   });
 
-  it("не оставляют пустых строк", () => {
-    // Пустой перевод проходит проверку типов и молча стирает надпись.
+  it("leave no empty strings", () => {
+    // An empty translation passes the type check and silently erases the label.
     for (const [code, info] of translated) {
       const empty = Object.entries(info.strings)
         .filter(([key, value]) => value.trim() === "" && ru[key as keyof typeof ru].trim() !== "")
@@ -57,7 +57,7 @@ describe("словари", () => {
     }
   });
 
-  it("держат одни и те же места подстановки", () => {
+  it("keep the same substitution slots", () => {
     const holes = (text: string) =>
       (text.match(/\{(\w+)\}/g) ?? []).sort().join(",");
 
@@ -68,8 +68,8 @@ describe("словари", () => {
     }
   });
 
-  it("держат группы склонения целиком", () => {
-    // Форма, которой нет, — это «3 файл» на экране.
+  it("keep plural groups complete", () => {
+    // A missing form shows up on screen as «3 файл».
     for (const key of Object.keys(ru)) {
       if (!key.endsWith(".one")) continue;
       const base = key.slice(0, -".one".length);
@@ -80,12 +80,12 @@ describe("словари", () => {
   });
 });
 
-describe("склонение", () => {
-  it("русское считает по двум последним цифрам", () => {
+describe("plural forms", () => {
+  it("counts Russian by the last two digits", () => {
     expect(ruForm(1)).toBe("one");
     expect(ruForm(2)).toBe("few");
     expect(ruForm(5)).toBe("many");
-    // Одиннадцать — не «один»: на этом ломается всякая простая реализация.
+    // Eleven is not «один» (one): every naive implementation breaks on this.
     expect(ruForm(11)).toBe("many");
     expect(ruForm(14)).toBe("many");
     expect(ruForm(21)).toBe("one");
@@ -93,24 +93,24 @@ describe("склонение", () => {
     expect(ruForm(0)).toBe("many");
   });
 
-  it("английское знает две формы", () => {
+  it("English knows two forms", () => {
     expect(enForm(1)).toBe("one");
     expect(enForm(2)).toBe("other");
     expect(enForm(0)).toBe("other");
   });
 
-  it("французское и бразильское считают ноль единственным числом", () => {
+  it("French and Brazilian count zero as singular", () => {
     expect(zeroOneForm(0)).toBe("one");
     expect(zeroOneForm(1)).toBe("one");
     expect(zeroOneForm(2)).toBe("other");
   });
 
-  it("китайское, японское и корейское не склоняют", () => {
+  it("Chinese, Japanese and Korean do not inflect", () => {
     expect(singleForm()).toBe("other");
   });
 
-  it("находит форму в каждом языке", () => {
-    // Вернувшийся ключ — это `row.files.other` на экране вместо числа файлов.
+  it("finds a form in every language", () => {
+    // A returned key means `row.files.other` on screen instead of the file count.
     for (const [code] of Object.entries(LOCALES)) {
       for (const n of [0, 1, 2, 5, 11, 21]) {
         const text = translatePlural(code as keyof typeof LOCALES, "row.files", n);
@@ -120,29 +120,29 @@ describe("склонение", () => {
     }
   });
 
-  it("подставляет число в выбранную форму", () => {
+  it("substitutes the number into the chosen form", () => {
     expect(translatePlural("ru", "row.files", 1)).toBe("1 файл");
     expect(translatePlural("ru", "row.files", 3)).toBe("3 файла");
     expect(translatePlural("ru", "row.files", 11)).toBe("11 файлов");
-    // Английскому нужна форма `other`, которой в словаре нет: он падает
-    // в `many`, где лежит та же строка.
+    // English needs the `other` form, which the dictionary does not have: it falls
+    // back to `many`, where the same string lies.
     expect(translatePlural("en", "row.files", 3)).toBe("3 files");
     expect(translatePlural("en", "row.files", 1)).toBe("1 file");
   });
 });
 
-describe("подстановка", () => {
-  it("заполняет именованные места", () => {
+describe("substitution", () => {
+  it("fills named slots", () => {
     expect(translate("ru", "act.created", { name: "a.rs" })).toBe("Создан a.rs");
     expect(translate("en", "act.created", { name: "a.rs" })).toBe("Created a.rs");
   });
 
-  it("оставляет незаполненное место видимым", () => {
-    // Пустота на месте имени файла — это надпись, потерявшаяся молча.
+  it("leaves an unfilled slot visible", () => {
+    // An empty gap where the file name goes is a label lost silently.
     expect(translate("ru", "act.created")).toBe("Создан {name}");
   });
 
-  it("показывает ключ, которого нет", () => {
-    expect(translate("ru", "нет.такого")).toBe("нет.такого");
+  it("shows a key that does not exist", () => {
+    expect(translate("ru", "no.such.key")).toBe("no.such.key");
   });
 });

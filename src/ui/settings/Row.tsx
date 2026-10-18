@@ -1,26 +1,25 @@
 /**
- * Формы окна настроек §10: строка, выключатель, переключатель из нескольких,
- * выпадающий список.
+ * Forms of the §10 settings window: a row, a switch, a multi-way toggle, a dropdown.
  *
- * Строка применяется сразу — кнопки «Сохранить» у раздела нет. Она разрешила
- * бы окну показывать одно, а диску держать другое, а §0 запрещает интерфейсу
- * врать про состояние. Документ — описание провайдера — исключение и живёт со
- * своими «Сохранить» и «Отмена»: недописанный адрес на диск попадать не
- * должен.
+ * A row applies at once — the section has no "Save" button. It would let the window
+ * show one thing while the disk held another, and §0 forbids the interface to lie
+ * about its state. The document — the provider description — is the exception and
+ * lives with its own "Save" and "Cancel": a half-written address must not reach the
+ * disk.
  */
 
 import type { ReactNode } from "react";
 import { CaretUpDown, Check } from "@phosphor-icons/react";
 import { Select as RadixSelect } from "radix-ui";
 
-/** Строка настройки: имя и подпись слева, контрол справа. */
+/** A settings row: name and hint on the left, control on the right. */
 export function Row({
   name,
   hint,
   children,
 }: {
   name: ReactNode;
-  /** Зачем это нужно и что случится. Не пересказ имени. */
+  /** Why this is needed and what will happen. Not a restatement of the name. */
   hint?: ReactNode;
   children: ReactNode;
 }) {
@@ -36,8 +35,8 @@ export function Row({
 }
 
 /**
- * Выключатель. Radix здесь не нужен: `role="switch"` с `aria-checked` — это
- * весь контракт, а клавиатура достаётся от настоящей `<button>`.
+ * The switch. Radix is not needed here: `role="switch"` with `aria-checked` is the
+ * whole contract, and the keyboard comes free with a real `<button>`.
  */
 export function Switch({
   on,
@@ -45,7 +44,7 @@ export function Switch({
   onChange,
 }: {
   on: boolean;
-  /** Доступное имя: у выключателя нет своего текста (§14). */
+  /** Accessible name: the switch has no text of its own (§14). */
   label: string;
   onChange: (on: boolean) => void;
 }) {
@@ -62,8 +61,8 @@ export function Switch({
 }
 
 /**
- * Переключатель из нескольких. Тот же `.segment`, что в нижнем ряду §7.1:
- * одна форма на окно, а не своя в каждом разделе.
+ * Multi-way toggle. The same `.segment` as the bottom row of §7.1: one form per
+ * window, not its own in every section.
  */
 export function Segments<T extends string>({
   label,

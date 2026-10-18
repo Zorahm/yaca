@@ -7,7 +7,7 @@ import { galleryOf } from "./gallery";
 const said = (attachments: string[]): AgentEvent => ({
   type: "userMessage",
   turnId: "t1",
-  text: "вот",
+  text: "here",
   attachments,
 });
 
@@ -29,15 +29,15 @@ const looked = (callId: string, path: string, parent: string | null = null): Age
   },
 ];
 
-describe("галерея просмотрщика", () => {
-  it("идёт по разговору: и приложенное, и открытое моделью", () => {
+describe("viewer gallery", () => {
+  it("walks the conversation: both attached and opened by the model", () => {
     const feed = reduceAll(emptyFeed, [
       said(["shot.png", "notes.md"]),
       ...looked("i1", "docs/mock.jpg"),
       said(["C:/Users/me/Desktop/after.png"]),
     ]);
 
-    // Файл-не-картинка в листание не попадает: смотреть в нём нечего.
+    // A file that is not a picture does not enter the paging: there is nothing to look at in it.
     expect(galleryOf(feed)).toEqual([
       "shot.png",
       "docs/mock.jpg",
@@ -45,12 +45,12 @@ describe("галерея просмотрщика", () => {
     ]);
   });
 
-  it("одна картинка — одна остановка, сколько бы раз её ни показали", () => {
+  it("one picture is one stop, however many times it was shown", () => {
     const feed = reduceAll(emptyFeed, [said(["shot.png"]), ...looked("i1", "shot.png")]);
     expect(galleryOf(feed)).toEqual(["shot.png"]);
   });
 
-  it("берёт и то, на что смотрел подагент", () => {
+  it("takes what a subagent looked at too", () => {
     const feed = reduceAll(emptyFeed, [
       {
         type: "toolCallStarted",
@@ -67,7 +67,7 @@ describe("галерея просмотрщика", () => {
     expect(galleryOf(feed)).toEqual(["ui/home.png"]);
   });
 
-  it("берёт картинки, которые вернул инструмент", () => {
+  it("takes the pictures a tool returned", () => {
     const feed = reduceAll(emptyFeed, [
       said(["shot.png"]),
       {
@@ -95,11 +95,11 @@ describe("галерея просмотрщика", () => {
     expect(galleryOf(feed)).toEqual(["shot.png", ".yaca/pasted/0a1b2c3d4e5f6a7b.png"]);
   });
 
-  it("упавший вызов показывать нечем", () => {
+  it("a failed call has nothing to show", () => {
     const [started] = looked("i1", "gone.png");
     const feed = reduceAll(emptyFeed, [
       started,
-      { type: "toolCallFailed", callId: "i1", message: "не найдено" },
+      { type: "toolCallFailed", callId: "i1", message: "not found" },
     ]);
     expect(galleryOf(feed)).toEqual([]);
     expect(galleryOf(null)).toEqual([]);

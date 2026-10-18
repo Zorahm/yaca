@@ -1,12 +1,12 @@
 /**
- * Строка действия и её раскрытие.
+ * Action row and its expansion.
  *
- * Раскрытие происходит внутри группы: строка растёт вниз, соседние остаются на
- * местах. Раскрыта по умолчанию только выполняющаяся — список из пятнадцати
- * действий читается как список, а не как простыня.
+ * The expansion happens inside the group: the row grows downward, the neighbours
+ * stay in place. Only the running one is expanded by default — a list of fifteen
+ * actions reads as a list, not as a wall of text.
  *
- * Строки `Task` здесь нет: подагенты стоят в ленте плашкой (`AgentsPlate`), а
- * их действия — этими же строками в панели агентов.
+ * There is no `Task` row here: subagents stand in the feed as a plate
+ * (`AgentsPlate`), and their actions are these same rows in the agents panel.
  */
 
 import { CaretDown, CaretRight } from "@phosphor-icons/react";
@@ -59,8 +59,8 @@ export function ActionRowView({
         onClick={() => setOverride(!open)}
       >
         <RowSign row={row} />
-        {/* Клик по имени файла открывает панель файла, клик мимо имени —
-            раскрывает строку. Имена у тулов без факта не кликабельны. */}
+        {/* A click on the file name opens the file panel, a click elsewhere
+            expands the row. Names of tools without a fact are not clickable. */}
         <span className="row-caption">{caption(row, onOpenFile)}</span>
         {counts && (
           <span className="counts counts-pill">
@@ -74,7 +74,7 @@ export function ActionRowView({
 
       {open && (
         <div className={boxed ? "row-body row-body-cmd" : "row-body row-body-file"}>
-          {/* Первая строка тела — полный путь или полная команда. */}
+          {/* The body's first line is the full path or the full command. */}
           {row.target && !boxed && (
             <div className="row-target">{plainPath(row.target)}</div>
           )}
@@ -85,8 +85,8 @@ export function ActionRowView({
             </pre>
           )}
 
-          {/* То, на что модель посмотрела, человек видит тоже: «прочитал
-              скриншот» без скриншота — отчёт, который нечем проверить. */}
+          {/* What the model looked at, the person sees too: "read a screenshot"
+              without the screenshot is a report with nothing to check it against. */}
           {row.tool === "ReadImage" && row.target && row.state === "done" && (
             <Thumb path={row.target} />
           )}
@@ -120,8 +120,8 @@ export function ActionRowView({
             <div className="row-target row-dim">{t("row.no_output")}</div>
           )}
 
-          {/* Причина, по которой действие не состоялось, — целиком: в подписи
-              она обрезана до строки, а чинить по обрезку нечего. */}
+          {/* The reason an action did not go through is shown in full: the caption
+              cuts it to one line, and there is nothing to fix from a truncated text. */}
           {row.message && row.state !== "denied" && row.state !== "stopped" && (
             <div className="row-target row-dim">{row.message}</div>
           )}

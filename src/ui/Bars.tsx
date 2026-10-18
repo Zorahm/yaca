@@ -1,18 +1,18 @@
 /**
- * Полосы уведомлений §6.1.1.
+ * Notice bars §6.1.1.
  *
- * Полосы изменений здесь больше нет: правки уезжают в рабочее дерево сразу, а
- * подтверждение спрашивается один раз, до записи (§8, §16.37). Полоса с
- * кнопкой «Применить» была вторым подтверждением того же самого.
+ * There are no change bars here any more: edits go to the working tree at once,
+ * and confirmation is asked once, before the write (§8, §16.37). A bar with an
+ * "Apply" button was a second confirmation of the same thing.
  *
- * Полос уведомлений здесь две из пяти, перечисленных в §6.1.1, — «контекст
- * заполнен» и «LSP не отвечает», те, про которые интерфейсу есть откуда узнать,
- * — и одна сверх списка: про серверы MCP. Сервер, который ждёт одобрения или
- * не подключился, иначе не был бы виден нигде, пока человек сам не наберёт
- * `/mcp`, а агент тем временем работает без его инструментов. «Файл изменён
- * извне» без наблюдателя за деревом и «доступна версия» без обновлятора — это
- * надписи, которые никогда не появятся, и место, где потом никто не вспомнит,
- * что они не работают.
+ * Two of the five notice bars listed in §6.1.1 are here — "context is full" and
+ * "LSP is not responding", the ones the interface can learn about — and one beyond
+ * the list: about MCP servers. A server that waits for approval or failed to
+ * connect would otherwise be visible nowhere until the person types `/mcp`
+ * themselves, while the agent works without its tools. "File changed externally"
+ * without a watcher on the tree, and "version available" without an updater, are
+ * labels that would never appear, and a place where nobody would later remember
+ * that they do not work.
  *
  * There is no "no API key" bar. A key is not required up front (§10): a
  * provider that wants one refuses the request, and the error names the key.

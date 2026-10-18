@@ -1,5 +1,5 @@
 /*
- * Отрисовка диффа §6.3. Одинакова в раскрытой строке действия и в панели.
+ * Drawing of the diff §6.3. The same in an opened action row and in the panel.
  */
 
 .diff {
@@ -7,23 +7,23 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-s);
   background: var(--sunk);
-  /* §6.3: горизонтальный скролл на контейнер, а не на строку. Вертикальный
-     тоже здесь: скроллится сам дифф, а не группа вокруг него (§5.4). */
+  /* §6.3: horizontal scroll on the container, not on the line. Vertical too:
+     the diff itself scrolls, not the group around it (§5.4). */
   overflow: auto;
   user-select: text;
 }
 
-/* В строке действия дифф ограничен по высоте (§5.5.1); в панели он занимает
-   всю её высоту, и потолок задаёт панель. */
+/* In an action row the diff is limited in height (§5.5.1); in the panel it
+   takes up the whole of its height, and the panel sets the ceiling. */
 .diff-soft {
   max-height: var(--h-action-content);
 }
 
-/* Строки дифф лежат на сетке в одну высоту — на этом держится окно (§12):
-   номер строки считается делением, а не обходом всего, что выше. */
+/* Diff lines sit on a grid of one height — the window (§12) depends on it: a
+   line's number is computed by division, not by walking everything above it. */
 .diff-line {
   display: grid;
-  /* §6.3: 52px 16px 1fr с номерами, 14px 16px 1fr без. */
+  /* §6.3: 52px 16px 1fr with numbers, 14px 16px 1fr without. */
   grid-template-columns: var(--gutter) 16px 1fr;
   height: var(--diff-line);
   line-height: var(--diff-line);
@@ -62,10 +62,11 @@
   padding-right: 12px;
 }
 
-/* Подложки разводятся из --ok и --err, а не своими токенами: иначе тема
-   переключается в двух местах и однажды разъедется. Цвет несёт знак, текст
-   остаётся --ink — на подложке в 14% он читается лучше собственного тона,
-   который приходилось подбирать под каждый фон. */
+/* Backgrounds are derived from --ok and --err, not from tokens of their own:
+   otherwise the theme would switch in two places and would one day drift
+   apart. The sign carries the colour and the text stays --ink: on a 14%
+   background it reads better than a tone of its own, which had to be picked
+   for every ground. */
 .diff-add {
   background: color-mix(in srgb, var(--ok) 14%, transparent);
 }
@@ -89,7 +90,7 @@
   color: var(--muted);
 }
 
-/* Внутри строки действия фон мягче (§2). */
+/* Inside an action row the background is softer (§2). */
 /* In a feed row the mark comes first and the line number after it: the row
    is read as "what was added", and the number says where. Both columns are
    as narrow as they can be, so the text starts near the block's left edge. */
@@ -128,7 +129,7 @@
   background: var(--del);
 }
 
-/* Пословная подсветка — чуть плотнее фона строки (§6.3). */
+/* Word highlight — a little denser than the line's background (§6.3). */
 .word {
   border-radius: var(--radius-s);
 }
@@ -141,9 +142,9 @@
   background: color-mix(in srgb, var(--err) 26%, transparent);
 }
 
-/* Заголовок ханка: номера скрыты (§6.3). Высота — та же, что у строки: окно
-   §12 считает по одной сетке, и заголовок в 26 px увёл бы его на два пикселя
-   за ханк. */
+/* A hunk's header: the numbers are hidden (§6.3). The height is the same as a
+   line's: the window (§12) counts on one grid, and a 26 px header would drift
+   it by two pixels per hunk. */
 .hunk {
   box-sizing: border-box;
   height: var(--diff-line);
@@ -155,7 +156,8 @@
   font: 400 11.5px/20px var(--mono);
 }
 
-/* Верхняя граница у первого не рисуется, но место занимает: высота одна. */
+/* The first one's top border is not drawn, but it still takes up the room: the
+   height is the same. */
 .hunk:first-child {
   border-top-color: transparent;
 }

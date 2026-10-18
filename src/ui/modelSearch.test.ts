@@ -125,7 +125,7 @@ describe("recent models", () => {
   it("reads a stored list and nothing else", () => {
     expect(parseRecent(JSON.stringify([gpt, sonnet]))).toEqual([gpt, sonnet]);
     expect(parseRecent(null)).toEqual([]);
-    expect(parseRecent("{ не json")).toEqual([]);
+    expect(parseRecent("{ not json")).toEqual([]);
     expect(parseRecent('{"a":1}')).toEqual([]);
     expect(parseRecent('["ok", 3, null]')).toEqual(["ok"]);
   });

@@ -1,16 +1,17 @@
 /**
- * Запрос разрешения (§5.7). Инлайновый блок, не модалка.
+ * Permission request (§5.7). An inline block, not a modal.
  *
- * Четыре яруса, всегда в этом порядке: вопрос, цель кратко, подробность
- * моноширинным, ряд действий. Подробность никогда не обрезается — это то
- * место, где человек замечает `&& rm -rf`.
+ * Four tiers, always in this order: the question, the target briefly, the detail
+ * in monospace, the row of actions. The detail is never cut — this is the place
+ * where the person notices `&& rm -rf`.
  *
- * Позиции кнопок неизменны во всех запросах: отклонения слева, разрешения
- * справа. Рука привыкает к позиции, а не читает подписи заново.
+ * The button positions are fixed in all requests: refusals on the left, allows on
+ * the right. The hand gets used to the position rather than reading the labels
+ * again.
  *
- * Цифры работают, пока запрос активен: нажимать `⌃⏎` не обязательно,
- * достаточно `4`. Композер в это время цифры не перехватывает — он ждёт
- * ответа, а не текста.
+ * The digits work while the request is active: pressing `⌃⏎` is not required,
+ * `4` is enough. The composer does not intercept the digits at this time — it is
+ * waiting for an answer, not for text.
  *
  * `1` and `Esc` refuse at once, as the button promises. The note for the
  * agent and the standing refusal live one step further, behind `2`: both are
@@ -121,8 +122,8 @@ export function Permission({
     <div className="ask">
       <div className="ask-head">
         <div className="ask-question">
-          {/* §5.7 names the server in the one question about MCP: "изменить
-              данные в Asana". The tool is the line below, as the target. */}
+          {/* §5.7 names the server in the one question about MCP: "change data in
+              Asana". The tool is the line below, as the target. */}
           {t(QUESTION[request.kind], {
             target: request.target,
             server: request.server ?? request.target,

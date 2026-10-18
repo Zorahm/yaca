@@ -36,7 +36,7 @@ export async function windowControls(): Promise<WindowControls | null> {
   if (!inTauri || !ownTitleBar) return null;
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   const current = getCurrentWindow();
-  const failed = (e: unknown) => console.error("окно не послушалось", e);
+  const failed = (e: unknown) => console.error("window failed to subscribe", e);
 
   return {
     minimize: () => void current.minimize().catch(failed),

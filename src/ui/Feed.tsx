@@ -1,24 +1,27 @@
 /**
- * Лента: вертикальный поток блоков, отрисованный окном.
+ * Feed: a vertical stream of blocks, drawn through a window.
  *
- * Виртуализация: `virtua` (VList) рендерит только видимую область и меряет
- * высоты блоков сам, ResizeObserver'ом внутри. Блоки разной высоты — норма,
- * ключи-строки дают библиотеке свои размеры на блок (индексы не используются).
+ * Virtualised: `virtua` (VList) renders only the visible area and measures the
+ * block heights itself, with a ResizeObserver inside. Blocks of different heights
+ * are the norm; row keys give the library its own size per block (indexes are not
+ * used).
  *
- * Автоскролл вниз, пока человек не прокрутил вверх; после этого появляется
- * кнопка возврата со счётчиком новых блоков. Скролл не отбирается: агент,
- * который утаскивает экран вниз, пока ты читаешь, — худшее, что бывает в такой
- * ленте. Решения «человек внизу», «он уехал?» и «куда встать» — чистая
- * арифметика в `ui/feedScroll`, проверяемая тестами; компонент только меряет
- * и применяет. Отпускание держится не порогом от измеренного низа (он отстаёт
- * на кадр, рывок роста перекрыл бы запас посреди стрима), а движением человека
- * вверх относительно последней нашей команды прокрутки.
+ * Auto-scroll down while the person has not scrolled up; after that a return
+ * button appears with a counter of new blocks. The scroll is not taken away: an
+ * agent that drags the screen down while you read is the worst thing that can
+ * happen in such a feed. The decisions "the person is at the bottom", "have they
+ * left?" and "where to stand" are pure arithmetic in `ui/feedScroll`, checked by
+ * tests; the component only measures and applies. Letting go is held not by a
+ * threshold from the measured bottom (it lags by a frame, and a jerk of growth
+ * would cover the margin in the middle of a stream), but by the person's movement
+ * up relative to our last scroll command.
  *
- * Дорастающий последний блок при стриминге сдвигает хвост ленты на один кадр
- * измерений: библиотека меряет рост после кадра, лента догоняет следующим
- * дельта-кадром, ошибка ограничена высотой одной пачки и глазом не видна.
- * Скачки по ленте (стрелки шапки, кнопка возврата) идут через окно по индексам:
- * блок вне видимой области не размечен, `getElementById` по нему мёртв.
+ * A growing last block during streaming shifts the tail of the feed by one frame
+ * of measurement: the library measures the growth after the frame, the feed
+ * catches up on the next delta frame, and the error is limited to the height of
+ * one batch and is invisible to the eye. Jumps along the feed (the header arrows,
+ * the return button) go through the window by index: a block outside the visible
+ * area is not marked up, and `getElementById` on it is dead.
  */
 
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
@@ -53,26 +56,27 @@ import { shouldHold, shouldStick, type ScrollState } from "./feedScroll";
 import { Work } from "./Work";
 import { TurnLive, TurnTime } from "./TurnTime";
 
-/** Точка конца ленты, с расчётом на отстающее измерение (см. удержание низа). */
+/** The feed's end point, allowing for a lagging measurement (see the bottom hold). */
 const END_PAD = 240;
 
-/** Ручной скачок по ключу блока идёт целиком через окно, а не через DOM:
-   блок вне видимой области не размечен и `getElementById` вернёт null. */
+/** A manual jump to a block by its key goes entirely through the window, not
+   through the DOM: a block outside the visible area is not marked up, and
+   `getElementById` returns null. */
 export type FeedJump = {
-  /** Прокрутка ленты к блоку с этим ключом; верх блока встаёт под шапку окна. */
+  /** Scroll the feed to the block with this key; the top of the block stands under the window's header. */
   jumpTo: (key: string) => void;
 };
 
 export type FeedActions = {
   answer: (answer: PermissionAnswer) => void;
-  /** Вопрос `AskUser`: ответ или отказ от ответа. */
+  /** The `AskUser` question: an answer or a refusal to answer. */
   answerQuestion: (reply: QuestionReply) => void;
   /** A form from an MCP server, answered by its id: several may be open. */
   answerElicitation: (requestId: string, reply: ElicitationReply) => void;
   previewCheckpoint: (id: string) => void;
   restoreCheckpoint: (id: string) => void;
   cancelPreview: () => void;
-  /** Клик по строке чекпоинта открывает панель со всеми точками. */
+  /** A click on a checkpoint line opens the panel with all the points. */
   openCheckpoints: () => void;
   editSummary: (text: string) => void;
   openFile: (path: string) => void;
@@ -94,29 +98,32 @@ export function Feed({
   const [stuck, setStuck] = useState(true);
   const [seen, setSeen] = useState(0);
 
-  // Вызовы и рассуждения между репликами — один элемент ленты (`core/work`).
+  // Calls and reasoning between replies are one feed item (`core/work`).
   const blocks = fold(visible(feed));
   const busy = feed.state?.busy ?? false;
   const count = blocks.length;
 
   /**
-   * Пока человек внизу, лента сама отдаёт скролл; прочие движения — его.
-   * `commanded` — куда мы сами положили окно в прошлый раз: прокрутка заметно
-   * выше этой точки значит жест человека, а не отставшее измерение.
+   * While the person is at the bottom, the feed gives the scroll itself; other
+   * movements are theirs. `commanded` is where we ourselves put the window last
+   * time: a scroll noticeably above this point is a gesture of the person, not a
+   * lagging measurement.
    */
   const stuckRef = useRef(stuck);
   const commanded = useRef<number | null>(null);
 
   /**
-   * Вниз держит не скролл-контейнер, а реплика окна на каждый кадр ленты:
-   * пока человек внизу, хвост стоит на месте, дальше — скролл его, а не наш.
-   * Это и возврат кнопкой, и дорастание последнего блока при стриминге.
+   * The bottom is held not by the scroll container, but by a replica of the window
+   * on each frame of the feed: while the person is at the bottom, the tail stays in
+   * place; further on, the scroll is theirs, not ours. This covers both the return
+   * by button and the growth of the last block during streaming.
    *
-   * Цель — конец кеша с подушкой `END_PAD`: измерение отстаёт от роста на
-   * кадр, и команда «до конца» без запаса упиралась бы во вчерашний низ,
-   * теряя прилипание, когда пачка перекрывает запас до старого конца. Подушка
-   * больше DRIFT_PX держит честной и решётку «человек уехал?»: зажатый до
-   * настоящего низа скролл читается ниже запрошенной цели и жёстко сидит.
+   * The target is the end of the cache with the padding `END_PAD`: the measurement
+   * lags behind growth by a frame, and a "to the end" command without a margin
+   * would aim at yesterday's bottom, losing the stickiness when a batch covers the
+   * margin up to the old end. A padding larger than DRIFT_PX also keeps the
+   * "has the person moved away?" check honest: a scroll pinned to the real bottom
+   * reads below the requested target and sits stuck there.
    */
   useEffect(() => {
     if (!stuck) return;
@@ -132,10 +139,10 @@ export function Feed({
 
   function onScroll(offset: number) {
     const h = handle.current;
-    // Без ручки (кадр до первого измерения) хвост читается нулевым, и лента
-    // считается внизу — безопасное «прилипло»: метрика 0 / 0 даёт нулевой
-    // разрыв, отпускание на ровном месте не сработает, а первым же
-    // измерением решение будет выправлено.
+    // Without a handle (the frame before the first measurement) the tail reads as
+    // zero, and the feed counts as at the bottom — a safe "stuck": with a metric of
+    // 0 / 0 the gap is zero, letting go on a flat spot will not fire, and the first
+    // measurement corrects the decision.
     const state: ScrollState = {
       offset,
       scrollSize: h ? h.scrollSize : offset,
@@ -143,9 +150,10 @@ export function Feed({
     };
     let down = false;
     if (stuckRef.current) {
-      // Прилипание не проверяется порогом от низа: измеренное дно отстаёт от
-      // настоящего, и рывок роста перекрыл бы запас на середине стрима.
-      // Отпускает только движение человека вверх, что и держит shouldHold.
+      // Sticking is not checked against a threshold from the bottom: the measured
+      // bottom lags behind the real one, and a jerk of growth would cover the margin
+      // in the middle of the stream. Only the person's movement up releases it, which
+      // is what shouldHold keeps.
       down = shouldHold(state, commanded.current);
     } else if (shouldStick(state)) {
       down = true;
@@ -157,9 +165,10 @@ export function Feed({
   }
 
   /**
-   * Ручка скачков читает блоки через ref-with-актуальность: factory заморожена
-   * раз и навсегда ([] в конце), и замкнутый на первом рендере `blocks`
-   * молчал бы по любому блоку, приехавшему позже — весь свежий разговор.
+   * The jump handle reads blocks through a ref that is kept current: the factory is
+   * frozen once and for all ([] at the end), and a `blocks` closed over on the first
+   * render would stay silent about any block that arrived later — the whole fresh
+   * conversation.
    */
   const blocksRef = useRef(blocks);
   blocksRef.current = blocks;
@@ -170,8 +179,8 @@ export function Feed({
       jumpTo: (key: string) => {
         const at = blocksRef.current.findIndex((b) => b.key === key);
         if (at === -1) return;
-        // Человек ушёл смотреть в ленту: прилипание отпускаем сразу, не по
-        // событию прокрутки — цель могла встать у самого низа.
+        // The person has gone to look at the feed: letting go of the stickiness at
+        // once, not by a scroll event — the target could have landed at the very bottom.
         stuckRef.current = false;
         commanded.current = null;
         handle.current?.scrollToIndex(at, { align: "start" });
@@ -218,10 +227,10 @@ export function Feed({
             <TurnLive startedAt={feed.turn.startedAt} />
           </div>
         )}
-        {/* Воздух между последним блоком и композером. Отдельным элементом
-            ленты, а не отступом последнего блока: тот перестаёт быть
-            последним с каждым новым, и его высота менялась бы под
-            прилипшей к низу прокруткой. */}
+        {/* Air between the last block and the composer. A feed item of its own,
+            not a margin of the last block: that stops being the last with each
+            new one, and its height would change under the scroll stuck to the
+            bottom. */}
         <div className="feed-end" key="feed-end" aria-hidden="true" />
       </VList>
 
@@ -234,15 +243,15 @@ export function Feed({
   );
 }
 
-/** Блоки, которые говорит агент, а не лента и не человек. */
+/** Blocks that the agent says, not the feed and not the person. */
 const AGENT_SIDE = new Set(["agent", "work", "agents", "todos", "plan", "shown"]);
 
 /**
- * Лейбл `Yaca` ставится один раз на реплику, а не над каждым блоком: агент,
- * который представляется перед каждой строчкой отчёта, читается как заика.
+ * The `Yaca` label is put on a reply once, not above each block: an agent that
+ * introduces itself before every line of a report reads as a stutterer.
  *
- * Первый блок реплики — не обязательно текст: чаще всего это работа хода,
- * и лейбл принадлежит ей.
+ * The first block of a reply is not necessarily text: most often it is the turn's
+ * work, and the label belongs to it.
  */
 function startsAgent(blocks: FeedItem[], index: number): boolean {
   if (!AGENT_SIDE.has(blocks[index].kind)) return false;
@@ -261,9 +270,9 @@ function Block({
   block: FeedItem;
   feed: FeedModel;
   actions: FeedActions;
-  /** Только для работы хода: ход ещё дописывает её. */
+  /** Only for the turn's work: the turn is still writing it. */
   live: boolean;
-  /** Только для текста агента: им заканчивается ответ. */
+  /** Only for the agent's text: it is what ends a reply. */
   copyable: boolean;
   replyText: string;
 }) {

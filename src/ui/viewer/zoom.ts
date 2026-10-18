@@ -1,12 +1,12 @@
 /**
- * Арифметика просмотрщика: масштаб, сдвиг и поворот картинки в рамке.
+ * The viewer's arithmetic: scale, pan and rotation of a picture in its frame.
  *
- * Отдельно от компонента по той же причине, что и `feedScroll`: тесты идут в
- * node без раскладки, а «где окажется точка под курсором после колеса» —
- * вопрос к числам, а не к браузеру.
+ * Kept apart from the component for the same reason as `feedScroll`: the tests run in node
+ * without layout, and "where the point under the cursor ends up after the wheel" is a question
+ * for numbers, not for the browser.
  *
- * Координаты сдвига — от центра рамки: `x = 0, y = 0` значит «картинка по
- * центру». Масштаб 1 — точка в точку.
+ * Pan coordinates are relative to the frame's centre: `x = 0, y = 0` means "picture centred".
+ * Scale 1 is 1:1.
  */
 
 export type Size = { width: number; height: number };
@@ -16,26 +16,26 @@ export type View = {
   scale: number;
   x: number;
   y: number;
-  /** Четверти оборота по часовой стрелке. */
+  /** Quarter turns clockwise. */
   turns: number;
 };
 
-/** Дальше восьми крат на экране уже квадраты, а не детали. */
+/** Beyond eight times the screen shows squares, not details. */
 export const MAX_SCALE = 8;
 
-/** Шаг кнопок «ближе» и «дальше». */
+/** The step of the zoom-in and zoom-out buttons. */
 export const STEP = 1.25;
 
-/** Сколько места картинка занимает в рамке: повёрнутая набок — наоборот. */
+/** How much room the picture takes in the frame: turned on its side, the other way round. */
 export function shown(image: Size, turns: number): Size {
   return turns % 2 === 0 ? image : { width: image.height, height: image.width };
 }
 
 /**
- * Масштаб, при котором картинка видна целиком.
+ * The scale at which the picture is seen whole.
  *
- * Не больше единицы: маленькую иконку растягивать на всё окно незачем, она
- * от этого не станет подробнее.
+ * Never more than one: there is no point stretching a small icon to the whole window, it does
+ * not get more detailed for it.
  */
 export function fitScale(image: Size, box: Size, turns: number): number {
   const { width, height } = shown(image, turns);
@@ -43,7 +43,7 @@ export function fitScale(image: Size, box: Size, turns: number): number {
   return Math.min(1, box.width / width, box.height / height);
 }
 
-/** Картинка целиком и по центру — с этого просмотр начинается. */
+/** The picture whole and centred — viewing starts from here. */
 export function fitted(image: Size, box: Size, turns = 0): View {
   return { scale: fitScale(image, box, turns), x: 0, y: 0, turns };
 }
@@ -54,11 +54,11 @@ export function isFitted(view: View, image: Size, box: Size): boolean {
 }
 
 /**
- * Возвращает вид в допустимые пределы.
+ * Brings the view back within the allowed limits.
  *
- * Мельче, чем «целиком», не бывает: дальше только поля. Сдвиг ограничен
- * краем картинки: пока она меньше рамки по оси, по этой оси она стоит по
- * центру, а когда больше — её край не уходит внутрь рамки.
+ * Nothing smaller than fitted exists: beyond it there are only margins. The pan is bounded by
+ * the picture's edge: while the picture is smaller than the frame on an axis, it stays centred
+ * on that axis, and once larger, its edge does not move inside the frame.
  */
 export function clamp(view: View, image: Size, box: Size): View {
   const fit = fitScale(image, box, view.turns);
@@ -75,10 +75,10 @@ export function clamp(view: View, image: Size, box: Size): View {
 }
 
 /**
- * Масштаб вокруг точки: то, что было под курсором, под ним и остаётся.
+ * Scale around a point: what was under the cursor stays under it.
  *
- * `at` — от центра рамки. Без этого колесо тянуло бы к центру картинки, и
- * чтобы рассмотреть угол, его пришлось бы сперва туда притащить.
+ * `at` is relative to the frame's centre. Without this the wheel would pull toward the picture's
+ * centre, and to look at a corner you would first have to drag it there.
  */
 export function zoomAt(view: View, factor: number, at: Point, image: Size, box: Size): View {
   const wanted = clamp({ ...view, scale: view.scale * factor }, image, box).scale;
@@ -99,25 +99,25 @@ export function panned(view: View, dx: number, dy: number, image: Size, box: Siz
   return clamp({ ...view, x: view.x + dx, y: view.y + dy }, image, box);
 }
 
-/** Точка в точку, вокруг центра рамки. */
+/** 1:1, around the centre of the frame. */
 export function actual(view: View, image: Size, box: Size): View {
   return zoomAt(view, 1 / view.scale, { x: 0, y: 0 }, image, box);
 }
 
 /**
- * Четверть оборота по часовой. Вид сбрасывается к «целиком»: после поворота
- * прежний сдвиг показывал бы уже другое место.
+ * A quarter turn clockwise. The view resets to fitted: after a turn the old pan would show a
+ * different place.
  */
 export function turned(view: View, image: Size, box: Size): View {
   return fitted(image, box, (view.turns + 1) % 4);
 }
 
 /**
- * Попала ли точка в картинку. `at` — от центра рамки.
+ * Whether the point falls on the picture. `at` is relative to the frame's centre.
  *
- * По этому щелчок отличает картинку от пустого места вокруг неё: по пустому
- * просмотрщик закрывается. Когда картинка увеличена во всю рамку, пустого
- * места нет — и щелчок ничего не закрывает.
+ * A click uses this to tell the picture from the empty space around it: on empty space the
+ * viewer closes. When the picture is enlarged to fill the frame there is no empty space — and a
+ * click closes nothing.
  */
 export function hits(view: View, image: Size, at: Point): boolean {
   const { width, height } = shown(image, view.turns);
@@ -128,9 +128,9 @@ export function hits(view: View, image: Size, at: Point): boolean {
 }
 
 /**
- * Дальше этого от места нажатия — уже перетаскивание, а не щелчок. Рука на
- * кнопке мыши не стоит неподвижно, и без допуска щелчок по пустому месту
- * через раз считался бы попыткой сдвинуть картинку.
+ * Beyond this distance from the press point it is a drag, not a click. A hand on the mouse
+ * button does not stay still, and without this tolerance a click on empty space would often
+ * count as an attempt to pan the picture.
  */
 export const CLICK_SLOP = 4;
 
@@ -138,7 +138,7 @@ export function isClick(from: Point, to: Point): boolean {
   return Math.hypot(to.x - from.x, to.y - from.y) <= CLICK_SLOP;
 }
 
-/** Масштаб в процентах для подписи. */
+/** The scale in percent, for the label. */
 export function percent(view: View): number {
   return Math.round(view.scale * 100);
 }

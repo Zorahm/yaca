@@ -1,22 +1,23 @@
 /**
- * Провайдеры (§10): список, описание целиком, модели, ключи.
+ * Providers (§10): the list, the full description, models, keys.
  *
- * Раньше это была выдвижная панель §1.1 — промежуточный шаг, записанный в §16
- * п. 30 как «до окна настроек». Окно приехало, панель ушла.
+ * This used to be the slide-out panel §1.1 — an intermediate step, written in §16
+ * item 30 as "before the settings window". The window arrived, the panel went away.
  *
- * Главное в строке — кружок слева: залитый мхом значит «провайдер ответил
- * списком моделей», пустой — «его не спрашивали». §10 говорит «настроен —
- * значит, ответил», и от этого зависит всё остальное: неопрошенный не
- * появится в выборе модели §7.1, а домашний экран §9.1 не начнёт разговор.
- * Раньше это приходилось выводить из числа моделей в строке меты.
+ * The main thing in a row is the dot on the left: filled with moss means "the
+ * provider answered with a list of models", empty means "it was not asked". §10
+ * says "configured — means answered", and everything else depends on it: an unasked
+ * provider will not appear in the model choice §7.1, and the home screen §9.1 will
+ * not start a conversation. Before, this had to be inferred from the model count in
+ * the meta line.
  *
- * `id` из строки убран: он почти всегда — имя в нижнем регистре, то есть шум.
- * В форме его теперь тоже нет: он назначается сам при создании
- * (`newProviderId`). Вместо него справа форма протокола — единственное, чего
- * нельзя угадать по адресу.
+ * `id` was removed from the row: it is almost always the name in lower case, which
+ * is noise. It is not in the form either: it is assigned automatically on creation
+ * (`newProviderId`). Instead, on the right is the protocol form — the only thing that
+ * cannot be guessed from the address.
  *
- * Предустановленные без кнопки удаления: ядро всё равно откажется, а кнопка,
- * чьё нажатие всегда ошибка, врёт про то, что она кнопка (§0).
+ * Built-in providers have no delete button: the core would refuse anyway, and a
+ * button whose press is always an error lies about being a button (§0).
  */
 
 import { ArrowClockwise, CaretLeft, PencilSimple, Plus, X } from "@phosphor-icons/react";
@@ -86,8 +87,8 @@ export function ProvidersSection({
 
       {error !== null && <div className="set-error">{error}</div>}
 
-      {/* `providers === null` без ошибки — это миг до того, как список приехал;
-          с ошибкой правда показана выше, а не пустым списком (§0). */}
+      {/* `providers === null` without an error is the moment before the list arrives;
+          with an error the truth is shown above, not as an empty list (§0). */}
       {providers !== null && (
         <>
           <div className="prov-list">
@@ -135,7 +136,7 @@ function ProviderRow({
   onDeleteCancel: () => void;
   onDelete: () => void;
 }) {
-  // Предустановленные не удаляются: ядро вернуло бы их следующей загрузкой.
+  // Built-in providers are not deleted: the core would bring them back on the next load.
   const builtin = isPreset(spec.id);
   const answered = spec.models.length > 0;
 
@@ -160,9 +161,9 @@ function ProviderRow({
       <span className="prov-proto">{PROTOCOL_NAME[spec.protocol]}</span>
 
       <div className="prov-actions">
-        {/* Опрос — самое частое, что делают с ненастроенным провайдером, и
-            кнопка стоит там, где видно беду: раньше за ней надо было открыть
-            форму и пролистать её до конца. */}
+        {/* Asking for models is the most common thing done with an unconfigured
+            provider, and the button sits where the trouble is visible: before, one had
+            to open the form and scroll it to the end. */}
         {!answered && (
           <button type="button" className="btn btn-small" onClick={onEdit}>
             <ArrowClockwise size={13} /> {t("prov.models_ask")}

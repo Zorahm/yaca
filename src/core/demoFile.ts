@@ -41,13 +41,13 @@ const CHUNKS: Chunk[] = [
     "",
   ],
   {
-    old: ["// Разбор одного сегмента."],
-    new: ["// Разбор одного сегмента: время приходит в UTC, зона — отдельным полем."],
+    old: ["// Parse one segment."],
+    new: ["// Parse one segment: the time comes in UTC, the zone as a separate field."],
   },
   [
     "export function parseSegment(raw: string): Date {",
     "  if (raw.length === 0) {",
-    '    throw new Error("пустая строка");',
+    '    throw new Error("empty string");',
     "  }",
   ],
   {

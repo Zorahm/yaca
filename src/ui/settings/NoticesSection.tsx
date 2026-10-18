@@ -1,12 +1,12 @@
 /**
- * Уведомления и язык (§10, §14, §15).
+ * Notifications and language (§10, §14, §15).
  *
- * Два уровня приложения в одном разделе: и то и другое — про окно, а не про
- * проект, и обоих слишком мало на раздел поодиночке.
+ * Two app-level settings in one section: both are about the window, not the
+ * project, and each is too little for a section of its own.
  *
- * Язык меняется на месте, без перезагрузки: словарь — модульная переменная,
- * а перерисовка дерева читает уже новый (`src/ui/prefs.ts`). Перезагружать
- * окна нельзя — в главном от этого закрылись бы открытые чаты.
+ * The language changes in place, without a reload: the dictionary is a module
+ * variable, and the tree re-renders reading the new one (`src/ui/prefs.ts`).
+ * Reloading the windows is not an option — in the main one it would close open chats.
  */
 
 import type { Language, Preferences } from "../../core/client";

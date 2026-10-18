@@ -1,9 +1,9 @@
 /**
- * Золотые тесты ленты — зеркало тех, что в ядре.
+ * Golden tests of the feed — a mirror of the ones in the core.
  *
- * Ядро проверяет, что поток событий той самой формы; здесь проверяется, что
- * лента есть функция от него. Вместе это и есть обещание §15, и ломается оно
- * тут, а не глазами.
+ * The core checks that the event stream has exactly this shape; here it is checked that
+ * the feed is a function of it. Together they are the §15 promise, and it breaks
+ * here, not by eye.
  */
 
 import { describe, expect, it } from "vitest";
@@ -52,7 +52,7 @@ const started = (callId: string, tool = "Read", parent: string | null = null): A
   turnId: "t1",
   callId,
   tool,
-  description: "Прочитал файл",
+  description: "Read the file",
   target: "src/a.rs",
   input: {},
   parent,
@@ -64,39 +64,39 @@ const finished = (callId: string): AgentEvent => ({
   meta: { lines: 3, items: null, truncated: false, durationMs: 12 },
 });
 
-describe("лента", () => {
-  it("склеивает дельты одного блока в одну реплику", () => {
-    const feed = run(wrote("b1", "Смотрю "), wrote("b1", "на парсер."));
+describe("feed", () => {
+  it("joins the deltas of one block into one reply", () => {
+    const feed = run(wrote("b1", "Looking "), wrote("b1", "at the parser."));
 
     expect(feed.blocks).toHaveLength(1);
     expect(feed.blocks[0]).toMatchObject({
       kind: "agent",
-      text: "Смотрю на парсер.",
+      text: "Looking at the parser.",
     });
   });
 
-  it("новый блок модели — новая реплика", () => {
-    const feed = run(wrote("b1", "раз"), wrote("b2", "два"));
+  it("a new model block is a new reply", () => {
+    const feed = run(wrote("b1", "one"), wrote("b2", "two"));
     expect(feed.blocks).toHaveLength(2);
   });
 
-  it("собирает подряд идущие действия в одну группу", () => {
+  it("collects consecutive actions into one group", () => {
     const feed = run(started("c1"), started("c2"), started("c3"));
 
     expect(feed.blocks).toHaveLength(1);
     expect(feed.blocks[0]).toMatchObject({ kind: "actions" });
-    if (feed.blocks[0].kind !== "actions") throw new Error("не группа");
+    if (feed.blocks[0].kind !== "actions") throw new Error("not a group");
     expect(feed.blocks[0].rows).toHaveLength(3);
   });
 
-  it("реплика и рассуждение между действиями встают между ними", () => {
-    // Редьюсер держит порядок; в блоки работу хода собирает `core/work`.
+  it("a reply and reasoning between actions stand between them", () => {
+    // The reducer keeps the order; the turn's work is gathered into blocks by `core/work`.
     const feed = run(
       started("c1"),
       started("c2"),
-      thought("t1", "теперь тесты"),
+      thought("t1", "now the tests"),
       started("c3"),
-      wrote("b1", "теперь стили"),
+      wrote("b1", "now the styles"),
       started("c4"),
     );
 
@@ -107,38 +107,38 @@ describe("лента", () => {
       "agent",
       "actions",
     ]);
-    if (feed.blocks[0].kind !== "actions") throw new Error("не группа");
+    if (feed.blocks[0].kind !== "actions") throw new Error("not a group");
     expect(feed.blocks[0].rows).toHaveLength(2);
   });
 
-  it("исход действия доезжает до своей строки", () => {
+  it("an action's outcome reaches its own row", () => {
     const feed = run(
       started("c1"),
       started("c2"),
       finished("c1"),
-      { type: "toolCallFailed", callId: "c2", message: "не найдено" },
+      { type: "toolCallFailed", callId: "c2", message: "not found" },
     );
 
-    if (feed.blocks[0].kind !== "actions") throw new Error("не группа");
+    if (feed.blocks[0].kind !== "actions") throw new Error("not a group");
     const [one, two] = feed.blocks[0].rows;
     expect(one.state).toBe("done");
     expect(one.meta?.durationMs).toBe(12);
     expect(two.state).toBe("failed");
-    expect(two.message).toBe("не найдено");
+    expect(two.message).toBe("not found");
   });
 
-  it("вывод команды копится в своей строке", () => {
+  it("command output accumulates in its own row", () => {
     const feed = run(
       started("c1", "Bash"),
-      { type: "toolCallProgress", callId: "c1", chunk: "раз\n" },
-      { type: "toolCallProgress", callId: "c1", chunk: "два\n" },
+      { type: "toolCallProgress", callId: "c1", chunk: "one\n" },
+      { type: "toolCallProgress", callId: "c1", chunk: "two\n" },
     );
 
-    if (feed.blocks[0].kind !== "actions") throw new Error("не группа");
-    expect(feed.blocks[0].rows[0].output).toBe("раз\nдва\n");
+    if (feed.blocks[0].kind !== "actions") throw new Error("not a group");
+    expect(feed.blocks[0].rows[0].output).toBe("one\ntwo\n");
   });
 
-  it("правка приезжает в строку диффом и счётчиками", () => {
+  it("an edit arrives in its row with the diff and the counters", () => {
     const feed = run(started("c1", "Edit"), {
       type: "fileChanged",
       callId: "c1",
@@ -152,12 +152,12 @@ describe("лента", () => {
       diff: { hunks: [], added: 4, removed: 2, truncated: false },
     });
 
-    if (feed.blocks[0].kind !== "actions") throw new Error("не группа");
+    if (feed.blocks[0].kind !== "actions") throw new Error("not a group");
     expect(feed.blocks[0].rows[0].fact?.added).toBe(4);
     expect(feed.blocks[0].rows[0].diff).not.toBeNull();
   });
 
-  it("переименование ставит каждый файл строкой под собой", () => {
+  it("a rename puts each file in a row under it", () => {
     const changed = (path: string, added: number): AgentEvent => ({
       type: "fileChanged",
       callId: "c1",
@@ -171,7 +171,7 @@ describe("лента", () => {
       changed("src/a.rs", 3),
     );
 
-    if (feed.blocks[0].kind !== "actions") throw new Error("не группа");
+    if (feed.blocks[0].kind !== "actions") throw new Error("not a group");
     const row = feed.blocks[0].rows[0];
     // The row is the rename; the files are under it, one row per file.
     expect(row.fact).toBeNull();
@@ -180,7 +180,7 @@ describe("лента", () => {
     expect(feed.diffs["src/b.rs"]).toBeDefined();
   });
 
-  it("форма сервера встаёт одна, сколько бы раз ни пришла, и закрывается ответом", () => {
+  it("a server form appears once, however many times it arrives, and closes on an answer", () => {
     const request = {
       id: "req_1",
       server: "billing",
@@ -197,25 +197,25 @@ describe("лента", () => {
     expect(forms[0].kind === "elicitation" && forms[0].status).toBe("declined");
   });
 
-  it("список задач обновляется на месте", () => {
-    // §5.6: новый блок не создаётся.
+  it("the todo list is updated in place", () => {
+    // §5.6: no new block is created.
     const feed = run(
-      { type: "todosUpdated", items: [{ content: "раз", status: "pending" }] },
-      wrote("b1", "работаю"),
+      { type: "todosUpdated", items: [{ content: "one", status: "pending" }] },
+      wrote("b1", "working"),
       {
         type: "todosUpdated",
-        items: [{ content: "раз", status: "completed" }],
+        items: [{ content: "one", status: "completed" }],
       },
     );
 
     const todos = feed.blocks.filter((b) => b.kind === "todos");
     expect(todos).toHaveLength(1);
     expect(feed.blocks[0].kind).toBe("todos");
-    if (feed.blocks[0].kind !== "todos") throw new Error("не задачи");
+    if (feed.blocks[0].kind !== "todos") throw new Error("not a todo list");
     expect(feed.blocks[0].items[0].status).toBe("completed");
   });
 
-  it("отвеченный запрос разрешения уходит из ленты, но не из истории", () => {
+  it("an answered permission request leaves the feed but not the history", () => {
     const request = {
       id: "req_1",
       callId: "c1",
@@ -239,54 +239,54 @@ describe("лента", () => {
 
     expect(feed.request).toBeNull();
     expect(visible(feed)).toHaveLength(0);
-    // Блоки только добавляются: на этом держатся индексы и повтор из журнала.
+    // Blocks only get added: the indices and the replay from the journal rely on that.
     expect(feed.blocks).toHaveLength(1);
   });
 
-  it("остановка хода помечает незавершённые действия", () => {
+  it("stopping a turn marks unfinished actions", () => {
     const feed = run(started("c1"), started("c2"), finished("c1"), {
       type: "turnCancelled",
       turnId: "t1",
       at: 0,
     });
 
-    if (feed.blocks[0].kind !== "actions") throw new Error("не группа");
+    if (feed.blocks[0].kind !== "actions") throw new Error("not a group");
     expect(feed.blocks[0].rows.map((r) => r.state)).toEqual(["done", "failed"]);
     expect(feed.blocks[1].kind).toBe("stopped");
   });
 
-  it("правка сводки не заводит второй разделитель", () => {
-    // §5.11: сводку правят перед продолжением, а не пишут заново.
+  it("editing the summary does not add a second divider", () => {
+    // §5.11: the summary is edited before continuing, not written again.
     const feed = run(
-      { type: "contextCompacted", summary: "первая", freed: 84000 },
-      { type: "summaryEdited", summary: "поправленная" },
+      { type: "contextCompacted", summary: "first", freed: 84000 },
+      { type: "summaryEdited", summary: "edited" },
     );
 
     expect(feed.blocks).toHaveLength(1);
     expect(feed.blocks[0]).toMatchObject({
       kind: "compacted",
-      summary: "поправленная",
+      summary: "edited",
       freed: 84000,
     });
   });
 
-  it("сообщение человека приходит из потока, а не из отправки", () => {
-    // Иначе открытая заново сессия показывала бы ответы без вопросов (§9).
-    const feed = run(said("почини разбор дат"), wrote("b1", "смотрю"));
+  it("the human's message comes from the stream, not from sending", () => {
+    // Otherwise a reopened session would show answers without questions (§9).
+    const feed = run(said("fix the date parsing"), wrote("b1", "looking"));
     expect(feed.blocks[0]).toMatchObject({
       kind: "human",
-      text: "почини разбор дат",
+      text: "fix the date parsing",
     });
   });
 
-  it("пустая пачка не создаёт нового снимка", () => {
-    // §12: перерисовка на кадр, а не на событие.
-    const feed = run(wrote("b1", "раз"));
+  it("an empty batch creates no new snapshot", () => {
+    // §12: redraw per frame, not per event.
+    const feed = run(wrote("b1", "one"));
     expect(reduceAll(feed, [])).toBe(feed);
   });
 });
 
-describe("панели", () => {
+describe("panels", () => {
   const changed = (callId: string, path: string, added = 2): AgentEvent => ({
     type: "fileChanged",
     callId,
@@ -294,23 +294,23 @@ describe("панели", () => {
     diff: { hunks: [], added, removed: 1, truncated: false },
   });
 
-  it("правка пополняет индекс панели файла", () => {
+  it("an edit feeds the file panel's index", () => {
     const feed = run(started("c1", "Edit"), changed("c1", "a.rs"));
 
     expect(feed.diffs["a.rs"]).toBeTruthy();
     expect(diffOf(feed, "a.rs")).toBe(feed.diffs["a.rs"]);
   });
 
-  it("diffOf падает к диффу строки действия", () => {
+  it("diffOf falls back to the action row's diff", () => {
     const feed = run(started("c3", "Edit"), changed("c3", "src/a.rs"));
 
-    // Индекс и строка держат одно событие; проверяем именно падение, выкинув индекс.
+    // The index and the row hold one event; this checks the fallback itself, by dropping the index.
     expect(diffOf({ ...feed, diffs: {} }, "src/a.rs")).toBeTruthy();
-    expect(diffOf({ ...feed, diffs: {} }, "src/чужой.rs")).toBeNull();
+    expect(diffOf({ ...feed, diffs: {} }, "src/other.rs")).toBeNull();
   });
 
-  it("последняя правка пути выигрывает", () => {
-    // Панель файла показывает файл, каким он стал, а не первую правку.
+  it("the last edit of a path wins", () => {
+    // The file panel shows the file as it became, not its first edit.
     const feed = run(
       started("c1", "Edit"),
       changed("c1", "a.rs", 2),
@@ -323,7 +323,7 @@ describe("панели", () => {
     expect(touchedFiles(feed)).toEqual(["a.rs"]);
   });
 
-  it("вывод процесса: сброс кладёт буфер, куски дописываются к своему id", () => {
+  it("process output: a reset puts the buffer, chunks are appended to their own id", () => {
     const feed = run(
       { type: "processOutputReset", id: 3, text: "ready\n", dropped: 0 },
       { type: "processOutput", id: 3, chunk: "compiled\n" },
@@ -332,17 +332,17 @@ describe("панели", () => {
     expect(feed.processOutput).toEqual({ id: 3, text: "ready\ncompiled\n", dropped: 0 });
   });
 
-  it("кусок чужого процесса не подменяет буфер выбранного", () => {
-    // Выбор объявляется сбросом; кусок без сброса — не тот, на кого смотрят.
+  it("a chunk from another process does not replace the selected buffer", () => {
+    // A selection is announced by a reset; a chunk without a reset is not the one being looked at.
     const feed = run(
       { type: "processOutputReset", id: 3, text: "ready\n", dropped: 0 },
-      { type: "processOutput", id: 7, chunk: "чужой\n" },
+      { type: "processOutput", id: 7, chunk: "other\n" },
     );
 
     expect(feed.processOutput).toEqual({ id: 3, text: "ready\n", dropped: 0 });
   });
 
-  it("новый выбор сбрасывает буфер целиком", () => {
+  it("a new selection resets the whole buffer", () => {
     const feed = run(
       { type: "processOutputReset", id: 3, text: "ready\n", dropped: 0 },
       { type: "processOutput", id: 3, chunk: "compiled\n" },
@@ -353,7 +353,7 @@ describe("панели", () => {
   });
 });
 
-describe("подагент", () => {
+describe("subagent", () => {
   const changed = (callId: string, path: string): AgentEvent => ({
     type: "fileChanged",
     callId,
@@ -381,12 +381,12 @@ describe("подагент", () => {
     },
   });
 
-  /** Строки верхнего уровня: то, что группа рисует сама. */
+  /** The top-level rows: what the group draws itself. */
   function top(feed: Feed) {
     return feed.blocks.flatMap((b) => (b.kind === "actions" ? b.rows : []));
   }
 
-  it("его вызовы встают под строку Task, а не рядом с ней", () => {
+  it("its calls stand under the Task row, not next to it", () => {
     const feed = run(
       started("t1", "Task"),
       started("r1", "Read", "t1"),
@@ -401,9 +401,9 @@ describe("подагент", () => {
     ]);
   });
 
-  it("запрос разрешения не отрывает вызов от своей строки", () => {
-    // Запрос закрывает группу (§5.4), а строка подагента к группе не
-    // прибивается: она идёт к своему Task, где бы тот ни остался.
+  it("a permission request does not detach a call from its row", () => {
+    // The request closes the group (§5.4), but a subagent's row is not pinned to the group:
+    // it goes to its own Task, wherever that one was left.
     const feed = run(
       started("t1", "Task"),
       started("w1", "Write", "t1"),
@@ -416,7 +416,7 @@ describe("подагент", () => {
     expect(top(feed)[0].children.map((r) => r.callId)).toEqual(["w1", "r1"]);
   });
 
-  it("два подагента не путают строки друг друга", () => {
+  it("two subagents do not mix up each other's rows", () => {
     const feed = run(
       started("t1", "Task"),
       started("t2", "Task"),
@@ -429,7 +429,7 @@ describe("подагент", () => {
     expect(second.children.map((r) => r.callId)).toEqual(["a"]);
   });
 
-  it("файл, созданный подагентом, виден панели файла и списку тронутых", () => {
+  it("a file created by a subagent is visible to the file panel and the touched list", () => {
     const feed = run(
       started("t1", "Task"),
       started("w1", "Write", "t1"),
@@ -443,31 +443,31 @@ describe("подагент", () => {
     expect(diffOf({ ...feed, diffs: {} }, "notes.txt")).toBeTruthy();
   });
 
-  it("остановка хода гасит и его незавершённые вызовы", () => {
+  it("stopping a turn also stops its unfinished calls", () => {
     const feed = run(
       started("t1", "Task"),
       started("r1", "Read", "t1"),
       { type: "turnCancelled", turnId: "t1", at: 0 },
     );
 
-    // Живая точка на вызове, который уже никто не выполняет, — враньё (§0).
+    // A live dot on a call nobody is running any more is a lie (§0).
     expect(flatRows(top(feed)).map((r) => r.state)).toEqual(["failed", "failed"]);
   });
 
-  it("вызов без своего Task в ленте не теряется", () => {
-    const feed = run(started("r1", "Read", "t-нет"));
+  it("a call without its own Task is not lost from the feed", () => {
+    const feed = run(started("r1", "Read", "t-none"));
     expect(top(feed).map((r) => r.callId)).toEqual(["r1"]);
   });
 });
 
-describe("вопросы AskUser", () => {
+describe("AskUser questions", () => {
   const request = {
     id: "q_1",
     callId: "c1",
-    question: "Какой путь?",
+    question: "Which path?",
     options: [
-      { label: "Быстрый", description: "без тестов" },
-      { label: "Полный", description: null },
+      { label: "Quick", description: "without tests" },
+      { label: "Full", description: null },
     ],
     allowOther: true,
     multiSelect: false,
@@ -482,11 +482,11 @@ describe("вопросы AskUser", () => {
 
   function question(feed: Feed) {
     const block = feed.blocks.find((b) => b.kind === "question");
-    if (!block || block.kind !== "question") throw new Error("нет блока вопроса");
+    if (!block || block.kind !== "question") throw new Error("no question block");
     return block;
   }
 
-  it("вопрос встаёт в ленту открытым и занимает нижний ряд", () => {
+  it("a question appears in the feed open and takes the bottom row", () => {
     const feed = run(asked);
 
     expect(feed.question?.id).toBe("q_1");
@@ -495,17 +495,17 @@ describe("вопросы AskUser", () => {
     expect(visible(feed)).toHaveLength(1);
   });
 
-  it("ответ закрывает вопрос, но строка с выбором остаётся в ленте", () => {
+  it("an answer closes the question, but the row with the choice stays in the feed", () => {
     const feed = run(asked, resolved({ type: "answered", selected: [1], other: null }));
 
     expect(feed.question).toBeNull();
     expect(question(feed).status).toBe("answered");
     expect(question(feed).reply).toEqual({ type: "answered", selected: [1], other: null });
-    // Блоки только добавляются: итог ответа — часть разговора.
+    // Blocks only get added: the outcome of an answer is part of the conversation.
     expect(visible(feed)).toHaveLength(1);
   });
 
-  it("отказ от ответа помечается отдельно от ответа", () => {
+  it("a refusal to answer is marked apart from an answer", () => {
     const feed = run(asked, resolved({ type: "dismissed" }));
 
     expect(feed.question).toBeNull();
@@ -513,10 +513,10 @@ describe("вопросы AskUser", () => {
     expect(question(feed).reply).toEqual({ type: "dismissed" });
   });
 
-  it("ответ на вопрос, которого нет на экране, ничего не трогает", () => {
+  it("an answer to a question not on screen touches nothing", () => {
     const feed = run(asked, {
       type: "questionResolved",
-      requestId: "другой",
+      requestId: "other",
       reply: { type: "dismissed" },
     });
 
@@ -524,9 +524,9 @@ describe("вопросы AskUser", () => {
     expect(question(feed).status).toBe("open");
   });
 
-  it("вопрос без ответа из журнала закрыт и не висит открытым", () => {
-    // Так выглядит повтор незавершённого прогона: ядро закрывает вопрос
-    // без ответа, и лента не рисует кнопки, которые уже никто не слушает.
+  it("a question with no answer from the journal is closed, not left open", () => {
+    // This is how a replay of an unfinished run looks: the core closes the question
+    // without an answer, and the feed draws no buttons that nobody listens to any more.
     const feed = run(asked, resolved(null));
 
     expect(feed.question).toBeNull();
@@ -534,26 +534,26 @@ describe("вопросы AskUser", () => {
     expect(question(feed).reply).toBeNull();
   });
 
-  it("выбор сохраняет свой текст рядом с отмеченными вариантами", () => {
+  it("a choice keeps its own text next to the ticked options", () => {
     const feed = run(
       asked,
-      resolved({ type: "answered", selected: [0], other: "оба сразу" }),
+      resolved({ type: "answered", selected: [0], other: "both at once" }),
     );
 
     expect(question(feed).reply).toEqual({
       type: "answered",
       selected: [0],
-      other: "оба сразу",
+      other: "both at once",
     });
   });
 });
 
-describe("панель файла (§6.4)", () => {
+describe("file panel (§6.4)", () => {
   const pending = (path: string, hunks: number) => ({
     fact: { path, kind: "modified" as const, movedFrom: null, added: hunks, removed: 0 },
   });
 
-  it("каждая запись файла двигает счётчик, по которому панель перечитывает вид", () => {
+  it("each file write moves the counter the panel rereads its view by", () => {
     const change = (callId: string, path: string) => ({
       type: "fileChanged" as const,
       callId,
@@ -564,7 +564,7 @@ describe("панель файла (§6.4)", () => {
     expect(feed.writes).toBe(2);
   });
 
-  it("вид файла держит последний ответ ядра по пути", () => {
+  it("the file view holds the core's latest answer for the path", () => {
     const view = {
       fact: pending("a.txt", 1).fact,
       segments: [],
@@ -574,12 +574,12 @@ describe("панель файла (§6.4)", () => {
     expect(feed.fileView).toEqual({ path: "a.txt", view });
   });
 
-  it("«нечего решать» приходит как null, а не как отсутствие ответа", () => {
+  it("\"nothing to decide\" arrives as null, not as a missing answer", () => {
     const feed = run({ type: "fileViewLoaded", path: "a.txt", view: null });
     expect(feed.fileView).toEqual({ path: "a.txt", view: null });
   });
 
-  it("новый вид перекрывает прежний, даже для другого файла", () => {
+  it("a new view replaces the previous one, even for another file", () => {
     const view = { fact: pending("b.txt", 1).fact, segments: [], truncated: false };
     const feed = run(
       { type: "fileViewLoaded", path: "a.txt", view: null },
@@ -589,7 +589,7 @@ describe("панель файла (§6.4)", () => {
   });
 });
 
-describe("очередь и поиск файлов (§7.4, §7.2)", () => {
+describe("queue and file search (§7.4, §7.2)", () => {
   const waiting = (id: string, text: string): QueuedMessage => ({
     id,
     text,
@@ -638,17 +638,17 @@ describe("очередь и поиск файлов (§7.4, §7.2)", () => {
   });
 });
 
-describe("время хода", () => {
+describe("turn time", () => {
   const begin: AgentEvent = { type: "turnStarted", turnId: "t1", at: 1_000 };
 
-  it("идущий ход несёт время начала, законченный — убирает его", () => {
+  it("a running turn carries its start time, a finished one clears it", () => {
     expect(run(begin).turn).toEqual({ startedAt: 1_000 });
     const done = run(begin, { type: "turnFinished", turnId: "t1", stopReason: "endTurn", at: 5_000 });
     expect(done.turn).toBeNull();
   });
 
-  it("под ответом встаёт строка с длительностью и временем конца", () => {
-    const feed = run(begin, wrote("b1", "готово"), {
+  it("a line with the duration and the end time stands under the answer", () => {
+    const feed = run(begin, wrote("b1", "done"), {
       type: "turnFinished",
       turnId: "t1",
       stopReason: "endTurn",
@@ -658,18 +658,18 @@ describe("время хода", () => {
     expect(last).toMatchObject({ kind: "turnTime", startedAt: 1_000, endedAt: 134_000 });
   });
 
-  it("остановленный ход тоже показывает, сколько он шёл", () => {
+  it("a stopped turn also shows how long it ran", () => {
     const feed = run(begin, { type: "turnCancelled", turnId: "t1", at: 4_000 });
     expect(feed.blocks.map((b) => b.kind)).toEqual(["stopped", "turnTime"]);
   });
 
-  it("без времени конца (журнал старой сборки) строки нет", () => {
+  it("without an end time (a journal from an older build) there is no line", () => {
     const feed = run(begin, { type: "turnFinished", turnId: "t1", stopReason: "endTurn", at: 0 });
     expect(feed.blocks.some((b) => b.kind === "turnTime")).toBe(false);
   });
 });
 
-describe("показанный текст файла", () => {
+describe("shown file text", () => {
   const shown = (text: string): AgentEvent => ({
     type: "textShown",
     path: "notes.md",
@@ -680,17 +680,17 @@ describe("показанный текст файла", () => {
     text,
   });
 
-  it("встаёт своим блоком с путём и строками", () => {
+  it("appears as its own block with the path and the lines", () => {
     const feed = run(shown("two\nthree"));
     expect(feed.blocks).toMatchObject([
       { kind: "shown", path: "notes.md", firstLine: 2, lines: 2, total: 5, text: "two\nthree" },
     ]);
   });
 
-  it("не сливается с текстом агента вокруг", () => {
-    const feed = run(wrote("b1", "Вот файл:"), shown("two"), wrote("b1", "Это всё."));
+  it("does not merge with the agent's text around it", () => {
+    const feed = run(wrote("b1", "Here is the file:"), shown("two"), wrote("b1", "That's all."));
     expect(feed.blocks.map((b) => b.kind)).toEqual(["agent", "shown", "agent"]);
-    expect(feed.blocks[2]).toMatchObject({ text: "Это всё." });
+    expect(feed.blocks[2]).toMatchObject({ text: "That's all." });
   });
 });
 

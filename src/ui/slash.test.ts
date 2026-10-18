@@ -1,8 +1,9 @@
 /**
- * Меню слэш-команд §7.3.
+ * The slash-command menu §7.3.
  *
- * Проверяется то, что решает поведение поля: когда меню есть, что в нём стоит
- * и что из набранного интерфейс выполняет сам, а что уезжает модели.
+ * Checks what decides the field's behaviour: when the menu is there, what it
+ * lists, and which of the typed text the interface runs itself and which goes
+ * to the model.
  */
 
 import { describe, expect, it } from "vitest";
@@ -13,65 +14,65 @@ import { builtinFor, menuFor, mcpPrompts, withSkills, type Builtin, type MenuCom
 const BUILTINS: Builtin[] = ["model", "compact", "clear"];
 
 const project: MenuCommand[] = [
-  { name: "review", description: "Просмотреть изменения", body: "...", kind: "command" },
-  { name: "compact", description: "Файл, назвавшийся встроенной", body: "...", kind: "command" },
+  { name: "review", description: "Review the changes", body: "...", kind: "command" },
+  { name: "compact", description: "A file named like a built-in", body: "...", kind: "command" },
 ];
 
 const names = (text: string, builtins = BUILTINS) =>
   menuFor(text, project, builtins)?.map((item) => item.name) ?? null;
 
-describe("меню команд", () => {
-  it("не показывается для обычного сообщения", () => {
-    expect(names("почини разбор дат")).toBeNull();
+describe("command menu", () => {
+  it("is not shown for an ordinary message", () => {
+    expect(names("fix the date parsing")).toBeNull();
     expect(names(" /review")).toBeNull();
   });
 
-  it("показывает всё по одному слэшу", () => {
+  it("shows everything for a bare slash", () => {
     expect(names("/")).toEqual(["clear", "compact", "model", "review"]);
   });
 
-  it("сужается по набранному", () => {
+  it("narrows to what is typed", () => {
     expect(names("/c")).toEqual(["clear", "compact"]);
     expect(names("/rev")).toEqual(["review"]);
   });
 
-  it("исчезает, когда дополнять нечего", () => {
+  it("disappears when there is nothing to complete", () => {
     expect(names("/zzz")).toBeNull();
   });
 
-  it("закрывается пробелом: дальше идут аргументы", () => {
+  it("closes at a space: arguments follow", () => {
     expect(names("/review src/main.rs")).toBeNull();
     expect(names("/review ")).toBeNull();
   });
 
-  it("не показывает встроенных, за которыми на этом экране нет действия", () => {
-    // Домашний экран §9.1: сжимать и начинать заново нечего. Занятое имя
-    // остаётся занятым и здесь — иначе `/compact` значил бы на двух экранах
-    // разное.
+  it("does not show built-ins that have no action on this screen", () => {
+    // The home screen §9.1 has nothing to compact or start over, but the taken
+    // name stays taken here too, otherwise `/compact` would mean different
+    // things on two screens.
     expect(names("/", ["model"])).toEqual(["model", "review"]);
   });
 
-  it("не сдваивает имя, занятое встроенной командой", () => {
-    // `/compact`, делающий что-то кроме сжатия, хуже, чем его отсутствие.
+  it("does not duplicate a name taken by a built-in command", () => {
+    // `/compact` doing something other than compacting is worse than its absence.
     const items = menuFor("/compact", project, BUILTINS);
     expect(items?.length).toBe(1);
     expect(items?.[0].builtin).toBe("compact");
   });
 });
 
-describe("отправка", () => {
-  it("узнаёт встроенную команду", () => {
+describe("sending", () => {
+  it("recognises a built-in command", () => {
     expect(builtinFor("/compact", BUILTINS)).toBe("compact");
     expect(builtinFor("/compact ", BUILTINS)).toBe("compact");
   });
 
-  it("не считает командой проектное имя: его разворачивает ядро", () => {
+  it("does not treat a project name as a command: the core expands it", () => {
     expect(builtinFor("/review", BUILTINS)).toBeNull();
   });
 
-  it("не считает командой строку с аргументами: встроенные их не берут", () => {
-    expect(builtinFor("/compact хвост", BUILTINS)).toBeNull();
-    expect(builtinFor("обычное сообщение", BUILTINS)).toBeNull();
+  it("does not treat a line with arguments as a command: built-ins take none", () => {
+    expect(builtinFor("/compact tail", BUILTINS)).toBeNull();
+    expect(builtinFor("an ordinary message", BUILTINS)).toBeNull();
   });
 });
 

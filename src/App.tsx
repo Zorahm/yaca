@@ -1,19 +1,19 @@
 /**
- * Окно: каркас и всё, что в него вставлено.
+ * Window: the frame and everything that is put into it.
  *
- * Здесь нет ни одного собственного «состояния ленты»: всё, что рисуется,
- * выводится из потока событий редьюсером `core/feed`. Лент теперь несколько —
- * по одной на открытый чат (`ui/chats`), — и живут они все сразу: ход,
- * начатый в одном разговоре, идёт дальше, пока смотрят в другой.
+ * There is no feed state of its own here: everything drawn is derived from the
+ * event stream by the `core/feed` reducer. There are several feeds now, one per
+ * open chat (`ui/chats`), and they all live at once: a turn started in one
+ * conversation keeps going while the other one is on screen.
  *
- * Своё состояние тут только то, что живёт в окне и ядру неизвестно: список
- * проектов, проект домашнего экрана, показан ли сайдбар, какая панель
- * открыта, какой файл в ней показан.
+ * Its own state is only what lives in the window and is unknown to the core: the
+ * list of projects, the home screen's project, whether the sidebar is shown,
+ * which panel is open, which file is shown in it.
  *
- * Правая панель — одна строка состояния, а не четыре независимых флага:
- * открыта всегда одна, и закрытая панель размонтируется, не помня себя.
- * Она стоит колонкой справа от ленты, как сайдбар слева; ширину обеих
- * человек тянет сам, и помнит её окно (`ui/resize`).
+ * The right panel is one state line, not four independent flags: exactly one is
+ * open, and a closed panel unmounts and remembers nothing. It stands as a column
+ * to the right of the feed, like the sidebar on the left; the person drags the
+ * width of both themselves, and the window remembers it (`ui/resize`).
  *
  * Between the feed and the panel stands the browser column, with its own
  * button and its own width (`ui/browser`).
@@ -102,12 +102,12 @@ import "./ui/viewer/viewer.css";
 import "./ui/sidebar/sidebar.css";
 
 export default function App({ prefs }: { prefs: Preferences }) {
-  // Настройки приложения живут в оболочке: подписка ставит атрибуты на
-  // <html> и перерисовывает дерево, когда выбрали другую тему или язык.
+  // Application settings live in the shell: the subscription sets attributes on
+  // <html> and redraws the tree when another theme or language is chosen.
   const livePrefs = usePreferences(prefs);
-  // Настройки поверх окна, а не отдельным окном: второе окно создавалось из
-  // команды оболочки и на Windows вешало всю программу, а ещё оно прятало
-  // разговор, к которому человек вернётся через секунду.
+  // Settings float over the window rather than in a separate one: a second window
+  // was created from a shell command and on Windows hung the whole program, and it
+  // also hid the conversation the person would return to a second later.
   // Which section it stands on, or `null` while it is closed.
   const [settingsAt, setSettingsAt] = useState<SettingsSection | null>(null);
 
@@ -140,7 +140,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
         { id: "check-updates", text: t("menu.check_updates"), action: openAbout },
         { id: "about", text: t("menu.about"), action: openAbout },
       ],
-    }).catch((e: unknown) => console.error("не собрать системное меню", e));
+    }).catch((e: unknown) => console.error("could not build the system menu", e));
   }, [livePrefs.language, openAbout]);
 
   // The window: its own title bar, where it has one, over everything else —
@@ -187,20 +187,22 @@ export default function App({ prefs }: { prefs: Preferences }) {
   // The settings lie over the whole window, the browser's page included.
   useBrowserCover(settingsAt !== null);
 
-  // Ручной скачок по ленте идёт через её окно: блок далеко от видимой области
-  // не размечен, и `getElementById` на нём мёртв. Скачки тут (стрелки шапки) —
-  // это и возврат по чекпоинтам, поэтому ручка одна и та же для обоих путей.
+  // A manual jump along the feed goes through its window: a block far from the
+  // visible area is not marked up, and `getElementById` is dead on it. The jumps
+  // here (the header arrows) are also the return via checkpoints, so one handle
+  // serves both paths.
   const feedJump = useRef<FeedJump>(null);
 
   /**
-   * Слэш-команды того проекта, в котором сейчас пишут.
+   * Slash commands of the project the person is writing in right now.
    *
-   * Список нужен только меню: разворачивает команду ядро, читая каталог на
-   * каждом сообщении. Поэтому и перечитывается он по требованию композера, а
-   * не подпиской: файлы проекта живут вне потока `AgentEvent`.
+   * The list is needed only by the menu: the core expands a command by reading
+   * the catalog on every message. That is why it is re-read on the composer's
+   * request rather than by a subscription: the project's files live outside the
+   * `AgentEvent` stream.
    */
   const project = active?.project ?? draft;
-  // Картинки разговора по порядку — по ним листает просмотрщик.
+  // The conversation's images in order — the viewer pages through them.
   const activeFeed = active?.feed ?? null;
   const gallery = useMemo(() => galleryOf(activeFeed), [activeFeed]);
   const refreshCommands = useCallback(() => {
@@ -220,27 +222,25 @@ export default function App({ prefs }: { prefs: Preferences }) {
   );
 
   useEffect(() => {
-    // Проекты помнят глобальные настройки приложения: в самом проекте список
-    // хранить негде, он нужен раньше, чем известен хоть один проект.
+    // Projects remember the application's global settings: the project itself has
+    // no place to keep the list, and it is needed before any project is known.
     void listProjects().then((list) => {
       setProjects(list);
       setDraft((now) => now ?? list[0] ?? null);
     }, failed);
   }, [failed]);
 
-  /** Модели меняются в панели провайдеров и перечитываются после неё. */
+  /** Models change in the providers panel and are re-read after it. */
   const refreshProviders = useCallback(() => {
-    // Ошибку глотать нельзя: битый `providers.json` останавливает список
-    // моделей, и молча пустой переключатель не объяснил бы, почему он
-    // пуст.
+    // The error must not be swallowed: a broken `providers.json` stops the model
+    // list, and a silently empty switcher would not explain why it is empty.
     void fetchModels().then(setModels, failed);
   }, [failed]);
 
   useEffect(refreshProviders, [refreshProviders]);
 
-  // Провайдеров правят в окне настроек, и переключатель моделей
-  // обязан это увидеть: список, оставшийся прежним после «Опросить», — это
-  // окно, врущее про состояние.
+  // Providers are edited in the settings window, and the model switcher must see
+  // that: a list left unchanged after "Ask" is a window lying about the state.
   useEffect(() => {
     let live = true;
     const off = onProviders(() => live && refreshProviders());
@@ -261,14 +261,14 @@ export default function App({ prefs }: { prefs: Preferences }) {
     [],
   );
 
-  // --- проекты и чаты -------------------------------------------------------
+  // --- projects and chats ---------------------------------------------------
 
   /**
-   * «Новый чат»: окно показывает домашний экран этого проекта.
+   * "New chat": the window shows this project's home screen.
    *
-   * Сессия рождается первым сообщением, и кнопка, заводящая её сразу,
-   * оставляла бы в списке пустую строку за каждое «передумал».
-   * Начатые чаты при этом никуда не деваются: они в сайдбаре рядом.
+   * A session is born with the first message, and a button that started it at
+   * once would leave an empty row in the list for every "changed my mind".
+   * Chats already started go nowhere: they stay in the sidebar next to it.
    */
   const newChat = useCallback(
     (project: string) => {
@@ -285,7 +285,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
     try {
       const list = await rememberProject(picked);
       setProjects(list);
-      // Добавили — значит сюда и собирались: домашний экран открывается в нём.
+      // Added means this is where they were headed: the home screen opens in it.
       setDraft(list[0] ?? picked);
       chats.activate(null);
     } catch (e) {
@@ -306,7 +306,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
     [failed],
   );
 
-  // --- действия ленты и композера -------------------------------------------
+  // --- feed and composer actions --------------------------------------------
 
   const humanKeys = useMemo(
     () =>
@@ -362,7 +362,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
       if (active) chats.patch(active.id, { feed: { ...active.feed, preview: null } });
     },
     editSummary: (text) => send(commands.editSummary(text)),
-    // Панель файла открывается и по имени файла в строке действия.
+    // The file panel also opens from a file name in the action row.
     openFile: (path) => {
       setFilePanelPath(path);
       setPanel("file");
@@ -393,8 +393,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
     setBypass: (on) => send(commands.setBypass(on)),
     setModel: (model) => send(commands.setModel(model)),
     setEffort: (effort: Effort) => send(commands.setEffort(effort)),
-    // Встроенные команды делает интерфейс — это те же действия, что у
-    // полосы уведомлений и у строки «Новый чат» сайдбара.
+    // Built-in commands are done by the interface: they are the same actions as
+    // the notice bar's and the sidebar's "New chat" row.
     compact: () => send(commands.compact()),
     openCheckpoints: () => setPanel("checkpoints"),
     openMcp: () => setPanel("mcp"),
@@ -402,8 +402,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
     newChat: () => {
       if (active !== null) newChat(active.project);
     },
-    // Пути отдаются от корня проекта — их же увидит модель, и карточка
-    // вложения не растянется абсолютным путём.
+    // Paths are given relative to the project root: that is what the model sees
+    // too, and the attachment card does not stretch with an absolute path.
     pickFiles: hasFileDialogs
       ? async () => {
           const root = active?.feed.state?.projectRoot;
@@ -416,7 +416,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
     refreshCommands,
   };
 
-  // --- правая панель ----------------------------------------------------------
+  // --- right panel -----------------------------------------------------------
 
   const watchProcess = useCallback(
     (id: ProcessId | null) => {
@@ -427,7 +427,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
     [active, chats],
   );
 
-  // ⌥← / ⌥→ листают файлы текущего набора, не закрывая панель.
+  // ⌥← / ⌥→ step through the files of the current set without closing the panel.
   const shiftFile = useCallback(
     (delta: number) => {
       if (panel !== "file" || !active) return;
@@ -455,27 +455,28 @@ export default function App({ prefs }: { prefs: Preferences }) {
       if (id) send(commands.previewCheckpoint(id));
     },
     nextMode: () => {
-      // На домашнем экране сочетание молчит: сессии нет, `setMode` слать
-      // некуда, а чип там свой и живёт в состоянии `Home`. Клавиатуру
-      // до него не дотянули — она вся висит здесь, — и это видимая дыра, а не
-      // забытая ветка: мышью режим до старта выбирается.
+      // On the home screen the shortcut is silent: there is no session to send
+      // `setMode` to, and the chip there is its own and lives in the `Home` state.
+      // The keyboard was never extended to it — all of it hangs here — and this is
+      // a visible gap, not a forgotten branch: before the start the mode is picked
+      // with the mouse.
       const now = active?.feed.state?.mode;
       if (now === undefined) return;
       composerActions.setMode(MODES[(MODES.indexOf(now) + 1) % MODES.length]);
     },
   });
 
-  // --- разметка -------------------------------------------------------------
+  // --- layout ---------------------------------------------------------------
 
-  // Сайдбар один и тот же на обоих экранах: разное — то, что стоит справа.
+  // The sidebar is the same on both screens: what differs is what stands on the right.
   const sidebar = (collapsed: boolean) => (
     <Sidebar
       projects={projects}
       chats={chats.chats}
       activeId={active?.id ?? null}
       current={active?.project ?? draft}
-      // Перечитать списки есть смысл, когда они могли измениться: открыли или
-      // закрыли чат, закончился ход и сменился заголовок.
+      // Re-reading the lists makes sense when they may have changed: a chat was
+      // opened or closed, a turn ended, and a title changed.
       reload={chats.chats.map((chat) => `${chat.id}:${chat.title}`).join("|")}
       onNewChat={newChat}
       onOpenSession={(project, id) => void chats.resume(project, id).catch(failed)}
@@ -504,17 +505,17 @@ export default function App({ prefs }: { prefs: Preferences }) {
     </div>
   ) : null;
 
-  // Состояние приезжает вместе с открытым чатом, поэтому `null` здесь значит
-  // ровно одно: открытого чата нет и окно на домашнем экране.
+  // The state arrives together with the open chat, so `null` here means exactly
+  // one thing: there is no open chat and the window is on the home screen.
   const state = active?.feed.state ?? null;
 
   if (active === null || state === null) {
     return frame(
       <Pictures root={project} gallery={gallery}>
       <div className="shell">
-        {/* На домашнем экране сайдбар не прячется: прячет его кнопка шапки,
-            а шапки здесь нет. Прятать тут и нечего — кроме сайдбара на
-            домашнем экране никакой навигации не осталось. */}
+        {/* On the home screen the sidebar does not hide: the header's button hides
+            it, and there is no header here. There is nothing to hide here — apart
+            from the sidebar, no navigation is left on the home screen. */}
         {sidebar(false)}
 
         <Home
@@ -614,8 +615,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
           queued={active.feed.queued}
           found={active.feed.found}
           actions={composerActions}
-          // Черновик принадлежит разговору, а не проекту: чатов в проекте
-          // несколько, и недописанное в одном не должно всплывать в другом.
+          // The draft belongs to the conversation, not the project: a project has
+          // several chats, and what is half-written in one must not surface in another.
           draftKey={`yaca.draft.${active.id}`}
         />
       </div>

@@ -1,16 +1,15 @@
 /**
- * Просмотрщик картинок — один на всё окно.
+ * Image viewer: one for the whole window.
  *
- * Открывается с любой плитки: вложение в композере, карточка сообщения,
- * строка `ReadImage`. Отдельного для «своих» и «модели» нет намеренно: это
- * одно и то же действие над одним и тем же файлом, и два просмотрщика
- * разошлись бы в мелочах на первой же правке.
+ * Opens from any tile: an attachment in the composer, a message card, a `ReadImage` row. There
+ * is deliberately no separate viewer for "mine" and "the model's": it is the same action on the
+ * same file, and two viewers would drift apart in small details at the first edit.
  *
- * Поведение диалога — у Radix, как у панелей §1.1: ловушка фокуса, `Esc`,
- * роли (§14). Арифметика масштаба — в `zoom.ts`, здесь только жесты.
+ * Dialog behaviour belongs to Radix, as for the panels (§1.1): focus trap, `Esc`, roles (§14).
+ * The zoom arithmetic is in `zoom.ts`; here there are only gestures.
  *
- * Картинка приходит от ядра целиком, `data:`-адресом: миниатюры в 320 точек
- * для рассматривания мало, а диск вебвью не читает.
+ * The picture comes from the core whole, as a `data:` address: 320-point thumbnails are too
+ * small for looking closely, and the webview does not read the disk.
  */
 
 import {
@@ -58,11 +57,10 @@ import {
 } from "./zoom";
 
 /**
- * Даёт окну корень для миниатюр и просмотрщик для всего, что в нём нарисовано.
+ * Gives the window the root for thumbnails and the viewer for everything drawn in it.
  *
- * `gallery` — картинки разговора по порядку. Открытая из него листается по
- * нему; открытая не из него — вложение, которое ещё не отправлено, —
- * показывается одна.
+ * `gallery` is the conversation's pictures in order. A picture opened from it is paged through
+ * it; one opened not from it — an attachment not yet sent — is shown alone.
  */
 export function Pictures({
   root,
@@ -122,17 +120,16 @@ function Viewer({
   const [image, setImage] = useState<Loaded | "failed" | null>(null);
   const [box, setBox] = useState<Size | null>(null);
   const [view, setView] = useState<View | null>(null);
-  // Состоянием, а не `useRef`: Radix рисует содержимое диалога порталом, на
-  // проход позже, и к первому эффекту узла ещё нет. С `useRef` рамка не
-  // измерялась никогда — и картинка, которой не с чем вписаться, не
-  // появлялась вовсе.
+  // State, not `useRef`: Radix draws the dialog's content through a portal, one pass later,
+  // and the node does not exist yet at the first effect. With `useRef` the frame was never
+  // measured, and the picture, having nothing to fit into, never appeared at all.
   const [stage, setStage] = useState<HTMLDivElement | null>(null);
   const drag = useRef<{ x: number; y: number } | null>(null);
   const [dragging, setDragging] = useState(false);
-  /** Где нажали — чтобы отличить щелчок от перетаскивания, когда отпустят. */
+  /** Where the press happened, to tell a click from a drag when it is released. */
   const pressed = useRef<{ x: number; y: number } | null>(null);
-  // «Стоял ли вид целиком» запоминается до смены рамки: после неё спросить
-  // уже не у чего — масштаб «целиком» стал другим.
+  // Whether the view was "fitted" is remembered before the frame changes: after the change there
+  // is nothing left to ask — the "fitted" scale has become a different one.
   const wasFitted = useRef(true);
 
   useEffect(() => {
@@ -141,7 +138,7 @@ function Viewer({
     setView(null);
     imageFull(root, path).then(
       (src) => {
-        // Размер нужен до первого кадра: без него «целиком» не посчитать.
+        // The size is needed before the first frame: without it "fitted" cannot be computed.
         const probe = new Image();
         probe.onload = () => {
           if (alive) {
@@ -170,8 +167,8 @@ function Viewer({
   const loaded = image !== null && image !== "failed" ? image : null;
   const size = loaded?.size ?? null;
 
-  // Окно изменили: вид, стоявший «целиком», остаётся целиком, остальное —
-  // в пределах новой рамки. Сюда же попадает первый кадр новой картинки.
+  // The window was resized: a view that was "fitted" stays fitted, the rest stays within the new
+  // frame. The first frame of a new picture also lands here.
   useEffect(() => {
     if (size === null || box === null) return;
     setView((now) => {
@@ -185,13 +182,13 @@ function Viewer({
       view === null || size === null || box === null || isFitted(view, size, box);
   }, [view, size, box]);
 
-  /** Жест над видом; до загрузки менять нечего. */
+  /** A gesture over the view; before loading there is nothing to change. */
   function change(next: (view: View, size: Size, box: Size) => View) {
     if (view === null || size === null || box === null) return;
     setView(next(view, size, box));
   }
 
-  /** Точка события от центра рамки — в этих координатах считает `zoom`. */
+  /** The event point relative to the frame's centre — `zoom` computes in these coordinates. */
   function fromCentre(event: { clientX: number; clientY: number }) {
     const rect = stage?.getBoundingClientRect();
     if (rect === undefined) return { x: 0, y: 0 };
@@ -203,7 +200,7 @@ function Viewer({
 
   function onWheel(event: WheelEvent) {
     const at = fromCentre(event);
-    // Колесо мыши шагает сотнями, тачпад — единицами; степень сглаживает оба.
+    // A mouse wheel steps in hundreds, a trackpad in units; the exponent smooths out both.
     const factor = Math.pow(STEP, -event.deltaY / 100);
     change((v, s, b) => zoomAt(v, factor, at, s, b));
   }
@@ -223,11 +220,11 @@ function Viewer({
   }
 
   /**
-   * Отпустили: щелчок по пустому месту закрывает просмотрщик.
+   * Released: a click on empty space closes the viewer.
    *
-   * По картинке — нет: по ней тянут и щёлкают дважды, и увеличенная во всю
-   * рамку она пустого места не оставляет вовсе. Пока картинки нет — грузится
-   * или не открылась, — пустое место вся рамка.
+   * On the picture it does not: the picture is dragged and double-clicked, and when it is
+   * enlarged to fill the frame it leaves no empty space at all. While there is no picture — it
+   * is loading or failed to open — the whole frame is empty space.
    */
   function onPointerUp(event: PointerEvent) {
     const from = pressed.current;
@@ -253,7 +250,7 @@ function Viewer({
   const many = list.length > 1;
   const step = (by: number) => onIndex((index + by + list.length) % list.length);
 
-  /** Поля панелей — то же пустое место; кнопки и подписи на них — нет. */
+  /** The margins of the panels are the same empty space; there are no buttons or captions on them. */
   function closeOnBare(event: MouseEvent<HTMLElement>) {
     if (event.target === event.currentTarget) onClose();
   }
@@ -281,7 +278,7 @@ function Viewer({
         break;
       case "r":
       case "R":
-      // Та же клавиша в русской раскладке.
+      // The same key in the Russian keyboard layout.
       case "к":
       case "К":
         turn();
@@ -322,7 +319,7 @@ function Viewer({
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={release}
-            // Двойной щелчок — туда и обратно между «целиком» и «точка в точку».
+            // Double-click toggles back and forth between "fitted" and "1:1".
             onDoubleClick={(event) => {
               const at = fromCentre(event);
               change((v, s, b) =>

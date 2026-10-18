@@ -1,10 +1,10 @@
 /**
- * Что лежит по пути вложения: картинка, файл, папка или уже ничего.
+ * What lies at an attachment's path: a picture, a file, a folder, or nothing at all.
  *
- * Спрашивается у ядра, а не угадывается по имени: `.png`, в котором лежит
- * HTML, — файл, а не картинка, и папку от файла без расширения по имени не
- * отличить вовсе. Вебвью диска не читает, поэтому вместе с ответом приезжает
- * и миниатюра — готовым `data:`-адресом.
+ * Asked of the core, not guessed from the name: a `.png` that holds HTML is a
+ * file, not a picture, and a folder without an extension cannot be told apart
+ * by name at all. The webview does not read the disk, so the thumbnail comes
+ * with the answer, as a ready `data:` address.
  */
 
 import { useContext, useEffect, useState } from "react";
@@ -12,10 +12,10 @@ import { useContext, useEffect, useState } from "react";
 import { attachmentLook, type AttachmentLook } from "../core/client";
 import { PreviewRoot } from "./viewer/context";
 
-/** Один вопрос на путь: лента перерисовывается чаще, чем меняются файлы. */
+/** One question per path: the feed re-renders more often than files change. */
 const asked = new Map<string, Promise<AttachmentLook>>();
 
-/** Ядро не ответило — значит, показать можно только имя. */
+/** The core did not answer, so only the name can be shown. */
 const UNKNOWN: AttachmentLook = { kind: "file", preview: null };
 
 function lookOf(root: string, path: string): Promise<AttachmentLook> {
@@ -28,7 +28,7 @@ function lookOf(root: string, path: string): Promise<AttachmentLook> {
   return answer;
 }
 
-/** `undefined` — ответ ещё едет. */
+/** `undefined` — the answer is still on its way. */
 export function useLook(path: string): AttachmentLook | undefined {
   const root = useContext(PreviewRoot);
   const [look, setLook] = useState<AttachmentLook | undefined>(undefined);

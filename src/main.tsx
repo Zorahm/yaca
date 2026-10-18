@@ -5,12 +5,12 @@ import App from "./App";
 import { adoptStorage } from "./core/legacy";
 import { bootPrefs } from "./ui/prefs";
 
-// До первого чтения: композер берёт черновик при монтировании (§7.4).
+// Before the first read: the composer takes its draft on mount (§7.4).
 adoptStorage();
 
-// Настройки приложения §10 прикладываются до первого кадра: язык выбирает
-// словарь, тема и акцент — токены. Окно, нарисованное в Ночи и тут же
-// перекрашенное в Бумагу, моргало бы на каждом запуске.
+// Application settings §10 are applied before the first frame: the language picks
+// the dictionary, the theme and accent pick the tokens. A window drawn in night and
+// at once repainted into paper would flicker on every launch.
 void bootPrefs().then((prefs) => {
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>

@@ -1,20 +1,20 @@
 /**
- * Склонение числительных (§14).
+ * Plural forms of numerals (§14).
  *
- * Своё, а не `Intl.PluralRules`: правила совпадают, но `Intl` возвращает
- * категорию по строке локали, а нам нужна ровно та локаль, которую выбрал
- * человек, и ровно те три формы, которые лежат в словаре. Плюс это чистая
- * функция — её видно в тесте целиком.
+ * Our own, not `Intl.PluralRules`: the rules match, but `Intl` returns the category
+ * for a locale string, and we need exactly the locale the user picked and exactly
+ * the three forms the dictionary has. Plus this is a pure function — it can be
+ * seen whole in a test.
  */
 
-/** Формы, которые может потребовать словарь. */
+/** Forms a dictionary may require. */
 export type PluralForm = "one" | "few" | "many" | "other";
 
 /**
- * Русский: 1 файл, 2 файла, 5 файлов, 11 файлов, 21 файл.
+ * Russian: 1 файл, 2 файла, 5 файлов, 11 файлов, 21 файл.
  *
- * Одиннадцать — не «один»: вторая цифра важнее последней, и это тот случай,
- * на котором ломается всякая «простая» реализация.
+ * Eleven is not «один» (one): the second digit matters more than the last one, and
+ * this is the case that breaks every "simple" implementation.
  */
 export function ruForm(n: number): PluralForm {
   const abs = Math.abs(Math.trunc(n));

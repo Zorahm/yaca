@@ -29,7 +29,7 @@ export function ModelsList({
 }: {
   models: ModelInfo[];
   busy: boolean;
-  /** Отказ провайдера. Пустой список после успеха — не ошибка. */
+  /** The provider's refusal. An empty list after success is not an error. */
   error: string | null;
   onAsk: () => void;
 }) {

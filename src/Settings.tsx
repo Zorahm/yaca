@@ -1,24 +1,27 @@
 /**
- * Настройки §10, поверх главного окна.
+ * Settings §10, over the main window.
  *
- * Не отдельное окно: оно создавалось командой оболочки и на Windows вешало
- * программу целиком, а ещё прятало разговор. Теперь это слой над ним, и
- * закрывается он кнопкой в навигации или Esc.
+ * Not a separate window: it was created by a shell command, and on Windows it
+ * hung the whole program and also hid the conversation. Now it is a layer over
+ * the window, and it closes with the button in the navigation or with Esc.
  *
- * Навигация разрезана надвое — приложение и проект. §10 перечисляет разделы
- * одним списком, но в нём смешаны два уровня правды: провайдеры, внешний вид и
- * уведомления общие для всего, а модели, режим, правила и исключения снимков —
- * этого проекта. Плоским списком человек менял бы «Режим» и не знал, где
- * именно, поэтому у проектной группы стоит чип папки, и он же переключатель.
+ * The navigation is split in two: the application and the project. §10 lists
+ * the sections in one list, but that list mixes two levels of truth: providers,
+ * appearance and notices are common to everything, while models, mode, rules and
+ * snapshot exclusions belong to this project. With a flat list a person would
+ * change "Mode" without knowing which one it was, so the project group has a
+ * folder chip, and it is also the switcher.
  *
- * Разделов восемь, а не девять: языковых серверов нет, потому что за ними нет
- * ничего в ядре, а раздел, который ничего не меняет, — это интерфейс, врущий
- * про состояние (§0). MCP стоит в обеих группах — свои серверы у приложения,
- * свои у проекта, — и это один и тот же раздел над двумя списками.
+ * There are eight sections, not nine: there are no language servers, because
+ * nothing in the core stands behind them, and a section that changes nothing is
+ * an interface lying about the state (§0). MCP is in both groups — its own
+ * servers for the application, its own for the project — and it is one and the
+ * same section over two lists.
  *
- * Настройки применяются сразу, без кнопки «Сохранить»: она разрешила бы окну
- * показывать одно, а диску держать другое. Исключение — описание провайдера:
- * это документ, и недописанный адрес на диск попадать не должен.
+ * Settings apply at once, without a "Save" button: it would let the window show
+ * one thing while the disk held another. The exception is the provider's
+ * description: it is a document, and an unfinished address must not reach the
+ * disk.
  */
 
 import {
@@ -127,15 +130,15 @@ export default function Settings({
   const [models, setModels] = useState<ModelInfo[]>([]);
 
   useEffect(() => {
-    // Свежий первым — тот же порядок, в котором главное окно выбирает проект
-    // по умолчанию, так что окно настроек открывается на том же самом.
+    // Newest first — the same order in which the main window picks the default
+    // project, so the settings window opens on that same one.
     void listProjects().then((list) => {
       setProjects(list);
       setProject((now) => now ?? list[0] ?? null);
     });
   }, []);
 
-  // Esc закрывает слой, пока фокус не в поле: в нём Esc принадлежит полю.
+  // Esc closes the layer while focus is not in a field: inside a field, Esc belongs to the field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -156,7 +159,7 @@ export default function Settings({
   const patchPrefs = useCallback(
     (change: Partial<Preferences>) => {
       void setPreferences({ ...prefs, ...change }).catch((e: unknown) =>
-        console.error("не записать настройки приложения", e),
+        console.error("could not save the application settings", e),
       );
     },
     [prefs],
@@ -166,8 +169,8 @@ export default function Settings({
   const ownMcp = useOwnMcp();
   const mcpFile = useMcpFile(project);
 
-  // Раздел проекта без проекта показать нечем: список пуст, пока ни одной
-  // папки не открывали.
+  // A project section has nothing to show without a project: the list is empty
+  // until a folder has been opened.
   const shown = project === null && isProjectSection(section) ? "providers" : section;
 
   return (
@@ -185,8 +188,8 @@ export default function Settings({
         {project !== null && (
           <>
             <div className="set-group">{t("set.group_project")}</div>
-            {/* Чип проекта — он же переключатель: папок в списке несколько, и
-                раздел обязан сказать, какую из них он правит. */}
+            {/* The project chip is also the switcher: there are several folders in
+                the list, and the section must say which one it edits. */}
             <Select
               mono
               align="start"
