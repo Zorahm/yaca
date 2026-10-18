@@ -28,6 +28,7 @@ import { t, type Key } from "../../i18n";
 import { baseName } from "../format";
 import type { Bounds } from "../resize";
 import { Splitter } from "../Splitter";
+import { useBrowserCover } from "../browser/cover";
 
 export type PanelKind = "checkpoints" | "processes" | "mcp" | "lsp" | "agents" | "file";
 
@@ -74,6 +75,8 @@ export function Panel({
   children: ReactNode;
 }) {
   const frame = useContext(PanelFrameContext);
+  // A file opened wide covers the browser's column too.
+  useBrowserCover(full);
   // A panel is only ever drawn by the window, which provides the frame.
   if (frame === null) return null;
 

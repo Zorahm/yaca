@@ -30,6 +30,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use super::app::AppLink;
 use crate::error::CoreError;
 
 /// The project's file, at its root.
@@ -142,9 +143,11 @@ impl McpServerSettings {
     /// The line a human recognises the server by: the command as written, or
     /// the address. Unexpanded on purpose — `${TOKEN}` stays `${TOKEN}`.
     pub(crate) fn target(&self) -> String {
+        // A declaration is never of an application server: those have no
+        // file to be declared in ([`ServerSpec::target`]).
         match self.transport() {
             McpTransport::Http => self.url.clone().unwrap_or_default(),
-            McpTransport::Stdio => {
+            McpTransport::Stdio | McpTransport::App => {
                 let mut line = self.command.clone().unwrap_or_default();
                 for arg in &self.args {
                     line.push(' ');
@@ -171,6 +174,8 @@ fn check_range(key: &str, value: Option<u64>, max: u64) -> Result<(), String> {
 pub enum McpTransport {
     Stdio,
     Http,
+    /// A server in the application's own process ([`super::app`]).
+    App,
 }
 
 /// Which file a server was declared in.
@@ -187,6 +192,9 @@ pub enum McpSource {
     /// A plugin the human enabled (`plugin`). Enabling it was the consent, so
     /// its servers start without a second question, like the human's own.
     Plugin,
+    /// The application itself ([`super::app`]): declared in no file, and
+    /// trusted like the application is.
+    App,
 }
 
 /// The shape of `mcp.json` and `.mcp.json`. Other keys are left alone: the
@@ -248,6 +256,9 @@ pub struct ServerSpec {
     pub settings: McpServerSettings,
     /// Set for a plugin's server: where it starts and what its variables are.
     pub plugin: Option<PluginLaunch>,
+    /// Set for a server of the application: `settings` then says nothing
+    /// about how to reach it.
+    pub app: Option<AppLink>,
 }
 
 /// What a plugin's server is started with on top of its declaration.
@@ -309,6 +320,7 @@ pub fn merge(
                     source,
                     settings: settings.clone(),
                     plugin: None,
+                    app: None,
                 },
             );
         }
@@ -329,9 +341,34 @@ pub(crate) enum Launch {
         url: String,
         headers: BTreeMap<String, String>,
     },
+    App(AppLink),
 }
 
 impl ServerSpec {
+    /// Why the declaration cannot be used. A server of the application has
+    /// nothing declared to get wrong.
+    pub(crate) fn validate(&self) -> Result<(), String> {
+        match self.app {
+            Some(_) => Ok(()),
+            None => self.settings.validate(),
+        }
+    }
+
+    pub(crate) fn transport(&self) -> McpTransport {
+        match self.app {
+            Some(_) => McpTransport::App,
+            None => self.settings.transport(),
+        }
+    }
+
+    /// The line the panel shows for the server, see [`McpServerSettings::target`].
+    pub(crate) fn target(&self) -> String {
+        match &self.app {
+            Some(app) => app.target.clone(),
+            None => self.settings.target(),
+        }
+    }
+
     /// Resolves the declaration against the project root and the environment.
     pub(crate) fn launch(&self, root: &Path) -> Result<Launch, String> {
         self.launch_with(root, &|name| std::env::var(name).ok())
@@ -342,6 +379,9 @@ impl ServerSpec {
         root: &Path,
         var: &dyn Fn(&str) -> Option<String>,
     ) -> Result<Launch, String> {
+        if let Some(app) = &self.app {
+            return Ok(Launch::App(app.clone()));
+        }
         let s = &self.settings;
         s.validate()?;
         let plugin = self.plugin.as_ref();
@@ -576,6 +616,7 @@ mod tests {
         let root = Path::new("/p");
         let spec = |settings| ServerSpec {
             plugin: None,
+            app: None,
             name: "s".into(),
             source: McpSource::Project,
             settings,

@@ -581,8 +581,8 @@ impl Inner {
             .map(|server| McpServerSummary {
                 name: server.spec.name.clone(),
                 source: server.spec.source,
-                transport: server.spec.settings.transport(),
-                target: server.spec.settings.target(),
+                transport: server.spec.transport(),
+                target: server.spec.target(),
                 status: server.status,
                 reason: server.reason.clone(),
                 label: server.client.as_ref().and_then(|c| c.info.label.clone()),
@@ -648,10 +648,9 @@ fn begin(inner: &Arc<Inner>, name: &str) {
     server.reason = None;
     server.login_url = None;
 
-    let settings = &server.spec.settings;
-    server.status = if settings.disabled {
+    server.status = if server.spec.settings.disabled {
         McpStatus::Disabled
-    } else if let Err(why) = settings.validate() {
+    } else if let Err(why) = server.spec.validate() {
         server.reason = Some(why);
         McpStatus::Failed
     } else if !server.approved {

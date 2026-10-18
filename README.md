@@ -40,6 +40,7 @@ The project is under active development: version alpha-1.0.4 (`1.0.4-alpha` in m
 - **Project memory** and custom slash commands from `.yaca/commands/`.
 - **MCP.** Tools and resources from external Model Context Protocol servers alongside built-in ones; see [MCP Servers](#mcp-servers).
 - **LSP.** Definitions, references, types, diagnostics, and project-wide renames from language servers; see [Language Servers (LSP)](#language-servers-lsp).
+- **Browser.** A real page per chat in the browser column beside the feed: the model opens it, reads it, takes screenshots, clicks and types, and runs JavaScript in it, and the human watches and can click in the same page. Windows only for now; see [Browser](#browser).
 
 No automatic update checks or installations are provided since pre-built binaries are not published. The menu item "Help → Check for Updates" opens "About", where this is explained.
 
@@ -74,6 +75,7 @@ Application settings and chats are stored in a single directory. On Windows, thi
 ├─ marketplaces\<name>\    cloned marketplaces
 ├─ plugin-cache\           installed plugins
 ├─ plugin-data\<plugin>\   PLUGIN_DATA for plugins
+├─ browser\               the browser column's profile: its cookies and site storage
 └─ chats\<project>-<path-hash>\
    ├─ project.json         identifies the project
    └─ <id>.jsonl, <id>.messages.jsonl, <id>.meta.json, <id>.checkpoints.json
@@ -346,6 +348,35 @@ Not supported in the MCP client:
 - **Sampling**: the client does not advertise it and servers do not request it.
 - **Resource subscriptions.** Resources are read on-demand by the model; servers do not push change notifications.
 - **Progress notifications** during long-running tool calls: the feed displays the result once completed.
+
+## Browser
+
+The globe left of the panel button opens the browser column: a page of its own for each chat, between the feed and the right panel. The model works in it through an MCP server the app provides itself, `browser` (source "app" in the `/mcp` panel), so its calls get the same rows in the feed and the same permission questions as any other server's. The server runs inside the app and opens no port.
+
+| Tool | What it does | Asks first |
+|---|---|---|
+| `navigate` | Opens a URL, or goes back, forward, or reloads. A bare `localhost:5173` opens over http. | yes |
+| `screenshot` | The visible part, the whole page (up to three viewports down), or one element. In CSS pixels. | no |
+| `read_page` | A snapshot of headings, text and interactive elements with refs (`e12`) for `act`, or the readable content as Markdown. | no |
+| `act` | Click, double or right click, hover, type, press a key, scroll, choose in a `<select>`, wait for text or an element. Real input events. | yes |
+| `eval_js` | Runs JavaScript in the page and returns the value as JSON; promises are awaited. | yes |
+| `logs` | The page's console messages or network requests since it loaded. | no |
+| `viewport` | Lays the page out at a preset (desktop, tablet, mobile) or a size, or back at the column's size. | no |
+
+In Auto mode the reviewer model decides whether a call that asks first may run; it sees only the call, which is why `act` carries `element`, the model's own words for what it acts on. Each result begins with the page's URL and the size it is laid out at: the human may have clicked somewhere since the last call. While the column is open the page is the column's size; while it is closed the page keeps living out of sight at 1280×800, and screenshots go on working. A size set with `viewport` holds either way, and the column shows a larger page scaled down.
+
+Screenshots show in their row of the feed, and a click opens them in the image viewer. Like every image an MCP server returns, they are kept under the project's `.yaca/pasted`, named by their content.
+
+The human uses the same page: back, forward, reload, an address field, opening the page in the system browser, and DevTools. A teal line under the column's header runs while a call is in progress, the element the model acts on is ringed for a moment, and a dot on the globe shows that the model is using a page the human cannot see. The first page the model opens in a chat brings the column up. All chats share one profile (`browser\` in the app directory), separate from the window's own; pages cannot reach the app's commands, and the window's own pages cannot be opened in it.
+
+Not supported:
+
+- **macOS and Linux.** The engine is WebView2 driven over the DevTools Protocol. The tools are written against an engine interface (`src-tauri/src/browser/engine.rs`); WKWebView and WebKitGTK need implementations of it, and until then those builds show no globe.
+- **Tabs.** One page per chat; links that open a new window open in the same page.
+- **Downloads and uploads.** Downloads are blocked and reported to the model; file inputs cannot be filled.
+- **Permission per site.** "Always allow" covers a tool, not a site.
+- **Prompt dialogs.** `alert` and `confirm` are accepted on their own, `prompt` is dismissed, and the next result says so.
+- **The CLI.** It has no window, and so no browser.
 
 ## PDFs and Notebooks
 

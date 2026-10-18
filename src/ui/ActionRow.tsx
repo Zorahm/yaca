@@ -90,6 +90,10 @@ export function ActionRowView({
           {row.tool === "ReadImage" && row.target && row.state === "done" && (
             <Thumb path={row.target} />
           )}
+          {/* And what a tool handed back as images — a page's screenshot:
+              the files the core kept of them (`ToolMeta.pictures`). */}
+          {row.state === "done" &&
+            row.meta?.pictures?.map((path) => <Thumb key={path} path={path} />)}
 
           {fileRows.length > 0 ? (
             <div className="group-list">

@@ -96,6 +96,7 @@ mod tests {
             name: "files".into(),
             source: McpSource::ProjectFile,
             plugin: None,
+            app: None,
             settings: stdio("server-files"),
         };
         assert!(!approvals.covers(&spec));
@@ -116,6 +117,7 @@ mod tests {
             name: "files".into(),
             source: McpSource::ProjectFile,
             plugin: None,
+            app: None,
             settings: stdio("server-files"),
         };
         approvals.record(&spec);

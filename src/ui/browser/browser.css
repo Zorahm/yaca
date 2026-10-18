@@ -1,0 +1,205 @@
+/*
+ * The browser column (BrowserColumn.tsx).
+ *
+ * The same card as the right panel: the window's ground inside, a hairline
+ * frame, held 8px off the window's edges, its header rule continuing the top
+ * bar's. Between the browser and a panel beside it there is one gap, not two.
+ *
+ * The body is where the page goes. The page itself is a native view laid
+ * over it by the shell, so the body only shows before the page exists.
+ */
+
+.browser-dock {
+  position: relative;
+  grid-column: 3;
+  grid-row: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 8px;
+  outline: none;
+}
+
+.browser-dock:has(+ .panel-dock) {
+  padding-right: 0;
+}
+
+.browser-dock > .splitter {
+  top: 20px;
+  bottom: 20px;
+}
+
+/* No room beside the feed: the column lies over its right side, as the
+   panel does. */
+.browser-dock-over {
+  grid-column: 2;
+  justify-self: end;
+  z-index: 30;
+  max-width: 100%;
+}
+
+.browser-dock-over .browser {
+  box-shadow: var(--shadow-panel);
+}
+
+.browser {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+}
+
+.browser-head {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: calc(var(--h-top) - 9px);
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.browser-address {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: var(--h-small-button);
+  padding: 0 4px 0 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+}
+
+.browser-address:focus-within {
+  border-color: var(--accent);
+}
+
+.browser-url,
+.browser-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  font: 12.5px var(--mono);
+  color: var(--ink);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  outline: none;
+}
+
+.browser-url {
+  cursor: text;
+}
+
+.browser-host {
+  color: var(--muted);
+}
+
+.browser-size {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding-right: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.browser-size-model {
+  padding-right: 0;
+  color: var(--accent-ink);
+}
+
+.browser-size-reset {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-s);
+  color: var(--muted);
+}
+
+.browser-size-reset:hover {
+  color: var(--ink);
+}
+
+/* The model is acting: a teal run along the header's rule. */
+.browser-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  overflow: hidden;
+}
+
+.browser-line::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: browser-run 1.2s ease-in-out infinite;
+}
+
+@keyframes browser-run {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browser-line::after {
+    left: 0;
+    width: 100%;
+    animation: none;
+  }
+}
+
+.browser-problem {
+  flex: none;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--err);
+}
+
+.browser-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.browser-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.browser-empty strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}

@@ -64,6 +64,7 @@ export const mcp = {
   "mcp.source_project_file": "프로젝트의 .mcp.json",
   "mcp.source_project": "프로젝트 설정",
   "mcp.source_plugin": "플러그인",
+  "mcp.source_app": "앱",
   "mcp.approve": "승인",
   "mcp.reconnect": "다시 연결",
   "mcp.status_needs_login": "로그인 필요",

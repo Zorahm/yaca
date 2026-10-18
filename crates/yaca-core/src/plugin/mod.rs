@@ -406,6 +406,7 @@ pub fn mcp_specs(plugins: &[Plugin]) -> Vec<ServerSpec> {
                     // is expanded; Claude Code expands the environment too.
                     expand_env: p.format == PluginFormat::Claude,
                 }),
+                app: None,
             })
         })
         .collect()

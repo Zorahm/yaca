@@ -14,6 +14,9 @@
  * открыта всегда одна, и закрытая панель размонтируется, не помня себя.
  * Она стоит колонкой справа от ленты, как сайдбар слева; ширину обеих
  * человек тянет сам, и помнит её окно (`ui/resize`).
+ *
+ * Between the feed and the panel stands the browser column, with its own
+ * button and its own width (`ui/browser`).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -67,6 +70,9 @@ import { PanelFrameContext, type PanelKind } from "./ui/panel/Panel";
 import { CheckpointsPanel } from "./ui/panel/CheckpointsPanel";
 import { AgentsPanel } from "./ui/panel/AgentsPanel";
 import { useChats } from "./ui/chats";
+import { BrowserColumn } from "./ui/browser/BrowserColumn";
+import { useBrowserCover } from "./ui/browser/cover";
+import { useBrowserColumn } from "./ui/browser/useBrowserColumn";
 import { useShortcuts } from "./ui/keyboard";
 import {
   clamp,
@@ -155,6 +161,17 @@ export default function App({ prefs }: { prefs: Preferences }) {
   const failed = useCallback((e: unknown) => setError(String(e)), []);
   const chats = useChats(failed);
   const active = chats.active;
+
+  const closePanel = useCallback(() => setPanel(null), []);
+  const browserColumn = useBrowserColumn({
+    session: active?.id ?? null,
+    windowWidth,
+    sideWidth: sidebarOpen ? sideWidth : 0,
+    panelOpen: panel !== null,
+    closePanel,
+  });
+  // The settings lie over the whole window, the browser's page included.
+  useBrowserCover(settingsAt !== null);
 
   // Ручной скачок по ленте идёт через её окно: блок далеко от видимой области
   // не размечен, и `getElementById` на нём мёртв. Скачки тут (стрелки шапки) —
@@ -507,7 +524,10 @@ export default function App({ prefs }: { prefs: Preferences }) {
 
   // The panel takes what the sidebar and the feed's floor leave it. A file is
   // opened to be read and starts wide; the lists start as a narrow column.
-  const panelLimits = panelBounds(windowWidth, sidebarOpen ? sideWidth : 0);
+  const panelLimits = panelBounds(
+    windowWidth,
+    (sidebarOpen ? sideWidth : 0) + browserColumn.reserve,
+  );
   const panelInitial =
     panel === "file" ? Math.round(windowWidth * FILE_SHARE) : PANEL.initial;
   const panelChosen = (panel === "file" ? fileChosen : listChosen) ?? panelInitial;
@@ -536,6 +556,15 @@ export default function App({ prefs }: { prefs: Preferences }) {
           runningProcesses={runningProcesses}
           onToggleSidebar={() => setSidebarOpen((now) => !now)}
           onTogglePanel={togglePanel}
+          browser={
+            browserColumn.supported
+              ? {
+                  open: browserColumn.open,
+                  busy: browserColumn.state?.busy ?? false,
+                  onToggle: browserColumn.toggle,
+                }
+              : null
+          }
         />
 
         <Feed feed={active.feed} actions={feedActions} ref={feedJump} />
@@ -573,6 +602,18 @@ export default function App({ prefs }: { prefs: Preferences }) {
           draftKey={`yaca.draft.${active.id}`}
         />
       </div>
+
+      {browserColumn.open && (
+        <BrowserColumn
+          session={active.id}
+          state={browserColumn.state}
+          width={browserColumn.width}
+          bounds={browserColumn.bounds}
+          initialWidth={browserColumn.initialWidth}
+          onResize={browserColumn.setWidth}
+          onClose={browserColumn.close}
+        />
+      )}
 
       {panel !== null && (
         <PanelFrameContext.Provider

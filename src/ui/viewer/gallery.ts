@@ -1,8 +1,8 @@
 /**
  * Все картинки разговора по порядку — то, что листает просмотрщик.
  *
- * И свои, и модели: приложенное человеком и открытое агентом через
- * `ReadImage`. Для листания разницы нет — это одна лента, и картинка, на
+ * И свои, и модели: приложенное человеком, открытое агентом через
+ * `ReadImage` и возвращённое инструментом картинкой (скриншот браузера). Для листания разницы нет — это одна лента, и картинка, на
  * которую агент посмотрел в ответ на скриншот, стоит сразу за скриншотом.
  */
 
@@ -35,7 +35,11 @@ export function galleryOf(feed: Feed | null): string[] {
     } else if (block.kind === "actions") {
       for (const row of flatRows(block.rows)) {
         // Только то, что открылось: у упавшего вызова показывать нечего.
-        if (row.tool === "ReadImage" && row.state === "done" && row.target) add(row.target);
+        if (row.state !== "done") continue;
+        if (row.tool === "ReadImage" && row.target) add(row.target);
+        // Images a tool returned, such as a page's screenshot, in the order
+        // the tool gave them.
+        row.meta?.pictures?.forEach(add);
       }
     }
   }

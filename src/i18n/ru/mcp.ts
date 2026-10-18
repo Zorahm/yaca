@@ -63,6 +63,7 @@ export const mcp = {
   "mcp.source_project_file": ".mcp.json проекта",
   "mcp.source_project": "настройки проекта",
   "mcp.source_plugin": "плагин",
+  "mcp.source_app": "приложение",
   "mcp.approve": "Одобрить",
   "mcp.reconnect": "Переподключить",
   "mcp.status_needs_login": "нужен вход",

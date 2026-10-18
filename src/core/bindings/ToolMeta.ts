@@ -20,4 +20,13 @@ truncated: boolean,
 /**
  * Сколько заняло, миллисекунды. Мета справа в строке.
  */
-durationMs: number, };
+durationMs: number, 
+/**
+ * Images the call returned, kept as files of the project and named by
+ * paths relative to it: the row shows them and the viewer opens them.
+ * An MCP server's images arrive as bytes, and everything the window
+ * draws speaks in paths. Optional for the window, whose rows were
+ * written before there was a field; journals of those rows read it as
+ * empty.
+ */
+pictures?: Array<string>, };

@@ -59,6 +59,9 @@ import type { ProcessSummary } from "./bindings/ProcessSummary";
 import type { ScopeKey } from "./bindings/ScopeKey";
 import type { SearchHit } from "./bindings/SearchHit";
 import type { SessionId } from "./bindings/SessionId";
+import type { BrowserState } from "./bindings/BrowserState";
+import type { Rect } from "./bindings/Rect";
+import type { ViewportSource } from "./bindings/ViewportSource";
 import type { SessionMeta } from "./bindings/SessionMeta";
 import type { SessionState } from "./bindings/SessionState";
 import type { ShellChoice } from "./bindings/ShellChoice";
@@ -87,6 +90,9 @@ import type { ToolMeta } from "./bindings/ToolMeta";
 import type { UsageSnapshot } from "./bindings/UsageSnapshot";
 
 export type {
+  BrowserState,
+  Rect,
+  ViewportSource,
   AttachedChat,
   AttachmentLook,
   ShellChoice,
@@ -1100,3 +1106,40 @@ export function refusal(scope: ScopeKey, reason: string): Refusal {
   const trimmed = reason.trim();
   return { scope, reason: trimmed === "" ? null : trimmed };
 }
+
+// --- the browser column -------------------------------------------------------
+
+const BROWSER_CHANNEL = "yaca://browser";
+
+/** A step of the page the column's arrows and reload button take. */
+export type BrowserStep = "back" | "forward" | "reload" | "stop";
+
+const NO_BROWSER = () => Promise.reject(new Error("no browser in the stand"));
+
+/**
+ * The chats' browsers (`src-tauri/src/browser`). The stand has none: its
+ * window says so by not offering the column at all.
+ */
+export const browser = {
+  supported: (): Promise<boolean> =>
+    inTauri ? invoke<boolean>("browser_supported") : Promise.resolve(false),
+  states: (): Promise<BrowserState[]> =>
+    inTauri ? invoke<BrowserState[]>("browser_states") : Promise.resolve([]),
+  /** Shows `session`'s page at `rect` and hides every other; both `null` hide all. */
+  place: (session: SessionId | null, rect: Rect | null): Promise<void> =>
+    inTauri ? invoke<void>("browser_place", { session, rect }) : Promise.resolve(),
+  open: (session: SessionId, url: string): Promise<void> =>
+    inTauri ? invoke<void>("browser_open", { session, url }) : NO_BROWSER(),
+  go: (session: SessionId, step: BrowserStep): Promise<void> =>
+    inTauri ? invoke<void>("browser_go", { session, step }) : NO_BROWSER(),
+  external: (session: SessionId): Promise<void> =>
+    inTauri ? invoke<void>("browser_external", { session }) : NO_BROWSER(),
+  devtools: (session: SessionId): Promise<void> =>
+    inTauri ? invoke<void>("browser_devtools", { session }) : NO_BROWSER(),
+  resetViewport: (session: SessionId): Promise<void> =>
+    inTauri ? invoke<void>("browser_reset_viewport", { session }) : NO_BROWSER(),
+  onState: (handler: (state: BrowserState) => void): Promise<UnlistenFn> =>
+    inTauri
+      ? listen<BrowserState>(BROWSER_CHANNEL, (event) => handler(event.payload))
+      : Promise.resolve(() => {}),
+};

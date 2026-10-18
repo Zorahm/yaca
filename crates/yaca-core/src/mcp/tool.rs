@@ -4,6 +4,8 @@
 //! from taking the name of a built-in tool, and the server's name keeps two
 //! servers from taking each other's.
 
+use std::path::Path;
+
 use async_trait::async_trait;
 use base64::Engine;
 use serde_json::{json, Value};
@@ -168,14 +170,17 @@ impl Tool for McpTool {
             .call_tool(&self.remote, input, deadline, &ctx.cancel)
             .await
             .map_err(failed)?;
-        output(&self.server, result, ctx.vision)
+        output(&self.server, result, ctx.vision, ctx.ws.home())
     }
 }
 
 /// A call's result as the session's tools return theirs.
-fn output(server: &str, result: CallResult, vision: bool) -> Result<ToolOutput, ToolError> {
+///
+/// `home` is the project, where the images are kept for the feed.
+fn output(server: &str, result: CallResult, vision: bool, home: &Path) -> Result<ToolOutput, ToolError> {
     let mut text = String::new();
     let mut pictures: Vec<Picture> = Vec::new();
+    let mut kept: Vec<String> = Vec::new();
     let mut add = |part: &str| {
         if !text.is_empty() && !text.ends_with('\n') {
             text.push('\n');
@@ -187,11 +192,17 @@ fn output(server: &str, result: CallResult, vision: bool) -> Result<ToolOutput, 
         match block {
             Content::Text { text } => add(text),
             Content::Image { data } => match decode_picture(data) {
-                Ok(picture) if vision => {
-                    add(&format!("[image {} — shown below]", pictures.len() + 1));
-                    pictures.push(picture);
+                Ok((picture, bytes)) => {
+                    // The human sees what the server returned, whether or
+                    // not the model can.
+                    kept.extend(keep(home, &bytes));
+                    if vision {
+                        add(&format!("[image {} — shown below]", pictures.len() + 1));
+                        pictures.push(picture);
+                    } else {
+                        add("[image: this model cannot be shown images]");
+                    }
                 }
-                Ok(_) => add("[image: this model cannot be shown images]"),
                 Err(why) => add(&format!("[image that could not be read: {why}]")),
             },
             Content::Audio {} => add("[audio: not passed on]"),
@@ -218,17 +229,36 @@ fn output(server: &str, result: CallResult, vision: bool) -> Result<ToolOutput, 
     }
 
     let mut out = ToolOutput::new(text).truncated(truncated);
+    out.meta.pictures = kept;
     for (index, picture) in pictures.into_iter().enumerate() {
         out = out.picture(format!("image {}", index + 1), picture);
     }
     Ok(out)
 }
 
-fn decode_picture(data: &str) -> Result<Picture, String> {
+/// The image for the model, and the bytes as the server sent them.
+fn decode_picture(data: &str) -> Result<(Picture, Vec<u8>), String> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(data.trim())
         .map_err(|e| e.to_string())?;
-    picture::prepare(bytes).map_err(|e| e.to_string())
+    let picture = picture::prepare(bytes.clone()).map_err(|e| e.to_string())?;
+    Ok((picture, bytes))
+}
+
+/// Keeps an image of a result as a file of the project, at full size, and
+/// says where, relative to the project. A file that cannot be written costs
+/// the human the preview and the model nothing.
+fn keep(home: &Path, bytes: &[u8]) -> Option<String> {
+    match picture::stash(home, bytes) {
+        Ok(path) => {
+            let shown = path.strip_prefix(home).unwrap_or(&path);
+            Some(shown.to_string_lossy().replace('\\', "/"))
+        }
+        Err(err) => {
+            tracing::warn!(%err, "an MCP image was not kept for the feed");
+            None
+        }
+    }
 }
 
 /// An embedded resource as text: its own, or a line saying what it is.
@@ -298,6 +328,7 @@ mod tests {
                 { "type": "resource_link", "uri": "file:///a.txt", "name": "a.txt" }
             ] })),
             true,
+            Path::new("."),
         )
         .unwrap();
         assert_eq!(out.text, "one\ntwo\n[resource a.txt: file:///a.txt]");
@@ -306,7 +337,8 @@ mod tests {
 
     #[test]
     fn structured_output_without_text_is_still_an_answer() {
-        let out = output("s", result(json!({ "structuredContent": { "n": 1 } })), true).unwrap();
+        let out = output("s", result(json!({ "structuredContent": { "n": 1 } })), true, Path::new("."))
+            .unwrap();
         assert!(out.text.contains("\"n\": 1"));
     }
 
@@ -316,6 +348,7 @@ mod tests {
             "tracker",
             result(json!({ "isError": true, "content": [{ "type": "text", "text": "no such task" }] })),
             true,
+            Path::new("."),
         )
         .unwrap_err();
         assert!(err.to_string().contains("tracker"));
@@ -338,9 +371,11 @@ mod tests {
             "s",
             result(json!({ "content": [{ "type": "image", "data": "not base64!", "mimeType": "image/png" }] })),
             true,
+            Path::new("."),
         )
         .unwrap();
         assert!(out.text.contains("could not be read"));
         assert!(out.pictures.is_empty());
+        assert!(out.meta.pictures.is_empty());
     }
 }

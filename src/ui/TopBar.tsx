@@ -10,9 +10,13 @@
  * колонка; при правой стоит точка, пока работают фоновые команды. Кнопка открывает панель на
  * той вкладке, на которой её закрыли; сами вкладки переключаются в панели.
  * Стрелки листают ленту по сообщениям человека.
+ *
+ * The globe left of the panel's button shows and hides the browser column,
+ * in the order the two columns stand. Its teal dot means the model is using
+ * a browser the human does not see right now.
  */
 
-import { ArrowLeft, ArrowRight } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, Globe } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import { t } from "../i18n";
@@ -32,6 +36,7 @@ export function TopBar({
   runningProcesses,
   onToggleSidebar,
   onTogglePanel,
+  browser,
 }: {
   title: string;
   projectRoot: string;
@@ -48,6 +53,8 @@ export function TopBar({
   runningProcesses: number;
   onToggleSidebar: () => void;
   onTogglePanel: () => void;
+  /** `null` where this build has no browser. */
+  browser: { open: boolean; busy: boolean; onToggle: () => void } | null;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
 
@@ -112,6 +119,21 @@ export function TopBar({
       </span>
 
       <div className="top-gap" />
+
+      {browser !== null && (
+        <div className="top-icon-wrap">
+          <button
+            className="top-icon"
+            aria-pressed={browser.open}
+            onClick={browser.onToggle}
+            aria-label={t("browser.toggle")}
+            title={browser.busy && !browser.open ? t("browser.busy") : t("browser.toggle")}
+          >
+            <Globe size={18} />
+          </button>
+          {browser.busy && !browser.open && <span className="top-dot top-dot-accent" aria-hidden="true" />}
+        </div>
+      )}
 
       <div className="top-icon-wrap">
         <button

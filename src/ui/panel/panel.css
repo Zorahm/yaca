@@ -13,7 +13,8 @@
 
 .panel-dock {
   position: relative;
-  grid-column: 3;
+  /* After the browser's column, which is empty while it is closed. */
+  grid-column: 4;
   grid-row: 1;
   min-width: 0;
   height: 100%;

@@ -15,6 +15,7 @@
 //! is one connection with its handshake, [`hub`] is the servers of a session
 //! and what state each is in.
 
+pub mod app;
 mod approval;
 mod client;
 pub mod elicit;
@@ -30,6 +31,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ts_rs::TS;
 
+pub use app::{AppServer, AppServerSpec, ServerEnd};
 pub use config::{McpServerSettings, McpSource, McpTransport, PluginLaunch, ServerSpec};
 pub use elicit::{ElicitField, ElicitKind, ElicitationReply, ElicitationRequest};
 pub use hub::Mcp;

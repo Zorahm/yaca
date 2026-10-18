@@ -27,7 +27,9 @@ yaca-core.workspace = true
 
 serde.workspace = true
 serde_json.workspace = true
-tauri = { version = "2", features = [] }
+# `unstable` is what lets a window hold a second webview — the browser
+# column's page; `devtools` keeps its DevTools in a release build.
+tauri = { version = "2", features = ["unstable", "devtools"] }
 # Выбор папки проекта в чипе §9.1. Своего диалога у вебвью нет.
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
@@ -37,3 +39,13 @@ tokio.workspace = true
 tokio-util.workspace = true
 # `Startup` уезжает в вебвью, как и типы ядра, и разойтись с ним не должен.
 ts-rs.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+# The browser's `read_page` as Markdown, the same converter `WebFetch` uses.
+htmd.workspace = true
+
+# The browser's engine on Windows talks to WebView2 directly: the versions are
+# the ones wry is built on, so the COM types are the same types.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.38"
+windows = "0.61"

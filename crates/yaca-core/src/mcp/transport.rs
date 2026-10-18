@@ -1,9 +1,11 @@
 //! How JSON-RPC messages reach a server and come back.
 //!
-//! Two ways, the two the protocol defines: a child process spoken to over its
-//! standard streams ([`stdio`]), and Streamable HTTP ([`http`]). The client
-//! above them sees neither: it sends a message and reads whatever arrives.
+//! The two the protocol defines — a child process spoken to over its standard
+//! streams ([`stdio`]), and Streamable HTTP ([`http`]) — and a third for a
+//! server that lives in the application itself ([`app`]). The client above
+//! them sees none of this: it sends a message and reads whatever arrives.
 
+pub(crate) mod app;
 pub(crate) mod http;
 pub(crate) mod stdio;
 
@@ -49,5 +51,6 @@ pub(crate) async fn open(launch: Launch, inbox: Inbox) -> Result<Arc<dyn Transpo
             cwd,
         } => Arc::new(stdio::Stdio::spawn(&program, &args, &env, &cwd, inbox)?),
         Launch::Http { url, headers } => Arc::new(http::Http::new(url, &headers, inbox)?),
+        Launch::App(link) => Arc::new(app::App::open(&*link.server, inbox)),
     })
 }

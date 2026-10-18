@@ -176,6 +176,10 @@ pub struct SessionConfig {
     /// their skills, commands, MCP servers and hooks join the session's. Empty
     /// in a test session, like `user_skills`.
     pub plugins: Vec<crate::plugin::Plugin>,
+    /// MCP servers the application runs in its own process (`mcp::app`),
+    /// such as the desktop window's browser. A server declared in a file
+    /// under the same name takes its place: what the human wrote down wins.
+    pub app_servers: Vec<crate::mcp::AppServerSpec>,
 }
 
 impl SessionConfig {
@@ -203,6 +207,7 @@ impl SessionConfig {
             user_agents: Vec::new(),
             mcp_tokens: crate::mcp::oauth::TokenStore::default(),
             plugins: Vec::new(),
+            app_servers: Vec::new(),
         }
     }
 
@@ -675,6 +680,12 @@ pub fn spawn(
         let mut specs =
             crate::mcp::config::merge(&config.mcp_servers, &project_file, &settings.mcp_servers);
         specs.extend(crate::plugin::mcp_specs(&config.plugins));
+        let app = crate::mcp::app::specs(&config.app_servers);
+        let free: Vec<_> = app
+            .into_iter()
+            .filter(|spec| !specs.iter().any(|declared| declared.name == spec.name))
+            .collect();
+        specs.extend(free);
         let mut roots = vec![ws.root().to_path_buf()];
         roots.extend(ws.additional_text().into_iter().map(PathBuf::from));
         Mcp::start(

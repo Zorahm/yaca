@@ -672,6 +672,15 @@ pub struct ToolMeta {
     pub truncated: bool,
     /// Сколько заняло, миллисекунды. Мета справа в строке.
     pub duration_ms: u32,
+    /// Images the call returned, kept as files of the project and named by
+    /// paths relative to it: the row shows them and the viewer opens them.
+    /// An MCP server's images arrive as bytes, and everything the window
+    /// draws speaks in paths. Optional for the window, whose rows were
+    /// written before there was a field; journals of those rows read it as
+    /// empty.
+    #[serde(default)]
+    #[ts(optional, as = "Option<Vec<String>>")]
+    pub pictures: Vec<String>,
 }
 
 /// A message waiting in the queue (§7.4): its cancel handle and what the chip

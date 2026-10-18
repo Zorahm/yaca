@@ -37,6 +37,7 @@ const SOURCE: Record<McpSource, Key> = {
   global: "mcp.source_global",
   projectFile: "mcp.source_project_file",
   plugin: "mcp.source_plugin",
+  app: "mcp.source_app",
   project: "mcp.source_project",
 };
 

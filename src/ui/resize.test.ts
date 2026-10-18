@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { clamp, FEED_MIN, PANEL, panelBounds, parseWidth, SIDE, sideBounds } from "./resize";
+import {
+  bothFit,
+  BROWSER,
+  browserBounds,
+  clamp,
+  FEED_MIN,
+  PANEL,
+  panelBounds,
+  parseWidth,
+  SIDE,
+  sideBounds,
+} from "./resize";
 
 describe("clamp", () => {
   it("keeps a width inside its bounds", () => {
@@ -49,5 +60,26 @@ describe("parseWidth", () => {
     expect(parseWidth("")).toBeNull();
     expect(parseWidth("wide")).toBeNull();
     expect(parseWidth("-40")).toBeNull();
+  });
+});
+
+describe("browserBounds", () => {
+  it("keeps room for the panel beside it", () => {
+    expect(browserBounds(1600, 248, PANEL.min)).toEqual({
+      min: BROWSER.min,
+      max: 1600 - 248 - FEED_MIN - PANEL.min,
+    });
+  });
+
+  it("reports no room when the browser cannot fit beside the feed", () => {
+    expect(browserBounds(FEED_MIN + BROWSER.min, 0)).toEqual({ min: BROWSER.min, max: BROWSER.min });
+    expect(browserBounds(FEED_MIN + BROWSER.min - 1, 0)).toBeNull();
+  });
+});
+
+describe("bothFit", () => {
+  it("is true only when the browser and the panel fit at their narrowest", () => {
+    expect(bothFit(FEED_MIN + BROWSER.min + PANEL.min, 0)).toBe(true);
+    expect(bothFit(FEED_MIN + BROWSER.min + PANEL.min, 1)).toBe(false);
   });
 });

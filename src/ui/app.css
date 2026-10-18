@@ -8,7 +8,8 @@
    явно: развёрнутая панель ложится в ту же ячейку, что и лента, поверх неё. */
 .shell {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* Sidebar, feed, browser, panel. */
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   grid-template-rows: minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
@@ -113,6 +114,11 @@
   height: 5px;
   border-radius: 50%;
   background: var(--ink);
+}
+
+/* The globe's: the model is using a browser the human cannot see. */
+.top-dot-accent {
+  background: var(--accent);
 }
 
 .top-icon-wrap {

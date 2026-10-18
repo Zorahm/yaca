@@ -64,6 +64,7 @@ export const mcp = {
   "mcp.source_project_file": "项目的 .mcp.json",
   "mcp.source_project": "项目设置",
   "mcp.source_plugin": "插件",
+  "mcp.source_app": "应用",
   "mcp.approve": "批准",
   "mcp.reconnect": "重新连接",
   "mcp.status_needs_login": "需要登录",

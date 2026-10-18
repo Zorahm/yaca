@@ -3,4 +3,4 @@
 /**
  * Which file a server was declared in.
  */
-export type McpSource = "global" | "projectFile" | "project" | "plugin";
+export type McpSource = "global" | "projectFile" | "project" | "plugin" | "app";

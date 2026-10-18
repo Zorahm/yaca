@@ -6134,6 +6134,9 @@ dependencies = [
 name = "yaca-desktop"
 version = "1.0.4-alpha"
 dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "htmd",
  "notify-rust",
  "serde",
  "serde_json",
@@ -6144,6 +6147,8 @@ dependencies = [
  "tokio",
  "tokio-util",
  "ts-rs",
+ "webview2-com",
+ "windows",
  "yaca-core",
 ]
 

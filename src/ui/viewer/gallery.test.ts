@@ -67,6 +67,34 @@ describe("галерея просмотрщика", () => {
     expect(galleryOf(feed)).toEqual(["ui/home.png"]);
   });
 
+  it("берёт картинки, которые вернул инструмент", () => {
+    const feed = reduceAll(emptyFeed, [
+      said(["shot.png"]),
+      {
+        type: "toolCallStarted",
+        turnId: "t1",
+        callId: "b1",
+        tool: "mcp__browser__screenshot",
+        description: null,
+        target: "browser · screenshot",
+        input: {},
+        parent: null,
+      },
+      {
+        type: "toolCallFinished",
+        callId: "b1",
+        meta: {
+          lines: 4,
+          items: null,
+          truncated: false,
+          durationMs: 120,
+          pictures: [".yaca/pasted/0a1b2c3d4e5f6a7b.png"],
+        },
+      },
+    ]);
+    expect(galleryOf(feed)).toEqual(["shot.png", ".yaca/pasted/0a1b2c3d4e5f6a7b.png"]);
+  });
+
   it("упавший вызов показывать нечем", () => {
     const [started] = looked("i1", "gone.png");
     const feed = reduceAll(emptyFeed, [

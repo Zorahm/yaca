@@ -245,7 +245,8 @@ pub fn original(path: &Path) -> Result<String, PictureError> {
 }
 
 /// Keeps an image that arrived without a file — pasted or dropped into the
-/// composer — under the project's `.yaca`, and returns where.
+/// composer, or returned by an MCP server — under the project's `.yaca`, and
+/// returns where.
 ///
 /// A file, because everything after this point speaks in paths: the
 /// attachment chip, the journal, the card of a reopened session. Named by its

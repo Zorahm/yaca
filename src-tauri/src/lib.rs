@@ -6,6 +6,7 @@
 //! receive the raw stream.
 
 mod bridge;
+mod browser;
 mod mcp;
 mod notify;
 mod prefs;
@@ -243,6 +244,13 @@ async fn open_project(
     // The small model the `Decision` tool asks, if there is one.
     config.decision = yaca_core::router::attach::decision_setup(&config_dir()?, &providers);
 
+    // The chat's browser, offered to its session as an MCP server of the
+    // window's own. The page itself is made on first use.
+    let browser = app.state::<browser::Browsers>().prepare(&app);
+    if let Some((_, server)) = &browser {
+        config.app_servers.push(server.clone());
+    }
+
     let provider = if config.provider == ROUTER_ID {
         // The same code the CLI runs: the session gets the router and a model
         // list that prices each request by the model that answered.
@@ -276,6 +284,9 @@ async fn open_project(
     settings.save(&dir).map_err(|e| e.to_string())?;
 
     let id = handle.id().clone();
+    if let Some((browser, _)) = browser {
+        app.state::<browser::Browsers>().bind(id.clone(), browser);
+    }
     state.open(handle.clone(), path, &app);
     // Read after the bridge is listening, so a server that becomes ready in
     // between is in one of the two: this list or the next frame.
@@ -291,8 +302,14 @@ async fn open_project(
 /// умирают вместе с ней (§6.5). Журнал §9 остаётся — закрыть не значит
 /// удалить, и закрытый чат открывается заново со своей историей.
 #[tauri::command]
-async fn close_chat(state: State<'_, AppState>, session: String) -> Result<(), String> {
-    let Some(handle) = state.close(&SessionId::from(session)) else {
+async fn close_chat(
+    state: State<'_, AppState>,
+    browsers: State<'_, browser::Browsers>,
+    session: String,
+) -> Result<(), String> {
+    let id = SessionId::from(session);
+    browsers.forget(&id);
+    let Some(handle) = state.close(&id) else {
         return Ok(());
     };
     // Отмена до того, как ручку отпустят: иначе начатый ход доработал бы до
@@ -618,6 +635,24 @@ fn user_name() -> Option<String> {
         .filter(|name| !name.is_empty())
 }
 
+/// The window's commands answer the window's own webview and nothing else.
+///
+/// The browser column's pages live in the same window, and Tauri lets the
+/// application's commands answer any page it counts as local: a page of the
+/// browser that got there must not be able to read chats or start one. The
+/// capabilities file limits the plugins' commands the same way.
+fn only_the_window(
+    handler: impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static,
+) -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
+    move |invoke| {
+        if invoke.message.webview_ref().label() != "main" {
+            invoke.resolver.reject("commands are for the Yaca window only");
+            return true;
+        }
+        handler(invoke)
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let context = tauri::generate_context!();
@@ -628,6 +663,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::new())
+        .manage(browser::Browsers::default())
         // Preferences before the first window draws anything: the shell holds
         // them (§10) and the toast watcher asks about them on every event.
         .setup(|app| {
@@ -637,7 +673,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(only_the_window(tauri::generate_handler![
             projects,
             add_project,
             forget_project,
@@ -696,7 +732,15 @@ pub fn run() {
             mcp::save_global_mcp_servers,
             mcp::project_mcp_file,
             mcp::session_mcp,
-        ])
+            browser::browser_supported,
+            browser::browser_states,
+            browser::browser_place,
+            browser::browser_open,
+            browser::browser_go,
+            browser::browser_external,
+            browser::browser_devtools,
+            browser::browser_reset_viewport,
+        ]))
         .run(context)
         .expect("не удалось запустить приложение");
 }

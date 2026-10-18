@@ -53,6 +53,7 @@ pub async fn run(
             McpSource::ProjectFile => ".mcp.json",
             McpSource::Project => ".yaca/settings.json",
             McpSource::Plugin => "плагин",
+            McpSource::App => "приложение",
         };
         let status = match server.status {
             McpStatus::Connecting => "подключается",

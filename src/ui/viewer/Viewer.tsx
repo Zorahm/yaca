@@ -37,6 +37,7 @@ import {
 } from "react";
 
 import { imageFull } from "../../core/client";
+import { useBrowserCover } from "../browser/cover";
 import { t } from "../../i18n";
 import { plainPath } from "../format";
 import { OpenImage, PreviewRoot } from "./context";
@@ -73,6 +74,8 @@ export function Pictures({
   children: ReactNode;
 }) {
   const [at, setAt] = useState<{ list: string[]; index: number } | null>(null);
+  // The viewer covers the window, and the browser's page with it.
+  useBrowserCover(at !== null);
 
   const open = useCallback(
     (path: string) => {
