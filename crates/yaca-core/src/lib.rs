@@ -53,6 +53,7 @@ pub mod skills;
 pub mod slash;
 pub mod store;
 pub mod tool;
+pub mod update;
 pub mod usage;
 pub mod workspace;
 
