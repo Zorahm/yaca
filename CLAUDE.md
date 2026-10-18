@@ -1,110 +1,139 @@
-# Работа над Yaca
+# Working on Yaca
 
-> **Примечание об имени:** проект переименован из **edoC** в **Yaca**, и новое имя носит всё: крейты (`crates/yaca-core`, `crates/yaca-cli`), бинарники (`yaca`, `yaca-desktop`), папка проекта (`.yaca/`), конфиг-каталог, сервис кейчейна и идентификатор окна. Старое имя осталось только там, где его нужно узнать, — в переносе данных прежней сборки: `crates/yaca-core/src/legacy.rs` и его половина на фронтенде, `src/core/legacy.ts`.
+Yaca is a desktop coding agent: a headless Rust core (`yaca-core`) wrapped by a
+Tauri 2 shell (`src-tauri`) with a React 19 + TypeScript UI (`src`). The UI is a
+pure function of the core's event stream. Current version: `1.0.0-beta`.
 
-## Что здесь нормативно
+The project was renamed from **edoC** to **Yaca**. The old name survives only in
+the migration of data written by earlier builds: `crates/yaca-core/src/legacy.rs`
+and `src/core/legacy.ts`. Everything else says Yaca.
 
-`docs/ui.md` — спецификация интерфейса. Если код с ней разошёлся, прав
-документ: это баг кода, а не устаревшая спека. Ссылки вида §6.5 — разделы
-оттуда.
+## Layout
 
-`README.md` держит раскладку крейтов и честный список того, чего ещё нет.
-
-## Язык
-
-**Новые файлы — английский**: комментарии, doc-комментарии, имена тестов и
-всё, что читает модель, — системный промпт, описания тулов, описания полей
-в JSON Schema. Модель надёжнее слушается английских инструкций.
-
-**Русский остаётся русским.** Написанное раньше не переводим: переписывать
-готовое ради единообразия — работа без результата. Правило про английский
-включается, когда файл создаётся или переписывается целиком.
-
-**Текст, который видит человек в ленте, — русский.** Результат тула, попадающий
-в раскрытую строку (§5.5.1), пишется на языке разговора, а не на языке кода.
-Отсюда обычная для этого дерева смесь: английский doc-комментарий над функцией,
-которая возвращает `Удалён src/a.rs`.
-
-## Куда писать дизайн
-
-**В чат, не в файлы.** В `/docs` ничего не добавляем: `ui.md` там единственный
-и ведётся вручную. Планов, спек и отчётов о проделанной работе в репозитории
-не заводим.
-
-`TODO.md` в корне — не тот жанр и потому исключение: там открытые вопросы к
-человеку и решения, которых ждёт код. Дизайнов, спек, планов и отчётов в нём
-нет и быть не может — они по-прежнему только в чате и коротко, файлами не
-заводятся. Сделанное живёт в коде, недостающее — в `README.md`.
-
-Исключение понадобилось потому, что «вслух» рассчитано на короткий разговор,
-где вопрос задают и тут же получают ответ. Когда за один проход находится
-десяток решений, ждущих человека, вслух они теряются.
-
-Запрет на «тихий `TODO`» ниже этого файла не касается: тихий — это `// TODO` на
-месте, о котором никто не узнает.
-
-## Заглушек не делать
-
-Команда, событие или кнопка, которые молча ничего не делают, — это интерфейс,
-врущий про состояние (§0). Лучше не объявлять вовсе. `command.rs` перечисляет
-только то, что ядро умеет исполнить; недостающее приезжает вместе со своей
-подсистемой.
-
-Если сделать целиком нельзя, дыра фиксируется явно: в `README.md`, в
-комментарии на месте и вслух — а не тихим `TODO`.
-
-## Расхождения со спекой
-
-Обсуждать, а не решать молча. В §15 уже добавлено несколько событий сверх
-списка, потому что §5 требует картинку, а данных не было; каждое помечено в
-`event.rs` в шапке модуля. Добавляешь своё — помечай там же и говори, что
-добавил.
-
-## Границы
-
-`crates/yaca-core` — безголовое ядро: ни окна, ни вебвью, ни Tauri. Наружу
-поток `AgentEvent`, внутрь `Command`. Интерфейс — чистая функция от этого
-потока. Если что-то в ядре нельзя прогнать из `yaca-cli`, значит вебвью
-протекло туда, где ему не место.
-
-Состояние живёт в ядре и уезжает наружу целиком (`ChangeSetUpdated`,
-`ProcessesUpdated`), а не накапливается в интерфейсе. Две версии правды
-разъезжаются на первом же отклонении файла.
-
-## Качество кода
-
-- `cargo clippy --workspace --all-targets` без предупреждений.
-- `unwrap` и `expect` — только там, где инвариант доказан рядом в комментарии.
-- Newtype вместо голого `String` для семантически разных значений: `CallId`,
-  `ProcessId`, `TurnId`.
-- Файл — одна ответственность. Файл, переваливший за 500 строк, скорее всего
-  делает два дела; разрезать его надо **до** того, как добавлять третье.
-- Без копипасты: одна и та же логика дважды — извлекай.
-- Комментарий объясняет **почему**: причину решения, неочевидное ограничение,
-  ссылку на раздел спеки. Пересказ кода — мусор.
-
-## Тесты
-
-```bash
-cargo test --workspace
-cargo clippy --workspace --all-targets
+```
+crates/yaca-core/    headless core: agent loop, tools, permissions, checkpoints,
+                     model router, MCP, LSP, plugins, skills, hooks, store
+crates/yaca-cli/     CLI over the core (anything the core does must run from here)
+crates/yaca-evals/   agent evaluation benchmarks
+src-tauri/           Tauri shell: bridge, prefs, settings, providers, browser pane
+src/core/            frontend client, event reducer (feed.ts), generated bindings
+src/ui/              React components and CSS; tokens live in src/ui/tokens.css
+src/i18n/            dictionaries: ru (source of keys), en, de, es, fr, ja, ko, pt, zh
+DESIGN.md PRODUCT.md visual system and product intent (kept in sync with the code)
+TODO.md              open questions that wait for a human decision
 ```
 
-Главный инструмент — **золотые тесты потока событий**: `MockProvider`
-проигрывает записанный ответ модели, тест проверяет точную последовательность
-`AgentEvent`. Интерфейс — чистая функция от этого потока, поэтому сломанная
-форма потока ловится там, а не глазами.
+## Commands
 
-Сквозные тесты гоняются через публичный API (`spawn`, `Command`, `AgentEvent`)
-— ровно ту поверхность, которая есть у интерфейса. Образец:
-`crates/yaca-core/tests/permissions.rs`.
+```bash
+npm ci                                   # frontend deps
+npm test                                 # vitest (src/**/*.test.ts)
+npm run build                            # tsc + vite build
+cargo test --workspace --no-fail-fast    # also regenerates src/core/bindings/
+cargo clippy --workspace --all-targets   # must be warning-free
+yaca.bat / dev.bat                       # dev window (vite + core + Tauri)
+npx tauri build --bundles nsis           # Windows installer -> target/release/bundle/nsis/
+```
 
-Где тул трогает файловую систему или процессы, тест трогает их тоже. Мок
-файловой системы ловит ошибки мока, а не тула.
+- `src/core/bindings/*.ts` is generated from Rust by `ts-rs` during `cargo test`.
+  Never edit it by hand; change the Rust type and rerun the tests.
+- The disk (C:) runs low. Before a big build check free space; below ~5 GB do
+  not start a workspace build. Use `CARGO_INCREMENTAL=0` and no debuginfo on the
+  workspace crates (`--config "profile.dev.package.yaca-core.debug=0"`, same for
+  `yaca-cli`, `yaca-evals`, `yaca-desktop`). Run integration tests in batches and
+  delete `target/debug/deps/*.pdb` between them (safe, cargo does not rebuild
+  for it). `cargo clean -p yaca-core -p yaca-cli -p yaca-evals -p yaca-desktop`
+  frees ~17 GB and keeps compiled dependencies.
+- Run the test suite more than once: tests run in parallel and temp directories
+  need truly unique names (Windows clocks are coarse enough to repeat a nanosecond).
 
-**Прогоняй набор больше одного раза.** Тесты идут параллельно, и временным
-каталогам нужны действительно уникальные имена: на Windows часы достаточно
-грубые, чтобы два теста получили одну и ту же наносекунду.
+## Architecture rules
 
-`cargo test` заодно перезаписывает `src/core/bindings/` — TypeScript-типы
-генерируются из Rust через `ts-rs` и разойтись с ним не могут.
+- `yaca-core` knows nothing about windows, webviews or Tauri. In: `Command`.
+  Out: `AgentEvent`. If something in the core cannot be exercised from
+  `yaca-cli`, UI leaked into it.
+- State lives in the core and is sent out whole (`ChangeSetUpdated`,
+  `ProcessesUpdated`); the UI never accumulates a second copy of it.
+- The UI never lies about state: a running tool pulses, a finished one is
+  ticked, irreversible actions ask first. A control that silently does nothing
+  is not declared at all. No stubs; if something cannot be finished, record the
+  gap in `README.md` and in a comment on the spot, and say so.
+- Newtypes over bare `String` for distinct ids (`CallId`, `ProcessId`, `TurnId`).
+- `unwrap`/`expect` only where an invariant is proven in an adjacent comment.
+- One responsibility per file. Past ~500 lines, split before adding a third thing.
+- No copy-paste: extract the second occurrence.
+- Events added beyond the existing list are marked in the module header of
+  `event.rs`; say so when you add one.
+
+## Language
+
+- Code, identifiers, comments, doc comments, test names, error codes: English.
+  Anything an LLM reads (system prompt, tool descriptions, JSON Schema field
+  descriptions, skills) is English too.
+- Existing Russian comments are left alone; rewriting finished text for
+  uniformity is wasted work. The English rule applies to new files and to files
+  rewritten whole.
+- Text a human sees in the feed (tool results in an expanded row) is written in
+  the conversation's language, not the code's.
+- Every user-facing string goes through i18n keys, never hardcoded in JSX.
+  Keys are typed from the Russian dictionary (`src/i18n/ru`); a new key needs all
+  nine locales, and the compiler catches a missing one.
+- Comments explain *why* (the decision, a non-obvious constraint), never what
+  the code already says.
+
+## Tests
+
+- The main instrument is golden tests of the event stream: `MockProvider`
+  replays a recorded model answer and the test asserts the exact `AgentEvent`
+  sequence. Model: `crates/yaca-core/tests/permissions.rs`.
+- End-to-end tests go through the public API (`spawn`, `Command`, `AgentEvent`).
+- Where a tool touches the filesystem or processes, the test touches them too;
+  no filesystem mocks.
+- The feed reducer and dictionaries are pure functions tested with vitest.
+- Known flaky under load: `commands.rs::a_background_command_that_ends_mid_turn_...`
+  (passes alone).
+
+## Design
+
+Read `DESIGN.md` before touching UI. Short version: "graphite and teal" in
+`src/ui/tokens.css`; use tokens, never raw colours; one accent (teal) for what is
+yours or needs you; motion only as state pulses; density is a principle. The
+theme values in code are `paper` (light, default), `night` (dark) and `system`;
+these are legacy names, do not rename them without a data migration.
+
+## Windows installer
+
+- NSIS config is in `src-tauri/tauri.conf.json`; Windows-only overrides
+  (frameless window) in `src-tauri/tauri.windows.conf.json`.
+- `src-tauri/windows/hooks.nsh` must stay UTF-8 **with BOM**, otherwise NSIS
+  reads the Russian text in the ANSI code page.
+- Installer art is produced by `scripts/installer_art.py`.
+
+## Release
+
+`.github/workflows/release.yml` runs on a `v*` tag, checks that the tag equals
+`src-tauri/tauri.conf.json` `version`, runs `npm test`, builds and creates a
+**draft** pre-release. Versions live in `Cargo.toml` (workspace), `package.json`,
+`package-lock.json`, `Cargo.lock` and `tauri.conf.json`; bump them together.
+The matrix builds Windows (NSIS), macOS (dmg, Apple silicon and Intel, unsigned)
+and Linux (deb, AppImage) into one draft release. Linux needs `libdbus-1-dev`
+even for `yaca-core` (the keyring's Secret Service); the workflow installs it.
+The update check picks the asset by file suffix and processor name
+(`crates/yaca-core/src/update.rs`), so keep Tauri's default asset names.
+Only the core was compiled and tested on Linux (Ubuntu 24.04); the macOS and
+Linux bundles, and the Tauri shell off Windows, have never been built.
+
+## Git
+
+The owner's rules apply (load the `zowork:solo-git` skill before any git action):
+commit only on an explicit command, push only on an explicit command, no PRs, no
+branches. `AGENTS.md` is a symlink to this file; keep it so.
+
+## Working style
+
+- Design talk goes in chat, not files. Do not add plans, specs or reports to the
+  repository. `TODO.md` is the exception: open questions that wait for a human.
+- When code and a spec disagree, say so in a sentence and follow the user.
+- Discuss deviations from the intended behaviour instead of deciding silently.
+- Verify before claiming done: run the tests, build the thing, look at the
+  result. Report failures with their output.

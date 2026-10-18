@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="#license"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/Version-1.0.4--alpha-orange.svg" alt="Version: 1.0.4-alpha">
+  <img src="https://img.shields.io/badge/Version-1.0.0--beta-blue.svg" alt="Version: 1.0.0-beta">
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.85%2B-dea584.svg?logo=rust&logoColor=white" alt="Rust: 1.85+"></a>
   <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-v2-24C8DB.svg?logo=tauri&logoColor=white" alt="Tauri: v2"></a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg" alt="Platform: Windows | macOS | Linux">
@@ -19,7 +19,7 @@
 
 ---
 
-The project is under active development: version alpha-1.0.4 (`1.0.4-alpha` in manifests). Pre-built binaries are not available yet; run from source.
+Yaca is in beta (`1.0.0-beta`). Installers (Windows NSIS `.exe`, macOS `.dmg`, Linux `.deb` and `.AppImage`) are built by the release workflow and published on the GitHub Releases page. Only Windows has been run so far; the macOS and Linux builds are untested, and the browser column is Windows only.
 
 ## Features
 
@@ -40,13 +40,16 @@ The project is under active development: version alpha-1.0.4 (`1.0.4-alpha` in m
 - **Project memory** and custom slash commands from `.yaca/commands/`.
 - **MCP.** Tools and resources from external Model Context Protocol servers alongside built-in ones; see [MCP Servers](#mcp-servers).
 - **LSP.** Definitions, references, types, diagnostics, and project-wide renames from language servers; see [Language Servers (LSP)](#language-servers-lsp).
+- **Interface in nine languages** (Russian, English, German, Spanish, French, Japanese, Korean, Portuguese, Chinese), following the system language by default, with a light and a dark theme.
 - **Browser.** A real page per chat in the browser column beside the feed: the model opens it, reads it, takes screenshots, clicks and types, and runs JavaScript in it, and the human watches and can click in the same page. Windows only for now; see [Browser](#browser).
 
-No automatic update checks or installations are provided since pre-built binaries are not published. The menu item "Help → Check for Updates" opens "About", where this is explained.
+**Updates.** About → Updates checks the GitHub releases by hand, and the app does the same by itself shortly after start and every few hours (switch it off in the same place). A newer release is shown with its changelog, the text of the release, and a download link; nothing is installed automatically. A beta is told about the next beta and the release, a release only about releases (alpha < beta < rc < release, then the numbers). The menu item "Help → Check for Updates" opens "About", where this is explained.
 
 ## Getting Started
 
-Requires [Node.js](https://nodejs.org/) and [Rust](https://rustup.rs/).
+**Windows:** download `Yaca_<version>_x64-setup.exe` from the [Releases](../../releases) page and run it. It installs per user and needs no administrator rights.
+
+**From source** (all platforms) requires [Node.js](https://nodejs.org/) 20+ and [Rust](https://rustup.rs/).
 
 On Windows, simply double-click `yaca.bat`: it checks the environment, installs dependencies, and opens the window. Or run manually:
 
@@ -532,7 +535,10 @@ The core is completely decoupled from the GUI: it consumes commands and emits an
 cargo test --workspace
 cargo clippy --workspace --all-targets
 npm test
+npx tauri build --bundles nsis   # Windows installer in target/release/bundle/nsis/
 ```
+
+Pushing a `v*` tag (it must equal the version in `src-tauri/tauri.conf.json`) runs `.github/workflows/release.yml`, which builds the installer and creates a draft pre-release.
 
 Contribution and coding guidelines are in [CLAUDE.md](CLAUDE.md); open design questions and roadmap items are in [TODO.md](TODO.md).
 
