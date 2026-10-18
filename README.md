@@ -498,7 +498,7 @@ The router picks the model that answers a message. It is a provider of its own (
 
 - **Questions.** `noul` (yes/no, answer is P(yes)) and `choice` (one of several options). Without a `predicate`, a `noul` signal needs P(yes) ≥ 0.5 and a `choice` label must be the most probable option.
 - **Rules.** `all`, `any`, `not` and `signal`, in three-valued logic: a signal the decision model did not answer is *unknown*, and `not(unknown)` stays unknown. What an unknown rule means is the decision's `onUnknown` (`noMatch` by default, so an unanswered question never sends a conversation to an expensive model).
-- **Failures.** A decision model that is late, refuses, or answers something unreadable yields the default route; it never fails the turn. The feed shows a "Route: … → model" line once per message, and the CLI prints `Маршрут: … → provider/model`.
+- **Failures.** A decision model that is late, refuses, or answers something unreadable yields the default route; it never fails the turn. The feed shows a "Route: … → model" line once per message, and the CLI prints `Route: … → provider/model`.
 - **A broken file.** It is never silently hidden: the switcher says why the router is missing, and Settings → Providers shows the same error the start would give.
 - **Cost.** A routed request is priced by the model that answered, not by the router's entry.
 

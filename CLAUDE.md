@@ -70,11 +70,12 @@ npx tauri build --bundles nsis           # Windows installer -> target/release/b
 - Code, identifiers, comments, doc comments, test names, error codes: English.
   Anything an LLM reads (system prompt, tool descriptions, JSON Schema field
   descriptions, skills) is English too.
-- Existing Russian comments are left alone; rewriting finished text for
-  uniformity is wasted work. The English rule applies to new files and to files
-  rewritten whole.
-- Text a human sees in the feed (tool results in an expanded row) is written in
-  the conversation's language, not the code's.
+- No hardcoded Russian anywhere in code, comments or messages. The only Russian
+  that stays is the `ru` dictionary, real locale data (language names, plural
+  rules, the Russian keyboard layout) and tests of Cyrillic/unicode handling.
+- Text a human sees in the feed (tool results in an expanded row, core errors)
+  is English in the code. Where the UI can localize it, it is substituted from
+  the dictionaries by key; never hardcode another language next to it.
 - Every user-facing string goes through i18n keys, never hardcoded in JSX.
   Keys are typed from the Russian dictionary (`src/i18n/ru`); a new key needs all
   nine locales, and the compiler catches a missing one.
