@@ -48,6 +48,8 @@ import { relativeTo } from "./ui/format";
 import { t } from "./i18n";
 import { Feed, type FeedActions, type FeedJump } from "./ui/Feed";
 import { Notices } from "./ui/Bars";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { useUpdate } from "./ui/update";
 import { Composer, type ComposerActions } from "./ui/Composer";
 import { MODES } from "./ui/ModeMenu";
 import { mcpPrompts, withSkills, type MenuCommand } from "./ui/slash";
@@ -113,6 +115,18 @@ export default function App({ prefs }: { prefs: Preferences }) {
   // there says that nothing is published to check against yet
   // (`AboutSection`).
   const openAbout = useCallback(() => setSettingsAt("about"), []);
+  const update = useUpdate();
+  // Closing the card hides that version until the application restarts, and
+  // only that version: a newer release brings the card back.
+  const [dismissedUpdate, setDismissedUpdate] = useState<string | null>(null);
+  const latest = update.check?.latest ?? null;
+  const shownUpdate = latest !== null && latest.version !== dismissedUpdate ? latest : null;
+  // The app installs nothing itself: «Update» takes the person to the
+  // installer, or to the release page when the release has none for this system.
+  const installUpdate = useCallback(() => {
+    const release = update.check?.latest;
+    if (release) void openUrl(release.downloadUrl ?? release.url).catch(() => undefined);
+  }, [update.check]);
 
   // Where the window keeps the system's frame, Help is the system's menu
   // (`core/menu`); where it draws its own, Help is in the title bar below.
@@ -466,9 +480,12 @@ export default function App({ prefs }: { prefs: Preferences }) {
       onNewChat={newChat}
       onOpenSession={(project, id) => void chats.resume(project, id).catch(failed)}
       onCloseChat={(id) => void chats.close(id).catch(failed)}
-      onAddProject={() => void addProject()}
       onForgetProject={(project) => void forgetProject(project)}
       onOpenSettings={() => setSettingsAt("providers")}
+      update={shownUpdate}
+      onDismissUpdate={() => setDismissedUpdate(shownUpdate?.version ?? null)}
+      onInstallUpdate={installUpdate}
+      onUpdateDetails={openAbout}
       width={sideWidth}
       bounds={sideLimits}
       onResize={setSideWidth}

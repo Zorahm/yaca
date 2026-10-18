@@ -18,7 +18,7 @@
  * is remembered.
  */
 
-import { FolderPlus, Gear, Plus } from "@phosphor-icons/react";
+import { ArrowCircleUp, Gear, Plus, X } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 
 import { t } from "../../i18n";
@@ -28,7 +28,7 @@ import { SIDE, type Bounds } from "../resize";
 import { Splitter } from "../Splitter";
 import { ProjectGroup } from "./ProjectGroup";
 import type { Chat } from "../chats";
-import type { SessionId } from "../../core/client";
+import type { ReleaseInfo, SessionId } from "../../core/client";
 
 /** Search over the journals is linear in their size (README); the debounce
     keeps it to one pass per pause rather than one per keystroke. */
@@ -43,9 +43,12 @@ export function Sidebar({
   onNewChat,
   onOpenSession,
   onCloseChat,
-  onAddProject,
   onForgetProject,
   onOpenSettings,
+  update = null,
+  onInstallUpdate,
+  onUpdateDetails,
+  onDismissUpdate,
   width,
   bounds,
   onResize,
@@ -63,10 +66,16 @@ export function Sidebar({
   onNewChat: (project: string) => void;
   onOpenSession: (project: string, id: SessionId) => void;
   onCloseChat: (id: SessionId) => void;
-  onAddProject: () => void;
   onForgetProject: (project: string) => void;
   /** Кнопка подвала ведёт в окно настроек, не в панель. */
   onOpenSettings: () => void;
+  /** A newer release than the running one, once the check has found it. */
+  update?: ReleaseInfo | null;
+  onInstallUpdate: () => void;
+  /** Leads to About, where the changelog is. */
+  onUpdateDetails: () => void;
+  /** Hides the card until the application is restarted. */
+  onDismissUpdate: () => void;
   /** The column's width and how far the handle on its edge may take it. */
   width: number;
   bounds: Bounds;
@@ -178,19 +187,36 @@ export function Sidebar({
         )}
       </div>
 
-      <div className="side-foot">
-        <button className="side-row" onClick={onAddProject}>
-          <span className="side-icon" aria-hidden="true">
-            <FolderPlus size={15} />
+      {update !== null && (
+        <div className="side-update" role="status">
+          <span className="side-update-title">
+            <ArrowCircleUp size={15} aria-hidden="true" />
+            {t("about.update_available", { version: update.version })}
           </span>
-          {t("side.add_project")}
-        </button>
+          <button
+            className="side-update-close"
+            onClick={onDismissUpdate}
+            aria-label={t("notice.dismiss")}
+          >
+            <X size={14} />
+          </button>
+          <span className="side-update-actions">
+            <button className="btn btn-accent btn-small" onClick={onInstallUpdate}>
+              {t("side.update_do")}
+            </button>
+            <button className="btn btn-small" onClick={onUpdateDetails}>
+              {t("side.update_more")}
+            </button>
+          </span>
+        </div>
+      )}
 
+      <div className="side-foot">
         {/* Окно, а не панель: настройки переживают разговор, и их
             открывают, не закрывая ленту. */}
-        <button className="side-row" onClick={onOpenSettings}>
+        <button className="side-row side-row-large" onClick={onOpenSettings}>
           <span className="side-icon" aria-hidden="true">
-            <Gear size={15} />
+            <Gear size={18} />
           </span>
           {t("set.title")}
         </button>

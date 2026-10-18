@@ -60,6 +60,56 @@
   color: var(--muted);
 }
 
+/* A newer release: a small card between the list and the footer, in the
+   accent because it waits on the human, like a request does. */
+.side-update {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 10px 10px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-l);
+}
+
+.side-update-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.side-update-title {
+  padding-right: 18px;
+}
+
+.side-update-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.side-update-close:hover {
+  color: var(--ink);
+}
+
+.side-update-title svg {
+  flex: none;
+}
+
+.side-update-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .side-foot {
   flex: none;
   padding: 10px;
@@ -99,6 +149,13 @@
 .side-row:disabled {
   color: var(--muted);
   cursor: not-allowed;
+}
+
+/* The footer's one row: a step larger than the rows of the list, because it
+   is the only thing down there. */
+.side-row-large {
+  height: var(--h-button);
+  font-size: 14px;
 }
 
 .side-icon {
