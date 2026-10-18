@@ -17,6 +17,8 @@
 
 mod approval;
 mod client;
+pub mod elicit;
+pub mod oauth;
 pub mod config;
 mod hub;
 mod protocol;
@@ -28,7 +30,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ts_rs::TS;
 
-pub use config::{McpServerSettings, McpSource, McpTransport, ServerSpec};
+pub use config::{McpServerSettings, McpSource, McpTransport, PluginLaunch, ServerSpec};
+pub use elicit::{ElicitField, ElicitKind, ElicitationReply, ElicitationRequest};
 pub use hub::Mcp;
 pub use tool::PREFIX as TOOL_PREFIX;
 
@@ -55,6 +58,10 @@ pub enum McpError {
     Cancelled,
     #[error("{0}")]
     Closed(String),
+    /// The server answered 401: it wants a login. Carries its
+    /// `WWW-Authenticate`, which may say where to log in.
+    #[error("сервер просит войти")]
+    Unauthorized(Option<String>),
 }
 
 /// What state a server is in. The interface draws the list from this and from
@@ -72,6 +79,10 @@ pub enum McpStatus {
     /// Declared in the project's `.mcp.json` and not approved by the human
     /// yet: nothing has been started.
     NeedsApproval,
+    /// A remote server that answered 401: the human has to log in (OAuth).
+    NeedsLogin,
+    /// A login is under way in the browser; `login_url` is its page.
+    LoggingIn,
 }
 
 /// One server of the session, as the interface lists it.
@@ -92,6 +103,24 @@ pub struct McpServerSummary {
     pub tools: Vec<McpToolSummary>,
     /// The server exposes resources, so the two resource tools reach it.
     pub resources: bool,
+    /// Its prompt templates, each a slash command.
+    pub prompts: Vec<McpPromptSummary>,
+    /// While logging in: the page to open in the browser.
+    pub login_url: Option<String>,
+    /// Yaca holds an OAuth login for this server, which "Log out" forgets.
+    pub logged_in: bool,
+}
+
+/// A server's prompt template, as the slash menu offers it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct McpPromptSummary {
+    /// What is typed after the slash: `mcp__server__prompt`.
+    pub command: String,
+    pub description: Option<String>,
+    /// The arguments, in the order words typed after the name fill them.
+    pub arguments: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

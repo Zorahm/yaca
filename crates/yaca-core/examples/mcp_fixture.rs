@@ -39,7 +39,7 @@ fn main() {
         let result = match message["method"].as_str().unwrap_or_default() {
             "initialize" => json!({
                 "protocolVersion": params["protocolVersion"],
-                "capabilities": { "tools": { "listChanged": true }, "resources": {} },
+                "capabilities": { "tools": { "listChanged": true }, "resources": {}, "prompts": {} },
                 "serverInfo": { "name": "fixture", "version": "1.0" },
                 "instructions": "Use echo to repeat a text back.",
             }),
@@ -70,6 +70,33 @@ fn main() {
                         }
                         text(&answer.to_string())
                     }
+                    // Asks the human through the client (elicitation) and
+                    // answers with what came back.
+                    "ask" => {
+                        send(&json!({
+                            "jsonrpc": "2.0", "id": "e1", "method": "elicitation/create",
+                            "params": {
+                                "message": "Who is this for?",
+                                "requestedSchema": {
+                                    "type": "object",
+                                    "properties": { "name": { "type": "string", "title": "Name" } },
+                                    "required": ["name"],
+                                },
+                            },
+                        }));
+                        let mut answer = Value::Null;
+                        for line in lines.by_ref() {
+                            let Ok(line) = line else { break };
+                            let Ok(reply) = serde_json::from_str::<Value>(&line) else {
+                                continue;
+                            };
+                            if reply["id"] == "e1" {
+                                answer = reply["result"].clone();
+                                break;
+                            }
+                        }
+                        text(&answer.to_string())
+                    }
                     other => call(other, args),
                 }
             }
@@ -89,6 +116,22 @@ fn main() {
                     continue;
                 }
             },
+            "prompts/list" => json!({ "prompts": [{
+                "name": "review",
+                "description": "Review a pull request",
+                "arguments": [
+                    { "name": "pr", "description": "Its number", "required": true },
+                    { "name": "focus", "description": "What to look at" },
+                ],
+            }] }),
+            "prompts/get" => {
+                let args = &params["arguments"];
+                json!({ "messages": [{ "role": "user", "content": { "type": "text", "text": format!(
+                    "Review PR {} focusing on {}",
+                    args["pr"].as_str().unwrap_or("?"),
+                    args["focus"].as_str().unwrap_or("everything"),
+                ) } }] })
+            }
             "ping" => json!({}),
             other => {
                 send(&json!({
@@ -177,6 +220,10 @@ fn tools(grown: bool) -> Vec<Value> {
         }),
         json!({
             "name": "roots", "description": "Says which roots the client reports.",
+            "inputSchema": { "type": "object" }, "annotations": read_only,
+        }),
+        json!({
+            "name": "ask", "description": "Asks the human for a name and says what came back.",
             "inputSchema": { "type": "object" }, "annotations": read_only,
         }),
     ];

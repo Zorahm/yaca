@@ -4,4 +4,4 @@
  * What state a server is in. The interface draws the list from this and from
  * nothing else.
  */
-export type McpStatus = "connecting" | "ready" | "failed" | "disabled" | "needsApproval";
+export type McpStatus = "connecting" | "ready" | "failed" | "disabled" | "needsApproval" | "needsLogin" | "loggingIn";

@@ -184,6 +184,9 @@ pub enum McpSource {
     ProjectFile,
     /// `<project>/.yaca/settings.json`.
     Project,
+    /// A plugin the human enabled (`plugin`). Enabling it was the consent, so
+    /// its servers start without a second question, like the human's own.
+    Plugin,
 }
 
 /// The shape of `mcp.json` and `.mcp.json`. Other keys are left alone: the
@@ -243,6 +246,44 @@ pub struct ServerSpec {
     pub name: String,
     pub source: McpSource,
     pub settings: McpServerSettings,
+    /// Set for a plugin's server: where it starts and what its variables are.
+    pub plugin: Option<PluginLaunch>,
+}
+
+/// What a plugin's server is started with on top of its declaration.
+///
+/// The plugin's root replaces the project as the base of a relative `cwd` and
+/// of a `./` program, and four variables name the plugin's directories — the
+/// two of Agent Plugins §9 and Claude Code's spelling of the same two. They are
+/// put in the server's environment and filled in where the declaration names
+/// them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginLaunch {
+    pub root: PathBuf,
+    pub data: PathBuf,
+    /// Whether other `${NAME}` are taken from the environment. Claude Code
+    /// expands them; Agent Plugins leaves them as written.
+    pub expand_env: bool,
+}
+
+impl PluginLaunch {
+    fn var(&self, name: &str) -> Option<String> {
+        match name {
+            "PLUGIN_ROOT" | "CLAUDE_PLUGIN_ROOT" => Some(self.root.display().to_string()),
+            "PLUGIN_DATA" | "CLAUDE_PLUGIN_DATA" => Some(self.data.display().to_string()),
+            _ => None,
+        }
+    }
+
+    fn vars(&self) -> [(String, String); 4] {
+        let (root, data) = (self.root.display().to_string(), self.data.display().to_string());
+        [
+            ("PLUGIN_ROOT".into(), root.clone()),
+            ("CLAUDE_PLUGIN_ROOT".into(), root),
+            ("PLUGIN_DATA".into(), data.clone()),
+            ("CLAUDE_PLUGIN_DATA".into(), data),
+        ]
+    }
 }
 
 /// The servers a session has, by name. A more specific file replaces a less
@@ -267,6 +308,7 @@ pub fn merge(
                     name: name.clone(),
                     source,
                     settings: settings.clone(),
+                    plugin: None,
                 },
             );
         }
@@ -302,7 +344,19 @@ impl ServerSpec {
     ) -> Result<Launch, String> {
         let s = &self.settings;
         s.validate()?;
-        let fill = |text: &str| expand(text, var);
+        let plugin = self.plugin.as_ref();
+        let root = plugin.map_or(root, |p| p.root.as_path());
+        let lookup = |name: &str| -> Lookup {
+            match plugin {
+                Some(p) => match p.var(name) {
+                    Some(value) => Lookup::Value(value),
+                    None if !p.expand_env => Lookup::Literal,
+                    None => var(name).map_or(Lookup::Missing, Lookup::Value),
+                },
+                None => var(name).map_or(Lookup::Missing, Lookup::Value),
+            }
+        };
+        let fill = |text: &str| expand_with(text, &lookup);
         let fill_map = |map: &BTreeMap<String, String>| {
             map.iter()
                 .map(|(key, value)| Ok((key.clone(), fill(value)?)))
@@ -321,22 +375,49 @@ impl ServerSpec {
             Some(cwd) => root.join(fill(cwd)?),
             None => root.to_path_buf(),
         };
+        let mut program = fill(s.command.as_deref().unwrap_or_default().trim())?;
+        let mut env = fill_map(&s.env)?;
+        if let Some(p) = plugin {
+            // A program named relative to the plugin is found there, not
+            // wherever Yaca happens to run from.
+            if let Some(rel) = program.strip_prefix("./") {
+                program = p.root.join(rel).display().to_string();
+            }
+            env.extend(p.vars());
+            // §9: created before the server is launched.
+            let _ = std::fs::create_dir_all(&p.data);
+        }
         Ok(Launch::Stdio {
-            program: fill(s.command.as_deref().unwrap_or_default().trim())?,
+            program,
             args: s.args.iter().map(|arg| fill(arg)).collect::<Result<_, _>>()?,
-            env: fill_map(&s.env)?,
+            env,
             cwd,
         })
     }
 }
 
-/// Fills `${NAME}` and `${NAME:-fallback}` from the environment.
+/// [`expand_with`] over the environment alone.
+#[cfg(test)]
+fn expand(text: &str, var: &dyn Fn(&str) -> Option<String>) -> Result<String, String> {
+    expand_with(text, &|name| var(name).map_or(Lookup::Missing, Lookup::Value))
+}
+
+/// What a `${NAME}` stands for.
+enum Lookup {
+    Value(String),
+    /// Not set, and an error unless the reference has a fallback.
+    Missing,
+    /// Not ours to expand: the reference stays as written.
+    Literal,
+}
+
+/// Fills `${NAME}` and `${NAME:-fallback}`.
 ///
 /// The spelling `.mcp.json` files already use, so a token stays in the
 /// environment and out of a file that gets committed. A name with no value and
 /// no fallback is an error rather than an empty string: a server started with
 /// an empty token fails later and further from the cause.
-fn expand(text: &str, var: &dyn Fn(&str) -> Option<String>) -> Result<String, String> {
+fn expand_with(text: &str, var: &dyn Fn(&str) -> Lookup) -> Result<String, String> {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
     while let Some(start) = rest.find("${") {
@@ -352,9 +433,10 @@ fn expand(text: &str, var: &dyn Fn(&str) -> Option<String>) -> Result<String, St
             Some((name, fallback)) => (name, Some(fallback)),
             None => (inner, None),
         };
-        match var(name).filter(|value| !value.is_empty()) {
-            Some(value) => out.push_str(&value),
-            None => match fallback {
+        match var(name) {
+            Lookup::Value(value) if !value.is_empty() => out.push_str(&value),
+            Lookup::Literal => out.push_str(&rest[start..start + 2 + end + 1]),
+            _ => match fallback {
                 Some(fallback) => out.push_str(fallback),
                 None => return Err(format!("переменная окружения {name} не задана")),
             },
@@ -493,6 +575,7 @@ mod tests {
     fn a_stdio_server_starts_in_the_project_unless_told_otherwise() {
         let root = Path::new("/p");
         let spec = |settings| ServerSpec {
+            plugin: None,
             name: "s".into(),
             source: McpSource::Project,
             settings,

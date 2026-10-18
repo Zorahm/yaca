@@ -95,6 +95,7 @@ mod tests {
         let mut spec = ServerSpec {
             name: "files".into(),
             source: McpSource::ProjectFile,
+            plugin: None,
             settings: stdio("server-files"),
         };
         assert!(!approvals.covers(&spec));
@@ -114,6 +115,7 @@ mod tests {
         let spec = ServerSpec {
             name: "files".into(),
             source: McpSource::ProjectFile,
+            plugin: None,
             settings: stdio("server-files"),
         };
         approvals.record(&spec);

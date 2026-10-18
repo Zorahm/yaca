@@ -6,9 +6,9 @@
 //! server that does not offer one answers 405, and then it simply never speaks
 //! first.
 //!
-//! Authorization is whatever the declaration's headers say. OAuth, which the
-//! protocol describes for servers that want a login, is not here; see the
-//! README.
+//! Authorization is whatever the declaration's headers say, or the bearer
+//! token of an OAuth login (`mcp::oauth`), which the hub adds as a header. A
+//! 401 is its own error, so the hub can ask the human to log in.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -163,6 +163,14 @@ impl Transport for Http {
             let reason = "сервер больше не знает эту сессию".to_string();
             let _ = link.inbox.send(Incoming::Closed(reason.clone()));
             return Err(McpError::Closed(reason));
+        }
+        if status == StatusCode::UNAUTHORIZED {
+            let challenge = response
+                .headers()
+                .get("www-authenticate")
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_string);
+            return Err(McpError::Unauthorized(challenge));
         }
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();

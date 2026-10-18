@@ -1,8 +1,9 @@
 //! One connection to one server: requests matched to their answers, the
 //! handshake, and the few things a server may ask of a client.
 //!
-//! Sampling and elicitation are not declared, so a server does not ask for
-//! them. Roots are: a file server needs to know where the project is, and the
+//! Sampling is not declared, so a server does not ask for it. Elicitation
+//! is: a server's request for the human's input goes to the hub, which puts
+//! a form on screen and answers with what the person did. Roots are: a file server needs to know where the project is, and the
 //! answer is the session's own workspace roots.
 
 use std::collections::HashMap;
@@ -18,8 +19,9 @@ use tokio_util::sync::{CancellationToken, DropGuard};
 
 use super::config::Launch;
 use super::protocol::{
-    CallResult, InitializeResult, ReadResult, RemoteResource, RemoteTool, ResourcesPage, ToolsPage,
-    TOOLS_LIST_CHANGED, VERSIONS,
+    CallResult, GetPromptResult, InitializeResult, PromptsPage, ReadResult, RemotePrompt,
+    RemoteResource, RemoteTool, ResourcesPage, ToolsPage, PROMPTS_LIST_CHANGED, TOOLS_LIST_CHANGED,
+    VERSIONS,
 };
 use super::transport::{self, Incoming, Transport};
 use crate::uri::file_uri;
@@ -38,6 +40,12 @@ type Waiting = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, McpError>>>>
 #[derive(Debug)]
 pub(crate) enum Notice {
     ToolsChanged,
+    PromptsChanged,
+    /// `elicitation/create`: the params, and where the answer goes.
+    Elicit {
+        params: Value,
+        answer: oneshot::Sender<Value>,
+    },
     Closed(String),
 }
 
@@ -49,6 +57,7 @@ pub(crate) struct ServerInfo {
     pub instructions: Option<String>,
     pub tools: bool,
     pub resources: bool,
+    pub prompts: bool,
 }
 
 pub(crate) struct Client {
@@ -100,7 +109,7 @@ impl Client {
                 "initialize",
                 Some(json!({
                     "protocolVersion": VERSIONS[0],
-                    "capabilities": { "roots": { "listChanged": false } },
+                    "capabilities": { "roots": { "listChanged": false }, "elicitation": {} },
                     "clientInfo": { "name": "yaca", "version": env!("CARGO_PKG_VERSION") },
                 })),
                 // The caller's deadline is the real one.
@@ -130,6 +139,7 @@ impl Client {
                 .filter(|text| !text.is_empty()),
             tools: result.capabilities.tools.is_some(),
             resources: result.capabilities.resources.is_some(),
+            prompts: result.capabilities.prompts.is_some(),
         };
         Ok(())
     }
@@ -210,6 +220,35 @@ impl Client {
         Ok(all)
     }
 
+    pub(crate) async fn list_prompts(&self) -> Result<Vec<RemotePrompt>, McpError> {
+        if !self.info.prompts {
+            return Ok(Vec::new());
+        }
+        let never = CancellationToken::new();
+        let mut all = Vec::new();
+        let mut cursor: Option<String> = None;
+        for _ in 0..MAX_PAGES {
+            let params = cursor.as_ref().map(|cursor| json!({ "cursor": cursor }));
+            let page: PromptsPage = self.ask("prompts/list", params, LOOKUP_TIMEOUT, &never).await?;
+            all.extend(page.prompts);
+            cursor = page.next_cursor.filter(|next| !next.is_empty());
+            if cursor.is_none() {
+                break;
+            }
+        }
+        Ok(all)
+    }
+
+    pub(crate) async fn get_prompt(
+        &self,
+        name: &str,
+        arguments: Value,
+        cancel: &CancellationToken,
+    ) -> Result<GetPromptResult, McpError> {
+        let params = json!({ "name": name, "arguments": arguments });
+        self.ask("prompts/get", Some(params), LOOKUP_TIMEOUT, cancel).await
+    }
+
     pub(crate) async fn call_tool(
         &self,
         name: &str,
@@ -286,6 +325,21 @@ async fn read(
 
         let method = message.get("method").and_then(Value::as_str);
         match (method, message.get("id")) {
+            // The human is asked; the answer goes back whenever it comes,
+            // and the loop goes on reading meanwhile.
+            (Some("elicitation/create"), Some(id)) if !id.is_null() => {
+                let (tx, rx) = oneshot::channel();
+                let params = message.get("params").cloned().unwrap_or(Value::Null);
+                let _ = notices.send(Notice::Elicit { params, answer: tx });
+                let transport = transport.clone();
+                let id = id.clone();
+                tokio::spawn(async move {
+                    let result = rx.await.unwrap_or_else(|_| json!({ "action": "cancel" }));
+                    let _ = transport
+                        .send(json!({ "jsonrpc": "2.0", "id": id, "result": result }))
+                        .await;
+                });
+            }
             // A request of the server's own.
             (Some(method), Some(id)) if !id.is_null() => {
                 let reply = match method {
@@ -307,6 +361,9 @@ async fn read(
             }
             (Some(TOOLS_LIST_CHANGED), _) => {
                 let _ = notices.send(Notice::ToolsChanged);
+            }
+            (Some(PROMPTS_LIST_CHANGED), _) => {
+                let _ = notices.send(Notice::PromptsChanged);
             }
             // Progress, log lines, changed resources: nothing here keeps them.
             (Some(_), _) => {}

@@ -1,7 +1,7 @@
 //! The messages of the Model Context Protocol this client reads and writes.
 //!
-//! Only the client's half, and only what the core uses: the handshake, tools
-//! and resources. Every struct ignores fields it does not name, so a server on
+//! Only the client's half, and only what the core uses: the handshake, tools,
+//! resources and prompts. Every struct ignores fields it does not name, so a server on
 //! a newer revision still parses.
 
 use serde::Deserialize;
@@ -12,6 +12,7 @@ use serde_json::Value;
 pub(crate) const VERSIONS: [&str; 3] = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 pub(crate) const TOOLS_LIST_CHANGED: &str = "notifications/tools/list_changed";
+pub(crate) const PROMPTS_LIST_CHANGED: &str = "notifications/prompts/list_changed";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,6 +33,47 @@ pub(crate) struct Capabilities {
     pub tools: Option<Value>,
     #[serde(default)]
     pub resources: Option<Value>,
+    #[serde(default)]
+    pub prompts: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PromptsPage {
+    #[serde(default)]
+    pub prompts: Vec<RemotePrompt>,
+    #[serde(default)]
+    pub next_cursor: Option<String>,
+}
+
+/// A prompt template a server offers, which Yaca shows as a slash command.
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct RemotePrompt {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub arguments: Vec<PromptArgument>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct PromptArgument {
+    pub name: String,
+    #[serde(default)]
+    pub required: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct GetPromptResult {
+    #[serde(default)]
+    pub messages: Vec<PromptMessage>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct PromptMessage {
+    #[serde(default)]
+    pub role: String,
+    pub content: Content,
 }
 
 #[derive(Debug, Deserialize)]

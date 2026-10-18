@@ -342,7 +342,7 @@ async fn a_server_from_the_projects_mcp_json_waits_for_approval() {
     );
     let config = || {
         let mut config = SessionConfig::new(dir.path());
-        config.journal = false;
+        config.journal = None;
         config.mcp_approvals = Some(approvals.path().to_path_buf());
         config
     };
@@ -573,4 +573,92 @@ async fn a_subagent_has_the_servers_tools_too() {
     assert!(subagent.tools.iter().any(|t| t.name == "mcp__fixture__echo"));
     assert!(subagent.tools.iter().all(|t| t.name != "Task"));
     assert!(subagent.system.contains("<mcp_servers>"));
+}
+
+#[tokio::test]
+async fn a_servers_prompt_is_a_slash_command_the_model_gets_filled() {
+    let dir = TempProject::new();
+    declare(&dir, &[], json!({}));
+    let provider = Arc::new(MockProvider::new(vec![Turn::Events(script_text("On it."))]));
+    let handle = open(&dir, provider.clone(), Mode::Auto);
+    let servers = settled(&handle).await;
+    let prompt = &servers[0].prompts[0];
+    assert_eq!(prompt.command, "mcp__fixture__review");
+    assert_eq!(prompt.arguments, vec!["pr".to_string(), "focus".to_string()]);
+
+    let mut rx = handle.subscribe();
+    ask(&handle, "/mcp__fixture__review 42 error handling").await;
+    let seen = turn(&mut rx).await;
+
+    let request = provider.seen.lock().unwrap()[0].clone();
+    let said = format!("{:?}", request.messages.last());
+    assert!(said.contains("Review PR 42 focusing on error handling"), "{said}");
+    // The feed keeps what the human typed.
+    assert!(seen.iter().any(|e| matches!(
+        e,
+        AgentEvent::UserMessage { text, .. } if text == "/mcp__fixture__review 42 error handling"
+    )));
+}
+
+#[tokio::test]
+async fn a_prompt_without_its_required_argument_says_which() {
+    let dir = TempProject::new();
+    declare(&dir, &[], json!({}));
+    let provider = Arc::new(MockProvider::new(vec![Turn::Events(script_text("ok"))]));
+    let handle = open(&dir, provider.clone(), Mode::Auto);
+    settled(&handle).await;
+
+    let mut rx = handle.subscribe();
+    ask(&handle, "/mcp__fixture__review").await;
+    let seen = turn(&mut rx).await;
+    assert!(seen.iter().any(|e| matches!(
+        e,
+        AgentEvent::Error { code, message, .. } if code == "mcp_prompt" && message.contains("`pr`")
+    )), "{seen:?}");
+}
+
+/// Runs one call to the fixture's `ask` tool, answering the form it puts up
+/// with `reply`, and returns the tool's result.
+async fn elicited(reply: yaca_core::mcp::ElicitationReply) -> (String, Vec<AgentEvent>) {
+    let dir = TempProject::new();
+    declare(&dir, &[], json!({}));
+    let provider = Arc::new(MockProvider::new(vec![
+        call("t1", "ask", json!({})),
+        Turn::Events(script_text("Done.")),
+    ]));
+    let handle = open(&dir, provider.clone(), Mode::Auto);
+    settled(&handle).await;
+    let mut rx = handle.subscribe();
+    ask(&handle, "ask me").await;
+
+    let shown = until_within(&mut rx, ROPE, |e| matches!(e, AgentEvent::ElicitationRequested { .. })).await;
+    let Some(AgentEvent::ElicitationRequested { request }) = shown.last().cloned() else {
+        panic!("no form: {shown:?}");
+    };
+    assert_eq!(request.server, "fixture");
+    assert_eq!(request.message, "Who is this for?");
+    assert_eq!(request.fields[0].title, "Name");
+    assert!(request.fields[0].required);
+
+    handle
+        .send(yaca_core::Command::AnswerElicitation { request_id: request.id.clone(), reply })
+        .await
+        .unwrap();
+    let mut seen = turn(&mut rx).await;
+    seen.extend(shown);
+    (tool_result_of(&provider, "t1").0, seen)
+}
+
+#[tokio::test]
+async fn a_servers_form_is_filled_by_the_human_and_answered() {
+    let values = serde_json::from_value(json!({ "name": "Ada" })).unwrap();
+    let (text, seen) = elicited(yaca_core::mcp::ElicitationReply::Accept { values }).await;
+    assert!(text.contains("accept") && text.contains("Ada"), "{text}");
+    assert!(seen.iter().any(|e| matches!(e, AgentEvent::ElicitationResolved { reply: Some(_), .. })));
+}
+
+#[tokio::test]
+async fn a_declined_form_tells_the_server_so() {
+    let (text, _) = elicited(yaca_core::mcp::ElicitationReply::Decline).await;
+    assert!(text.contains("decline"), "{text}");
 }
