@@ -226,7 +226,7 @@ export default function Settings({
           {shown === "plugins" && <PluginsSection />}
           {shown === "appearance" && <AppearanceSection prefs={prefs} onPatch={patchPrefs} />}
           {shown === "notices" && <NoticesSection prefs={prefs} onPatch={patchPrefs} />}
-          {shown === "about" && <AboutSection />}
+          {shown === "about" && <AboutSection prefs={prefs} onPatch={patchPrefs} />}
 
           {isProjectSection(shown) && project !== null && (
             <>

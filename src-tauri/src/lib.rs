@@ -16,6 +16,7 @@ mod providers;
 mod routing;
 mod settings;
 mod state;
+mod update;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -671,6 +672,7 @@ pub fn run() {
                 app.state::<AppState>()
                     .set_prefs(AppSettings::load(&dir).prefs().clone());
             }
+            update::watch(app.handle().clone());
             Ok(())
         })
         .invoke_handler(only_the_window(tauri::generate_handler![
@@ -724,6 +726,8 @@ pub fn run() {
             routing::remove_routing,
             prefs::preferences,
             prefs::set_preferences,
+            update::check_for_updates,
+            update::update_status,
             project::project_settings,
             project::save_project_settings,
             project::project_instructions,

@@ -101,6 +101,10 @@ pub struct Preferences {
     /// system prompt names the shell, so a chat that is already open keeps
     /// the one it started with.
     pub shell: ShellChoice,
+    /// Look for a newer release on GitHub on its own: shortly after start and
+    /// every few hours after (see [`crate::update`]). Off still leaves the
+    /// button in the About screen; it only stops the app from asking by itself.
+    pub check_updates: bool,
 }
 
 impl Default for Preferences {
@@ -113,6 +117,7 @@ impl Default for Preferences {
             notifications: true,
             respect_robots: true,
             shell: ShellChoice::default(),
+            check_updates: true,
         }
     }
 }
@@ -175,6 +180,7 @@ mod tests {
         assert!(prefs.notifications);
         assert!(prefs.respect_robots);
         assert_eq!(prefs.shell, ShellChoice::Auto);
+        assert!(prefs.check_updates);
     }
 
     /// A file from a build that knew fewer fields keeps the rest as they were.

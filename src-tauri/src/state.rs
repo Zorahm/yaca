@@ -53,6 +53,9 @@ pub struct AppState {
     /// disk in the path of a permission request. The file stays the truth;
     /// this is refreshed by the same command that writes it.
     prefs: Mutex<Preferences>,
+    /// The last answer of the update check, so a window opened later (the
+    /// settings one) sees what the first window was told.
+    update: Mutex<Option<yaca_core::update::UpdateCheck>>,
 }
 
 impl AppState {
@@ -66,6 +69,14 @@ impl AppState {
 
     pub fn set_prefs(&self, prefs: Preferences) {
         *self.prefs.lock().unwrap() = prefs;
+    }
+
+    pub fn update(&self) -> Option<yaca_core::update::UpdateCheck> {
+        self.update.lock().unwrap().clone()
+    }
+
+    pub fn set_update(&self, check: yaca_core::update::UpdateCheck) {
+        *self.update.lock().unwrap() = Some(check);
     }
 
     pub fn chat(&self, id: &SessionId) -> Option<Arc<SessionHandle>> {

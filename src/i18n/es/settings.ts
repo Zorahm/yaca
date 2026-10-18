@@ -79,8 +79,23 @@ export const settings = {
     "La conversación va al proveedor que se ha elegido; las claves se guardan en el llavero del sistema, y antes de cada edición se guarda el estado del proyecto para poder volver a él.",
   "about.updates": "Actualizaciones",
   "about.updates_hint":
-    "Todavía no hay compilaciones publicadas, así que no hay con qué comparar la versión. La comprobación llegará con la primera versión publicada.",
-  "about.updates_none": "todavía no hay comprobación",
+    "Consulta las versiones de Yaca en GitHub. Nada se descarga ni se instala por sí solo.",
+  "about.update_check": "Comprobar",
+  "about.update_checking": "Comprobando…",
+  "about.update_latest": "Tienes la última versión.",
+  "about.update_available": "Hay una versión disponible: {version}",
+  "about.update_prerelease": "preliminar",
+  "about.update_changes": "Novedades",
+  "about.update_no_changes": "La versión no tiene descripción.",
+  "about.update_download": "Descargar",
+  "about.update_page": "Página de la versión",
+  "about.update_offline": "No se pudo conectar con GitHub. Revisa la conexión.",
+  "about.update_rate_limited":
+    "GitHub limita las solicitudes desde esta dirección. Inténtalo más tarde.",
+  "about.update_failed": "La comprobación falló. Inténtalo más tarde.",
+  "about.update_auto": "Comprobar automáticamente",
+  "about.update_auto_hint":
+    "Unos segundos después de iniciar y luego cada pocas horas. Si hay una versión nueva, aparece una tarjeta en la barra lateral.",
   "about.license": "Licencia",
 
   "notices.title": "Notificaciones e idioma",

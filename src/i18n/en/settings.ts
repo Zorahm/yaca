@@ -79,8 +79,23 @@ export const settings = {
     "The conversation goes to the provider you chose yourself; keys stay in the system keychain, and before edits the project's state is saved so you can go back to it.",
   "about.updates": "Updates",
   "about.updates_hint":
-    "There are no published builds yet, so there is nothing to compare the version with. The check arrives with the first published release.",
-  "about.updates_none": "no check yet",
+    "Looks at the Yaca releases on GitHub. Nothing is downloaded or installed by itself.",
+  "about.update_check": "Check now",
+  "about.update_checking": "Checking…",
+  "about.update_latest": "You have the latest version.",
+  "about.update_available": "Version {version} is available",
+  "about.update_prerelease": "pre-release",
+  "about.update_changes": "What's new",
+  "about.update_no_changes": "This release has no description.",
+  "about.update_download": "Download",
+  "about.update_page": "Release page",
+  "about.update_offline": "Could not reach GitHub. Check the connection.",
+  "about.update_rate_limited":
+    "GitHub is limiting requests from this address. Try again later.",
+  "about.update_failed": "The check failed. Try again later.",
+  "about.update_auto": "Check automatically",
+  "about.update_auto_hint":
+    "A few seconds after start and then every few hours. When a newer version appears, a card shows in the sidebar.",
   "about.license": "License",
 
   "notices.title": "Notifications and language",

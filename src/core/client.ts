@@ -88,6 +88,8 @@ import type { Startup } from "./bindings/Startup";
 import type { TodoItem } from "./bindings/TodoItem";
 import type { ToolMeta } from "./bindings/ToolMeta";
 import type { UsageSnapshot } from "./bindings/UsageSnapshot";
+import type { ReleaseInfo } from "./bindings/ReleaseInfo";
+import type { UpdateCheck } from "./bindings/UpdateCheck";
 
 export type {
   BrowserState,
@@ -161,6 +163,8 @@ export type {
   TodoItem,
   ToolMeta,
   UsageSnapshot,
+  ReleaseInfo,
+  UpdateCheck,
 };
 
 /** Мост шлёт события пачками по кадру, а не по одному (§12). */
@@ -909,6 +913,56 @@ export const commands = {
   editSummary: (text: string): Command => ({ type: "editSummary", text }),
 };
 
+// --- обновления -------------------------------------------------------------
+
+/** Канал ответа проверки обновлений: см. `update.rs`. Слушают оба экрана. */
+const UPDATE_CHANNEL = "yaca://update";
+
+/**
+ * Спрашивает GitHub, есть ли версия новее. Отказ — это код (`offline`,
+ * `rate_limited`, `status:502`, `bad_response`), а не фраза: слова ему подбирает
+ * окно, на языке человека.
+ */
+export function checkForUpdates(): Promise<UpdateCheck> {
+  return inTauri ? invoke<UpdateCheck>("check_for_updates") : Promise.resolve(DEMO_UPDATE);
+}
+
+/** В стенде оболочки нет, и «найденный» релиз — образец для глаз. */
+const DEMO_UPDATE: UpdateCheck = {
+  current: "1.0.0-beta",
+  latest: {
+    version: "1.0.1-beta",
+    name: "Yaca 1.0.1-beta",
+    changelog: [
+      "## What's new",
+      "",
+      "- Update check in About: by hand and in the background",
+      "- The browser column keeps its page when a chat is switched",
+      "- `Read` returns the cells of a notebook with their ids",
+      "",
+      "## Fixed",
+      "",
+      "- A permission request no longer loses focus after a window reload",
+      "- The installer keeps the language of Windows",
+    ].join("\n"),
+    url: "https://github.com/Zorahm/yaca/releases/tag/v1.0.1-beta",
+    downloadUrl: "https://github.com/Zorahm/yaca/releases/download/v1.0.1-beta/Yaca_1.0.1-beta_x64-setup.exe",
+    publishedAt: "2026-10-25T10:00:00Z",
+    prerelease: true,
+  },
+};
+
+/** Что нашла последняя проверка; `null`, пока первая не закончилась. */
+export function updateStatus(): Promise<UpdateCheck | null> {
+  return inTauri ? invoke<UpdateCheck | null>("update_status") : Promise.resolve(DEMO_UPDATE);
+}
+
+/** Подписка на ответ проверки: фоновой и той, что запущена кнопкой. */
+export function onUpdate(handler: (check: UpdateCheck) => void): Promise<UnlistenFn> {
+  if (!inTauri) return Promise.resolve(() => undefined);
+  return listen<UpdateCheck>(UPDATE_CHANNEL, (e) => handler(e.payload));
+}
+
 // --- настройки §10 ----------------------------------------------------------
 
 /** Канал настроек приложения. Одно имя на оба окна: см. `prefs.rs`. */
@@ -952,6 +1006,7 @@ export const DEFAULT_PREFS: Preferences = {
   notifications: true,
   respectRobots: true,
   shell: "auto",
+  checkUpdates: true,
 };
 
 /**

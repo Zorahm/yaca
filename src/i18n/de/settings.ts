@@ -79,8 +79,23 @@ export const settings = {
     "Das Gespräch geht an den selbst gewählten Anbieter; Schlüssel liegen im Systemschlüsselbund, und vor Änderungen wird der Stand des Projekts gesichert, zu dem man zurückkehren kann.",
   "about.updates": "Updates",
   "about.updates_hint":
-    "Es gibt noch keine veröffentlichten Builds, daher gibt es nichts, womit die Version verglichen werden könnte. Die Prüfung kommt mit dem ersten veröffentlichten Release.",
-  "about.updates_none": "noch keine Prüfung",
+    "Sieht in den Yaca-Releases auf GitHub nach. Nichts wird von selbst geladen oder installiert.",
+  "about.update_check": "Prüfen",
+  "about.update_checking": "Prüfe …",
+  "about.update_latest": "Die neueste Version ist installiert.",
+  "about.update_available": "Version {version} ist verfügbar",
+  "about.update_prerelease": "Vorabversion",
+  "about.update_changes": "Neuerungen",
+  "about.update_no_changes": "Das Release hat keine Beschreibung.",
+  "about.update_download": "Herunterladen",
+  "about.update_page": "Release-Seite",
+  "about.update_offline": "GitHub ist nicht erreichbar. Prüfe die Verbindung.",
+  "about.update_rate_limited":
+    "GitHub begrenzt die Anfragen von dieser Adresse. Versuche es später erneut.",
+  "about.update_failed": "Die Prüfung ist fehlgeschlagen. Versuche es später erneut.",
+  "about.update_auto": "Automatisch prüfen",
+  "about.update_auto_hint":
+    "Einige Sekunden nach dem Start und danach alle paar Stunden. Gibt es eine neue Version, erscheint eine Karte in der Seitenleiste.",
   "about.license": "Lizenz",
 
   "notices.title": "Benachrichtigungen und Sprache",

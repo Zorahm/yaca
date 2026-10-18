@@ -49,4 +49,10 @@ respectRobots: boolean,
  * system prompt names the shell, so a chat that is already open keeps
  * the one it started with.
  */
-shell: ShellChoice, };
+shell: ShellChoice, 
+/**
+ * Look for a newer release on GitHub on its own: shortly after start and
+ * every few hours after (see [`crate::update`]). Off still leaves the
+ * button in the About screen; it only stops the app from asking by itself.
+ */
+checkUpdates: boolean, };

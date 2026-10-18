@@ -79,8 +79,23 @@ export const settings = {
     "A conversa vai para o provedor que você escolheu; as chaves ficam no chaveiro do sistema, e antes das edições é guardado um snapshot do estado do projeto, para o qual você pode voltar.",
   "about.updates": "Atualizações",
   "about.updates_hint":
-    "Ainda não há versões publicadas, então não há com o que comparar a versão. A verificação chega com a primeira versão publicada.",
-  "about.updates_none": "ainda sem verificação",
+    "Consulta as versões do Yaca no GitHub. Nada é baixado nem instalado sozinho.",
+  "about.update_check": "Verificar",
+  "about.update_checking": "Verificando…",
+  "about.update_latest": "Você está com a versão mais recente.",
+  "about.update_available": "A versão {version} está disponível",
+  "about.update_prerelease": "pré-lançamento",
+  "about.update_changes": "Novidades",
+  "about.update_no_changes": "A versão não tem descrição.",
+  "about.update_download": "Baixar",
+  "about.update_page": "Página da versão",
+  "about.update_offline": "Não foi possível conectar ao GitHub. Verifique a conexão.",
+  "about.update_rate_limited":
+    "O GitHub está limitando as requisições deste endereço. Tente novamente mais tarde.",
+  "about.update_failed": "A verificação falhou. Tente novamente mais tarde.",
+  "about.update_auto": "Verificar automaticamente",
+  "about.update_auto_hint":
+    "Alguns segundos após iniciar e depois a cada poucas horas. Quando houver uma versão nova, um cartão aparece na barra lateral.",
   "about.license": "Licença",
 
   "notices.title": "Notificações e idioma",

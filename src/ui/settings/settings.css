@@ -885,6 +885,98 @@
   color: var(--muted);
 }
 
+.about-value[data-state="new"] {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.about-value[data-state="error"] {
+  color: var(--err);
+}
+
+.about-update-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* A found release is a card on the ground, the way a request is, because it
+   too waits on the human. */
+.about-release {
+  margin-top: 20px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-l);
+}
+
+.about-release-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.about-release-name {
+  margin: 0;
+  font: 600 15px/22px var(--display);
+  color: var(--ink);
+}
+
+.about-release-meta {
+  font: 12px/18px var(--mono);
+  color: var(--muted);
+}
+
+.about-release-label {
+  margin: 12px 0 6px;
+  font: 600 12.5px/18px var(--display);
+  color: var(--ink);
+}
+
+.about-release-body {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  background: var(--sunk);
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  line-height: 1.55;
+  user-select: text;
+}
+
+.about-release-body .md-doc {
+  max-width: none;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.about-release-body .md-doc h1,
+.about-release-body .md-doc h2,
+.about-release-body .md-doc h3 {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.about-release-body .md-doc h1,
+.about-release-body .md-doc h2,
+.about-release-body .md-doc h3 {
+  margin: 10px 0 4px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.about-release-body .md-doc > :first-child {
+  margin-top: 0;
+}
+
+.about-release-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 /* A plugin row carries more than a provider's: its counts and what of it did
    not load, each on a line of its own. */
 .plug .prov-main {
