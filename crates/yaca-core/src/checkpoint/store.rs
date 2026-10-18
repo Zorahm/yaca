@@ -56,6 +56,30 @@ impl Store {
         })
     }
 
+    /// The store of `root` if it has one, and nothing created if it does not.
+    ///
+    /// For readers that only ask what is there — the feed of a session that is
+    /// not running — where [`Store::open`] would bring back a `.yaca` the human
+    /// had deleted.
+    pub fn existing(root: &Path) -> Option<Self> {
+        let shadow = crate::project::dir(root).join(SHADOW_DIR);
+        let manifests = shadow.join("manifests");
+        if !manifests.is_dir() {
+            return None;
+        }
+        Some(Store {
+            objects: shadow.join("objects"),
+            tmp: shadow.join("tmp"),
+            manifests,
+            shadow,
+        })
+    }
+
+    /// Whether the manifest is stored. A point is only as good as this.
+    pub fn has_manifest(&self, hash: &Hash) -> bool {
+        path_in(&self.manifests, hash).is_file()
+    }
+
     /// The shadow directory itself. Used as the key for in-process bookkeeping,
     /// since every session of one project opens the same one.
     pub fn dir(&self) -> &Path {

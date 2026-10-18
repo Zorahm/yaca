@@ -133,19 +133,29 @@ impl Background {
 
 impl Subagents {
     /// Sends a subagent on `task` and returns without waiting for it.
-    pub(crate) fn send(&self, task: String, cancel: &CancellationToken) -> ToolOutput {
+    pub(crate) fn send(
+        &self,
+        task: String,
+        agent: Option<String>,
+        model: Option<String>,
+        cancel: &CancellationToken,
+    ) -> Result<ToolOutput, ToolError> {
+        // An agent or a model nobody has fails the call now, not in the
+        // background.
+        self.agent(agent.as_deref())?;
+        self.model(model.as_deref())?;
         let agents = self.clone();
         let cancel = cancel.clone();
         let shared = self.sender.shared.clone();
         shared.background.sent();
         tokio::spawn(async move {
             let started = Instant::now();
-            let outcome = agents.run(task, &cancel).await;
+            let outcome = agents.run(task, agent, model, &cancel).await;
             let report = agents.close_row(outcome, started.elapsed().as_millis() as u32);
             shared.background.finish(report);
         });
 
-        ToolOutput::new(format!(
+        Ok(ToolOutput::new(format!(
             "Subagent {} is working in the background. Its report will be given to you \
              when it is ready, with no call from you: go on with your own work \
              meanwhile, and leave what you handed over to it. If nothing is left for \
@@ -153,7 +163,7 @@ impl Subagents {
              the report.",
             self.row
         ))
-        .detached()
+        .detached())
     }
 
     /// The end of the `Task` row, which `calls` left open for a detached
@@ -233,8 +243,10 @@ impl Worker {
             let mut content = self.reports();
             content.extend(self.process_note());
             for queued in inbox.messages(&self.shared.queue) {
-                let said = self.hear(turn_id, queued.text, queued.attachments).await;
-                content.extend(said.content);
+                let heard = self.hear_checked(turn_id, queued.text, queued.attachments, cancel);
+                if let Some(said) = heard.await {
+                    content.extend(said.content);
+                }
             }
             // Empty when what woke it was a message cancelled since.
             if !content.is_empty() {

@@ -5,4 +5,9 @@ import type { SessionId } from "./SessionId";
 /**
  * Batch of events of one chat (§12).
  */
-export type EventFrame = { session: SessionId, events: Array<AgentEvent>, };
+export type EventFrame = { session: SessionId, 
+/**
+ * Which bridge of the chat sent this. The window folds only the frames of the epoch
+ * its feed was built at.
+ */
+epoch: number, events: Array<AgentEvent>, };

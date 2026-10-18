@@ -157,6 +157,46 @@ describe("лента", () => {
     expect(feed.blocks[0].rows[0].diff).not.toBeNull();
   });
 
+  it("переименование ставит каждый файл строкой под собой", () => {
+    const changed = (path: string, added: number): AgentEvent => ({
+      type: "fileChanged",
+      callId: "c1",
+      fact: { path, kind: "modified", movedFrom: null, added, removed: added },
+      diff: { hunks: [], added, removed: added, truncated: false },
+    });
+    const feed = run(
+      started("c1", "Rename"),
+      changed("src/a.rs", 2),
+      changed("src/b.rs", 1),
+      changed("src/a.rs", 3),
+    );
+
+    if (feed.blocks[0].kind !== "actions") throw new Error("не группа");
+    const row = feed.blocks[0].rows[0];
+    // The row is the rename; the files are under it, one row per file.
+    expect(row.fact).toBeNull();
+    expect(row.children.map((c) => c.fact?.path)).toEqual(["src/a.rs", "src/b.rs"]);
+    expect(row.children[0].fact?.added).toBe(3);
+    expect(feed.diffs["src/b.rs"]).toBeDefined();
+  });
+
+  it("форма сервера встаёт одна, сколько бы раз ни пришла, и закрывается ответом", () => {
+    const request = {
+      id: "req_1",
+      server: "billing",
+      message: "Which account?",
+      fields: [],
+    };
+    const feed = run(
+      { type: "elicitationRequested", request },
+      { type: "elicitationRequested", request },
+      { type: "elicitationResolved", requestId: "req_1", reply: { type: "decline" } },
+    );
+    const forms = feed.blocks.filter((b) => b.kind === "elicitation");
+    expect(forms).toHaveLength(1);
+    expect(forms[0].kind === "elicitation" && forms[0].status).toBe("declined");
+  });
+
   it("список задач обновляется на месте", () => {
     // §5.6: новый блок не создаётся.
     const feed = run(
@@ -633,6 +673,7 @@ describe("показанный текст файла", () => {
   const shown = (text: string): AgentEvent => ({
     type: "textShown",
     path: "notes.md",
+    command: null,
     firstLine: 2,
     lines: 2,
     total: 5,
@@ -650,5 +691,53 @@ describe("показанный текст файла", () => {
     const feed = run(wrote("b1", "Вот файл:"), shown("two"), wrote("b1", "Это всё."));
     expect(feed.blocks.map((b) => b.kind)).toEqual(["agent", "shown", "agent"]);
     expect(feed.blocks[2]).toMatchObject({ text: "Это всё." });
+  });
+});
+
+describe("plugin hooks in the feed", () => {
+  it("a hook that blocked a message stands under that message", () => {
+    const feed = run(said("deploy"), {
+      type: "hookReported",
+      plugin: "tools",
+      event: "UserPromptSubmit",
+      text: "not today",
+      blocked: true,
+    });
+    expect(feed.blocks.map((b) => b.kind)).toEqual(["human", "hook"]);
+    const hook = feed.blocks[1];
+    expect(hook.kind === "hook" && hook.blocked && hook.text).toBe("not today");
+  });
+});
+
+describe("the model router in the feed", () => {
+  const routed = (model: string, route: string | null): AgentEvent => ({
+    type: "routeDecided",
+    route,
+    provider: "gateway",
+    model,
+    matched: [],
+  });
+
+  it("puts which model answers ahead of its text", () => {
+    const feed = run(said("hi"), routed("big", "hard-code"), wrote("b1", "answer"));
+    expect(feed.blocks.map((b) => b.kind)).toEqual(["human", "route", "agent"]);
+
+    const note = feed.blocks[1];
+    expect(note.kind === "route" && [note.route, note.provider, note.model]).toEqual([
+      "hard-code",
+      "gateway",
+      "big",
+    ]);
+  });
+
+  it("keeps the default route, which has no name", () => {
+    const feed = run(said("hi"), routed("big", null));
+    const note = feed.blocks[1];
+    expect(note.kind === "route" && note.route).toBeNull();
+  });
+
+  it("shows each turn's model, since the next message may go elsewhere", () => {
+    const feed = run(said("one"), routed("fast", null), said("two"), routed("big", "hard-code"));
+    expect(feed.blocks.filter((b) => b.kind === "route")).toHaveLength(2);
   });
 });

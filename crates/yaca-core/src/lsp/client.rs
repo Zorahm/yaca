@@ -58,6 +58,9 @@ pub(crate) struct Client {
     diagnostics: Arc<Diagnostics>,
     /// `name version` as the server introduces itself.
     pub(crate) label: Option<String>,
+    /// The server answers `textDocument/diagnostic` (pull diagnostics, LSP
+    /// 3.17). Some servers only answer when asked and never publish.
+    pulls: bool,
     /// Ends the reading task when the client goes.
     _alive: DropGuard,
 }
@@ -98,6 +101,7 @@ impl Client {
             docs: Default::default(),
             diagnostics,
             label: None,
+            pulls: false,
             _alive: alive.drop_guard(),
         };
         client.initialize(root).await?;
@@ -120,7 +124,13 @@ impl Client {
                     "rootUri": uri,
                     "workspaceFolders": [{ "uri": uri, "name": name }],
                     "capabilities": {
-                        "workspace": { "workspaceFolders": true, "configuration": true },
+                        // Text edits only: `Rename` applies no file
+                        // operations, and a server told so does not send them.
+                        "workspace": {
+                            "workspaceFolders": true,
+                            "configuration": true,
+                            "workspaceEdit": { "documentChanges": true, "resourceOperations": [] },
+                        },
                         "textDocument": {
                             "synchronization": { "didSave": true },
                             "publishDiagnostics": {},
@@ -128,6 +138,8 @@ impl Client {
                             "references": {},
                             "hover": { "contentFormat": ["plaintext", "markdown"] },
                             "documentSymbol": { "hierarchicalDocumentSymbolSupport": true },
+                            "rename": { "prepareSupport": true },
+                            "diagnostic": { "dynamicRegistration": false },
                         },
                     },
                 }),
@@ -136,6 +148,10 @@ impl Client {
                 &never,
             )
             .await?;
+        self.pulls = result
+            .get("capabilities")
+            .and_then(|c| c.get("diagnosticProvider"))
+            .is_some_and(|p| !p.is_null() && p != &Value::Bool(false));
         self.label = result
             .get("serverInfo")
             .and_then(|info| {
@@ -175,7 +191,7 @@ impl Client {
 
         let gave_up = tokio::select! {
             result = rx => {
-                return result.unwrap_or_else(|_| Err(LspError::Closed("соединение закрыто".into())));
+                return result.unwrap_or_else(|_| Err(LspError::Closed("connection closed".into())));
             }
             _ = cancel.cancelled() => LspError::Cancelled,
             _ = tokio::time::sleep(deadline) => LspError::Timeout(deadline.as_secs()),
@@ -251,6 +267,23 @@ impl Client {
         wait: Duration,
         cancel: &CancellationToken,
     ) -> (Vec<Value>, bool) {
+        // A server that answers when asked is asked: what it says is about the
+        // text it was just sent, with no publication to wait for. Not every
+        // pull server publishes at all. A pull that fails falls back to what
+        // was published.
+        if self.pulls {
+            let ask = self.request(
+                "textDocument/diagnostic",
+                serde_json::json!({ "textDocument": { "uri": uri } }),
+                wait.max(Duration::from_secs(2)),
+                cancel,
+            );
+            if let Ok(report) = ask.await {
+                if let Some(items) = report.get("items").and_then(Value::as_array) {
+                    return (items.clone(), true);
+                }
+            }
+        }
         let mut ticks = self.diagnostics.tick.subscribe();
         let deadline = tokio::time::sleep(wait);
         tokio::pin!(deadline);
@@ -299,7 +332,7 @@ async fn read(
         let message = match next {
             Some(Incoming::Message(message)) => message,
             Some(Incoming::Closed(reason)) => break reason,
-            None => break "соединение закрыто".to_string(),
+            None => break "connection closed".to_string(),
         };
 
         let method = message.get("method").and_then(Value::as_str);
@@ -383,7 +416,7 @@ fn answer_of(message: &Value) -> Result<Value, LspError> {
             message: error
                 .get("message")
                 .and_then(Value::as_str)
-                .unwrap_or("ошибка без текста")
+                .unwrap_or("error without message")
                 .to_string(),
         });
     }

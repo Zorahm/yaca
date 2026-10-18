@@ -202,6 +202,7 @@ describe("closesReply", () => {
     const feed = items(wrote("b1", "Here it is:"), {
       type: "textShown",
       path: "a.md",
+      command: null,
       firstLine: 1,
       lines: 1,
       total: 1,

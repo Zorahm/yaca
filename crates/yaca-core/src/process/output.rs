@@ -84,7 +84,7 @@ impl Utf8Stream {
 ///
 /// Older Windows tools, and `cmd` when a command calls it, write in the
 /// machine's OEM codepage —
-/// `ломалось` comes out as eight cp866 bytes — and showing that as `��������`
+/// Russian text comes out as eight cp866 bytes — and showing that as replacement characters
 /// would be the feed lying about what the command printed (§0). Prefixing the
 /// command with `chcp 65001` was tried and dropped: it changes the line the
 /// human approved in §5.7, and it worked only sometimes, because cmd settles
@@ -282,7 +282,7 @@ pub fn clamp(lines: &[&str], max_bytes: usize) -> (String, bool) {
     }
 
     let mut out = join(&lines[..head]);
-    out.push_str(&format!("\n[… пропущено {skipped} строк …]\n\n"));
+    out.push_str(&format!("\n[… skipped {skipped} lines …]\n\n"));
     out.push_str(&join(&lines[tail..]));
     (out, true)
 }
@@ -308,11 +308,11 @@ mod tests {
     #[test]
     fn a_character_split_across_reads_survives() {
         let mut stream = Utf8Stream::default();
-        let text = "привет";
+        let text = "café";
         let bytes = text.as_bytes();
-        // Cut inside the second character, where a naive decoder puts a `�`.
-        assert_eq!(stream.push(&bytes[..3]), "п");
-        assert_eq!(stream.push(&bytes[3..]), "ривет");
+        // Cut inside the multi-byte character, where a naive decoder puts a replacement char.
+        assert_eq!(stream.push(&bytes[..4]), "caf");
+        assert_eq!(stream.push(&bytes[4..]), "é");
         assert_eq!(stream.flush(), "");
     }
 
@@ -324,7 +324,7 @@ mod tests {
         let out = stream.push(&[b'a', 0xFF, b'b']);
         assert!(
             out.starts_with('a') && out.ends_with('b'),
-            "получили {out:?}"
+            "got {out:?}"
         );
         assert_eq!(stream.flush(), "");
     }
@@ -335,7 +335,7 @@ mod tests {
     #[test]
     fn console_codepage_output_is_read_rather_than_mangled() {
         let mut stream = Utf8Stream::default();
-        // `ломалось` as cp866 puts it on the wire.
+        // Russian text as cp866 puts it on the wire.
         let bytes = [0xABu8, 0xAE, 0xAC, 0xA0, 0xAB, 0xAE, 0xE1, 0xEC];
         let out = stream.push(&bytes);
 
@@ -344,7 +344,7 @@ mod tests {
         // came back, and not the lossy reading.
         assert!(
             !out.contains(char::REPLACEMENT_CHARACTER),
-            "получили {out:?}"
+            "got {out:?}"
         );
         assert_ne!(out, String::from_utf8_lossy(&bytes));
     }
@@ -443,7 +443,7 @@ mod tests {
         assert!(cut);
         assert!(text.starts_with("line 0\n"), "got: {text}");
         assert!(text.ends_with("line 999\n"), "got: {text}");
-        assert!(text.contains("пропущено"));
+        assert!(text.contains("skipped"));
         // The budget is a promise, not a suggestion: the marker is the only
         // thing allowed past it.
         assert!(text.len() < 800, "got {} bytes", text.len());

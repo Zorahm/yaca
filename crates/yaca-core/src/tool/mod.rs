@@ -1,4 +1,4 @@
-//! Тулы и реестр.
+//! Tools and registry.
 //!
 //! The mechanics of §5.4.1 live here: who writes the caption of an action. Tools
 //! come in two kinds, and the split is drawn in the call's schema, not in the prompt.
@@ -14,6 +14,7 @@ pub mod bash;
 mod bash_background;
 pub mod bash_control;
 pub mod bash_output;
+pub mod decision;
 pub mod delete_dir;
 pub mod delete_file;
 pub mod edit_file;
@@ -25,8 +26,11 @@ pub mod glob;
 pub mod grep;
 pub mod lsp;
 pub mod memory;
+pub mod notebook;
 pub(crate) mod page;
+pub(crate) mod pdf;
 pub(crate) mod robots;
+pub mod rename;
 pub mod read_file;
 pub mod read_image;
 pub mod search_message;
@@ -40,6 +44,7 @@ pub mod web_search;
 pub mod write_file;
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -77,7 +82,7 @@ pub enum Narration {
 /// Where a tool sends its output while it is still running (§15, `ToolCallProgress`).
 ///
 /// `call_id` is built in: the tool physically cannot write into someone else's
-/// feed row. The «пользовались» flag decides who sends the text: the feed gets it
+/// feed row. The `used` flag decides who sends the text: the feed gets it
 /// exactly once — either as it arrives, or whole when the tool has returned.
 pub struct Progress {
     call_id: CallId,
@@ -115,7 +120,7 @@ impl Progress {
 
 pub struct ToolCtx {
     pub ws: Arc<Workspace>,
-    /// Фоновые команды сессии (§6.5).
+    /// Background session commands (§6.5).
     pub processes: Processes,
     pub events: EventSink,
     pub progress: Progress,
@@ -147,6 +152,8 @@ pub struct ToolCtx {
     /// one a human typed. `SetTitle` refuses on it. False where there is no
     /// index behind the call.
     pub title_locked: bool,
+    /// Where the session's skills are found, for `Skill`.
+    pub skills: Arc<crate::skills::SkillRoots>,
 }
 
 impl ToolCtx {
@@ -167,6 +174,16 @@ pub struct FileChange {
     pub diff: FileDiff,
 }
 
+/// One file of a call that changed several (`Rename`): the change for the feed,
+/// and both texts for the file panel's set of changes.
+#[derive(Debug, Clone)]
+pub struct Edited {
+    pub change: FileChange,
+    pub abs: PathBuf,
+    pub before: String,
+    pub after: String,
+}
+
 #[derive(Debug)]
 pub struct ToolOutput {
     /// What goes to the model as `tool_result`.
@@ -176,6 +193,11 @@ pub struct ToolOutput {
     /// Filled in by the file tools. The session sends the event from it — it alone
     /// knows the `call_id`, and all events leave from one place.
     pub changed: Option<FileChange>,
+    /// The files of a call that changes many at once. Each reaches the feed
+    /// as a `FileChanged` of its own under the call's row, and the set of
+    /// changes takes its baseline from here: the session cannot capture these
+    /// files before the call, since only the call learns which they are.
+    pub edited: Vec<Edited>,
     /// Images for the model, each under the name it is told. They reach it
     /// after the results of the batch: see [`ContentBlock::Image`].
     ///
@@ -196,6 +218,7 @@ impl ToolOutput {
                 ..Default::default()
             },
             changed: None,
+            edited: Vec::new(),
             pictures: Vec::new(),
             detached: false,
         }
@@ -213,6 +236,11 @@ impl ToolOutput {
 
     pub fn changed(mut self, change: FileChange) -> Self {
         self.changed = Some(change);
+        self
+    }
+
+    pub fn edited(mut self, file: Edited) -> Self {
+        self.edited.push(file);
         self
     }
 
@@ -283,9 +311,9 @@ pub trait Tool: Send + Sync {
     /// `true` is set on a tool that changes nothing and asks about nothing.
     /// Writing tools may not: two edits of one file are a race around
     /// the §8 freshness invariant, where both checks pass but only one survives,
-    /// and the «перед командой» checkpoint (§5.8) stops meaning anything if
+    /// and the "before command" checkpoint (§5.8) stops meaning anything if
     /// a second command runs alongside. Asking tools may not either: §5.7 draws one
-    /// block with a `2 из 3` counter, and two questions at once have nowhere to sit.
+    /// block with a `2 of 3` counter, and two questions at once have nowhere to sit.
     fn concurrent(&self) -> bool {
         false
     }
@@ -394,11 +422,13 @@ impl ToolRegistry {
             Arc::new(memory::Memory),
             Arc::new(skill::Skill),
             Arc::new(edit_file::EditFile),
+            Arc::new(notebook::NotebookEdit),
             Arc::new(delete_file::DeleteFile),
             Arc::new(delete_dir::DeleteDir),
             Arc::new(delete_file::MoveFile),
             Arc::new(bash::Bash),
             Arc::new(bash_output::BashOutput),
+            Arc::new(bash_output::BashWait),
             Arc::new(bash_control::BashKill),
             Arc::new(bash_control::BashRestart),
             Arc::new(task::Task),
@@ -440,11 +470,19 @@ impl ToolRegistry {
         all
     }
 
+    /// The same registry with only the tools `keep` says yes to: a named
+    /// agent's `tools`.
+    pub fn only(&self, keep: impl Fn(&str) -> bool) -> Self {
+        let mut all = self.clone();
+        all.tools.retain(|name, _| keep(name));
+        all
+    }
+
     /// The tool, if it exists at all in this mode.
     ///
     /// The mode is not decoration: §7.1 does not offer writing tools to the model in
-    /// «Плане», and a `write_file` it made up must get «неизвестный
-    /// инструмент», not a permission request. Asking about an action that does not exist
+    /// Plan mode, and a `write_file` it made up must get "unknown tool",
+    /// not a permission request. Asking about an action that does not exist
     /// in this mode is an interface lying about the state (§0).
     pub fn get(&self, name: &str, intent: Intent) -> Option<Arc<dyn Tool>> {
         self.tools
@@ -583,6 +621,7 @@ pub(crate) mod tests_support {
             title_locked: false,
             transcript: None,
             lsp: None,
+            skills: Arc::new(crate::skills::SkillRoots::new(ws.home(), Vec::new())),
         };
         (ctx, ws)
     }

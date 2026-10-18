@@ -28,6 +28,20 @@ impl Tool for Task {
                 "type": "string",
                 "description": "The task, complete on its own: what to do or find                     out, what you already know that narrows it, where it must stop,                     and what the report should contain.",
             },
+            "agent": {
+                "type": "string",
+                "description": "Name of an agent from the available agents, to send that \
+                    agent instead of a plain subagent. It brings its own instructions, and \
+                    may have fewer tools or another model.",
+            },
+            "model": {
+                "type": "string",
+                "description": "Id of the model the subagent runs on, exactly as the human \
+                    gave it. Set it only when the human asked for a particular model; \
+                    without it the subagent runs on the agent's model or the default \
+                    subagent model. An id this chat's provider does not have fails the \
+                    call and lists the ids there are.",
+            },
             "background": {
                 "type": "boolean",
                 "description": "Set to true when you have work of your own to do                     while the subagent does this, on files it will not touch. Leave                     it out when the report is the next thing you need: waiting for                     it in place costs nothing.",
@@ -62,16 +76,26 @@ impl Tool for Task {
             .as_str()
             .map(str::trim)
             .filter(|prompt| !prompt.is_empty())
-            .ok_or_else(|| ToolError::failed("не задан prompt"))?;
+            .ok_or_else(|| ToolError::failed("missing prompt"))?;
         let agents = ctx
             .agents
             .as_ref()
-            .ok_or_else(|| ToolError::failed("подагент не может запустить подагента"))?;
+            .ok_or_else(|| ToolError::failed("subagents cannot spawn subagents"))?;
 
+        let agent = input["agent"]
+            .as_str()
+            .map(str::trim)
+            .filter(|a| !a.is_empty())
+            .map(str::to_string);
+        let model = input["model"]
+            .as_str()
+            .map(str::trim)
+            .filter(|m| !m.is_empty())
+            .map(str::to_string);
         if input["background"].as_bool() == Some(true) {
-            return Ok(agents.send(prompt.to_string(), &ctx.cancel));
+            return agents.send(prompt.to_string(), agent, model, &ctx.cancel);
         }
-        let report = agents.run(prompt.to_string(), &ctx.cancel).await?;
+        let report = agents.run(prompt.to_string(), agent, model, &ctx.cancel).await?;
         Ok(ToolOutput::new(report))
     }
 }

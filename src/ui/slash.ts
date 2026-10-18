@@ -16,11 +16,11 @@
  * версией той же правды и разошёлся бы с ней на первом же `Backspace`.
  */
 
-import type { SlashCommand } from "../core/client";
+import type { McpServerSummary, SkillInfo, SkillScope, SlashCommand } from "../core/client";
 import { t, type Key } from "../i18n";
 
 /** Встроенная команда — то, что интерфейс умеет сделать сам. */
-export type Builtin = "checkpoints" | "clear" | "compact" | "mcp" | "model";
+export type Builtin = "checkpoints" | "clear" | "compact" | "lsp" | "mcp" | "model";
 
 /**
  * Все имена, занятые встроенными командами.
@@ -29,15 +29,22 @@ export type Builtin = "checkpoints" | "clear" | "compact" | "mcp" | "model";
  * нечего, но `/compact` там не должен вдруг означать чужой файл. Имя команды
  * значит одно и то же везде.
  */
-export const RESERVED: Builtin[] = ["checkpoints", "clear", "compact", "mcp", "model"];
+export const RESERVED: Builtin[] = ["checkpoints", "clear", "compact", "lsp", "mcp", "model"];
 
 const NOTE: Record<Builtin, Key> = {
   checkpoints: "slash.checkpoints",
   clear: "slash.clear",
   compact: "slash.compact",
+  lsp: "slash.lsp",
   mcp: "slash.mcp",
   model: "slash.model",
 };
+
+/** Where a command the core expands comes from, for the pane that explains it. */
+export type CommandKind = "command" | "pluginCommand" | "skill" | "mcpPrompt";
+
+/** A command of the menu that is not built in: a file, a plugin's, a skill. */
+export type MenuCommand = SlashCommand & { kind: CommandKind; scope?: SkillScope };
 
 /** Строка меню. Имя — без слэша, как и у файла. */
 export type SlashItem = {
@@ -45,6 +52,8 @@ export type SlashItem = {
   description: string;
   /** `null` у проектной команды: её разворачивает ядро. */
   builtin: Builtin | null;
+  kind: CommandKind | "builtin";
+  scope?: SkillScope;
 };
 
 /**
@@ -54,7 +63,7 @@ export type SlashItem = {
  */
 export function menuFor(
   text: string,
-  project: SlashCommand[],
+  project: MenuCommand[],
   builtins: Builtin[],
 ): SlashItem[] | null {
   if (!text.startsWith("/")) return null;
@@ -62,7 +71,9 @@ export function menuFor(
   if (/\s/.test(typed)) return null;
 
   const prefix = typed.toLowerCase();
-  const items = all(project, builtins).filter((item) => item.name.startsWith(prefix));
+  const items = all(project, builtins).filter((item) =>
+    item.name.toLowerCase().startsWith(prefix),
+  );
   return items.length > 0 ? items : null;
 }
 
@@ -86,13 +97,14 @@ export function builtinFor(text: string, builtins: Builtin[]): Builtin | null {
  * экране, где встроенной нет, тоже: `/compact`, означающий на домашнем экране
  * одно, а в разговоре другое, хуже, чем `/compact`, которого нет.
  */
-function all(project: SlashCommand[], builtins: Builtin[]): SlashItem[] {
+function all(project: MenuCommand[], builtins: Builtin[]): SlashItem[] {
   const taken = new Set<string>(RESERVED);
   return [
     ...[...builtins].sort().map((name) => ({
       name,
       description: t(NOTE[name]),
       builtin: name,
+      kind: "builtin" as const,
     })),
     ...project
       .filter((command) => !taken.has(command.name))
@@ -100,6 +112,56 @@ function all(project: SlashCommand[], builtins: Builtin[]): SlashItem[] {
         name: command.name,
         description: command.description,
         builtin: null,
+        kind: command.kind,
+        scope: command.scope,
       })),
   ];
+}
+
+/**
+ * The project's commands with the skills a human may call by name, as one
+ * group in name order. The core looks a typed `/name` up among the commands
+ * first, so a skill named like a command is left out here as well: the menu
+ * must offer what the core will actually run.
+ */
+export function withSkills(commands: SlashCommand[], skills: SkillInfo[]): MenuCommand[] {
+  const taken = new Set(commands.map((command) => command.name));
+  // A plugin's command carries its plugin's name before a colon; a file of
+  // `.yaca/commands` cannot.
+  const files: MenuCommand[] = commands.map((command) => ({
+    ...command,
+    kind: command.name.includes(":") ? "pluginCommand" : "command",
+  }));
+  const callable: MenuCommand[] = skills
+    .filter((skill) => skill.userInvocable && !taken.has(skill.name))
+    .map((skill) => ({
+      name: skill.name,
+      description: skill.description,
+      body: "",
+      kind: "skill",
+      scope: skill.scope,
+    }));
+  return [...files, ...callable].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * The prompts of this chat's ready MCP servers, as commands: the core fills
+ * `/mcp__server__prompt words…` by asking the server. The arguments are named
+ * in the description, in the order typed words fill them.
+ */
+export function mcpPrompts(servers: McpServerSummary[] | null): MenuCommand[] {
+  return (servers ?? [])
+    .filter((server) => server.status === "ready")
+    .flatMap((server) =>
+      server.prompts.map((prompt) => {
+        const args = prompt.arguments.map((name) => `<${name}>`).join(" ");
+        const about = prompt.description ?? "";
+        return {
+          name: prompt.command,
+          description: args === "" ? about : `${args}${about === "" ? "" : ` — ${about}`}`,
+          body: "",
+          kind: "mcpPrompt" as const,
+        };
+      }),
+    );
 }

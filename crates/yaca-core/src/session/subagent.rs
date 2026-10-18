@@ -44,11 +44,12 @@ use crate::message::{strip_thinking, ContentBlock, Message};
 use crate::process::shell::Shell;
 use crate::provider::ProviderRequest;
 use crate::tool::memory::store::MemoryIndex;
-use crate::tool::skill::Listing;
+use crate::skills::Listing;
 use crate::usage::{Pricing, TokenCounts};
 
 use super::accumulator::{Accumulator, Completion};
-use super::calls::Caller;
+use super::calls::{Caller, ModelPick};
+use crate::agents::AgentDef;
 use super::prompt;
 
 /// How many requests a subagent may make before it has to report.
@@ -104,21 +105,93 @@ impl Subagents {
         Subagents { sender, turn, row }
     }
 
-    /// Runs a subagent on `task` and returns its report.
+    /// The named agent `name` stands for, or the reason there is none.
+    pub(crate) fn agent(&self, name: Option<&str>) -> Result<Option<AgentDef>, ToolError> {
+        let Some(name) = name else { return Ok(None) };
+        let all = &self.sender.shared.agents;
+        if let Some(def) = all.iter().find(|d| d.name == name) {
+            return Ok(Some(def.clone()));
+        }
+        let known: Vec<&str> = all.iter().map(|d| d.name.as_str()).collect();
+        Err(ToolError::failed_with(
+            format!("no agent named `{name}`"),
+            if known.is_empty() {
+                format!("No agent named `{name}`: this session has no named agents. Call Task without `agent`.")
+            } else {
+                format!(
+                    "No agent named `{name}`. The agents are: {}. Call Task with one of them, or without `agent`.",
+                    known.join(", ")
+                )
+            },
+        ))
+    }
+
+    /// The model `Task`'s `model` names, or the reason there is none. Checked
+    /// before anything starts: the id came from the human, so a wrong one is
+    /// the model's to fix, not a reason to quietly run on another.
+    pub(super) fn model(&self, spec: Option<&str>) -> Result<Option<ModelPick>, ToolError> {
+        let Some(spec) = spec else { return Ok(None) };
+        match crate::agents::resolve_model(spec, &self.sender.shared.models) {
+            Ok(Some(id)) => Ok(Some(ModelPick::Exact(id))),
+            Ok(None) => Ok(Some(ModelPick::Session)),
+            Err(why) => Err(ToolError::failed_with(
+                format!("no model `{spec}`"),
+                format!(
+                    "Task was not run: {why}. Call it again with one of these ids exactly, \
+                     or without `model`."
+                ),
+            )),
+        }
+    }
+
+    /// Runs a subagent on `task` and returns its report: a plain one, or the
+    /// named agent `agent`; on the model `model` names, when it names one.
     pub(crate) async fn run(
         &self,
         task: String,
+        agent: Option<String>,
+        model: Option<String>,
         cancel: &CancellationToken,
     ) -> Result<String, ToolError> {
         let shared = &self.sender.shared;
+        let def = self.agent(agent.as_deref())?;
+        let asked = self.model(model.as_deref())?;
+        let registry = self.sender.registry.delegated();
+        let registry = match &def {
+            Some(def) => registry.only(|tool| crate::agents::allows(def, tool)),
+            None => registry,
+        };
+        let model = match (asked, def.as_ref().and_then(|d| d.model.as_deref())) {
+            (Some(pick), _) => pick,
+            (None, None) => ModelPick::Default,
+            (None, Some(spec)) => match crate::agents::resolve_model(spec, &shared.models) {
+                Ok(Some(id)) => ModelPick::Exact(id),
+                Ok(None) => ModelPick::Session,
+                Err(why) => {
+                    // Said on the row, and the work goes on: the agent's
+                    // instructions still apply on another model.
+                    self.sender.emit(AgentEvent::ToolCallProgress {
+                        call_id: self.row.clone(),
+                        chunk: format!(
+                            "Agent `{}` asks for model `{spec}`: {why}. It runs on the default subagent model.\n",
+                            def.as_ref().map_or("", |d| d.name.as_str())
+                        ),
+                    });
+                    ModelPick::Default
+                }
+            },
+        };
         let me = Caller {
-            registry: Arc::new(self.sender.registry.delegated()),
+            registry: Arc::new(registry),
             ws: Arc::new(self.sender.ws.fork()),
             under: Some(self.row.clone()),
+            model,
             ..self.sender.clone()
         };
 
         let mut history = vec![Message::user_text(task)];
+        // Times a `SubagentStop` hook sent this subagent back to work.
+        let mut returns = 0;
         let mut bound_to: Option<Intent> = None;
         let mut spent = TokenCounts::default();
 
@@ -143,13 +216,16 @@ impl Subagents {
             let request = ProviderRequest {
                 model: model.id.clone(),
                 system: prompt::with_mcp(
-                    system_prompt(
-                        me.ws.root(),
-                        intent,
-                        me.instructions.as_deref(),
-                        me.skills.as_deref(),
-                        me.memory.as_deref(),
-                        shared.shell,
+                    with_agent(
+                        system_prompt(
+                            me.ws.root(),
+                            intent,
+                            me.instructions.as_deref(),
+                            me.skills.as_deref(),
+                            me.memory.as_deref(),
+                            shared.shell,
+                        ),
+                        def.as_ref(),
                     ),
                     me.mcp_notes.as_deref(),
                 ),
@@ -160,7 +236,11 @@ impl Subagents {
                 thinking: model.supports_thinking,
             };
             let done = self.complete(&me, request, cancel).await?;
-            shared.ledger.add(done.usage, model.pricing);
+            // The subagent runs on the session's model, which may be a router:
+            // the request is paid for by the model the router chose.
+            shared
+                .ledger
+                .add(done.usage, shared.pricing_of(done.routed.as_ref(), model.pricing));
             spent.add(done.usage);
             me.emit(AgentEvent::SubagentUsage {
                 call_id: self.row.clone(),
@@ -172,11 +252,17 @@ impl Subagents {
                 history.push(Message::assistant(done.blocks));
             }
             if done.calls.is_empty() {
+                if step <= MAX_STEPS {
+                    if let Some(back) = shared.subagent_stop(&mut returns, cancel).await {
+                        history.push(back);
+                        continue;
+                    }
+                }
                 return report(said);
             }
             if step > MAX_STEPS {
                 return Err(ToolError::failed_with(
-                    format!("подагент не уложился в {MAX_STEPS} шагов"),
+                    format!("subagent did not finish within {MAX_STEPS} steps"),
                     "The subagent used all its steps without writing a report. What it \
                      changed is in the working tree: look before going on. Give the \
                      rest to a subagent as a narrower task, or do it yourself.",
@@ -205,7 +291,7 @@ impl Subagents {
         request: ProviderRequest,
         cancel: &CancellationToken,
     ) -> Result<Completion, ToolError> {
-        let failed = |err: ProviderError| ToolError::failed(format!("подагент: {err}"));
+        let failed = |err: ProviderError| ToolError::failed(format!("subagent: {err}"));
 
         let opened = me.shared.open(me.provider.as_ref(), request, cancel);
         let mut stream = match opened.await {
@@ -221,8 +307,8 @@ impl Subagents {
                 _ = cancel.cancelled() => return Err(ToolError::Cancelled),
                 item = stream.next() => match item {
                     None => break,
-                    // The feed events it makes are the model's text and
-                    // reasoning; neither is addressed to the human.
+                    // The feed events it makes are the model's text, reasoning
+                    // and route; none is addressed to the human.
                     Some(Ok(event)) => drop(acc.push(event)),
                     Some(Err(err)) => return Err(failed(err)),
                 },
@@ -246,7 +332,7 @@ fn text_of(blocks: &[ContentBlock]) -> String {
 
 fn report(mut text: String) -> Result<String, ToolError> {
     if text.is_empty() {
-        return Err(ToolError::failed("подагент ничего не ответил"));
+        return Err(ToolError::failed("subagent returned empty response"));
     }
     if text.len() > REPORT_MAX_BYTES {
         let cut = (0..=REPORT_MAX_BYTES)
@@ -255,7 +341,7 @@ fn report(mut text: String) -> Result<String, ToolError> {
             .unwrap_or(0);
         text.truncate(cut);
         text.push_str(&format!(
-            "\n[отчёт обрезан: показаны первые {REPORT_MAX_BYTES} байт]"
+            "\n[report truncated: showing first {REPORT_MAX_BYTES} bytes]"
         ));
     }
     Ok(text)
@@ -288,6 +374,19 @@ const REPORT: &str = "<report>\nYour final message is the whole result of your w
      there. Report results as they are: a failing test with its output, a step you \
      skipped as skipped, and what you could not find or did not check as plainly as \
      what you did.\n</report>\n\n";
+
+/// A named agent's instructions after the subagent's own prompt: they shape
+/// how the task is done, and the task is still the message it was given.
+fn with_agent(mut system: String, def: Option<&AgentDef>) -> String {
+    let Some(def) = def else { return system };
+    system.push_str(&format!(
+        "<agent name=\"{}\">\nYou are working as the `{}` agent. Its instructions follow; \
+         they shape how you do the task, and the task itself is the message you were \
+         given.\n\n{}\n</agent>\n\n",
+        def.name, def.name, def.prompt
+    ));
+    system
+}
 
 /// The subagent's system prompt.
 ///
@@ -390,9 +489,9 @@ mod tests {
 
     #[test]
     fn a_long_report_is_cut_on_a_character_and_says_so() {
-        let cut = report("я".repeat(REPORT_MAX_BYTES)).unwrap();
+        let cut = report("é".repeat(REPORT_MAX_BYTES)).unwrap();
         assert!(cut.len() < REPORT_MAX_BYTES + 100);
-        assert!(cut.ends_with("байт]"));
+        assert!(cut.ends_with("bytes]"));
         assert_eq!(report("short".into()).unwrap(), "short");
     }
 
@@ -446,9 +545,9 @@ mod tests {
     #[test]
     fn the_skills_listing_is_given_to_a_subagent_too() {
         let skills = Listing {
-            entries: vec![crate::tool::skill::Entry {
+            entries: vec![crate::skills::Entry {
                 name: "audit".into(),
-                description: "Аудит зависимостей".into(),
+                description: "Dependency audit".into(),
             }],
             truncated: false,
         };
@@ -460,7 +559,7 @@ mod tests {
             None,
             Shell::default(),
         );
-        assert_eq!(with.matches("<project_skills>").count(), 1);
+        assert_eq!(with.matches("<available_skills>").count(), 1);
         assert!(with.contains("audit"));
     }
 

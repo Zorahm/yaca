@@ -25,7 +25,7 @@ import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "reac
 
 import { VList, type VListHandle } from "virtua";
 
-import type { PermissionAnswer, QuestionReply } from "../core/client";
+import type { ElicitationReply, PermissionAnswer, QuestionReply } from "../core/client";
 import type { Feed as FeedModel } from "../core/feed";
 import { visible } from "../core/feed";
 import { closesReply, fold, isLiveWork, type FeedItem } from "../core/work";
@@ -40,9 +40,12 @@ import {
   ShownText,
   Simple,
   Todos,
+  HookNote,
+  RouteNote,
 } from "./Blocks";
 import { CodeBlock } from "./CodeBlock";
 import { Permission } from "./Permission";
+import { Elicitation } from "./Elicitation";
 import { Question } from "./Question";
 import { timeOf } from "./format";
 import { tp } from "../i18n";
@@ -64,6 +67,8 @@ export type FeedActions = {
   answer: (answer: PermissionAnswer) => void;
   /** Вопрос `AskUser`: ответ или отказ от ответа. */
   answerQuestion: (reply: QuestionReply) => void;
+  /** A form from an MCP server, answered by its id: several may be open. */
+  answerElicitation: (requestId: string, reply: ElicitationReply) => void;
   previewCheckpoint: (id: string) => void;
   restoreCheckpoint: (id: string) => void;
   cancelPreview: () => void;
@@ -295,6 +300,15 @@ function Block({
         />
       );
 
+    case "elicitation":
+      return (
+        <Elicitation
+          request={block.request}
+          status={block.status}
+          onAnswer={(reply) => actions.answerElicitation(block.request.id, reply)}
+        />
+      );
+
     case "checkpoint":
       return (
         <Checkpoint
@@ -356,6 +370,12 @@ function Block({
 
     case "stopped":
       return <Simple textKey="err.stopped" />;
+
+    case "route":
+      return <RouteNote block={block} />;
+
+    case "hook":
+      return <HookNote block={block} />;
 
     case "turnTime":
       return <TurnTime startedAt={block.startedAt} endedAt={block.endedAt} />;

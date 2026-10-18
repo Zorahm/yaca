@@ -88,7 +88,7 @@ pub fn open(home: &Path, id: &SessionId, create: bool) -> Result<Option<Isolatio
     // repository, and the prefix is how the chat lands in the same
     // subdirectory of its own checkout.
     let prefix = git(home, &["rev-parse", "--show-prefix"])
-        .map_err(|_| CoreError::Config("проект не под git: изолировать чат нечем".into()))?;
+        .map_err(|_| CoreError::Config("project is not under git: cannot isolate chat".into()))?;
 
     if !exists {
         // Relative to `home`, which is where git runs: a verbatim `\\?\` path
@@ -97,7 +97,7 @@ pub fn open(home: &Path, id: &SessionId, create: bool) -> Result<Option<Isolatio
         let branch = branch_of(id);
 
         git(home, &["rev-parse", "--verify", "--quiet", "HEAD"]).map_err(|_| {
-            CoreError::Config("в проекте нет ни одного коммита: изолировать чат не от чего".into())
+            CoreError::Config("project has no commits: cannot isolate chat".into())
         })?;
 
         let branch_exists = git(
@@ -112,7 +112,7 @@ pub fn open(home: &Path, id: &SessionId, create: bool) -> Result<Option<Isolatio
         } else {
             git(home, &["worktree", "add", "--quiet", "-b", &branch, &target, "HEAD"])
         };
-        made.map_err(|e| CoreError::Config(format!("не создать worktree чата: {e}")))?;
+        made.map_err(|e| CoreError::Config(format!("cannot create chat worktree: {e}")))?;
     }
 
     let tree = if prefix.is_empty() {
@@ -140,7 +140,7 @@ pub fn commit_all(tree: &Path, subject: &str) -> Result<bool, String> {
     let line: String = subject.split_whitespace().collect::<Vec<_>>().join(" ");
     let line: String = line.chars().take(72).collect();
     let message = if line.is_empty() {
-        "yaca: правки чата".to_string()
+        "yaca: chat edits".to_string()
     } else {
         format!("yaca: {line}")
     };
@@ -297,7 +297,7 @@ mod tests {
         let dir = TempDir::new();
         assert!(run(dir.path(), &["init", "-q"], false).unwrap().status.success());
         let err = open(dir.path(), &SessionId::new(), true).unwrap_err();
-        assert!(err.to_string().contains("коммит"), "{err}");
+        assert!(err.to_string().contains("commit"), "{err}");
     }
 
     #[test]

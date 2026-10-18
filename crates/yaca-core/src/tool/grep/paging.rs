@@ -26,7 +26,7 @@ async fn a_page_says_where_the_next_one_starts() {
     assert!(out.text.contains("a.rs:4: hit 4"), "{}", out.text);
     assert!(!out.text.contains("hit 5"), "{}", out.text);
     assert!(
-        out.text.contains("показаны 1–4 из 10 совпадений в 1 файлах; продолжить: offset=4"),
+        out.text.contains("showing 1–4 of 10 matches in 1 files; continue: offset=4"),
         "{}",
         out.text
     );
@@ -44,7 +44,7 @@ async fn the_offset_from_the_footer_continues_without_a_gap_or_a_repeat() {
     assert!(out.text.starts_with("a.rs:5: hit 5\n"), "{}", out.text);
     assert!(out.text.contains("a.rs:8: hit 8"), "{}", out.text);
     assert!(!out.text.contains("hit 9"), "{}", out.text);
-    assert!(out.text.contains("показаны 5–8 из 10"), "{}", out.text);
+    assert!(out.text.contains("showing 5–8 of 10"), "{}", out.text);
     assert!(out.text.contains("offset=8"), "{}", out.text);
 }
 
@@ -56,8 +56,8 @@ async fn the_last_page_has_no_continuation() {
     let out = search(&dir, json!({ "pattern": "hit", "head_limit": 4, "offset": 8 })).await;
 
     assert!(out.text.contains("hit 10"), "{}", out.text);
-    assert!(out.text.contains("показаны 9–10 из 10"), "{}", out.text);
-    assert!(!out.text.contains("продолжить"), "{}", out.text);
+    assert!(out.text.contains("showing 9–10 of 10"), "{}", out.text);
+    assert!(!out.text.contains("continue"), "{}", out.text);
     assert!(!out.meta.truncated);
 }
 
@@ -75,7 +75,7 @@ async fn pages_run_across_files_in_path_order() {
     assert!(second.text.contains("a.rs:3: hit a3"), "{}", second.text);
     assert!(second.text.contains("b.rs:1: hit b1"), "{}", second.text);
     assert!(!second.text.contains("b2"), "{}", second.text);
-    assert!(second.text.contains("в 2 файлах"), "{}", second.text);
+    assert!(second.text.contains("in 2 files"), "{}", second.text);
 }
 
 #[tokio::test]
@@ -85,7 +85,7 @@ async fn an_offset_past_the_end_says_how_many_there_are() {
 
     let out = search(&dir, json!({ "pattern": "hit", "offset": 50 })).await;
 
-    assert!(out.text.contains("за пределами выдачи: всего 3"), "{}", out.text);
+    assert!(out.text.contains("is out of range: 3 matches total"), "{}", out.text);
     assert!(!out.text.contains("a.rs:"), "{}", out.text);
 }
 
@@ -113,7 +113,7 @@ async fn files_mode_pages_too() {
 
     let first = search(&dir, json!({ "pattern": "hit", "mode": "files", "head_limit": 3 })).await;
     assert_eq!(first.text.lines().take(3).collect::<Vec<_>>(), ["a.rs", "b.rs", "c.rs"]);
-    assert!(first.text.contains("из 4 файлов; продолжить: offset=3"), "{}", first.text);
+    assert!(first.text.contains("of 4 files; continue: offset=3"), "{}", first.text);
 
     let rest = search(
         &dir,
@@ -121,7 +121,7 @@ async fn files_mode_pages_too() {
     )
     .await;
     assert!(rest.text.starts_with("d.rs\n"), "{}", rest.text);
-    assert!(!rest.text.contains("продолжить"), "{}", rest.text);
+    assert!(!rest.text.contains("continue"), "{}", rest.text);
 }
 
 #[tokio::test]
@@ -130,7 +130,7 @@ async fn a_pattern_cannot_span_lines_unless_asked() {
     dir.write("a.rs", "fn main() {\n    run();\n}\n");
 
     let out = search(&dir, json!({ "pattern": r"main\(\) \{\n\s+run" })).await;
-    assert!(out.text.contains("совпадений нет"), "{}", out.text);
+    assert!(out.text.contains("no matches found"), "{}", out.text);
 }
 
 #[tokio::test]
@@ -199,7 +199,7 @@ async fn multiline_matches_are_paged_by_match() {
     assert_eq!(out.text.lines().next(), Some("a.rs:4: <a>"), "{}", out.text);
     assert!(out.text.contains("a.rs:6: </a>"), "{}", out.text);
     assert!(!out.text.contains("a.rs:7:"), "{}", out.text);
-    assert!(out.text.contains("показаны 2–2 из 3 совпадений"), "{}", out.text);
+    assert!(out.text.contains("showing 2–2 of 3 matches"), "{}", out.text);
     assert!(out.text.contains("offset=2"), "{}", out.text);
 }
 
@@ -232,6 +232,6 @@ async fn context_that_fills_the_budget_before_a_match_says_so() {
 
     let out = search(&dir, json!({ "pattern": "^hit$", "before": 600 })).await;
 
-    assert!(out.text.contains("уменьши context"), "{}", out.text);
-    assert!(!out.text.contains("продолжить"), "{}", out.text);
+    assert!(out.text.contains("decrease context"), "{}", out.text);
+    assert!(!out.text.contains("continue"), "{}", out.text);
 }

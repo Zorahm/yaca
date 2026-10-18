@@ -114,7 +114,7 @@ async fn drive(
     config.model = plan.model.clone();
     config.models = plan.models.clone();
     config.mode = session_mode(task.mode);
-    config.journal = false;
+    config.journal = None;
 
     let handle = match yaca_core::spawn(config, plan.provider.clone()) {
         Ok(handle) => handle,

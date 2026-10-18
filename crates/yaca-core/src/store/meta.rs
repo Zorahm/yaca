@@ -55,7 +55,7 @@ pub struct SessionMeta {
     pub tokens: TokenCounts,
     /// Paths the session changed, relative to the project root.
     ///
-    /// Changed, not read: §9 searches "по путям затронутых файлов", and a
+    /// Changed, not read: §9 searches "by paths of affected files", and a
     /// session that grepped forty files touched none of them.
     #[serde(default)]
     pub files: Vec<String>,
@@ -91,24 +91,24 @@ impl SessionMeta {
         }
     }
 
-    pub fn path(root: &Path, id: &SessionId) -> PathBuf {
-        super::dir(root).join(format!("{id}.meta.json"))
+    /// `dir` is the project's folder of journals ([`super::location`]).
+    pub fn path(dir: &Path, id: &SessionId) -> PathBuf {
+        dir.join(format!("{id}.meta.json"))
     }
 
-    pub fn load(root: &Path, id: &SessionId) -> Option<SessionMeta> {
-        let text = std::fs::read_to_string(SessionMeta::path(root, id)).ok()?;
+    pub fn load(dir: &Path, id: &SessionId) -> Option<SessionMeta> {
+        let text = std::fs::read_to_string(SessionMeta::path(dir, id)).ok()?;
         serde_json::from_str(&text).ok()
     }
 
     /// Written aside and renamed: a half-written index read by the panel is
     /// worse than an index that is one turn behind.
-    pub fn save(&self, root: &Path) -> std::io::Result<()> {
-        let dir = super::dir(root);
-        std::fs::create_dir_all(&dir)?;
-        let target = SessionMeta::path(root, &self.id);
+    pub fn save(&self, dir: &Path) -> std::io::Result<()> {
+        std::fs::create_dir_all(dir)?;
+        let target = SessionMeta::path(dir, &self.id);
         let temp = dir.join(format!("{}.meta.json.tmp", self.id));
         let text = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::other(format!("не собрать meta: {e}")))?;
+            .map_err(|e| std::io::Error::other(format!("cannot assemble meta: {e}")))?;
         std::fs::write(&temp, text)?;
         std::fs::rename(&temp, &target)
     }
@@ -246,27 +246,27 @@ mod tests {
     #[test]
     fn a_title_is_the_first_line_of_the_first_message() {
         let mut m = meta();
-        m.title_from_message("почини разбор дат\n\nвот трейс:\n...");
-        assert_eq!(m.title, "почини разбор дат");
+        m.title_from_message("fix date parsing\n\nhere is trace:\n...");
+        assert_eq!(m.title, "fix date parsing");
     }
 
     #[test]
     fn a_long_first_line_is_cut_at_a_word() {
-        let long = "перенеси типографику на токены приложения и заодно проверь \
-                    контраст во всех четырёх акцентах";
+        let long = "migrate typography to application tokens and also verify \
+                    contrast across all four accents";
         assert!(title_of(long).chars().count() <= TITLE_MAX_CHARS);
         assert!(title_of(long).ends_with('…'));
-        assert!(!title_of(long).contains("акцент"));
+        assert!(!title_of(long).contains("accents"));
     }
 
     #[test]
     fn a_renamed_session_keeps_its_name() {
         let mut m = meta();
-        m.title = "разбор дат".into();
+        m.title = "date parsing".into();
         m.title_custom = true;
-        m.title_from_message("совсем про другое");
+        m.title_from_message("completely different topic");
         // A rebuilt index must not quietly take the name back.
-        assert_eq!(m.title, "разбор дат");
+        assert_eq!(m.title, "date parsing");
     }
 
     #[test]
@@ -274,15 +274,15 @@ mod tests {
         use crate::event::AgentEvent;
 
         let mut m = meta();
-        m.title_from_message("привет");
+        m.title_from_message("hello");
         m.absorb(&AgentEvent::TitleSet {
-            title: "Разбор дат в логах".into(),
+            title: "Log date parsing".into(),
         });
-        assert_eq!(m.title, "Разбор дат в логах");
+        assert_eq!(m.title, "Log date parsing");
 
         // The first message must not take the name back on a later prompt.
-        m.title_from_message("а теперь другое");
-        assert_eq!(m.title, "Разбор дат в логах");
+        m.title_from_message("and now something else");
+        assert_eq!(m.title, "Log date parsing");
     }
 
     #[test]
@@ -290,12 +290,12 @@ mod tests {
         use crate::event::AgentEvent;
 
         let mut m = meta();
-        m.title = "мой заголовок".into();
+        m.title = "my title".into();
         m.title_custom = true;
         m.absorb(&AgentEvent::TitleSet {
-            title: "Разбор дат в логах".into(),
+            title: "Log date parsing".into(),
         });
-        assert_eq!(m.title, "мой заголовок");
+        assert_eq!(m.title, "my title");
     }
 
     #[test]
@@ -303,12 +303,12 @@ mod tests {
         use crate::event::AgentEvent;
 
         let mut m = meta();
-        for title in ["Первое", "Второе"] {
+        for title in ["First", "Second"] {
             m.absorb(&AgentEvent::TitleSet {
                 title: title.into(),
             });
         }
-        assert_eq!(m.title, "Первое");
+        assert_eq!(m.title, "First");
         assert!(!m.title_open_to_model());
     }
 
@@ -325,7 +325,7 @@ mod tests {
     fn round_trip_through_disk() {
         let dir = TempDir::new();
         let mut m = meta();
-        m.title = "разбор дат".into();
+        m.title = "date parsing".into();
         m.cost_usd = 0.31;
         m.note_file("src/a.rs");
         m.save(dir.path()).unwrap();
@@ -337,7 +337,7 @@ mod tests {
     fn nothing_is_left_half_written() {
         let dir = TempDir::new();
         meta().save(dir.path()).unwrap();
-        let leftovers: Vec<_> = std::fs::read_dir(super::super::dir(dir.path()))
+        let leftovers: Vec<_> = std::fs::read_dir(dir.path())
             .unwrap()
             .filter_map(|e| e.ok())
             .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))

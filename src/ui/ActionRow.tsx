@@ -14,7 +14,7 @@ import { useState } from "react";
 
 import type { ActionRow } from "../core/feed";
 import { t, tp } from "../i18n";
-import { caption, isFileRow, rowCounts, rowFiles } from "./captions";
+import { caption, fileChildren, isFileRow, rowCounts, rowFiles } from "./captions";
 import { CodeBlock } from "./CodeBlock";
 import { Diff } from "./Diff";
 import { plainPath } from "./format";
@@ -46,6 +46,9 @@ export function ActionRowView({
   // What was read is drawn like a diff — numbers in a gutter, text in the
   // file's colours — not as the padded listing the tool wrote for the model.
   const read = row.tool === "Read" && row.state === "done" ? parseRead(row.output) : null;
+  // A rename shows its files, each a row with its own diff, in place of the
+  // list the tool wrote for the model: the rows are that list.
+  const fileRows = fileChildren(row);
   const boxed = !file;
 
   return (
@@ -88,7 +91,13 @@ export function ActionRowView({
             <Thumb path={row.target} />
           )}
 
-          {row.diff ? (
+          {fileRows.length > 0 ? (
+            <div className="group-list">
+              {fileRows.map((child) => (
+                <ActionRowView key={child.callId} row={child} onOpenFile={onOpenFile} />
+              ))}
+            </div>
+          ) : row.diff ? (
             <Diff diff={row.diff} soft path={row.fact?.path ?? row.target ?? undefined} />
           ) : read ? (
             <>

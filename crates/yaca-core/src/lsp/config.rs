@@ -91,7 +91,7 @@ pub fn load_global(config_dir: &Path) -> Result<BTreeMap<String, LspServerSettin
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
-        Err(e) => return Err(CoreError::Config(format!("не прочитать {}: {e}", path.display()))),
+        Err(e) => return Err(CoreError::Config(format!("failed to read {}: {e}", path.display()))),
     };
     if text.trim().is_empty() {
         return Ok(BTreeMap::new());
@@ -146,9 +146,9 @@ pub fn resolve(
             .collect();
 
         let invalid = if settings.command.trim().is_empty() {
-            Some("не задан command".to_string())
+            Some("command is required".to_string())
         } else if settings.extensions.is_empty() {
-            Some("не заданы extensions: непонятно, за какие файлы отвечает сервер".to_string())
+            Some("extensions are required: unclear which files the server handles".to_string())
         } else {
             None
         };

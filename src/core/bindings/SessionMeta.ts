@@ -21,7 +21,7 @@ messages: number, costUsd: number, tokens: TokenCounts,
 /**
  * Paths the session changed, relative to the project root.
  *
- * Changed, not read: §9 searches "по путям затронутых файлов", and a
+ * Changed, not read: §9 searches "by paths of affected files", and a
  * session that grepped forty files touched none of them.
  */
 files: Array<string>, 

@@ -2,21 +2,21 @@
 //!
 //! Three invariants of §8 meet here: the file must have been read, must not have
 //! changed since the read, and the anchor must be unambiguous. The last is not
-//! pedantry: «замени первое вхождение» in a file with three
+//! pedantry: "replace the first occurrence" in a file with three
 //! identical lines means the model does not know what it is editing.
 //!
 //! There can be several edits in one call, and that is not a convenience but a fix. The model
 //! reads the file once and counts the whole batch against it at once; the tool's description
-//! itself tells it to take a wider anchor, «добавь окружающих строк». In a densely
+//! itself tells it to take a wider anchor, "add more surrounding lines". In a densely
 //! commented file the surroundings of one edit are the body of the neighbouring one, and
 //! fourteen separate calls land on fourteen different versions of the file:
 //! the first passes, the second's anchor is gone along with the lines the first
 //! rewrote. Within one call all anchors are searched in one text — the one the model
 //! counted them against — and overlapping ranges become a named conflict instead of a
-//! cryptic «не нашёл этот текст».
+//! cryptic "could not find this text".
 //!
-//! The call is atomic: if one edit does not apply, none is. «Изменён
-//! файл» with half the edits not landed would be a lie about the state (§0),
+//! The call is atomic: if one edit does not apply, none is. "Modified
+//! file" with half the edits not landed would be a lie about the state (§0),
 //! and after a refusal the model has something to re-read and something to retry with.
 
 use async_trait::async_trait;
@@ -39,7 +39,7 @@ impl Tool for EditFile {
     }
 
     /// English, like `bash`: this is an instruction that has to work, not text
-    /// for a human (CLAUDE.md, «Язык»).
+    /// for a human (CLAUDE.md, "Language").
     fn description(&self) -> &'static str {
         "Replace text in a file. `old_string` must occur exactly once — widen it with \
          surrounding lines until it does. Read the file before editing it.\n\
@@ -86,8 +86,8 @@ impl Tool for EditFile {
         })
     }
 
-    /// Only `path`: beyond it comes either the flat pair or `edits`, and «ровно одна из
-    /// двух форм» cannot be expressed in the schema. What arrives is parsed by [`Edit::list`].
+    /// Only `path`: beyond it comes either the flat pair or `edits`, and "exactly one of the
+    /// two forms" cannot be expressed in the schema. What arrives is parsed by [`Edit::list`].
     fn required(&self) -> &'static [&'static str] {
         &["path"]
     }
@@ -104,7 +104,7 @@ impl Tool for EditFile {
         input["path"].as_str().map(str::to_owned)
     }
 
-    /// Asked in «Ручном» mode (§8). There are no `+12 −3` counters here: they are
+    /// Asked in "Manual" mode (§8). There are no `+12 −3` counters here: they are
     /// known only after the edit, and the point of the question is to stop the agent
     /// before the file is touched.
     fn permission(&self, ws: &Workspace, input: &Value) -> Option<PermissionNeed> {
@@ -116,19 +116,19 @@ impl Tool for EditFile {
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let raw = input["path"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан path"))?;
+            .ok_or_else(|| ToolError::failed("path is required"))?;
         let edits = Edit::list(&input)?;
 
         let target = files::look_editable(ctx, raw)?;
         let Some(base) = target.current.clone() else {
-            return Err(ToolError::failed(format!("не найдено: {raw}")));
+            return Err(ToolError::failed(format!("not found: {raw}")));
         };
 
         let (updated, replaced) = apply(&base, &edits, &target.rel)?;
         let (fact, diff) = files::write(ctx, &target, ChangeKind::Modified, Some(&updated))?;
 
         Ok(ToolOutput::new(format!(
-            "Изменён {} (+{} −{}{})\n",
+            "Modified {} (+{} −{}{})\n",
             target.rel,
             fact.added,
             fact.removed,
@@ -156,11 +156,11 @@ impl Edit {
         if let Some(items) = input.get("edits").and_then(Value::as_array) {
             if flat {
                 return Err(ToolError::failed(
-                    "или edits, или old_string/new_string — не оба сразу",
+                    "either edits or old_string/new_string — not both at once",
                 ));
             }
             if items.is_empty() {
-                return Err(ToolError::failed("edits пуст — править нечего"));
+                return Err(ToolError::failed("edits is empty — nothing to edit"));
             }
             return items.iter().map(Edit::one).collect();
         }
@@ -171,18 +171,18 @@ impl Edit {
     fn one(value: &Value) -> Result<Edit, ToolError> {
         let old = value["old_string"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан old_string"))?;
+            .ok_or_else(|| ToolError::failed("old_string is required"))?;
         let new = value["new_string"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан new_string"))?;
+            .ok_or_else(|| ToolError::failed("new_string is required"))?;
 
         if old.is_empty() {
             return Err(ToolError::failed(
-                "пустой old_string — для создания файла есть Write",
+                "empty old_string — use Write to create a file",
             ));
         }
         if old == new {
-            return Err(ToolError::failed("old_string и new_string совпадают"));
+            return Err(ToolError::failed("old_string and new_string are identical"));
         }
 
         Ok(Edit {
@@ -208,7 +208,7 @@ struct Claim {
 /// later ones, and the order of edits in the list makes no difference.
 ///
 /// The edit number in messages is for humans, counted from one, and only when
-/// there is more than one edit: «правка 1 из 1» clarifies nothing.
+/// there is more than one edit: "edit 1 of 1" clarifies nothing.
 fn apply(base: &str, edits: &[Edit], rel: &str) -> Result<(String, usize), ToolError> {
     let many = edits.len() > 1;
     let mut claims: Vec<Claim> = Vec::new();
@@ -220,15 +220,15 @@ fn apply(base: &str, edits: &[Edit], rel: &str) -> Result<(String, usize), ToolE
         match found.len() {
             0 => {
                 return Err(ToolError::failed(format!(
-                    "не нашёл этот текст в {rel}{which}"
+                    "could not find this text in {rel}{which}"
                 )))
             }
             n if n > 1 && !edit.replace_all => {
                 // The anchor uniqueness invariant (§8): §5.9 shows this as a
                 // rejection, not a failure — the guard worked, it did not break.
                 return Err(ToolError::rejected(format!(
-                    "якорь встречается {n} раз в {rel}{which} — добавь окружающих \
-                     строк или поставь replace_all"
+                    "anchor occurs {n} times in {rel}{which} — add more surrounding \
+                     lines or set replace_all"
                 )));
             }
             _ => {}
@@ -252,8 +252,8 @@ fn apply(base: &str, edits: &[Edit], rel: &str) -> Result<(String, usize), ToolE
             // first ate it. A named conflict is something the model can fix without
             // re-reading the file again.
             return Err(ToolError::rejected(format!(
-                "правки {} и {} меняют один и тот же кусок {rel} — \
-                 объедини их в одну",
+                "edits {} and {} modify the same chunk of {rel} — \
+                 combine them into one",
                 left.edit + 1,
                 right.edit + 1
             )));
@@ -267,10 +267,10 @@ fn apply(base: &str, edits: &[Edit], rel: &str) -> Result<(String, usize), ToolE
     Ok((out, claims.len()))
 }
 
-/// `, правка 3` — only when there are several edits.
+/// `, edit 3` — only when there are several edits.
 fn which(many: bool, index: usize) -> String {
     if many {
-        format!(", правка {}", index + 1)
+        format!(", edit {}", index + 1)
     } else {
         String::new()
     }
@@ -282,9 +282,9 @@ fn which(many: bool, index: usize) -> String {
 fn tail(edits: usize, replaced: usize) -> String {
     match (edits > 1, replaced > edits) {
         (false, false) => String::new(),
-        (false, true) => format!(", заменено вхождений: {replaced}"),
-        (true, false) => format!(", правок: {edits}"),
-        (true, true) => format!(", правок: {edits}, заменено вхождений: {replaced}"),
+        (false, true) => format!(", occurrences replaced: {replaced}"),
+        (true, false) => format!(", edits: {edits}"),
+        (true, true) => format!(", edits: {edits}, occurrences replaced: {replaced}"),
     }
 }
 
@@ -295,7 +295,7 @@ mod tests {
     use crate::tool::tests_support::ctx_for;
 
     #[tokio::test]
-    async fn правит_по_однозначному_якорю() {
+    async fn edits_by_unambiguous_anchor() {
         let dir = TempDir::new();
         let path = dir.write("a.rs", "let x = 1;\nlet y = 2;\n");
         let (ctx, ws) = ctx_for(&dir);
@@ -313,56 +313,56 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
             "let x = 1;\nlet y = 42;\n",
-            "правка уезжает в дерево сразу"
+            "edit moves to tree immediately"
         );
     }
 
     #[tokio::test]
-    async fn непрочитанный_файл_править_нельзя() {
+    async fn unread_file_cannot_be_edited() {
         let dir = TempDir::new();
-        dir.write("a.rs", "тело\n");
+        dir.write("a.rs", "body\n");
         let (ctx, _ws) = ctx_for(&dir);
 
         let err = EditFile
             .run(
                 &ctx,
-                json!({ "path": "a.rs", "old_string": "тело", "new_string": "туша" }),
+                json!({ "path": "a.rs", "old_string": "body", "new_string": "carcass" }),
             )
             .await
             .unwrap_err();
 
-        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
-        assert!(err.to_string().contains("не прочитан в этой сессии"));
+        assert!(matches!(err, ToolError::Rejected(_)), "got {err:?}");
+        assert!(err.to_string().contains("was not read in this session"));
     }
 
     #[tokio::test]
-    async fn изменившийся_после_чтения_файл_надо_перечитать() {
+    async fn file_changed_after_reading_must_be_reread() {
         let dir = TempDir::new();
-        let path = dir.write("a.rs", "раз\n");
+        let path = dir.write("a.rs", "one\n");
         let (ctx, ws) = ctx_for(&dir);
         ws.mark_read(&path);
 
         std::thread::sleep(std::time::Duration::from_millis(10));
-        std::fs::write(&path, "кто-то другой\n").unwrap();
+        std::fs::write(&path, "someone else\n").unwrap();
 
         let err = EditFile
             .run(
                 &ctx,
-                json!({ "path": "a.rs", "old_string": "раз", "new_string": "два" }),
+                json!({ "path": "a.rs", "old_string": "one", "new_string": "two" }),
             )
             .await
             .unwrap_err();
 
-        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
-        assert!(err.to_string().contains("изменился после чтения"));
+        assert!(matches!(err, ToolError::Rejected(_)), "got {err:?}");
+        assert!(err.to_string().contains("changed since it was read"));
         assert!(
             !ws.was_read(&path),
-            "отпечаток забыт — иначе повтор пройдёт"
+            "fingerprint forgotten — otherwise retry would succeed"
         );
     }
 
     #[tokio::test]
-    async fn неоднозначный_якорь_отклоняется() {
+    async fn ambiguous_anchor_is_rejected() {
         let dir = TempDir::new();
         let path = dir.write("a.rs", "x = 1;\nx = 1;\nx = 1;\n");
         let (ctx, ws) = ctx_for(&dir);
@@ -376,12 +376,12 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
-        assert!(err.to_string().contains("3 раз"));
+        assert!(matches!(err, ToolError::Rejected(_)), "got {err:?}");
+        assert!(err.to_string().contains("3 times"));
     }
 
     #[tokio::test]
-    async fn replace_all_снимает_требование_однозначности() {
+    async fn replace_all_lifts_uniqueness_requirement() {
         let dir = TempDir::new();
         let path = dir.write("a.rs", "x = 1;\nx = 1;\n");
         let (ctx, ws) = ctx_for(&dir);
@@ -400,14 +400,14 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(out.text.contains("заменено вхождений: 2"));
+        assert!(out.text.contains("occurrences replaced: 2"));
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "x = 2;\nx = 2;\n");
     }
 
     #[tokio::test]
-    async fn ненайденный_якорь_это_сбой_а_не_отклонение() {
+    async fn missing_anchor_is_failure_not_rejection() {
         let dir = TempDir::new();
-        let path = dir.write("a.rs", "тело\n");
+        let path = dir.write("a.rs", "body\n");
         let (ctx, ws) = ctx_for(&dir);
         ws.mark_read(&path);
 
@@ -415,31 +415,31 @@ mod tests {
         let err = EditFile
             .run(
                 &ctx,
-                json!({ "path": "a.rs", "old_string": "нету", "new_string": "x" }),
+                json!({ "path": "a.rs", "old_string": "missing", "new_string": "x" }),
             )
             .await
             .unwrap_err();
-        assert!(matches!(err, ToolError::Failed { .. }), "получили {err:?}");
+        assert!(matches!(err, ToolError::Failed { .. }), "got {err:?}");
     }
 
     #[tokio::test]
-    async fn правка_ложится_поверх_предыдущей() {
+    async fn edit_applies_on_top_of_previous_one() {
         let dir = TempDir::new();
-        let path = dir.write("a.rs", "раз\nдва\n");
+        let path = dir.write("a.rs", "one\ntwo\n");
         let (ctx, ws) = ctx_for(&dir);
         ws.mark_read(&path);
 
         EditFile
             .run(
                 &ctx,
-                json!({ "path": "a.rs", "old_string": "раз", "new_string": "один" }),
+                json!({ "path": "a.rs", "old_string": "one", "new_string": "first" }),
             )
             .await
             .unwrap();
         EditFile
             .run(
                 &ctx,
-                json!({ "path": "a.rs", "old_string": "два", "new_string": "второй" }),
+                json!({ "path": "a.rs", "old_string": "two", "new_string": "second" }),
             )
             .await
             .unwrap();
@@ -447,16 +447,14 @@ mod tests {
         // The second edit must see the first, or the agent overwrites itself.
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
-            "один\nвторой\n"
+            "first\nsecond\n"
         );
     }
+
     #[tokio::test]
-    async fn несколько_правок_ложатся_одним_вызовом() {
+    async fn multiple_edits_apply_in_one_call() {
         let dir = TempDir::new();
-        let path = dir.write("a.rs", "раз
-два
-три
-");
+        let path = dir.write("a.rs", "one\ntwo\nthree\n");
         let (ctx, ws) = ctx_for(&dir);
         ws.mark_read(&path);
 
@@ -466,8 +464,8 @@ mod tests {
                 json!({
                     "path": "a.rs",
                     "edits": [
-                        { "old_string": "раз", "new_string": "one" },
-                        { "old_string": "три", "new_string": "three" },
+                        { "old_string": "one", "new_string": "first" },
+                        { "old_string": "three", "new_string": "third" },
                     ],
                 }),
             )
@@ -476,25 +474,20 @@ mod tests {
 
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
-            "one
-два
-three
-"
+            "first\ntwo\nthird\n"
         );
         // One call — one action line and one diff.
-        assert!(out.text.contains("правок: 2"), "{}", out.text);
+        assert!(out.text.contains("edits: 2"), "{}", out.text);
         assert!(out.changed.is_some());
     }
 
     #[tokio::test]
-    async fn якоря_ищутся_в_исходном_тексте_а_не_в_работе_соседа() {
+    async fn anchors_matched_against_original_text_not_neighbouring_work() {
         let dir = TempDir::new();
         // Taken separately this does not work: the first edit creates a second
         // occurrence of the second one's anchor, and that one is rejected as ambiguous — though in the file
         // the model read, the anchor was exactly one.
-        let path = dir.write("a.rs", "x = 1;
-y = 2;
-");
+        let path = dir.write("a.rs", "x = 1;\ny = 2;\n");
         let (ctx, ws) = ctx_for(&dir);
         ws.mark_read(&path);
 
@@ -514,22 +507,17 @@ y = 2;
 
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
-            "x = 3;
-x = 1;
-",
-            "каждая правка попала туда, куда её посчитали"
+            "x = 3;\nx = 1;\n",
+            "each edit landed where it was calculated"
         );
     }
 
     #[tokio::test]
-    async fn пересекающиеся_правки_называют_друг_друга_и_ничего_не_пишут() {
+    async fn overlapping_edits_name_each_other_and_write_nothing() {
         let dir = TempDir::new();
-        // Exactly a case from real life: the anchor was taken wider, «добавь окружающих строк»,
+        // Exactly a case from real life: the anchor was taken wider, "add more surrounding lines",
         // and one edit's surroundings turned out to be the body of its neighbour.
-        let path = dir.write("a.rs", "раз
-два
-три
-");
+        let path = dir.write("a.rs", "one\ntwo\nthree\n");
         let (ctx, ws) = ctx_for(&dir);
         ws.mark_read(&path);
 
@@ -539,37 +527,28 @@ x = 1;
                 json!({
                     "path": "a.rs",
                     "edits": [
-                        { "old_string": "раз
-два", "new_string": "one
-two" },
-                        { "old_string": "два
-три", "new_string": "two
-three" },
+                        { "old_string": "one\ntwo", "new_string": "first\nsecond" },
+                        { "old_string": "two\nthree", "new_string": "second\nthird" },
                     ],
                 }),
             )
             .await
             .unwrap_err();
 
-        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
+        assert!(matches!(err, ToolError::Rejected(_)), "got {err:?}");
         let text = err.to_string();
-        assert!(text.contains("правки 1 и 2"), "{text}");
+        assert!(text.contains("edits 1 and 2"), "{text}");
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
-            "раз
-два
-три
-",
-            "вызов атомарен: не сложилась одна — не применилась ни одна"
+            "one\ntwo\nthree\n",
+            "call is atomic: if one fails — none apply"
         );
     }
 
     #[tokio::test]
-    async fn промах_одной_правки_отменяет_всю_пачку() {
+    async fn miss_in_one_edit_cancels_entire_batch() {
         let dir = TempDir::new();
-        let path = dir.write("a.rs", "раз
-два
-");
+        let path = dir.write("a.rs", "one\ntwo\n");
         let (ctx, ws) = ctx_for(&dir);
         ws.mark_read(&path);
 
@@ -579,8 +558,8 @@ three" },
                 json!({
                     "path": "a.rs",
                     "edits": [
-                        { "old_string": "раз", "new_string": "one" },
-                        { "old_string": "нету", "new_string": "x" },
+                        { "old_string": "one", "new_string": "first" },
+                        { "old_string": "missing", "new_string": "x" },
                     ],
                 }),
             )
@@ -588,37 +567,33 @@ three" },
             .unwrap_err();
 
         // The miss is named by number: otherwise it is unclear which of ten to fix.
-        assert!(err.to_string().contains("правка 2"), "{err}");
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "раз
-два
-");
+        assert!(err.to_string().contains("edit 2"), "{err}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "one\ntwo\n");
     }
 
     #[tokio::test]
-    async fn у_одиночной_правки_номера_нет() {
+    async fn single_edit_has_no_number() {
         let dir = TempDir::new();
-        let path = dir.write("a.rs", "тело
-");
+        let path = dir.write("a.rs", "body\n");
         let (ctx, ws) = ctx_for(&dir);
         ws.mark_read(&path);
 
         let err = EditFile
             .run(
                 &ctx,
-                json!({ "path": "a.rs", "old_string": "нету", "new_string": "x" }),
+                json!({ "path": "a.rs", "old_string": "missing", "new_string": "x" }),
             )
             .await
             .unwrap_err();
 
-        // «правка 1 из 1» clarifies nothing.
-        assert!(!err.to_string().contains("правка"), "{err}");
+        // "edit 1 of 1" clarifies nothing.
+        assert!(!err.to_string().contains("edit"), "{err}");
     }
 
     #[tokio::test]
-    async fn две_формы_разом_это_отказ_а_не_догадка() {
+    async fn both_forms_at_once_is_refusal_not_a_guess() {
         let dir = TempDir::new();
-        let path = dir.write("a.rs", "тело
-");
+        let path = dir.write("a.rs", "body\n");
         let (ctx, ws) = ctx_for(&dir);
         ws.mark_read(&path);
 
@@ -627,24 +602,22 @@ three" },
                 &ctx,
                 json!({
                     "path": "a.rs",
-                    "old_string": "тело",
-                    "new_string": "туша",
-                    "edits": [{ "old_string": "тело", "new_string": "плоть" }],
+                    "old_string": "body",
+                    "new_string": "carcass",
+                    "edits": [{ "old_string": "body", "new_string": "flesh" }],
                 }),
             )
             .await
             .unwrap_err();
 
-        assert!(err.to_string().contains("не оба сразу"), "{err}");
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "тело
-");
+        assert!(err.to_string().contains("not both at once"), "{err}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "body\n");
     }
 
     #[tokio::test]
-    async fn пустой_список_правок_это_отказ() {
+    async fn empty_edits_list_is_refusal() {
         let dir = TempDir::new();
-        let path = dir.write("a.rs", "тело
-");
+        let path = dir.write("a.rs", "body\n");
         let (ctx, ws) = ctx_for(&dir);
         ws.mark_read(&path);
 
@@ -652,16 +625,13 @@ three" },
             .run(&ctx, json!({ "path": "a.rs", "edits": [] }))
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("править нечего"), "{err}");
+        assert!(err.to_string().contains("nothing to edit"), "{err}");
     }
 
     #[tokio::test]
-    async fn replace_all_внутри_пачки_считает_все_вхождения() {
+    async fn replace_all_inside_batch_counts_all_occurrences() {
         let dir = TempDir::new();
-        let path = dir.write("a.rs", "x = 1;
-x = 1;
-y = 2;
-");
+        let path = dir.write("a.rs", "x = 1;\nx = 1;\ny = 2;\n");
         let (ctx, ws) = ctx_for(&dir);
         ws.mark_read(&path);
 
@@ -681,14 +651,10 @@ y = 2;
 
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
-            "x = 9;
-x = 9;
-y = 8;
-"
+            "x = 9;\nx = 9;\ny = 8;\n"
         );
-        assert!(out.text.contains("заменено вхождений: 3"), "{}", out.text);
+        assert!(out.text.contains("occurrences replaced: 3"), "{}", out.text);
     }
-
 }
 
 #[cfg(test)]

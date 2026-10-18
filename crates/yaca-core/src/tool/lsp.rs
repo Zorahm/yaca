@@ -115,15 +115,15 @@ impl Tool for LspQuery {
             .lsp
             .as_ref()
             .filter(|lsp| !lsp.names().is_empty())
-            .ok_or_else(|| ToolError::failed("языковых серверов в этой сессии нет"))?;
+            .ok_or_else(|| ToolError::failed("no language servers in this session"))?;
         let action = input["action"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан action"))?;
+            .ok_or_else(|| ToolError::failed("action is required"))?;
 
         let file = match input["path"].as_str() {
             Some(raw) => Some(open(ctx, raw)?),
             None if action == "workspace_symbols" => None,
-            None => return Err(ToolError::failed(format!("для {action} нужен path"))),
+            None => return Err(ToolError::failed(format!("path is required for {action}"))),
         };
         let server = pick(lsp, file.as_ref().map(|f| f.abs.as_path()))?;
         let client = lsp.client(&server, &ctx.cancel).await.map_err(mapped)?;
@@ -144,10 +144,10 @@ impl Tool for LspQuery {
             let query = input["query"]
                 .as_str()
                 .filter(|q| !q.trim().is_empty())
-                .ok_or_else(|| ToolError::failed("для workspace_symbols нужен query"))?;
+                .ok_or_else(|| ToolError::failed("query is required for workspace_symbols"))?;
             let answer = ask("workspace/symbol", json!({ "query": query })).await?;
             let (text, total) = format::render_found(&answer, MAX_SYMBOLS, &show);
-            return Ok(found_or(text, total, format!("Символов по «{query}» не найдено."))
+            return Ok(found_or(text, total, format!("No symbols found for \"{query}\"."))
                 .truncated(total > MAX_SYMBOLS));
         }
 
@@ -161,14 +161,14 @@ impl Tool for LspQuery {
             "symbols" => {
                 let answer = ask("textDocument/documentSymbol", json!({ "textDocument": document })).await?;
                 let (text, total) = format::render_outline(&answer, MAX_SYMBOLS);
-                Ok(found_or(text, total, format!("В {} символов нет.", file.shown))
+                Ok(found_or(text, total, format!("No symbols in {}.", file.shown))
                     .truncated(total > MAX_SYMBOLS))
             }
             "diagnostics" => diagnostics(&client, &file, &uri, before, told, ctx).await,
             "definition" | "references" | "hover" => {
                 let line = input["line"]
                     .as_u64()
-                    .ok_or_else(|| ToolError::failed(format!("для {action} нужна line")))?;
+                    .ok_or_else(|| ToolError::failed(format!("line is required for {action}")))?;
                 let (line, character) = locate(
                     &file.text,
                     line as usize,
@@ -185,14 +185,14 @@ impl Tool for LspQuery {
                         let answer = ask("textDocument/definition", params).await?;
                         let places = format::places(&answer);
                         let text = format::render_places(&places, MAX_PLACES, &show);
-                        Ok(found_or(text, places.len(), "Определение не найдено.".into()))
+                        Ok(found_or(text, places.len(), "Definition not found.".into()))
                     }
                     "references" => {
                         params["context"] = json!({ "includeDeclaration": true });
                         let answer = ask("textDocument/references", params).await?;
                         let places = format::places(&answer);
                         let text = format::render_places(&places, MAX_PLACES, &show);
-                        Ok(found_or(text, places.len(), "Использований не найдено.".into())
+                        Ok(found_or(text, places.len(), "No references found.".into())
                             .truncated(places.len() > MAX_PLACES))
                     }
                     _ => {
@@ -203,13 +203,13 @@ impl Tool for LspQuery {
                                 let more = text.chars().count() > MAX_HOVER_CHARS;
                                 Ok(ToolOutput::new(cut).items(1).truncated(more))
                             }
-                            None => Ok(ToolOutput::new("Сервер ничего не знает об этом месте.".into())
+                            None => Ok(ToolOutput::new("The server has no information for this position.".into())
                                 .items(0)),
                         }
                     }
                 }
             }
-            other => Err(ToolError::failed(format!("неизвестный action: {other}"))),
+            other => Err(ToolError::failed(format!("unknown action: {other}"))),
         }
     }
 }
@@ -224,9 +224,9 @@ struct File {
 fn open(ctx: &ToolCtx, raw: &str) -> Result<File, ToolError> {
     let abs = ctx.ws.resolve_existing(raw)?;
     if abs.is_dir() {
-        return Err(ToolError::failed(format!("{raw} — каталог, не файл")));
+        return Err(ToolError::failed(format!("{raw} is a directory, not a file")));
     }
-    let text = read_text(&abs)?.ok_or_else(|| ToolError::failed(format!("не найдено: {raw}")))?;
+    let text = read_text(&abs)?.ok_or_else(|| ToolError::failed(format!("not found: {raw}")))?;
     Ok(File {
         shown: ctx.ws.display(&abs),
         abs,
@@ -245,7 +245,7 @@ fn pick(lsp: &Lsp, path: Option<&Path>) -> Result<String, ToolError> {
                 .map(|s| format!("{} ({})", s.name, s.extensions.join(", ")))
                 .collect();
             ToolError::failed_with(
-                format!("для {} нет языкового сервера", path.display()),
+                format!("no language server for {}", path.display()),
                 format!(
                     "No language server handles this file's extension. Known servers: {}. \
                      Use Grep and Read for this file.",
@@ -259,7 +259,7 @@ fn pick(lsp: &Lsp, path: Option<&Path>) -> Result<String, ToolError> {
         (Some(name), _) => Ok(name),
         (None, [only]) => Ok(only.clone()),
         _ => Err(ToolError::failed(format!(
-            "укажи path: серверов несколько ({})",
+            "specify path: multiple servers available ({})",
             names.join(", ")
         ))),
     }
@@ -282,8 +282,8 @@ async fn diagnostics(
         .await;
     if !arrived && items.is_empty() {
         return Ok(ToolOutput::new(format!(
-            "Сервер ещё не прислал диагностику для {}: проект, возможно, ещё индексируется. \
-             Повтори запрос позже.",
+            "Server has not yet sent diagnostics for {}: project may still be indexing. \
+             Retry the request later.",
             file.shown
         ))
         .items(0));
@@ -291,12 +291,12 @@ async fn diagnostics(
     let (text, rest) =
         format::render_diagnostics(&items, &file.shown, &file.abs, 2, MAX_DIAGNOSTICS, 500);
     if text.is_empty() {
-        return Ok(ToolOutput::new(format!("Ошибок и предупреждений в {} нет.", file.shown)).items(0));
+        return Ok(ToolOutput::new(format!("No errors or warnings in {}.", file.shown)).items(0));
     }
     let n = text.lines().count() as u32;
     let mut text = text;
     if rest > 0 {
-        text.push_str(&format!("[показаны первые {MAX_DIAGNOSTICS}, ещё {rest}]\n"));
+        text.push_str(&format!("[showing first {MAX_DIAGNOSTICS}, {rest} more]\n"));
     }
     Ok(ToolOutput::new(text).items(n).truncated(rest > 0))
 }
@@ -312,6 +312,6 @@ fn found_or(text: String, total: usize, none: String) -> ToolOutput {
 fn mapped(error: LspError) -> ToolError {
     match error {
         LspError::Cancelled => ToolError::Cancelled,
-        other => ToolError::failed(format!("языковой сервер: {other}")),
+        other => ToolError::failed(format!("language server: {other}")),
     }
 }

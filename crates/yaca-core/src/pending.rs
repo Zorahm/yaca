@@ -57,6 +57,16 @@ where
         self.waiting.lock().unwrap().clear();
     }
 
+    /// Everything still waiting, in no particular order.
+    pub fn metas(&self) -> Vec<M> {
+        self.waiting
+            .lock()
+            .unwrap()
+            .values()
+            .map(|(meta, _)| meta.clone())
+            .collect()
+    }
+
     pub fn forget(&self, key: &K) {
         self.waiting.lock().unwrap().remove(key);
     }

@@ -126,12 +126,12 @@ mod tests {
 
     #[test]
     fn both_sides_are_numbered_in_the_order_they_spoke() {
-        let records = [prompt("вопрос"), message(Message::user_text("вопрос")), reply("ответ")];
+        let records = [prompt("question"), message(Message::user_text("question")), reply("answer")];
         assert_eq!(
             said(&records),
             vec![
-                (1, Role::User, "вопрос".to_string()),
-                (2, Role::Assistant, "ответ".to_string()),
+                (1, Role::User, "question".to_string()),
+                (2, Role::Assistant, "answer".to_string()),
             ]
         );
     }
@@ -139,10 +139,10 @@ mod tests {
     #[test]
     fn calls_results_and_reasoning_are_not_messages() {
         let records = [
-            prompt("прочитай"),
+            prompt("read"),
             message(Message::assistant(vec![
                 ContentBlock::Thinking {
-                    thinking: "надо прочитать".into(),
+                    thinking: "need to read".into(),
                     signature: None,
                 },
                 ContentBlock::ToolUse {
@@ -156,13 +156,13 @@ mod tests {
                 content: "fn main() {}".into(),
                 is_error: false,
             }])),
-            reply("прочитал"),
+            reply("read it"),
         ];
         assert_eq!(
             said(&records),
             vec![
-                (1, Role::User, "прочитай".to_string()),
-                (2, Role::Assistant, "прочитал".to_string()),
+                (1, Role::User, "read".to_string()),
+                (2, Role::Assistant, "read it".to_string()),
             ]
         );
     }
@@ -170,48 +170,48 @@ mod tests {
     #[test]
     fn the_text_around_a_call_is_one_message() {
         let records = [message(Message::assistant(vec![
-            ContentBlock::Text { text: "Сначала посмотрю.".into() },
+            ContentBlock::Text { text: "Looking first.".into() },
             ContentBlock::ToolUse {
                 id: "c1".into(),
                 name: "Read".into(),
                 input: serde_json::json!({}),
             },
-            ContentBlock::Text { text: "Вижу.".into() },
+            ContentBlock::Text { text: "I see.".into() },
         ]))];
         assert_eq!(
             said(&records),
-            vec![(1, Role::Assistant, "Сначала посмотрю.\n\nВижу.".to_string())]
+            vec![(1, Role::Assistant, "Looking first.\n\nI see.".to_string())]
         );
     }
 
     #[test]
     fn the_history_a_compaction_writes_again_gets_no_new_numbers() {
         let records = [
-            prompt("раз"),
-            reply("ответ раз"),
-            prompt("два"),
-            reply("ответ два"),
+            prompt("one"),
+            reply("answer one"),
+            prompt("two"),
+            reply("answer two"),
             Record::Reset {
                 turn: TurnId::from("t"),
                 kept: 3,
             },
             // The summary, then the turn that was kept.
             message(Message::user_text("summary")),
-            message(Message::user_text("два")),
-            reply("ответ два"),
-            prompt("три"),
-            reply("ответ три"),
+            message(Message::user_text("two")),
+            reply("answer two"),
+            prompt("three"),
+            reply("answer three"),
         ];
         let numbers: Vec<_> = said(&records).into_iter().map(|(n, _, text)| (n, text)).collect();
         assert_eq!(
             numbers,
             vec![
-                (1, "раз".to_string()),
-                (2, "ответ раз".to_string()),
-                (3, "два".to_string()),
-                (4, "ответ два".to_string()),
-                (5, "три".to_string()),
-                (6, "ответ три".to_string()),
+                (1, "one".to_string()),
+                (2, "answer one".to_string()),
+                (3, "two".to_string()),
+                (4, "answer two".to_string()),
+                (5, "three".to_string()),
+                (6, "answer three".to_string()),
             ]
         );
     }

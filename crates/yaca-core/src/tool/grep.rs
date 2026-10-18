@@ -151,7 +151,7 @@ impl Tool for Grep {
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let pattern = input["pattern"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан pattern"))?;
+            .ok_or_else(|| ToolError::failed("pattern is required"))?;
         let multiline = input["multiline"].as_bool().unwrap_or(false);
         let re = regex::RegexBuilder::new(pattern)
             .case_insensitive(input["case_insensitive"].as_bool().unwrap_or(false))
@@ -160,7 +160,7 @@ impl Tool for Grep {
             .multi_line(multiline)
             .dot_matches_new_line(multiline)
             .build()
-            .map_err(|e| ToolError::failed(format!("плохое выражение `{pattern}`: {e}")))?;
+            .map_err(|e| ToolError::failed(format!("bad pattern `{pattern}`: {e}")))?;
 
         let given = match input["path"].as_str() {
             Some(p) => Some(ctx.ws.resolve_existing(p)?),
@@ -173,7 +173,7 @@ impl Tool for Grep {
                 globset::GlobBuilder::new(g)
                     .literal_separator(true)
                     .build()
-                    .map_err(|e| ToolError::failed(format!("плохой шаблон `{g}`: {e}")))?
+                    .map_err(|e| ToolError::failed(format!("bad glob `{g}`: {e}")))?
                     .compile_matcher(),
             ),
             None => None,
@@ -277,7 +277,7 @@ impl Tool for Grep {
             Ok((excerpts, files, total))
         })
         .await
-        .map_err(|e| ToolError::failed(format!("поиск упал: {e}")))??;
+        .map_err(|e| ToolError::failed(format!("search failed: {e}")))??;
 
         let mut out = String::new();
         let shown;
@@ -294,37 +294,37 @@ impl Tool for Grep {
             out = text;
             shown = matches;
         }
-        let unit = if files_only { "файлов" } else { "совпадений" };
+        let unit = if files_only { "files" } else { "matches" };
         let last = offset + shown;
         let truncated = last < total;
 
         if total == 0 {
-            out.push_str("[совпадений нет]\n");
+            out.push_str("[no matches found]\n");
         } else if offset >= total {
             out.push_str(&format!(
-                "[offset {offset} за пределами выдачи: всего {total} {unit}]\n"
+                "[offset {offset} is out of range: {total} {unit} total]\n"
             ));
         } else if shown == 0 {
             // Only content mode gets here: the context asked for fills the
             // byte budget before the first match, and `offset` would not move.
             out.push_str(&format!(
-                "[контекст не поместился в {} КБ раньше первого совпадения; уменьши \
-                 context, before или after]\n",
+                "[context exceeded {} KB before the first match; decrease \
+                 context, before or after]\n",
                 MAX_OUTPUT_BYTES / 1000
             ));
         } else if truncated || offset > 0 {
             let in_files = if files_only {
                 String::new()
             } else {
-                format!(" в {} файлах", files.len())
+                format!(" in {} files", files.len())
             };
             let more = if truncated {
-                format!("; продолжить: offset={last}")
+                format!("; continue: offset={last}")
             } else {
                 String::new()
             };
             out.push_str(&format!(
-                "\n[показаны {}–{last} из {total} {unit}{in_files}{more}]\n",
+                "\n[showing {}–{last} of {total} {unit}{in_files}{more}]\n",
                 offset + 1
             ));
         }
@@ -372,12 +372,12 @@ fn hits_of(re: &regex::Regex, text: &str, lines: &[&str], multiline: bool) -> Ve
 }
 
 /// The failure shape for the feed and for the model. Red (§5.9 colours `Failed`
-/// `--rust`): the search was not finished, and its result is not «ничего не
-/// нашлось» but «неизвестно».
+/// `--rust`): the search was not finished, and its result is not "nothing
+/// found" but "unknown".
 fn overran(limit: Duration) -> ToolError {
     ToolError::failed_with(
-        format!("поиск не уложился в {} с и остановлен", limit.as_secs()),
-        "Полный обход проекта в отведённое время не укладывается. Ищи в подкаталоге или сузь `glob`.",
+        format!("search timed out after {} s and was stopped", limit.as_secs()),
+        "Full project traversal timed out. Search in a subdirectory or narrow down `glob`.",
     )
 }
 

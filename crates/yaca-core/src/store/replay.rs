@@ -5,16 +5,19 @@
 //! happened, and some say what *was* — and what was is over.
 //!
 //! [`AgentEvent::ProcessesUpdated`] is the process table of a run whose
-//! commands died with it, and its `Остановить` would stop nothing.
+//! commands died with it, and its "Stop" would stop nothing.
 //! [`AgentEvent::StateChanged`] is the mode and model the run ended on; the
 //! reopened session has its own, and the shell already carries it.
-//! [`AgentEvent::CheckpointCreated`] is worse than stale: `.yaca/shadow` keeps
-//! what the snapshots hold, but the list of points lives in the session and
-//! does not outlive it, so a replayed divider would offer `Откатить сюда` to a
-//! point the core no longer knows. §0 has a name for that.
+//! [`AgentEvent::CheckpointCreated`] stays only for the points the session still
+//! holds: the list of them is saved next to the journal (`checkpoint::ledger`),
+//! so a divider for a point on that list offers a rollback that works, and one
+//! for a point that is not — a snapshot someone deleted by hand — would offer
+//! one the core no longer knows. §0 has a name for that. The list itself
+//! arrives as one [`AgentEvent::CheckpointsUpdated`] at the end, not as the
+//! lists the run went through.
 //!
-//! Hence the rule: **a replay carries what happened — not what was, and not
-//! what can still be done.**
+//! Hence the rule: **a replay carries what happened — not what was, and what
+//! can still be done only where the core says it can.**
 //!
 //! Then the tail gets closed. A run that died mid-turn — window killed, machine
 //! down — leaves a journal whose last turn never finished, and folding that as
@@ -22,11 +25,22 @@
 //! a question with buttons nobody is listening to. Both are ended here with the
 //! events the core would have sent had anyone been there to stop it.
 
+use crate::checkpoint::CheckpointSummary;
 use crate::event::AgentEvent;
 use crate::id::{RequestId, TurnId};
 
-/// The journal of a session, as the feed of a new run may draw it.
+/// The journal of a session, as the feed of a new run may draw it, for a run
+/// that has no checkpoints to offer.
 pub fn feed(events: Vec<AgentEvent>) -> Vec<AgentEvent> {
+    with_checkpoints(events, &[])
+}
+
+/// [`feed`] for a session that holds `checkpoints`: the dividers of those
+/// points stay, and the panel's list is `checkpoints` as they are now.
+pub fn with_checkpoints(
+    events: Vec<AgentEvent>,
+    checkpoints: &[CheckpointSummary],
+) -> Vec<AgentEvent> {
     let mut out = Vec::with_capacity(events.len());
     let mut open_turn: Option<TurnId> = None;
     let mut open_request: Option<RequestId> = None;
@@ -41,9 +55,15 @@ pub fn feed(events: Vec<AgentEvent>) -> Vec<AgentEvent> {
             | AgentEvent::LspUpdated { .. }
             | AgentEvent::ProcessOutputReset { .. }
             | AgentEvent::ProcessOutput { .. }
-            | AgentEvent::CheckpointCreated { .. }
             | AgentEvent::CheckpointsUpdated { .. }
             | AgentEvent::CheckpointPreviewed { .. } => continue,
+
+            // A divider is kept for a point the session can still go back to.
+            AgentEvent::CheckpointCreated { checkpoint }
+                if !checkpoints.iter().any(|held| held.id == checkpoint.id) =>
+            {
+                continue
+            }
 
             AgentEvent::TurnStarted { turn_id, .. } => open_turn = Some(turn_id.clone()),
             AgentEvent::TurnFinished { turn_id, .. } | AgentEvent::TurnCancelled { turn_id, .. }
@@ -69,6 +89,12 @@ pub fn feed(events: Vec<AgentEvent>) -> Vec<AgentEvent> {
             _ => {}
         }
         out.push(event);
+    }
+
+    if !checkpoints.is_empty() {
+        out.push(AgentEvent::CheckpointsUpdated {
+            checkpoints: checkpoints.to_vec(),
+        });
     }
 
     // The question first: the answer that never came is why the turn stopped,
@@ -162,11 +188,11 @@ mod tests {
         let journal = vec![
             AgentEvent::UserMessage {
                 turn_id: TurnId::from("t1"),
-                text: "привет".into(),
+                text: "hello".into(),
                 attachments: Vec::new(),
             },
             started("t1"),
-            said("и тебе"),
+            said("to you too"),
             finished("t1"),
         ];
 
@@ -188,21 +214,84 @@ mod tests {
         ];
 
         // The commands died with the run; a panel listing them would offer a
-        // `Остановить` that stops nothing.
+        // "Stop" that stops nothing.
         assert_eq!(feed(journal), vec![started("t1"), finished("t1")]);
     }
 
-    #[test]
-    fn checkpoint_dividers_are_left_behind_because_the_way_back_is_gone() {
-        let journal = vec![snapshot(), started("t1"), said("готово"), finished("t1")];
+    fn point() -> CheckpointSummary {
+        CheckpointSummary {
+            id: CheckpointId::from("ckpt_1"),
+            at: TsMillis(1_700_000_000_000),
+            reason: CheckpointReason::Message,
+            tracked: 12,
+        }
+    }
 
-        // The snapshots are still in `.yaca/shadow`, but the list of points is
-        // not: the divider would offer `Откатить сюда` to a point the new run
-        // has never heard of.
+    #[test]
+    fn dividers_are_left_behind_when_the_session_holds_no_points() {
+        let journal = vec![snapshot(), started("t1"), said("done"), finished("t1")];
+
+        // Nothing to roll back to: the divider would offer a rollback to a
+        // point this run has never heard of.
         assert_eq!(
             feed(journal),
-            vec![started("t1"), said("готово"), finished("t1")]
+            vec![started("t1"), said("done"), finished("t1")]
         );
+    }
+
+    #[test]
+    fn a_divider_of_a_point_the_session_holds_stays_and_the_panel_is_filled() {
+        let journal = vec![snapshot(), started("t1"), said("done"), finished("t1")];
+
+        let replayed = with_checkpoints(journal, &[point()]);
+
+        assert_eq!(
+            replayed,
+            vec![
+                snapshot(),
+                started("t1"),
+                said("done"),
+                finished("t1"),
+                AgentEvent::CheckpointsUpdated {
+                    checkpoints: vec![point()]
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn a_divider_of_a_point_that_is_gone_does_not_stay() {
+        let mut gone = point();
+        gone.id = CheckpointId::from("ckpt_gone");
+        let journal = vec![
+            AgentEvent::CheckpointCreated {
+                checkpoint: gone.clone(),
+            },
+            snapshot(),
+            started("t1"),
+            finished("t1"),
+        ];
+
+        let replayed = with_checkpoints(journal, &[point()]);
+
+        assert!(replayed
+            .iter()
+            .all(|e| !matches!(e, AgentEvent::CheckpointCreated { checkpoint } if checkpoint.id == gone.id)));
+        assert!(replayed.contains(&snapshot()));
+    }
+
+    #[test]
+    fn the_lists_the_old_run_went_through_are_replaced_by_the_current_one() {
+        let old = AgentEvent::CheckpointsUpdated {
+            checkpoints: vec![point(), point()],
+        };
+        let replayed = with_checkpoints(vec![snapshot(), old, started("t1")], &[point()]);
+
+        let lists: Vec<_> = replayed
+            .iter()
+            .filter(|e| matches!(e, AgentEvent::CheckpointsUpdated { .. }))
+            .collect();
+        assert_eq!(lists.len(), 1);
     }
 
     #[test]
@@ -214,7 +303,7 @@ mod tests {
         };
         let journal = vec![started("t1"), restored.clone(), finished("t1")];
 
-        // `Откачено к 14:32 · 3 файла` is a thing that happened, not a thing
+        // "Rolled back to 14:32 · 3 files" is a thing that happened, not a thing
         // that can still be done.
         assert_eq!(feed(journal), vec![started("t1"), restored, finished("t1")]);
     }
@@ -329,6 +418,21 @@ mod tests {
             1,
             "an answered question must not gain a second resolution"
         );
+    }
+
+    #[test]
+    fn the_model_that_answered_a_request_is_kept_in_the_replay() {
+        let decided = AgentEvent::RouteDecided {
+            route: Some("code".into()),
+            provider: "local".into(),
+            model: "qwen".into(),
+            matched: vec!["keyword:refactor".into()],
+        };
+        let journal = vec![started("t1"), decided, said("done"), finished("t1")];
+
+        // What happened, not live status: the feed shows which model answered
+        // above the text it wrote, as the live run did.
+        assert_eq!(feed(journal.clone()), journal);
     }
 
     #[test]

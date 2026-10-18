@@ -54,6 +54,8 @@ export const panels = {
   "file.copy": "Копировать файл",
   "file.expand": "На всё окно",
   "file.shrink": "Свернуть в панель",
+  "file.view_code": "Код",
+  "file.view_render": "Рендер",
   "file.loading": "Читаю файл…",
   "file.unavailable": "Показать нечего: файла нет на диске, он двоичный или лежит вне проекта",
 
@@ -97,6 +99,16 @@ export const panels = {
   "proj.commands": "Свои команды",
   "proj.commands_hint": "Файлы .yaca/commands — их же предлагает меню слэш-команд.",
   "proj.commands_none": "Своих команд у проекта нет.",
+  "proj.skills": "Навыки",
+  "proj.skills_hint": "Из .yaca/skills, .agents/skills и .claude/skills проекта и из ваших каталогов навыков. Модель берёт их сама, а /имя вызывает навык вручную.",
+  "proj.skills_none": "Навыков нет.",
+  "proj.skills_user": "ваш",
+  "proj.skills_project": "проект",
+  "proj.skills_plugin": "плагин",
+  "proj.skills_slash_only": "только через /",
+  "proj.skills_problems": "Что не так с файлами навыков",
+  "proj.skills_skipped": "пропущен",
+  "proj.skills_warning": "внимание",
 
   // --- image viewer ----------------------------------------------------
   "viewer.open": "Открыть {name}",

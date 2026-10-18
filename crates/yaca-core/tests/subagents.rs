@@ -18,7 +18,7 @@ use yaca_core::id::RequestId;
 use yaca_core::message::ContentBlock;
 use yaca_core::provider::mock::{script_text, script_tool_call, MockProvider, Turn};
 use yaca_core::provider::ProviderRequest;
-use yaca_core::{Command, Mode, PermissionAnswer, SessionConfig, SessionHandle, SessionStore};
+use yaca_core::{Command, Mode, PermissionAnswer, SessionConfig, SessionHandle};
 
 use common::{ask, calls, is_turn_over, session, until, TempProject};
 
@@ -375,7 +375,7 @@ async fn a_reopened_session_shows_what_the_subagent_did() {
         text("готово"),
     ]));
     let mut cfg = SessionConfig::new(dir.path());
-    cfg.journal = true;
+    cfg.journal = Some(dir.chats());
     let handle = yaca_core::spawn(cfg, provider).unwrap();
     let mut rx = handle.subscribe();
 
@@ -383,7 +383,7 @@ async fn a_reopened_session_shows_what_the_subagent_did() {
     until(&mut rx, is_turn_over).await;
 
     // The journal is all a reopened session has of the feed.
-    let replayed = SessionStore::open(dir.path()).feed(handle.id());
+    let replayed = dir.store().feed(handle.id());
     assert_eq!(
         rows(&replayed),
         vec![
@@ -422,6 +422,54 @@ async fn the_subagent_model_comes_from_the_project_settings() {
     assert_eq!(sent[1].effort, None);
     assert!(!sent[1].thinking);
     assert_ne!(sent[0].model, sent[1].model);
+}
+
+#[tokio::test]
+async fn task_runs_the_subagent_on_the_model_id_it_is_given() {
+    let dir = TempProject::new();
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(script_tool_call(
+            "t1",
+            "Task",
+            json!({ "prompt": "Look around.", "model": "claude-haiku-4-5", "description": "Отдал субагенту" }),
+        )),
+        text("report"),
+        text("готово"),
+    ]));
+    let handle = session(&dir, provider.clone(), Mode::Manual);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "посмотри на haiku").await;
+    until(&mut rx, is_turn_over).await;
+
+    let sent = requests(&provider);
+    assert_eq!(sent[1].model, "claude-haiku-4-5");
+    assert_ne!(sent[0].model, sent[1].model);
+}
+
+#[tokio::test]
+async fn a_model_id_the_provider_lacks_is_named_back_with_the_ones_there_are() {
+    let dir = TempProject::new();
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(script_tool_call(
+            "t1",
+            "Task",
+            json!({ "prompt": "Look around.", "model": "sonnet", "description": "Отдал субагенту" }),
+        )),
+        text("ok"),
+    ]));
+    let handle = session(&dir, provider.clone(), Mode::Manual);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "посмотри").await;
+    until(&mut rx, is_turn_over).await;
+
+    // No subagent ran: the next request is the agent's, with the failure.
+    let sent = requests(&provider);
+    assert_eq!(sent.len(), 2);
+    let (text, is_error) = result_of(&sent[1], "t1");
+    assert!(is_error, "{text}");
+    assert!(text.contains("`sonnet`") && text.contains("claude-haiku-4-5"), "{text}");
 }
 
 #[tokio::test]
@@ -629,4 +677,96 @@ async fn each_subagent_reports_what_it_has_spent_so_far() {
         })
         .collect();
     assert_eq!(spent, vec![("t1", 100, 30), ("t1", 200, 50)]);
+}
+
+const REVIEWER: &str = "---\nname: reviewer\ndescription: Reviews code for bugs\ntools: Read, Grep\n---\n\nYou are a terse reviewer. Flag only real bugs.\n";
+
+fn task_as(id: &str, agent: &str, prompt: &str) -> Turn {
+    Turn::Events(script_tool_call(
+        id,
+        "Task",
+        json!({ "prompt": prompt, "agent": agent, "description": "Отдал ревью агенту" }),
+    ))
+}
+
+#[tokio::test]
+async fn a_named_agent_brings_its_instructions_and_only_its_tools() {
+    let dir = TempProject::new();
+    dir.write(".yaca/agents/reviewer.md", REVIEWER);
+
+    let provider = Arc::new(MockProvider::new(vec![
+        task_as("t1", "reviewer", "Review dates.rs."),
+        text("No bugs."),
+        text("готово"),
+    ]));
+    let handle = session(&dir, provider.clone(), Mode::Auto);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "review").await;
+    until(&mut rx, is_turn_over).await;
+    let sent = requests(&provider);
+
+    // The agent's own prompt lists the agents.
+    assert!(sent[0].system.contains("- reviewer: Reviews code for bugs"), "{}", sent[0].system);
+    // The subagent's request carries the agent's instructions and its tools.
+    let sub = &sent[1];
+    assert!(sub.system.contains("You are a terse reviewer"), "{}", sub.system);
+    let tools: Vec<&str> = sub.tools.iter().map(|t| t.name.as_str()).collect();
+    assert!(tools.contains(&"Read") && tools.contains(&"Grep"), "{tools:?}");
+    assert!(!tools.contains(&"Write") && !tools.contains(&"Bash"), "{tools:?}");
+    let (report, is_error) = result_of(&sent[2], "t1");
+    assert!(!is_error && report.contains("No bugs."), "{report}");
+}
+
+#[tokio::test]
+async fn an_agent_nobody_has_is_named_back_with_the_ones_there_are() {
+    let dir = TempProject::new();
+    dir.write(".yaca/agents/reviewer.md", REVIEWER);
+
+    let provider = Arc::new(MockProvider::new(vec![
+        task_as("t1", "auditor", "Audit."),
+        text("ok"),
+    ]));
+    let handle = session(&dir, provider.clone(), Mode::Auto);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "audit").await;
+    until(&mut rx, is_turn_over).await;
+    let sent = requests(&provider);
+    let (text, is_error) = result_of(&sent[1], "t1");
+    assert!(is_error, "{text}");
+    assert!(text.contains("reviewer"), "{text}");
+}
+
+#[tokio::test]
+async fn a_forked_skill_runs_in_a_subagent_and_reports() {
+    let dir = TempProject::new();
+    dir.write(".yaca/agents/reviewer.md", REVIEWER);
+    dir.write(
+        ".yaca/skills/audit/SKILL.md",
+        "---\nname: audit\ndescription: Audit the code\ncontext: fork\nagent: reviewer\n---\n\nCheck every file for unsafe code.\n",
+    );
+
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(script_tool_call(
+            "s1",
+            "Skill",
+            json!({ "name": "audit", "args": "src/", "description": "Запустил аудит" }),
+        )),
+        text("Nothing unsafe."),
+        text("готово"),
+    ]));
+    let handle = session(&dir, provider.clone(), Mode::Auto);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "audit").await;
+    until(&mut rx, is_turn_over).await;
+    let sent = requests(&provider);
+
+    let sub = &sent[1];
+    assert!(sub.system.contains("terse reviewer"), "runs as the skill's agent");
+    let task = format!("{:?}", sub.messages[0]);
+    assert!(task.contains("Check every file for unsafe code") && task.contains("src/"), "{task}");
+    let (report, is_error) = result_of(&sent[2], "s1");
+    assert!(!is_error && report.contains("Nothing unsafe."), "{report}");
 }

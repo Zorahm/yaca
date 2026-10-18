@@ -1,5 +1,5 @@
-//! Список задач (§5.6). Подписывает интерфейс: он сам рисует строки со
-//! статусами, и подпись модели поверх них была бы вторым рассказом о том же.
+//! Task list (§5.6). Narrated by the interface: it renders items and their
+//! statuses directly, so a model narration over them would repeat the same thing.
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -57,7 +57,7 @@ impl Tool for TodoWrite {
 
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let items: Vec<TodoItem> = serde_json::from_value(input["todos"].clone())
-            .map_err(|e| ToolError::failed(format!("не разобрал todos: {e}")))?;
+            .map_err(|e| ToolError::failed(format!("failed to parse todos: {e}")))?;
 
         let in_progress = items
             .iter()
@@ -65,7 +65,7 @@ impl Tool for TodoWrite {
             .count();
         if in_progress > 1 {
             return Err(ToolError::failed(
-                "в статусе inProgress может быть только одна задача",
+                "at most one task may be in status inProgress",
             ));
         }
 
@@ -78,7 +78,7 @@ impl Tool for TodoWrite {
             .filter(|i| i.status == TodoStatus::Completed)
             .count();
         Ok(ToolOutput::new(format!(
-            "Список обновлён: {done} из {} сделано\n",
+            "Task list updated: {done} of {} completed\n",
             items.len()
         ))
         .items(items.len() as u32))
@@ -92,7 +92,7 @@ mod tests {
     use crate::tool::tests_support::ctx_with_events;
 
     #[tokio::test]
-    async fn обновление_уходит_событием() {
+    async fn update_emitted_as_event() {
         let dir = TempDir::new();
         let (ctx, mut rx) = ctx_with_events(&dir);
 
@@ -100,9 +100,9 @@ mod tests {
             .run(
                 &ctx,
                 json!({ "todos": [
-                    { "content": "прочитать спеку", "status": "completed" },
-                    { "content": "написать ядро",   "status": "inProgress" },
-                    { "content": "прикрутить UI",   "status": "pending" },
+                    { "content": "read spec",  "status": "completed" },
+                    { "content": "write core", "status": "inProgress" },
+                    { "content": "attach UI",  "status": "pending" },
                 ]}),
             )
             .await
@@ -113,12 +113,12 @@ mod tests {
                 assert_eq!(items.len(), 3);
                 assert_eq!(items[1].status, TodoStatus::InProgress);
             }
-            other => panic!("не то событие: {other:?}"),
+            other => panic!("unexpected event: {other:?}"),
         }
     }
 
     #[tokio::test]
-    async fn две_текущие_задачи_это_ошибка() {
+    async fn two_current_tasks_is_an_error() {
         let dir = TempDir::new();
         let (ctx, _rx) = ctx_with_events(&dir);
 
@@ -126,13 +126,13 @@ mod tests {
             .run(
                 &ctx,
                 json!({ "todos": [
-                    { "content": "раз", "status": "inProgress" },
-                    { "content": "два", "status": "inProgress" },
+                    { "content": "one", "status": "inProgress" },
+                    { "content": "two", "status": "inProgress" },
                 ]}),
             )
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("только одна"));
+        assert!(err.to_string().contains("at most one"));
         assert!(err.to_string().contains("inProgress"), "{err}");
     }
 

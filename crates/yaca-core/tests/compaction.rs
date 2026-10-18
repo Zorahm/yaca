@@ -29,7 +29,7 @@ use common::{ask, calls, is_turn_over, until, TempProject};
 fn tiny_session(dir: &TempProject, provider: Arc<MockProvider>) -> SessionHandle {
     let mut cfg = SessionConfig::new(dir.path());
     cfg.mode = Mode::Manual;
-    cfg.journal = false;
+    cfg.journal = None;
     cfg.model = "tiny".into();
     cfg.models = vec![ModelInfo {
         id: "tiny".into(),

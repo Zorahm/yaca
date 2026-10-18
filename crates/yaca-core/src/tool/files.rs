@@ -117,7 +117,7 @@ pub(crate) fn look_any(ctx: &ToolCtx, raw: &str) -> Result<Target, ToolError> {
 ///
 /// The fingerprint is updated here too: a write changes the mtime, and without
 /// this the agent could not fix a file twice in a row — the second edit would hit
-/// its own first one as «файл изменился после чтения».
+/// its own first one as "file changed after reading".
 pub(crate) fn write(
     ctx: &ToolCtx,
     target: &Target,
@@ -156,9 +156,9 @@ pub(crate) fn look_editable(ctx: &ToolCtx, raw: &str) -> Result<Target, ToolErro
 
 fn ensure_editable(ctx: &ToolCtx, target: &Target) -> Result<(), ToolError> {
     if !ctx.ws.was_read(&target.abs) {
-        // Форма из §5.9: `Правка отклонена · src/app.rs не прочитан в этой сессии`.
+        // §5.9 format: `Edit rejected · src/app.rs was not read in this session`.
         return Err(ToolError::rejected(format!(
-            "{} не прочитан в этой сессии",
+            "{} was not read in this session",
             target.rel
         )));
     }
@@ -168,7 +168,7 @@ fn ensure_editable(ctx: &ToolCtx, target: &Target) -> Result<(), ToolError> {
         // blind, and a retry runs into the very first check.
         ctx.ws.forget(&target.abs);
         return Err(ToolError::rejected(format!(
-            "{} изменился после чтения — перечитай его",
+            "{} changed since it was read — read it again",
             target.rel
         )));
     }
@@ -185,7 +185,7 @@ pub(crate) fn read_text(path: &Path) -> Result<Option<String>, ToolError> {
         Err(e) => return Err(ToolError::failed(e.to_string())),
     };
     if bytes.iter().take(8_192).any(|b| *b == 0) {
-        return Err(ToolError::failed("двоичный файл, править нечего"));
+        return Err(ToolError::failed("binary file, nothing to edit"));
     }
     Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
 }

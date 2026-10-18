@@ -147,6 +147,10 @@ export function SessionList({
               onDeleteStart: () => setConfirming(session.id),
               onDelete: () => {
                 setConfirming(null);
+                // Off the screen too: the shell stops a live session before
+                // deleting it, and a feed left open would show a chat that no
+                // longer exists.
+                if (chat) onClose(session.id);
                 void act(() => sessions.remove(project, session.id));
               },
             }}

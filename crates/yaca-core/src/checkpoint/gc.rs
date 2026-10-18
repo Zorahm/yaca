@@ -4,12 +4,15 @@
 //! content it had not seen before, and nothing removed either. This module is
 //! a mark and sweep over it.
 //!
-//! Roots are the manifests that are kept, and a manifest is kept when either
-//! it was recorded by this process, or it is younger than [`RETENTION`]. The
-//! second clause is what protects sessions of the same project that run in
-//! another process: their points are in their memory, not on disk, and nothing
-//! here can see them. Everything a kept manifest names is live. Anything else
-//! is swept once it is older than [`GRACE`].
+//! Roots are the manifests that are kept, and a manifest is kept when it was
+//! recorded by this process, or is named by the saved list of any session of
+//! the project ([`super::ledger`]), or is younger than [`RETENTION`]. The
+//! saved lists are what keep a chat's points for as long as the chat exists,
+//! whatever their age and whichever process wrote them; the age clause is what
+//! protects points nothing names — a run whose list is not saved, in another
+//! process, whose points are in its memory and nowhere this sweep can see.
+//! Everything a kept manifest names is live. Anything else is swept once it is
+//! older than [`GRACE`].
 //!
 //! The grace window is for writers that are not yet visible to the mark. A
 //! snapshot stores its objects before it writes the manifest that names them,
@@ -34,10 +37,10 @@ use blake3::Hash;
 use super::manifest::Manifest;
 use super::store::{Store, REFRESH_AFTER};
 
-/// How long a manifest outlives the process that wrote it. Two weeks is longer
-/// than a chat stays open in practice, and a manifest is a few kilobytes, so
-/// the cost of keeping it is negligible next to deleting a point another
-/// window can still roll back to.
+/// How long a manifest outlives the process that wrote it, when no saved list
+/// names it. Two weeks is longer than a chat stays open in practice, and a
+/// manifest is a few kilobytes, so the cost of keeping it is negligible next to
+/// deleting a point another window can still roll back to.
 pub const RETENTION: Duration = Duration::from_secs(14 * 24 * 60 * 60);
 
 /// How long an unreferenced object must sit untouched before it is removed.
@@ -102,7 +105,15 @@ pub(super) fn remember(store: &Store, manifest: Hash) {
 /// Runs one sweep of `store` as a session sees it: the manifests recorded in
 /// this process are live, the clock is the real one.
 pub fn run(store: &Store) -> Report {
-    let live = recorded().get(store.dir()).cloned().unwrap_or_default();
+    run_keeping(store, &HashSet::new())
+}
+
+/// [`run`], with `kept` live on top of what this process recorded: the
+/// manifests that the saved lists of the project's sessions name (see
+/// [`super::ledger`]), which no age may take.
+pub fn run_keeping(store: &Store, kept: &HashSet<Hash>) -> Report {
+    let mut live = recorded().get(store.dir()).cloned().unwrap_or_default();
+    live.extend(kept.iter().copied());
     let report = collect(store, &live, SystemTime::now(), Policy::default());
     tracing::debug!(
         manifests = report.manifests_removed,

@@ -137,7 +137,7 @@ impl Lsp {
             let servers = self.0.servers.lock().unwrap();
             let server = servers
                 .get(name)
-                .ok_or_else(|| LspError::Transport(format!("нет сервера «{name}»")))?;
+                .ok_or_else(|| LspError::Transport(format!("no server \"{name}\"")))?;
             if let State::Ready(client) = &server.state {
                 return Ok(client.clone());
             }
@@ -161,7 +161,7 @@ impl Lsp {
                 _ => {}
             }
             if server.spec.settings.disabled {
-                return Err(LspError::Transport(format!("сервер «{name}» отключён")));
+                return Err(LspError::Transport(format!("server \"{name}\" is disabled")));
             }
             server.attempt += 1;
             server.state = State::Starting;
@@ -219,6 +219,29 @@ impl Lsp {
                 Err(error)
             }
         }
+    }
+
+    /// Stops a server, if it is running, and starts it again: the panel's
+    /// "Restart". A disabled server or one that is starting is left alone.
+    pub fn restart(&self, name: &str) {
+        {
+            let mut servers = self.0.servers.lock().unwrap();
+            let Some(server) = servers.get_mut(name) else { return };
+            if server.spec.settings.disabled || matches!(server.state, State::Starting) {
+                return;
+            }
+            // Dropping the client drops its process (`kill_on_drop`). A new
+            // attempt number keeps the old process's close notice from
+            // marking the new one failed.
+            server.attempt += 1;
+            server.state = State::Idle;
+        }
+        self.0.announce();
+        let lsp = self.clone();
+        let name = name.to_string();
+        tokio::spawn(async move {
+            let _ = lsp.client(&name, &CancellationToken::new()).await;
+        });
     }
 
     /// The client of a server that is already up, without starting anything.

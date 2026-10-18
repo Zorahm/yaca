@@ -40,11 +40,11 @@ pub enum LspError {
     #[error("{0}")]
     Transport(String),
     /// The server answered with a JSON-RPC error.
-    #[error("{message} (код {code})")]
+    #[error("{message} (code {code})")]
     Rpc { code: i64, message: String },
-    #[error("сервер не ответил за {0} с")]
+    #[error("server did not respond within {0} s")]
     Timeout(u64),
-    #[error("отменено")]
+    #[error("cancelled")]
     Cancelled,
     #[error("{0}")]
     Closed(String),

@@ -145,7 +145,7 @@ fn clip(text: &str, max: usize) -> String {
         return trimmed.to_string();
     }
     let head: String = trimmed.chars().take(max).collect();
-    format!("{head}\n… обрезано")
+    format!("{head}\n… truncated")
 }
 
 /// A session that was never named still needs a heading.
@@ -165,7 +165,7 @@ mod tests {
 
     fn session() -> (SessionMeta, Vec<Record>) {
         let mut meta = SessionMeta::new(SessionId::from("ses_1"), "anthropic".into(), "claude-opus-5".into());
-        meta.title = "Разбор дат".into();
+        meta.title = "Date parsing".into();
         meta.messages = 1;
         meta.cost_usd = 0.31;
         meta.files = vec!["src/a.rs".into()];
@@ -174,17 +174,17 @@ mod tests {
         let records = vec![
             Record::Prompt {
                 turn: turn.clone(),
-                text: "почини разбор дат".into(),
+                text: "fix date parsing".into(),
             },
             Record::Message {
                 turn: turn.clone(),
                 message: Message::assistant(vec![
                     ContentBlock::Thinking {
-                        thinking: "прикидываю".into(),
+                        thinking: "pondering".into(),
                         signature: None,
                     },
                     ContentBlock::Text {
-                        text: "Смотрю на парсер.".into(),
+                        text: "Looking at parser.".into(),
                     },
                     ContentBlock::ToolUse {
                         id: "call_1".into(),
@@ -210,8 +210,8 @@ mod tests {
         let (meta, records) = session();
         let md = markdown(&meta, &records);
 
-        assert!(md.starts_with("# Разбор дат"));
-        assert!(md.contains("### You\n\nпочини разбор дат"));
+        assert!(md.starts_with("# Date parsing"));
+        assert!(md.contains("### You\n\nfix date parsing"));
         assert!(md.contains("### Yaca"));
         assert!(md.contains("**Read** `path=src/a.rs`"));
         assert!(md.contains("fn parse() {}"), "{md}");
@@ -222,7 +222,7 @@ mod tests {
         let (meta, records) = session();
         // §5.3 keeps it collapsed in the feed; an export is not a place to
         // publish it either.
-        assert!(!markdown(&meta, &records).contains("прикидываю"));
+        assert!(!markdown(&meta, &records).contains("pondering"));
     }
 
     #[test]
@@ -240,13 +240,13 @@ mod tests {
             turn: TurnId::from("t1"),
             message: Message::tool_results(vec![ContentBlock::ToolResult {
                 tool_use_id: "call_2".into(),
-                content: "строка\n".repeat(5_000),
+                content: "line\n".repeat(5_000),
                 is_error: false,
             }]),
         });
 
         let md = markdown(&meta, &records);
-        assert!(md.contains("обрезано"));
+        assert!(md.contains("truncated"));
         assert!(md.chars().count() < 4_000, "{}", md.chars().count());
     }
 

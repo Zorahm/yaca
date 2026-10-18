@@ -21,7 +21,7 @@ pub const PROVIDERS_CHANNEL: &str = "yaca://providers";
 /// Tells the windows that the list has changed. A failed broadcast does not fail the write:
 /// the disk already holds the truth, and a missed event is a stale list, not a
 /// lost setting.
-fn announce(app: &tauri::AppHandle) {
+pub(crate) fn announce(app: &tauri::AppHandle) {
     use tauri::Emitter;
     let _ = app.emit(PROVIDERS_CHANNEL, ());
 }
@@ -185,11 +185,15 @@ pub fn search_key_source() -> &'static str {
     }
 }
 
-/// Models of all providers (§7.1).
+/// Models of all providers (§7.1), and the router's model when `routing.json`
+/// is usable. A broken file adds nothing here — `routing_status` is where that
+/// is said, so the switcher can say why the model is not there.
 #[tauri::command]
 pub fn models() -> Result<Vec<ModelInfo>, String> {
     let providers = Providers::load(&config_dir()?).map_err(|e| e.to_string())?;
-    Ok(providers.all_models())
+    let mut all = providers.all_models();
+    all.extend(crate::routing::offered());
+    Ok(all)
 }
 
 /// Which of a provider's models are in memory right now (§7.1).

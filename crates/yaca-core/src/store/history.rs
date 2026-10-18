@@ -78,20 +78,20 @@ pub struct MessageLog {
 }
 
 impl MessageLog {
-    pub fn open(root: &Path, id: &SessionId) -> std::io::Result<Self> {
-        let dir = super::dir(root);
-        std::fs::create_dir_all(&dir)?;
+    /// `dir` is the project's folder of journals ([`super::location`]).
+    pub fn open(dir: &Path, id: &SessionId) -> std::io::Result<Self> {
+        std::fs::create_dir_all(dir)?;
         let file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(MessageLog::path(root, id))?;
+            .open(MessageLog::path(dir, id))?;
         Ok(MessageLog {
             file: Mutex::new(file),
         })
     }
 
-    pub fn path(root: &Path, id: &SessionId) -> PathBuf {
-        super::dir(root).join(format!("{id}.messages.jsonl"))
+    pub fn path(dir: &Path, id: &SessionId) -> PathBuf {
+        dir.join(format!("{id}.messages.jsonl"))
     }
 
     /// A failed write does not bring the turn down, the same as the feed
@@ -166,7 +166,7 @@ pub fn prefix(records: &[Record]) -> Option<Fingerprint> {
     })
 }
 
-/// Everything up to and including `turn` — the cut "дублировать до точки"
+/// Everything up to and including `turn` — the cut "duplicate to point"
 /// makes (§9).
 pub fn through(records: Vec<Record>, turn: &TurnId) -> Vec<Record> {
     let mut out = Vec::new();
@@ -212,19 +212,19 @@ mod tests {
         log.append(&Record::Message {
             turn: TurnId::from("t1"),
             message: Message::assistant(vec![ContentBlock::Thinking {
-                thinking: "прикидываю".into(),
+                thinking: "pondering".into(),
                 signature: Some("sig-abc".into()),
             }]),
         });
 
         let back = replay(&MessageLog::path(dir.path(), &id)).unwrap();
         let Record::Message { message, .. } = &back[0] else {
-            panic!("не сообщение: {:?}", back[0]);
+            panic!("not a message: {:?}", back[0]);
         };
         assert_eq!(
             message.content[0],
             ContentBlock::Thinking {
-                thinking: "прикидываю".into(),
+                thinking: "pondering".into(),
                 signature: Some("sig-abc".into()),
             }
         );
@@ -232,20 +232,20 @@ mod tests {
 
     #[test]
     fn the_provider_gets_messages_and_not_prompts() {
-        let records = vec![prompt("t1", "что тут"), reply("t1", "вот что")];
+        let records = vec![prompt("t1", "what is here"), reply("t1", "here is what")];
         assert_eq!(messages(records).len(), 1);
     }
 
     #[test]
     fn a_compacted_session_reopens_compacted() {
         let records = vec![
-            prompt("t1", "раз"),
-            reply("t1", "длинный разговор"),
+            prompt("t1", "one"),
+            reply("t1", "long conversation"),
             Record::Reset {
                 turn: TurnId::from("t2"),
                 kept: 1,
             },
-            reply("t2", "сводка"),
+            reply("t2", "summary"),
         ];
         // What the human said before the summary is still theirs to search,
         // but the provider must not see the history the summary replaced.
@@ -254,7 +254,7 @@ mod tests {
         assert_eq!(
             back[0].content[0],
             ContentBlock::Text {
-                text: "сводка".into()
+                text: "summary".into()
             }
         );
     }
@@ -327,11 +327,11 @@ mod tests {
     #[test]
     fn cutting_at_a_turn_keeps_that_turn_whole() {
         let records = vec![
-            prompt("t1", "раз"),
-            reply("t1", "первый"),
-            prompt("t2", "два"),
-            reply("t2", "второй"),
-            prompt("t3", "три"),
+            prompt("t1", "one"),
+            reply("t1", "first"),
+            prompt("t2", "two"),
+            reply("t2", "second"),
+            prompt("t3", "three"),
         ];
         let cut = through(records, &TurnId::from("t2"));
         assert_eq!(cut.len(), 4);
@@ -343,7 +343,7 @@ mod tests {
         let dir = TempDir::new();
         let p = dir.write(
             "s.messages.jsonl",
-            "{\"kind\":\"prompt\",\"turn\":\"t1\",\"text\":\"раз\"}\nмусор\n",
+            "{\"kind\":\"prompt\",\"turn\":\"t1\",\"text\":\"one\"}\ngarbage\n",
         );
         assert_eq!(replay(&p).unwrap().len(), 1);
     }

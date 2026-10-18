@@ -65,13 +65,13 @@ pub(crate) fn validate(primary: &Path, given: &[PathBuf]) -> Result<Vec<PathBuf>
     for raw in given {
         let canon = std::fs::canonicalize(raw).map_err(|e| {
             CoreError::Config(format!(
-                "не открыть дополнительный корень {}: {e}",
+                "failed to open additional root {}: {e}",
                 raw.display()
             ))
         })?;
         if !canon.is_dir() {
             return Err(CoreError::Config(format!(
-                "{} — не каталог",
+                "{} is not a directory",
                 canon.display()
             )));
         }
@@ -80,7 +80,7 @@ pub(crate) fn validate(primary: &Path, given: &[PathBuf]) -> Result<Vec<PathBuf>
         }
         if primary.starts_with(&canon) {
             return Err(CoreError::Config(format!(
-                "{} содержит сам проект {}: границы стали бы шире проекта",
+                "{} contains the project itself {}: boundaries would become wider than the project",
                 canon.display(),
                 primary.display()
             )));

@@ -67,6 +67,23 @@ impl Queue {
         id
     }
 
+    /// The list the interface has been shown: what a window that missed the
+    /// announcements needs to draw the same chips. An entry the worker is about
+    /// to take at once was never announced and is not in it.
+    pub(super) fn waiting(&self) -> Vec<QueuedMessage> {
+        self.entries
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|entry| entry.shown)
+            .map(|entry| QueuedMessage {
+                id: entry.id.clone(),
+                text: entry.text.clone(),
+                attachments: entry.attachments.clone(),
+            })
+            .collect()
+    }
+
     /// Removes a message that is still waiting. A message that is not there —
     /// already taken in, or never queued — is not an error: the list is sent
     /// regardless, so an interface that asked gets the core's answer back.

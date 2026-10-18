@@ -1,21 +1,23 @@
-//! Чтение файла. Подпись пишет модель (§5.4.1): зачем читали, интерфейс не знает.
+//! Reading a file. The caption is written by the model (§5.4.1): the interface does not know why it was read.
 //!
-//! Читает сквозь набор непринятых правок. Иначе агент, только что изменивший
-//! файл, перечитает его, увидит старое содержимое и начнёт спорить сам с собой.
+//! Reads through the set of uncommitted changes. Otherwise an agent that just edited
+//! a file would re-read it, see the old content, and start arguing with itself.
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
-use super::files;
+use std::path::{Path, PathBuf};
+
+use super::{files, notebook, pdf};
 use super::{Narration, Tool, ToolCtx, ToolOutput};
 use crate::error::ToolError;
 use crate::intent::Intent;
 
-/// Потолок за один вызов. Больше — только явным `offset`/`limit`:
-/// иначе один `read_file` съедает окно контекста.
+/// Cap for a single call. More only with explicit `offset`/`limit`:
+/// otherwise a single `read_file` consumes the context window.
 const DEFAULT_LIMIT: usize = 2_000;
-/// Длинные строки режутся: минифицированный бандл в одну строку способен
-/// выбить окно целиком.
+/// Long lines are truncated: a single-line minified bundle can
+/// blow out the entire window.
 const MAX_LINE_CHARS: usize = 2_000;
 /// How much of the file one call hands the model, in bytes, line numbers
 /// included. The two limits above do not bound it: two thousand lines of a
@@ -35,7 +37,11 @@ impl Tool for ReadFile {
 
     fn description(&self) -> &'static str {
         "Read a project file. Returns numbered lines. \
-         For large files, use offset and limit."
+         For large files, use offset and limit. \
+         A PDF comes back as its text, page by page: one of up to 10 pages is read \
+         whole, a longer one needs `pages` (at most 20 per call). A scanned page has \
+         no text to return. A Jupyter notebook (.ipynb) comes back as its cells, each \
+         with its number, id and outputs; offset and limit then count cells."
     }
 
     fn properties(&self) -> Value {
@@ -54,6 +60,10 @@ impl Tool for ReadFile {
                 "minimum": 1,
                 "description": "Number of lines to read.",
             },
+            "pages": {
+                "type": "string",
+                "description": "PDF only: the pages to read, e.g. \"3\" or \"3-7\".",
+            },
         })
     }
 
@@ -65,7 +75,7 @@ impl Tool for ReadFile {
         Narration::Model
     }
 
-    /// Чтение ничего не меняет и ни о чём не спрашивает.
+    /// Reading modifies nothing and asks for nothing.
     fn concurrent(&self) -> bool {
         true
     }
@@ -81,36 +91,58 @@ impl Tool for ReadFile {
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let raw_path = input["path"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан path"))?;
+            .ok_or_else(|| ToolError::failed("path is required"))?;
 
         // An image read as text is two megabytes of noise in the window, and
         // "binary file" would leave the model with nowhere to go next.
         if ctx.ws.resolve_new(raw_path).is_ok_and(|abs| crate::picture::is_picture(&abs)) {
             return Err(ToolError::failed_with(
-                format!("{raw_path} — изображение, а не текст"),
+                format!("{raw_path} is an image, not text"),
                 "This file is an image. Look at it with ReadImage.",
             ));
         }
 
-        // Чтение уходит на блокирующий исполнитель: большой файл на сетевом
-        // диске иначе останавливает всю сессию — вместе с каналом событий и
-        // отменой, — а в пачке §5.4 держит соседние чтения, которые должны
-        // были идти рядом.
+        if let Ok(abs) = ctx.ws.resolve_new(raw_path) {
+            if is_pdf(&abs) {
+                return read_pdf(ctx, abs, &input).await;
+            }
+        }
+
+        // Reading moves to a blocking executor: a large file on a network
+        // drive would otherwise stall the entire session — along with the event
+        // channel and cancellation, — and in a §5.4 batch would block adjacent
+        // reads that should run together.
         let ws = ctx.ws.clone();
         let raw = raw_path.to_string();
         let target = tokio::task::spawn_blocking(move || files::look_in(&ws, &raw))
             .await
-            .map_err(|_| ToolError::failed("чтение файла не завершилось"))??;
+            .map_err(|_| ToolError::failed("reading file did not complete"))??;
 
         if target.abs.is_dir() {
-            return Err(ToolError::failed(format!("{raw_path} — каталог, не файл")));
+            return Err(ToolError::failed(format!("{raw_path} is a directory, not a file")));
         }
         let Some(text) = target.current else {
-            return Err(ToolError::failed(format!("не найдено: {raw_path}")));
+            return Err(ToolError::failed(format!("not found: {raw_path}")));
         };
 
         let offset = input["offset"].as_u64().unwrap_or(1).max(1) as usize;
         let limit = input["limit"].as_u64().unwrap_or(DEFAULT_LIMIT as u64) as usize;
+
+        if notebook::is_notebook(&target.abs) {
+            let shown = notebook::render(&text, &target.rel, offset, limit, MAX_OUTPUT_BYTES)?;
+            remember(ctx, &target.abs);
+            let mut out = shown.text;
+            let truncated = shown.end < shown.total;
+            if truncated || offset > 1 {
+                out.push_str(&format!(
+                    "[showing cells {offset}–{} of {}]\n",
+                    shown.end, shown.total
+                ));
+            }
+            return Ok(ToolOutput::new(out)
+                .items(shown.total as u32)
+                .truncated(truncated));
+        }
 
         let all: Vec<&str> = text.lines().collect();
         let total = all.len();
@@ -118,7 +150,7 @@ impl Tool for ReadFile {
 
         if start >= total && total > 0 {
             return Err(ToolError::failed(format!(
-                "в файле {total} строк, запрошена строка {offset}"
+                "file has {total} lines, requested line {offset}"
             )));
         }
 
@@ -131,7 +163,7 @@ impl Tool for ReadFile {
             ctx.check_cancelled()?;
             let n = start + i + 1;
             let shown: String = if line.chars().count() > MAX_LINE_CHARS {
-                line.chars().take(MAX_LINE_CHARS).collect::<String>() + " …[строка обрезана]"
+                line.chars().take(MAX_LINE_CHARS).collect::<String>() + " …[line truncated]"
             } else {
                 (*line).to_string()
             };
@@ -143,31 +175,80 @@ impl Tool for ReadFile {
             end = n;
         }
 
-        // Файл прочитан — реестр запомнил отпечаток (§8, read-before-edit).
-        // Для файла, который существует только в наборе, отпечатка нет:
-        // сверять его будет не с чем, и это правильно.
-        if ctx.ws.fingerprint(&target.abs).is_some() {
-            ctx.ws.mark_read(&target.abs);
-        } else {
-            ctx.ws.mark_authored(&target.abs);
-        }
+        remember(ctx, &target.abs);
 
         let truncated = end < total;
         if truncated {
             out.push_str(&format!(
-                "\n[показаны строки {}–{} из {total}]\n",
+                "\n[showing lines {}–{} of {total}]\n",
                 start + 1,
                 end
             ));
         }
         if total == 0 {
-            out.push_str("[файл пуст]\n");
+            out.push_str("[file is empty]\n");
         }
 
         Ok(ToolOutput::new(out)
             .items(total as u32)
             .truncated(truncated))
     }
+}
+
+/// File read — registry remembered the fingerprint (§8, read-before-edit).
+/// For a file that only exists in the change set, there is no fingerprint:
+/// there will be nothing to compare it against, and that is correct.
+fn remember(ctx: &ToolCtx, abs: &Path) {
+    if ctx.ws.fingerprint(abs).is_some() {
+        ctx.ws.mark_read(abs);
+    } else {
+        ctx.ws.mark_authored(abs);
+    }
+}
+
+fn is_pdf(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf"))
+}
+
+/// A PDF's text, by page. Not marked as read: there is no text in the file
+/// itself an edit could anchor on.
+async fn read_pdf(ctx: &ToolCtx, abs: PathBuf, input: &Value) -> Result<ToolOutput, ToolError> {
+    let shown = ctx.ws.display(&abs);
+    let pages = input["pages"].as_str().map(pdf::parse_pages).transpose()?;
+    if abs.is_dir() {
+        return Err(ToolError::failed(format!("{shown} is a directory, not a file")));
+    }
+    let name = shown.clone();
+    let read = tokio::task::spawn_blocking(move || {
+        let bytes = std::fs::read(&abs).map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => ToolError::failed(format!("not found: {name}")),
+            _ => ToolError::failed(e.to_string()),
+        })?;
+        pdf::read(&bytes, &name, pages)
+    })
+    .await
+    .map_err(|_| ToolError::failed("reading the PDF did not complete"))??;
+
+    let mut text = read.text;
+    let partial = read.shown < read.total;
+    if partial {
+        text.push_str(&format!("[{} of {} pages shown]\n", read.shown, read.total));
+    }
+    if !read.empty.is_empty() && read.empty.len() as u32 == read.shown {
+        text.push_str(
+            "[no page here has a text layer: this looks like a scanned document, \
+             and its text cannot be read]\n",
+        );
+    }
+    if text.len() > MAX_OUTPUT_BYTES {
+        let mut end = MAX_OUTPUT_BYTES;
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        text.truncate(end);
+        text.push_str("\n[text cut: ask for fewer pages]\n");
+    }
+    Ok(ToolOutput::new(text).items(read.total).truncated(partial))
 }
 
 #[cfg(test)]
@@ -177,22 +258,22 @@ mod tests {
     use crate::tool::tests_support::ctx_for;
 
     #[tokio::test]
-    async fn нумерует_строки_и_помечает_прочитанным() {
+    async fn numbers_lines_and_marks_read() {
         let dir = TempDir::new();
-        dir.write("a.rs", "первая\nвторая\nтретья\n");
+        dir.write("a.rs", "first\nsecond\nthird\n");
         let (ctx, ws) = ctx_for(&dir);
 
         let out = ReadFile.run(&ctx, json!({ "path": "a.rs" })).await.unwrap();
 
-        assert!(out.text.contains("     1\tпервая"));
-        assert!(out.text.contains("     3\tтретья"));
+        assert!(out.text.contains("     1\tfirst"));
+        assert!(out.text.contains("     3\tthird"));
         assert_eq!(out.meta.items, Some(3));
         assert!(!out.meta.truncated);
         assert!(ws.was_read(&ws.resolve_existing("a.rs").unwrap()));
     }
 
     #[tokio::test]
-    async fn окно_по_offset_и_limit() {
+    async fn window_by_offset_and_limit() {
         let dir = TempDir::new();
         dir.write("a.rs", "1\n2\n3\n4\n5\n");
         let (ctx, _ws) = ctx_for(&dir);
@@ -223,7 +304,7 @@ mod tests {
         assert!(out.meta.truncated);
         assert!(!out.text.contains("  2000\t"));
         // The footer is how the model finds out where to go on from.
-        assert!(out.text.contains("из 2000]"), "{:?}", out.text.lines().last());
+        assert!(out.text.contains("of 2000]"), "{:?}", out.text.lines().last());
     }
 
     #[tokio::test]
@@ -240,20 +321,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn выход_за_проект_это_отклонение_а_не_сбой() {
+    async fn leaving_project_is_a_rejection_not_a_failure() {
         let dir = TempDir::new();
         dir.write("a.rs", "x");
         let (ctx, _ws) = ctx_for(&dir);
 
         let err = ReadFile
-            .run(&ctx, json!({ "path": "../снаружи.rs" }))
+            .run(&ctx, json!({ "path": "../outside.rs" }))
             .await
             .unwrap_err();
-        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
+        assert!(matches!(err, ToolError::Rejected(_)), "got {err:?}");
     }
 
     #[tokio::test]
-    async fn двоичный_файл_отвергается_понятно() {
+    async fn binary_file_is_rejected_clearly() {
         let dir = TempDir::new();
         std::fs::write(dir.path().join("bin"), [0u8, 1, 2, 3]).unwrap();
         let (ctx, _ws) = ctx_for(&dir);
@@ -262,7 +343,7 @@ mod tests {
             .run(&ctx, json!({ "path": "bin" }))
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("двоичный"));
+        assert!(err.to_string().contains("binary"));
     }
 
     #[tokio::test]
@@ -279,14 +360,53 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn несуществующий_файл_это_понятный_отказ() {
+    async fn missing_file_is_clear_refusal() {
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
 
         let err = ReadFile
-            .run(&ctx, json!({ "path": "нет-такого.rs" }))
+            .run(&ctx, json!({ "path": "no-such.rs" }))
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("не найдено"));
+        assert!(err.to_string().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn a_pdf_is_read_as_text_by_page() {
+        let dir = TempDir::new();
+        std::fs::write(
+            dir.path().join("spec.pdf"),
+            crate::tool::pdf::tests::pdf(&["The first page says hello", "The second one says bye"]),
+        )
+        .unwrap();
+        let (ctx, _ws) = ctx_for(&dir);
+
+        let out = ReadFile.run(&ctx, json!({ "path": "spec.pdf" })).await.unwrap();
+        assert!(out.text.contains("--- page 1 of 2 ---"), "{}", out.text);
+        assert!(out.text.contains("says bye"), "{}", out.text);
+        assert_eq!(out.meta.items, Some(2));
+
+        let one = ReadFile
+            .run(&ctx, json!({ "path": "spec.pdf", "pages": "2" }))
+            .await
+            .unwrap();
+        assert!(!one.text.contains("hello"));
+        assert!(one.text.contains("[1 of 2 pages shown]"), "{}", one.text);
+        assert!(one.meta.truncated);
+    }
+
+    #[tokio::test]
+    async fn a_notebook_is_read_as_cells_and_can_then_be_edited() {
+        let dir = TempDir::new();
+        let path = dir.write(
+            "a.ipynb",
+            r#"{"cells":[{"cell_type":"code","id":"c1","metadata":{},"outputs":[],"source":["x = 1"]}],"metadata":{},"nbformat":4,"nbformat_minor":5}"#,
+        );
+        let (ctx, ws) = ctx_for(&dir);
+
+        let out = ReadFile.run(&ctx, json!({ "path": "a.ipynb" })).await.unwrap();
+        assert!(out.text.starts_with("[cell 1 · code · id c1]\nx = 1\n"), "{}", out.text);
+        assert_eq!(out.meta.items, Some(1));
+        assert!(ws.was_read(&path));
     }
 }

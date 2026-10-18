@@ -39,14 +39,14 @@ fn host(url: &Url) -> &str {
 fn parse(input: &Value) -> Result<Url, ToolError> {
     let raw = input["url"]
         .as_str()
-        .ok_or_else(|| ToolError::failed("не задан url"))?;
+        .ok_or_else(|| ToolError::failed("missing url"))?;
     let url =
-        Url::parse(raw).map_err(|e| ToolError::failed(format!("плохой адрес `{raw}`: {e}")))?;
+        Url::parse(raw).map_err(|e| ToolError::failed(format!("invalid url `{raw}`: {e}")))?;
 
     match url.scheme() {
         "http" | "https" => Ok(url),
         other => Err(ToolError::failed(format!(
-            "схема `{other}` не поддерживается, нужен http или https"
+            "scheme `{other}` is not supported, http or https required"
         ))),
     }
 }
@@ -103,8 +103,8 @@ impl Tool for WebFetch {
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let start = parse(&input)?;
 
-        // До первого запроса за страницей: `robots.txt` — это про то, куда
-        // ходить, и спрашивать его после того, как сходил, поздно (§10).
+        // Before the first request for the page: robots.txt tells where
+        // to go, and asking for it after fetching is too late (§10).
         if ctx.respect_robots {
             robots::check(ctx, &start).await?;
         }
@@ -134,7 +134,7 @@ impl Tool for WebFetch {
         // the rest of the session is sharing.
         let rendered = tokio::task::spawn_blocking(move || page::render(&body, &content_type))
             .await
-            .map_err(|e| ToolError::failed(format!("разбор страницы не завершился: {e}")))??;
+            .map_err(|e| ToolError::failed(format!("failed to parse page: {e}")))??;
 
         // The feed gets the page, the model gets the page under a header. The
         // header says the content is data and not instructions, and that
@@ -172,7 +172,7 @@ async fn follow(ctx: &ToolCtx, start: Url) -> Result<(Url, reqwest::Response), T
 
         let response =
             net::client().get(url.clone()).send().await.map_err(|e| {
-                ToolError::failed(format!("не удалось загрузить {}: {e}", host(&url)))
+                ToolError::failed(format!("failed to fetch {}: {e}", host(&url)))
             })?;
 
         if !response.status().is_redirection() {
@@ -185,19 +185,19 @@ async fn follow(ctx: &ToolCtx, start: Url) -> Result<(Url, reqwest::Response), T
             .and_then(|v| v.to_str().ok())
             .and_then(|v| url.join(v).ok())
             .ok_or_else(|| {
-                ToolError::failed(format!("HTTP {} без Location", response.status().as_u16()))
+                ToolError::failed(format!("HTTP {} without Location", response.status().as_u16()))
             })?;
 
-        // Редирект внутри хоста ведёт на другой путь, а правила пишутся по
-        // путям: разрешённый адрес мог бы увести на запрещённый.
+        // An internal redirect leads to another path, and rules are written
+        // on paths: an allowed address could lead to a disallowed one.
         if ctx.respect_robots && host(&next) == host(&start) {
             robots::check(ctx, &next).await?;
         }
 
         if host(&next) != host(&start) {
             return Err(ToolError::Rejected(format!(
-                "редирект с {} на другой хост: {next}. Разрешение выдано на {}. \
-                 Повтори вызов с новым адресом, если он нужен.",
+                "redirect from {} to another host: {next}. Permission was granted for {}. \
+                 Repeat the call with the new URL if needed.",
                 host(&start),
                 host(&start)
             )));
@@ -207,7 +207,7 @@ async fn follow(ctx: &ToolCtx, start: Url) -> Result<(Url, reqwest::Response), T
     }
 
     Err(ToolError::failed(format!(
-        "больше {MAX_REDIRECTS} редиректов подряд"
+        "more than {MAX_REDIRECTS} consecutive redirects"
     )))
 }
 
@@ -308,15 +308,13 @@ mod tests {
         response("200 OK", &[("Content-Type", "text/plain")], body)
     }
 
-    /// Запрет из `robots.txt` — не сбой, а сработавшая граница: `Rejected`,
-    /// как у редиректа на чужой хост. И страницу никто не трогает.
+    /// A restriction from `robots.txt` is not a failure, but a tripped boundary: `Rejected`,
+    /// just like a redirect to a foreign host. And the page is not touched.
     #[tokio::test]
     async fn a_disallowed_path_is_refused_before_the_page_is_asked_for() {
         let (base, seen) = serve_robots(
-            Some(robots("User-agent: *
-Disallow: /private
-")),
-            vec![html("<p>секрет</p>")],
+            Some(robots("User-agent: *\nDisallow: /private\n")),
+            vec![html("<p>secret</p>")],
         )
         .await;
         let dir = TempDir::new();
@@ -331,18 +329,16 @@ Disallow: /private
         assert!(err.to_string().contains("/private"), "{err}");
 
         let requests = seen.lock().unwrap();
-        assert_eq!(requests.len(), 1, "за страницей ходить было нельзя");
+        assert_eq!(requests.len(), 1, "page must not be fetched");
         assert!(requests[0].contains("GET /robots.txt"), "{:?}", requests[0]);
     }
 
-    /// Путь, которого запрет не касается, забирается как обычно.
+    /// A path not affected by restrictions is fetched normally.
     #[tokio::test]
     async fn an_allowed_path_goes_through_with_robots_in_place() {
         let (base, seen) = serve_robots(
-            Some(robots("User-agent: *
-Disallow: /private
-")),
-            vec![html("<p>Открыто.</p>")],
+            Some(robots("User-agent: *\nDisallow: /private\n")),
+            vec![html("<p>Open.</p>")],
         )
         .await;
         let dir = TempDir::new();
@@ -353,14 +349,14 @@ Disallow: /private
             .await
             .unwrap();
 
-        assert!(out.text.contains("Открыто."));
+        assert!(out.text.contains("Open."));
         assert_eq!(seen.lock().unwrap().len(), 2);
     }
 
-    /// Выключатель §10 выключает: запрет читается, но не применяется.
+    /// Setting §10 disables the check: rules are read but not enforced.
     #[tokio::test]
     async fn the_setting_turns_the_whole_check_off() {
-        let (base, seen) = serve_seen(vec![html("<p>секрет</p>")]).await;
+        let (base, seen) = serve_seen(vec![html("<p>secret</p>")]).await;
         let dir = TempDir::new();
         let (mut ctx, _ws) = ctx_for(&dir);
         ctx.respect_robots = false;
@@ -370,22 +366,21 @@ Disallow: /private
             .await
             .unwrap();
 
-        assert!(out.text.contains("секрет"));
-        // Ни одного лишнего запроса: выключено — значит, `robots.txt` даже
-        // не спрашивают.
+        assert!(out.text.contains("secret"));
+        // Not a single extra request: disabled means robots.txt is not even requested.
         let requests = seen.lock().unwrap();
         assert_eq!(requests.len(), 1);
         assert!(requests[0].contains("GET /private/page"), "{:?}", requests[0]);
     }
 
-    /// Не ответивший `robots.txt` разрешает, а не запрещает: человек только
-    /// что сам разрешил этот домен, и упавший на секунду сервер не должен
-    /// закрывать страницу молча.
+    /// An unreachable `robots.txt` allows rather than blocks: the user just
+    /// manually allowed the domain, and a server down for a second should
+    /// not silently close the page.
     #[tokio::test]
     async fn an_unreachable_robots_file_allows_rather_than_blocks() {
         let (base, _seen) = serve_robots(
-            Some(response("503 Service Unavailable", &[], "увы")),
-            vec![html("<p>Страница.</p>")],
+            Some(response("503 Service Unavailable", &[], "service down")),
+            vec![html("<p>Page.</p>")],
         )
         .await;
         let dir = TempDir::new();
@@ -396,18 +391,15 @@ Disallow: /private
             .await
             .unwrap();
 
-        assert!(out.text.contains("Страница."));
+        assert!(out.text.contains("Page."));
     }
 
-    /// Файл читается один раз на хост: без кэша каждая страница стоила бы
-    /// двух запросов.
+    /// The file is read once per host: without cache each page would cost two requests.
     #[tokio::test]
     async fn robots_is_read_once_per_host() {
         let (base, seen) = serve_robots(
-            Some(robots("User-agent: *
-Disallow: /private
-")),
-            vec![html("<p>Раз.</p>"), html("<p>Два.</p>")],
+            Some(robots("User-agent: *\nDisallow: /private\n")),
+            vec![html("<p>One.</p>"), html("<p>Two.</p>")],
         )
         .await;
         let dir = TempDir::new();
@@ -433,7 +425,7 @@ Disallow: /private
     /// better than a page fetched under a false name.
     #[tokio::test]
     async fn the_request_names_yaca_in_its_user_agent() {
-        let (base, seen) = serve_seen(vec![html("<p>Текст.</p>")]).await;
+        let (base, seen) = serve_seen(vec![html("<p>Text.</p>")]).await;
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
 
@@ -446,16 +438,15 @@ Disallow: /private
         let lowered = request.to_lowercase();
         assert!(
             lowered.contains("user-agent: yacatraveler/"),
-            "нет заголовка или не то имя:
-{request}"
+            "missing header or unexpected name:\n{request}"
         );
-        // Не браузер: строка Mozilla открыла бы больше дверей, но соврав.
+        // Not a browser: Mozilla string would open more doors, but dishonesty.
         assert!(!lowered.contains("mozilla"), "{request}");
     }
 
     #[tokio::test]
     async fn a_page_reaches_the_model_as_markdown_under_a_warning() {
-        let base = serve(vec![html("<h1>Заголовок</h1><p>Текст.</p>")]).await;
+        let base = serve(vec![html("<h1>Heading</h1><p>Text.</p>")]).await;
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
 
@@ -464,7 +455,7 @@ Disallow: /private
             .await
             .unwrap();
 
-        assert!(out.text.contains("# Заголовок"));
+        assert!(out.text.contains("# Heading"));
         assert!(out.text.contains(net::UNTRUSTED));
         assert!(out.text.contains("· 200 · text/html ·"));
         assert!(out.text.contains(&format!("{base}/page")));
@@ -476,7 +467,7 @@ Disallow: /private
         // §5.5.1 shows the human what was on the page. The line about
         // untrusted content is addressed to the model and would read as
         // gibberish in the feed.
-        let base = serve(vec![html("<h1>Заголовок</h1>")]).await;
+        let base = serve(vec![html("<h1>Heading</h1>")]).await;
         let dir = TempDir::new();
         let (ctx, mut events) = ctx_with_events(&dir);
 
@@ -488,15 +479,15 @@ Disallow: /private
                 _ => continue,
             }
         };
-        assert_eq!(chunk, "# Заголовок");
-        assert!(ctx.progress.used(), "лента получит текст дважды");
+        assert_eq!(chunk, "# Heading");
+        assert!(ctx.progress.used(), "feed would receive text twice");
     }
 
     #[tokio::test]
     async fn a_redirect_inside_the_host_is_followed() {
         let base = serve(vec![
             response("301 Moved Permanently", &[("Location", "/moved")], ""),
-            html("<h1>Приехали</h1>"),
+            html("<h1>Arrived</h1>"),
         ])
         .await;
         let dir = TempDir::new();
@@ -504,7 +495,7 @@ Disallow: /private
 
         let out = WebFetch.run(&ctx, json!({ "url": base })).await.unwrap();
 
-        assert!(out.text.contains("# Приехали"));
+        assert!(out.text.contains("# Arrived"));
         // The final URL is what the model is told, not the one it asked for.
         assert!(out.text.contains("/moved"), "{}", out.text);
     }
@@ -540,7 +531,7 @@ Disallow: /private
             .run(&ctx, json!({ "url": base }))
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("без Location"));
+        assert!(err.to_string().contains("without Location"));
     }
 
     #[tokio::test]
@@ -572,7 +563,7 @@ Disallow: /private
             .run(&ctx, json!({ "url": base }))
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("больше 5 МиБ"), "{err}");
+        assert!(err.to_string().contains("exceeds 5 MiB"), "{err}");
     }
 
     #[tokio::test]
@@ -583,16 +574,16 @@ Disallow: /private
         for bad in ["ftp://example.com/x", "file:///etc/passwd"] {
             let err = WebFetch.run(&ctx, json!({ "url": bad })).await.unwrap_err();
             assert!(
-                err.to_string().contains("не поддерживается"),
+                err.to_string().contains("not supported"),
                 "{bad}: {err}"
             );
         }
 
         let err = WebFetch
-            .run(&ctx, json!({ "url": "не адрес вовсе" }))
+            .run(&ctx, json!({ "url": "not a url at all" }))
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("плохой адрес"), "{err}");
+        assert!(err.to_string().contains("invalid url"), "{err}");
     }
 
     #[test]

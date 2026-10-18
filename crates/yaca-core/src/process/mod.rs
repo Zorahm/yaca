@@ -39,7 +39,7 @@ impl std::fmt::Display for ProcessId {
     }
 }
 
-/// The `состояние` column of §6.5.
+/// The "state" column of §6.5.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -65,7 +65,7 @@ pub struct ProcessSummary {
     pub cwd: String,
     pub state: ProcessState,
     pub started_at: TsMillis,
-    /// `None` while running. The `время работы` column is the difference
+    /// `None` while running. The "uptime" column is the difference
     /// between these two, counted by the interface — a core that ticked a
     /// clock event every second would say nothing new each time.
     pub finished_at: Option<TsMillis>,
@@ -165,6 +165,22 @@ struct Inner {
     /// Bumped whenever a command ends, so a tool can wait for a stop to land
     /// instead of polling the table.
     ended: watch::Sender<u64>,
+    /// Bumped whenever a command prints, so `BashWait` can look at new lines
+    /// as they come instead of polling the buffer.
+    printed: watch::Sender<u64>,
+}
+
+/// Why [`Processes::wait_for`] stopped waiting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Waited {
+    /// A line the model has not read yet matches the pattern.
+    Matched,
+    /// The command is no longer running.
+    Ended,
+    /// Neither happened in time.
+    TimedOut,
+    /// The turn was cancelled.
+    Cancelled,
 }
 
 /// The session's background commands. Cloneable handle: the dispatcher answers
@@ -181,6 +197,7 @@ impl Processes {
             watched: Mutex::new(None),
             notices: Mutex::new(Vec::new()),
             ended: watch::channel(0).0,
+            printed: watch::channel(0).0,
         }))
     }
 
@@ -263,6 +280,7 @@ impl Processes {
                 entry.ring.push(line);
             }
         });
+        self.0.printed.send_modify(|n| *n += 1);
 
         if *self.watched() == Some(id) {
             self.0.events.emit(AgentEvent::ProcessOutput { id, chunk });
@@ -352,6 +370,49 @@ impl Processes {
         tokio::time::timeout(limit, waiting).await.is_ok()
     }
 
+    /// Waits until a line printed since the model last read matches `until`,
+    /// the command stops running, `limit` passes, or `cancel` fires — the first
+    /// of these. `None` when there is no such command.
+    ///
+    /// Nothing is read here: the lines stay unread, for `BashOutput` (or the
+    /// caller) to hand over. A match is checked before the ending, so a server
+    /// that printed "ready" and then crashed is reported as having printed it.
+    pub async fn wait_for(
+        &self,
+        id: ProcessId,
+        until: Option<&regex::Regex>,
+        limit: Duration,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> Option<Waited> {
+        // Subscribed before the first look, for the reason `wait_ended` is.
+        let mut printed = self.0.printed.subscribe();
+        let mut ended = self.0.ended.subscribe();
+        let deadline = tokio::time::sleep(limit);
+        tokio::pin!(deadline);
+        loop {
+            let (matched, running) = self.with_table(|table| {
+                let entry = table.get(&id)?;
+                let matched = until.is_some_and(|re| {
+                    let (lines, _) = entry.ring.since(entry.cursor);
+                    lines.iter().any(|line| re.is_match(line))
+                });
+                Some((matched, entry.state == ProcessState::Running))
+            })?;
+            if matched {
+                return Some(Waited::Matched);
+            }
+            if !running {
+                return Some(Waited::Ended);
+            }
+            tokio::select! {
+                _ = printed.changed() => {}
+                _ = ended.changed() => {}
+                _ = &mut deadline => return Some(Waited::TimedOut),
+                _ = cancel.cancelled() => return Some(Waited::Cancelled),
+            }
+        }
+    }
+
     /// Puts a finished command back in the panel under its old number, running
     /// again. The buffer is kept — what the old run printed and the model has
     /// not read yet is exactly what explains why it was restarted — and a
@@ -368,7 +429,7 @@ impl Processes {
             if entry.state == ProcessState::Running {
                 return false;
             }
-            entry.ring.push("[перезапуск]".to_string());
+            entry.ring.push("[restart]".to_string());
             entry.state = ProcessState::Running;
             entry.started_at = TsMillis::now();
             entry.finished_at = None;
@@ -450,6 +511,23 @@ impl Processes {
             self.notices().retain(|n| n.id != id);
         }
         read
+    }
+
+    /// Everything a command has printed, for `SendText`: the file its whole
+    /// output goes to when it has one, the buffer otherwise. With the command
+    /// line. `None` when there is no such command. Does not move the read
+    /// cursor: showing output to the human is not the model reading it.
+    pub fn full_output(&self, id: ProcessId) -> Option<(String, String)> {
+        let (command, file, buffered) = self.with_table(|table| {
+            table
+                .get(&id)
+                .map(|e| (e.command.clone(), e.file.clone(), e.ring.text()))
+        })?;
+        let text = file
+            .and_then(|file| std::fs::read(file).ok())
+            .map(|bytes| String::from_utf8_lossy(&bytes).replace("\r\n", "\n"))
+            .unwrap_or(buffered);
+        Some((command, text))
     }
 
     pub fn is_empty(&self) -> bool {

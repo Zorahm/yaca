@@ -15,7 +15,13 @@
 import { Check } from "@phosphor-icons/react";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
-import { modelResidency, providers as registry, type ModelInfo } from "../core/client";
+import {
+  modelResidency,
+  providers as registry,
+  ROUTER_PROVIDER_ID,
+  routingStatus,
+  type ModelInfo,
+} from "../core/client";
 import { t } from "../i18n";
 import { ProviderMark } from "./brand";
 import {
@@ -54,6 +60,8 @@ export function ModelMenu({
   /** Provider names by id: a model knows only the id of who serves it. */
   const [names, setNames] = useState<Map<string, string>>(new Map());
   const [recent, setRecent] = useState<string[]>([]);
+  /** Why the router is not in the list, when `routing.json` is there and unusable. */
+  const [routerError, setRouterError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   /** The row `⏎` takes, as an index into `rows`. */
   const [at, setAt] = useState(0);
@@ -81,6 +89,14 @@ export function ModelMenu({
       },
       () => undefined,
     );
+    // A file that is there and does not work is said here: a router that just
+    // is not in the list reads as a feature that was never set up.
+    routingStatus().then(
+      (status) => {
+        if (live) setRouterError(status.state === "broken" ? status.error : null);
+      },
+      () => undefined,
+    );
     setRecent(parseRecent(localStorage.getItem(RECENT_KEY)));
     setQuery("");
     setAt(0);
@@ -93,7 +109,8 @@ export function ModelMenu({
     m.id === model && (!provider || !m.providerId || m.providerId === provider);
 
   const sections = useMemo(() => {
-    const nameOf = (id: string) => names.get(id) ?? id;
+    const nameOf = (id: string) =>
+      id === ROUTER_PROVIDER_ID ? t("routing.title") : (names.get(id) ?? id);
     const found: ModelGroup[] = groupsOf(models, nameOf, query.trim());
     // The recent models are a shortcut past the search, not a result of it:
     // under a query they would only show the same model twice.
@@ -196,7 +213,10 @@ export function ModelMenu({
                       <span className="menu-note">
                         {/* Among the recent ones the heading does not say
                             who serves the model, so the row does. */}
-                        {section.provider === "" && (names.get(m.providerId) ?? m.providerId)}
+                        {section.provider === "" &&
+                          (m.providerId === ROUTER_PROVIDER_ID
+                            ? t("routing.title")
+                            : (names.get(m.providerId) ?? m.providerId))}
                         {unloaded && section.provider === "" && " · "}
                         {unloaded && t("composer.model_unloaded")}
                       </span>
@@ -212,6 +232,9 @@ export function ModelMenu({
             ))}
             {rows.length === 0 && (
               <div className="menu-empty">{t("composer.model_none")}</div>
+            )}
+            {routerError !== null && (
+              <div className="menu-empty">{t("routing.menu_broken", { error: routerError })}</div>
             )}
           </div>
         </div>

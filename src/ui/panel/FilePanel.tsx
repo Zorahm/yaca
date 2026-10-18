@@ -21,7 +21,9 @@ import {
   CaretDown,
   CaretUp,
   Check,
+  Code,
   Copy,
+  Eye,
   MagnifyingGlass,
   X,
 } from "@phosphor-icons/react";
@@ -32,6 +34,7 @@ import type { Feed } from "../../core/feed";
 import { t } from "../../i18n";
 import { Diff } from "../Diff";
 import { plainPath } from "../format";
+import { MarkdownDoc } from "../MarkdownDoc";
 import { useCopy } from "../useCopy";
 import { Panel } from "./Panel";
 
@@ -67,6 +70,12 @@ export function FilePanel({
   const ready = shown !== undefined && shown !== null && !gone;
 
   const [full, setFull] = useState(false);
+  // The rendered view exists only for Markdown; a search runs over the lines
+  // of the code view, so opening the render closes it.
+  const markdown = /\.(md|markdown|mdown|mkd)$/i.test(path);
+  const [view, setView] = useState<"code" | "render">("code");
+  const rendered = markdown && view === "render";
+  const text = useMemo(() => lines.map((line) => line.text).join("\n"), [lines]);
   const { copied, copy } = useCopy();
 
   // `null` — поиск закрыт. Открытый с пустой строкой ничего не находит.
@@ -93,7 +102,7 @@ export function FilePanel({
         setQuery(null);
       }}
       onKeyDown={(event) => {
-        if (ready && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+        if (ready && !rendered && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
           event.preventDefault();
           setQuery((now) => now ?? "");
         }
@@ -101,12 +110,34 @@ export function FilePanel({
     >
       <div className="file-bar">
         <span className="file-path">{plainPath(path)}</span>
+        {markdown && (
+          <div className="file-view" role="group">
+            {(["code", "render"] as const).map((kind) => {
+              const label = t(kind === "code" ? "file.view_code" : "file.view_render");
+              return (
+                <button
+                  key={kind}
+                  className="file-view-btn"
+                  aria-pressed={view === kind}
+                  title={label}
+                  onClick={() => {
+                    setView(kind);
+                    if (kind === "render") setQuery(null);
+                  }}
+                >
+                  {kind === "code" ? <Code size={14} /> : <Eye size={14} />}
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <button
           className="top-icon"
           aria-label={t("file.search")}
           title={t("file.search")}
           aria-pressed={query !== null}
-          disabled={!ready}
+          disabled={!ready || rendered}
           onClick={() => setQuery((now) => (now === null ? "" : null))}
         >
           <MagnifyingGlass size={15} />
@@ -116,7 +147,7 @@ export function FilePanel({
           aria-label={copyLabel}
           title={copyLabel}
           disabled={!ready}
-          onClick={() => copy(lines.map((line) => line.text).join("\n"))}
+          onClick={() => copy(text)}
         >
           {copied ? <Check size={15} weight="bold" /> : <Copy size={15} />}
         </button>
@@ -130,7 +161,7 @@ export function FilePanel({
         </button>
       </div>
 
-      {query !== null && (
+      {query !== null && !rendered && (
         <div className="file-search">
           <input
             className="file-search-input"
@@ -182,7 +213,13 @@ export function FilePanel({
       <div className="panel-file">
         {shown === undefined && <div className="panel-empty">{t("file.loading")}</div>}
         {gone && <div className="panel-empty">{t("file.unavailable")}</div>}
-        {ready && (
+        {ready && rendered && (
+          <div className="md-scroll">
+            <MarkdownDoc text={text} />
+            {shown.truncated && <div className="md-note">{t("file.truncated")}</div>}
+          </div>
+        )}
+        {ready && !rendered && (
           <Diff
             body={{
               lines,

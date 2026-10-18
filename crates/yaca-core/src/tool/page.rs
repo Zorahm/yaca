@@ -21,7 +21,7 @@ const SKIP_TAGS: &[&str] = &[
 ];
 
 /// A body that turned out not to be text at all.
-const NOT_TEXT: &str = "не текст";
+const NOT_TEXT: &str = "not text";
 
 #[derive(Debug)]
 pub(crate) struct Rendered {
@@ -121,7 +121,7 @@ pub(crate) fn render(bytes: &[u8], content_type: &str) -> Result<Rendered, ToolE
             .skip_tags(SKIP_TAGS.to_vec())
             .build()
             .convert(&decoded)
-            .map_err(|e| ToolError::failed(format!("не разобрал HTML: {e}")))?,
+            .map_err(|e| ToolError::failed(format!("failed to parse HTML: {e}")))?,
     };
     let text = text.trim().to_string();
 
@@ -157,7 +157,7 @@ fn cut(text: String) -> Rendered {
     let head = &text[..end];
     let shown = head.chars().count();
     Rendered {
-        text: format!("{head}\n\n[… страница обрезана: показано {shown} из {chars} символов …]"),
+        text: format!("{head}\n\n[… page truncated: showing {shown} of {chars} characters …]"),
         chars,
         truncated: true,
     }
@@ -175,18 +175,18 @@ mod tests {
     fn furniture_does_not_reach_the_model() {
         let page = html(
             "<html><body>\
-             <nav><a href='/x'>Главная</a></nav>\
+             <nav><a href='/x'>Home</a></nav>\
              <script>alert(1)</script>\
              <style>body{color:red}</style>\
-             <h1>Заголовок</h1><p>Текст статьи.</p>\
+             <h1>Title</h1><p>Article body.</p>\
              <footer>© 2026</footer>\
              </body></html>",
         );
 
-        assert!(page.text.contains("# Заголовок"));
-        assert!(page.text.contains("Текст статьи."));
-        for gone in ["Главная", "alert", "color:red", "© 2026"] {
-            assert!(!page.text.contains(gone), "{gone} осталось в тексте");
+        assert!(page.text.contains("# Title"));
+        assert!(page.text.contains("Article body."));
+        for gone in ["Home", "alert", "color:red", "© 2026"] {
+            assert!(!page.text.contains(gone), "{gone} remained in text");
         }
     }
 
@@ -208,17 +208,17 @@ mod tests {
 
     #[test]
     fn a_declared_charset_is_honoured() {
-        // "Привет" in windows-1251. Decoded as UTF-8 it would be mojibake, and
+        // "Café" in windows-1252. Decoded as UTF-8 it would be mojibake, and
         // mojibake in the feed is the interface lying about the page (§0).
-        let body: &[u8] = &[0xCF, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2];
-        let page = render(body, "text/plain; charset=windows-1251").unwrap();
-        assert_eq!(page.text, "Привет");
+        let body: &[u8] = &[b'C', b'a', b'f', 0xE9];
+        let page = render(body, "text/plain; charset=windows-1252").unwrap();
+        assert_eq!(page.text, "Café");
     }
 
     #[test]
     fn an_unknown_charset_falls_back_to_utf8() {
-        let page = render("Привет".as_bytes(), "text/plain; charset=x-made-up").unwrap();
-        assert_eq!(page.text, "Привет");
+        let page = render("Hello".as_bytes(), "text/plain; charset=x-made-up").unwrap();
+        assert_eq!(page.text, "Hello");
     }
 
     #[test]
@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn a_long_page_is_cut_at_a_line_with_a_note() {
-        let line = "строка текста, которая занимает какое-то место\n";
+        let line = "a line of text that takes up some space on each row\n";
         let body = line.repeat(4_000);
         let chars = body.trim().chars().count();
         assert!(body.len() > MODEL_OUTPUT_MAX_BYTES);
@@ -253,10 +253,10 @@ mod tests {
         assert!(page.truncated);
         assert_eq!(page.chars, chars);
         assert!(page.text.len() < MODEL_OUTPUT_MAX_BYTES + 200);
-        assert!(page.text.contains(&format!("из {chars} символов")));
+        assert!(page.text.contains(&format!("of {chars} characters")));
         // The cut lands on a line break, not inside a word.
         let head = page.text.split("\n\n[…").next().unwrap();
-        assert!(head.ends_with("место"), "обрезано посреди строки");
+        assert!(head.ends_with("row"), "cut in the middle of a line");
     }
 
     #[test]
@@ -264,7 +264,7 @@ mod tests {
         let page = render(b"two words", "text/plain").unwrap();
         assert!(!page.truncated);
         assert_eq!(page.chars, 9);
-        assert!(!page.text.contains("обрезана"));
+        assert!(!page.text.contains("truncated"));
     }
 
     #[test]

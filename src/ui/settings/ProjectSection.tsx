@@ -1,5 +1,6 @@
 /**
- * Проект (§10): файл инструкций, исключения теневого хранилища, свои команды.
+ * Проект (§10): файл инструкций, исключения теневого хранилища, свои команды,
+ * навыки.
  *
  * Инструкции и команды показаны, но не правятся: это файлы в дереве, и место,
  * где их меняют, — редактор, а не окно настроек. Окно говорит, какой файл в
@@ -17,11 +18,20 @@ import { useEffect, useState } from "react";
 import {
   projectCommands,
   projectInstructions,
+  projectSkills,
   shadowExcludedDirs,
+  type SkillReport,
   type SlashCommand,
   type Settings,
 } from "../../core/client";
-import { t } from "../../i18n";
+import { t, type Key } from "../../i18n";
+import { plainPath } from "../format";
+
+const SCOPE: Record<SkillReport["skills"][number]["scope"], Key> = {
+  project: "proj.skills_project",
+  user: "proj.skills_user",
+  plugin: "proj.skills_plugin",
+};
 
 export function ProjectSection({
   project,
@@ -34,6 +44,7 @@ export function ProjectSection({
 }) {
   const [instructions, setInstructions] = useState<string | null>(null);
   const [commands, setCommands] = useState<SlashCommand[]>([]);
+  const [skills, setSkills] = useState<SkillReport>({ skills: [], diagnostics: [] });
   const [fixed, setFixed] = useState<string[]>([]);
   const [adding, setAdding] = useState("");
 
@@ -60,6 +71,10 @@ export function ProjectSection({
       (list) => live && setCommands(list),
       () => live && setCommands([]),
     );
+    void projectSkills(project).then(
+      (report) => live && setSkills(report),
+      () => live && setSkills({ skills: [], diagnostics: [] }),
+    );
     return () => {
       live = false;
     };
@@ -82,7 +97,7 @@ export function ProjectSection({
       <div className="set-head">
         <div>
           <h1 className="set-title">{t("proj.title")}</h1>
-          <p className="set-lede">{project}</p>
+          <p className="set-lede">{plainPath(project)}</p>
         </div>
       </div>
 
@@ -167,6 +182,50 @@ export function ProjectSection({
           </div>
         ))}
       </div>
+
+      <div className="set-subhead set-subhead-sep">
+        <div>
+          <span className="set-subname">{t("proj.skills")}</span>
+          <span className="set-subhint">{t("proj.skills_hint")}</span>
+        </div>
+      </div>
+
+      {skills.skills.length === 0 && <div className="set-empty">{t("proj.skills_none")}</div>}
+      <div className="prov-list">
+        {skills.skills.map((skill) => (
+          <div key={skill.name} className="prov plug" title={skill.path}>
+            <div className="prov-main">
+              <span className="prov-name skill-name">{skill.name}</span>
+              <span className="plug-desc">{skill.description}</span>
+              {!skill.modelInvocable && <span className="plug-note">{t("proj.skills_slash_only")}</span>}
+            </div>
+            <span className="prov-proto">{t(SCOPE[skill.scope])}</span>
+          </div>
+        ))}
+      </div>
+
+      {skills.diagnostics.length > 0 && (
+        <>
+          <div className="set-subhead set-subhead-sep">
+            <div>
+              <span className="set-subname">{t("proj.skills_problems")}</span>
+            </div>
+          </div>
+          <div className="set-list">
+            {skills.diagnostics.map((d, at) => (
+              <div key={`${d.path}-${at}`} className="diag" data-skipped={d.skipped || undefined}>
+                <span className="diag-message">
+                  <span className="diag-kind">
+                    {d.skipped ? t("proj.skills_skipped") : t("proj.skills_warning")}
+                  </span>{" "}
+                  {d.message}
+                </span>
+                <span className="diag-path">{d.path}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </>
   );
 }

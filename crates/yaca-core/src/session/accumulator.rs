@@ -36,6 +36,17 @@ pub enum Garbled {
     Invalid,
 }
 
+/// The model a routing provider picked for one request, as it was reported.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RouteDecision {
+    /// The name of the matched decision; `None` when the default was used.
+    pub route: Option<String>,
+    pub provider: String,
+    pub model: String,
+    /// The names of the signals that were read to make the choice.
+    pub matched: Vec<String>,
+}
+
 #[derive(Debug)]
 pub struct Completion {
     /// Response blocks in the form they will be sent back to the history.
@@ -43,6 +54,14 @@ pub struct Completion {
     pub calls: Vec<PendingCall>,
     pub stop_reason: StopReason,
     pub usage: TokenCounts,
+    /// `(provider, model)` the request was routed to, from the last `Routed`
+    /// the request carried; `None` when the provider did not route it. The
+    /// request is priced by this model, not by the session's one: the session
+    /// knows only the virtual model a router presents. The pair is what
+    /// identifies a model in the list (`ModelInfo::provider_id`), and the
+    /// provider's own `MessageStart.model` is not used — aliases and dated ids
+    /// there do not match the configured ids.
+    pub routed: Option<(String, String)>,
 }
 
 #[derive(Debug)]
@@ -72,6 +91,9 @@ pub struct Accumulator {
     blocks: BTreeMap<u32, Partial>,
     stop_reason: Option<StopReason>,
     usage: TokenCounts,
+    /// The last `Routed` of this request. Not a feed event here: the turn
+    /// decides whether the human sees it, once per turn (`turn::steps`).
+    route: Option<RouteDecision>,
 }
 
 impl Accumulator {
@@ -81,12 +103,33 @@ impl Accumulator {
             blocks: BTreeMap::new(),
             stop_reason: None,
             usage: TokenCounts::default(),
+            route: None,
         }
+    }
+
+    /// The model this request was routed to, as far as it has been reported.
+    pub fn route(&self) -> Option<&RouteDecision> {
+        self.route.as_ref()
     }
 
     /// Feeds in a provider event, returns the feed events it produces.
     pub fn push(&mut self, event: ProviderEvent) -> Vec<AgentEvent> {
         match event {
+            ProviderEvent::Routed {
+                route,
+                provider,
+                model,
+                matched,
+            } => {
+                self.route = Some(RouteDecision {
+                    route,
+                    provider,
+                    model,
+                    matched,
+                });
+                vec![]
+            }
+
             ProviderEvent::MessageStart { usage, .. } => {
                 self.usage.add(usage);
                 vec![]
@@ -244,12 +287,15 @@ impl Accumulator {
             }
         }
 
+        let routed = self.route.map(|r| (r.provider, r.model));
+
         Completion {
             blocks,
             calls,
             // A stream cut off without a `message_delta` counts as the turn having ended.
             stop_reason: self.stop_reason.unwrap_or(StopReason::EndTurn),
             usage: self.usage,
+            routed,
         }
     }
 }
@@ -269,22 +315,22 @@ mod tests {
     }
 
     #[test]
-    fn текст_склеивается_в_один_блок_и_течёт_дельтами() {
-        let (events, done) = feed(mock::script_text("привет"));
+    fn text_concatenates_into_one_block_and_streams_as_deltas() {
+        let (events, done) = feed(mock::script_text("hello"));
 
         assert_eq!(events.len(), 1);
-        assert!(matches!(&events[0], AgentEvent::TextDelta { text, .. } if text == "привет"));
+        assert!(matches!(&events[0], AgentEvent::TextDelta { text, .. } if text == "hello"));
         assert_eq!(
             done.blocks,
             vec![ContentBlock::Text {
-                text: "привет".into()
+                text: "hello".into()
             }]
         );
         assert_eq!(done.stop_reason, StopReason::EndTurn);
     }
 
     #[test]
-    fn дельты_одного_блока_делят_один_block_id() {
+    fn deltas_of_the_same_block_share_one_block_id() {
         let mut acc = Accumulator::new(TurnId::from("t"));
         acc.push(ProviderEvent::BlockStart {
             index: 0,
@@ -292,32 +338,32 @@ mod tests {
         });
         let a = acc.push(ProviderEvent::TextDelta {
             index: 0,
-            text: "раз".into(),
+            text: "one".into(),
         });
         let b = acc.push(ProviderEvent::TextDelta {
             index: 0,
-            text: "два".into(),
+            text: "two".into(),
         });
 
         let id = |e: &AgentEvent| match e {
             AgentEvent::TextDelta { block_id, .. } => block_id.clone(),
-            _ => panic!("не дельта"),
+            _ => panic!("not a delta"),
         };
         assert_eq!(id(&a[0]), id(&b[0]));
         assert_eq!(
             acc.finish().blocks[0],
             ContentBlock::Text {
-                text: "раздва".into()
+                text: "onetwo".into()
             }
         );
     }
 
     #[test]
-    fn аргументы_тула_склеиваются_из_кусков() {
+    fn tool_arguments_are_assembled_from_chunks() {
         let (_, done) = feed(mock::script_tool_call(
             "toolu_1",
             "Read",
-            serde_json::json!({ "path": "src/main.rs", "description": "Прочитал точку входа" }),
+            serde_json::json!({ "path": "src/main.rs", "description": "Read entry point" }),
         ));
 
         assert_eq!(done.stop_reason, StopReason::ToolUse);
@@ -327,7 +373,7 @@ mod tests {
     }
 
     #[test]
-    fn битый_json_аргументов_не_роняет_турн() {
+    fn corrupted_arguments_json_does_not_crash_turn() {
         let mut acc = Accumulator::new(TurnId::from("t"));
         acc.push(ProviderEvent::BlockStart {
             index: 0,
@@ -395,39 +441,67 @@ mod tests {
     }
 
     #[test]
-    fn подпись_рассуждения_сохраняется_для_отправки_обратно() {
-        let (events, done) = feed(mock::script_thinking("думаю", "ответ"));
+    fn thinking_signature_is_preserved_for_echoing_back() {
+        let (events, done) = feed(mock::script_thinking("thinking", "answer"));
 
         assert!(matches!(events[0], AgentEvent::ThinkingDelta { .. }));
         assert!(matches!(events[1], AgentEvent::TextDelta { .. }));
         assert_eq!(
             done.blocks[0],
             ContentBlock::Thinking {
-                thinking: "думаю".into(),
+                thinking: "thinking".into(),
                 signature: Some("sig".into()),
             }
         );
     }
 
     #[test]
-    fn счётчики_суммируются_из_начала_и_конца_сообщения() {
+    fn token_counts_are_summed_from_message_start_and_end() {
         let (_, done) = feed(mock::script_text("x"));
         assert_eq!(done.usage.input, 100);
         assert_eq!(done.usage.output, 20);
     }
 
     #[test]
-    fn дельта_без_начала_блока_не_теряет_текст() {
+    fn a_routed_request_reports_its_model_without_a_feed_event() {
+        let mut acc = Accumulator::new(TurnId::from("t"));
+        let out = acc.push(ProviderEvent::Routed {
+            route: Some("code".into()),
+            provider: "local".into(),
+            model: "qwen-coder".into(),
+            matched: vec!["keyword:refactor".into()],
+        });
+        assert!(out.is_empty(), "the turn decides what is shown: {out:?}");
+        assert_eq!(acc.route().map(|r| r.model.as_str()), Some("qwen-coder"));
+
+        for ev in mock::script_text("hi") {
+            acc.push(ev);
+        }
+        let done = acc.finish();
+        assert_eq!(
+            done.routed,
+            Some(("local".to_string(), "qwen-coder".to_string()))
+        );
+    }
+
+    #[test]
+    fn a_request_without_routing_has_no_routed_model() {
+        let (_, done) = feed(mock::script_text("hi"));
+        assert_eq!(done.routed, None);
+    }
+
+    #[test]
+    fn delta_without_block_start_does_not_lose_text() {
         let mut acc = Accumulator::new(TurnId::from("t"));
         let out = acc.push(ProviderEvent::TextDelta {
             index: 7,
-            text: "осиротевший".into(),
+            text: "orphaned".into(),
         });
         assert_eq!(out.len(), 1);
         assert_eq!(
             acc.finish().blocks[0],
             ContentBlock::Text {
-                text: "осиротевший".into()
+                text: "orphaned".into()
             }
         );
     }

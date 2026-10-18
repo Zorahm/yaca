@@ -95,22 +95,42 @@ impl QuestionRequest {
         };
 
         if selected.iter().any(|&i| i as usize >= self.options.len()) {
-            return Some("такого варианта нет");
+            return Some("no such option");
         }
         let mut seen = selected.clone();
         seen.sort_unstable();
         seen.dedup();
         if seen.len() != selected.len() {
-            return Some("вариант выбран дважды");
+            return Some("option selected twice");
         }
         if !self.multi_select && selected.len() > 1 {
-            return Some("можно выбрать только один вариант");
+            return Some("only one option can be selected");
         }
         match other {
-            Some(_) if !self.allow_other => Some("свой ответ здесь не предусмотрен"),
-            Some(text) if text.trim().is_empty() => Some("ответ пустой"),
-            _ if selected.is_empty() && other.is_none() => Some("ответ пустой"),
+            Some(_) if !self.allow_other => Some("custom answer is not allowed here"),
+            Some(text) if text.trim().is_empty() => Some("answer is empty"),
+            _ if selected.is_empty() && other.is_none() => Some("answer is empty"),
             _ => None,
+        }
+    }
+
+    /// The reply as the agent is to hear it, once [`refuses`](Self::refuses)
+    /// has let it stand.
+    ///
+    /// A multi-choice question (checkboxes) adds what the human wrote to what
+    /// they ticked. A single-choice one (radio) is answered by one thing: when
+    /// the human both picked an option and wrote their own answer, the written
+    /// one is what they meant, and the pick is dropped.
+    pub fn settle(&self, reply: QuestionReply) -> QuestionReply {
+        match reply {
+            QuestionReply::Answered {
+                selected,
+                other: Some(text),
+            } if !self.multi_select && !selected.is_empty() => QuestionReply::Answered {
+                selected: Vec::new(),
+                other: Some(text),
+            },
+            reply => reply,
         }
     }
 }
@@ -150,7 +170,7 @@ mod tests {
     fn an_index_past_the_options_is_refused() {
         assert_eq!(
             request(3, true, false).refuses(&picked(&[3])),
-            Some("такого варианта нет")
+            Some("no such option")
         );
     }
 
@@ -158,7 +178,7 @@ mod tests {
     fn two_picks_need_multi_select() {
         assert_eq!(
             request(3, true, false).refuses(&picked(&[0, 1])),
-            Some("можно выбрать только один вариант")
+            Some("only one option can be selected")
         );
         assert_eq!(request(3, true, true).refuses(&picked(&[0, 1])), None);
     }
@@ -167,7 +187,7 @@ mod tests {
     fn the_same_option_twice_is_refused() {
         assert_eq!(
             request(3, true, true).refuses(&picked(&[1, 1])),
-            Some("вариант выбран дважды")
+            Some("option selected twice")
         );
     }
 
@@ -179,7 +199,7 @@ mod tests {
         };
         assert_eq!(
             request(2, false, false).refuses(&reply),
-            Some("свой ответ здесь не предусмотрен")
+            Some("custom answer is not allowed here")
         );
         assert_eq!(request(2, true, false).refuses(&reply), None);
     }
@@ -188,7 +208,7 @@ mod tests {
     fn an_empty_answer_is_refused_and_a_blank_one_too() {
         assert_eq!(
             request(2, true, false).refuses(&picked(&[])),
-            Some("ответ пустой")
+            Some("answer is empty")
         );
         let blank = QuestionReply::Answered {
             selected: Vec::new(),
@@ -196,7 +216,35 @@ mod tests {
         };
         assert_eq!(
             request(2, true, false).refuses(&blank),
-            Some("ответ пустой")
+            Some("answer is empty")
+        );
+    }
+
+    fn picked_and_written(selected: &[u32], text: &str) -> QuestionReply {
+        QuestionReply::Answered {
+            selected: selected.to_vec(),
+            other: Some(text.into()),
+        }
+    }
+
+    #[test]
+    fn a_radio_answer_keeps_only_the_written_text() {
+        assert_eq!(
+            request(3, true, false).settle(picked_and_written(&[1], "neither")),
+            picked_and_written(&[], "neither")
+        );
+    }
+
+    #[test]
+    fn a_radio_pick_without_text_stands() {
+        assert_eq!(request(3, true, false).settle(picked(&[1])), picked(&[1]));
+    }
+
+    #[test]
+    fn checkboxes_add_the_text_to_the_picks() {
+        assert_eq!(
+            request(3, true, true).settle(picked_and_written(&[0, 2], "and more")),
+            picked_and_written(&[0, 2], "and more")
         );
     }
 

@@ -12,7 +12,7 @@ async fn a_search_that_overruns_is_stopped_and_says_so() {
     let dir = TempDir::new();
     dir.write(
         "a.rs",
-        "найди меня
+        "find me
 ",
     );
     let (ctx, _ws) = ctx_for(&dir);
@@ -21,21 +21,21 @@ async fn a_search_that_overruns_is_stopped_and_says_so() {
         deadline: Duration::ZERO,
     };
     let err = tool
-        .run(&ctx, json!({ "pattern": "найди" }))
+        .run(&ctx, json!({ "pattern": "find" }))
         .await
         .unwrap_err();
 
-    assert!(matches!(err, ToolError::Failed { .. }), "получили {err:?}");
-    assert!(err.to_string().contains("не уложился"), "{err}");
+    assert!(matches!(err, ToolError::Failed { .. }), "got {err:?}");
+    assert!(err.to_string().contains("timed out"), "{err}");
     // The model gets the way out as well, not only the fact.
     assert!(
-        err.for_model().contains("подкаталоге"),
+        err.for_model().contains("subdirectory"),
         "{}",
         err.for_model()
     );
 }
 #[tokio::test]
-async fn находит_строки_с_номерами() {
+async fn finds_lines_with_numbers() {
     let dir = TempDir::new();
     dir.write("src/a.rs", "let x = 1;\nlet clipboard = 2;\n");
     dir.write("src/b.ts", "const clipboard = 3;\n");
@@ -52,7 +52,7 @@ async fn находит_строки_с_номерами() {
 }
 
 #[tokio::test]
-async fn шаблон_пути_сужает_поиск() {
+async fn path_pattern_narrows_search() {
     let dir = TempDir::new();
     dir.write("src/a.rs", "clipboard\n");
     dir.write("src/b.ts", "clipboard\n");
@@ -68,13 +68,13 @@ async fn шаблон_пути_сужает_поиск() {
 }
 
 #[tokio::test]
-async fn режим_files_отдаёт_только_пути() {
+async fn files_mode_returns_only_paths() {
     let dir = TempDir::new();
-    dir.write("a.rs", "нужное\nнужное\n");
+    dir.write("a.rs", "needle\nneedle\n");
     let (ctx, _ws) = ctx_for(&dir);
 
     let out = Grep::new()
-        .run(&ctx, json!({ "pattern": "нужное", "mode": "files" }))
+        .run(&ctx, json!({ "pattern": "needle", "mode": "files" }))
         .await
         .unwrap();
 
@@ -83,7 +83,7 @@ async fn режим_files_отдаёт_только_пути() {
 }
 
 #[tokio::test]
-async fn игнор_действует_и_вне_git_репозитория() {
+async fn ignore_applies_outside_git_repository_too() {
     let dir = TempDir::new();
     dir.write(
         ".gitignore",
@@ -93,29 +93,29 @@ node_modules
     );
     dir.write(
         "target/debug/build.rs",
-        "нужное
+        "needle
 ",
     );
     dir.write(
         "node_modules/pkg/index.js",
-        "нужное
+        "needle
 ",
     );
     dir.write(
         "src/a.rs",
-        "нужное
+        "needle
 ",
     );
     let (ctx, _ws) = ctx_for(&dir);
 
     let out = Grep::new()
-        .run(&ctx, json!({ "pattern": "нужное" }))
+        .run(&ctx, json!({ "pattern": "needle" }))
         .await
         .unwrap();
 
-    assert!(out.text.contains("src/a.rs"), "получили: {}", out.text);
-    assert!(!out.text.contains("target"), "получили: {}", out.text);
-    assert!(!out.text.contains("node_modules"), "получили: {}", out.text);
+    assert!(out.text.contains("src/a.rs"), "got: {}", out.text);
+    assert!(!out.text.contains("target"), "got: {}", out.text);
+    assert!(!out.text.contains("node_modules"), "got: {}", out.text);
 }
 
 fn numbered(n: usize) -> String {
@@ -215,18 +215,18 @@ async fn wide_context_is_cut_to_a_budget_and_counted_in_matches() {
     assert!(out.meta.truncated);
     // The footer counts matches, not the lines around them.
     let footer = out.text.lines().last().unwrap();
-    assert!(footer.contains("из 200 совпадений"), "{footer}");
+    assert!(footer.contains("of 200 matches"), "{footer}");
 }
 
 #[tokio::test]
-async fn отсутствие_совпадений_проговаривается() {
+async fn absence_of_matches_is_stated() {
     let dir = TempDir::new();
-    dir.write("a.rs", "ничего\n");
+    dir.write("a.rs", "nothing\n");
     let (ctx, _ws) = ctx_for(&dir);
 
     let out = Grep::new()
-        .run(&ctx, json!({ "pattern": "^нет$" }))
+        .run(&ctx, json!({ "pattern": "^none$" }))
         .await
         .unwrap();
-    assert!(out.text.contains("совпадений нет"));
+    assert!(out.text.contains("no matches found"));
 }

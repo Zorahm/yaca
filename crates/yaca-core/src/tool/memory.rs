@@ -94,30 +94,30 @@ impl Tool for Memory {
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let op = input["op"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан op"))?;
+            .ok_or_else(|| ToolError::failed("missing op"))?;
         let name = input["name"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан name"))?;
+            .ok_or_else(|| ToolError::failed("missing name"))?;
 
         match op {
             "write" => {
                 let content = input["content"]
                     .as_str()
-                    .ok_or_else(|| ToolError::failed("не задан content"))?;
+                    .ok_or_else(|| ToolError::failed("missing content"))?;
                 let hook = input["hook"]
                     .as_str()
-                    .ok_or_else(|| ToolError::failed("не задан hook"))?;
+                    .ok_or_else(|| ToolError::failed("missing hook"))?;
                 let title = input["title"].as_str();
                 let replaced = store::write(&ctx.ws, name, title, hook, content)?;
-                let verb = if replaced { "Заменена" } else { "Записана" };
-                Ok(ToolOutput::new(format!("{verb} заметка {name}\n")))
+                let verb = if replaced { "Replaced" } else { "Wrote" };
+                Ok(ToolOutput::new(format!("{verb} note {name}\n")))
             }
             "read" => Ok(ToolOutput::new(store::read(&ctx.ws, name)?)),
             "delete" => {
                 store::delete(&ctx.ws, name)?;
-                Ok(ToolOutput::new(format!("Удалена заметка {name}\n")))
+                Ok(ToolOutput::new(format!("Deleted note {name}\n")))
             }
-            other => Err(ToolError::failed(format!("неизвестная операция: {other}"))),
+            other => Err(ToolError::failed(format!("unknown operation: {other}"))),
         }
     }
 }
@@ -141,7 +141,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(out.text, "Записана заметка deploy.md\n");
+        assert_eq!(out.text, "Wrote note deploy.md\n");
 
         let read = Memory
             .run(&ctx, json!({ "op": "read", "name": "deploy.md" }))
@@ -153,7 +153,7 @@ mod tests {
             .run(&ctx, json!({ "op": "delete", "name": "deploy.md" }))
             .await
             .unwrap();
-        assert_eq!(out.text, "Удалена заметка deploy.md\n");
+        assert_eq!(out.text, "Deleted note deploy.md\n");
         assert!(Memory
             .run(&ctx, json!({ "op": "read", "name": "deploy.md" }))
             .await
@@ -176,7 +176,7 @@ mod tests {
             .run(&ctx, json!({ "op": "write", "name": "a.md", "hook": "h", "content": "c" }))
             .await
             .unwrap();
-        assert_eq!(out.text, "Заменена заметка a.md\n");
+        assert_eq!(out.text, "Replaced note a.md\n");
     }
 
     #[tokio::test]
@@ -188,7 +188,7 @@ mod tests {
             .run(&ctx, json!({ "op": "rename", "name": "a.md" }))
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("неизвестная операция"), "{err}");
+        assert!(err.to_string().contains("unknown operation"), "{err}");
 
         let err = Memory
             .run(&ctx, json!({ "op": "write", "name": "a.md", "hook": "h" }))

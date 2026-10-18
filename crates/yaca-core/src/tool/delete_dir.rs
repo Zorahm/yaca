@@ -106,23 +106,23 @@ impl Tool for DeleteDir {
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let raw = input["path"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан path"))?;
+            .ok_or_else(|| ToolError::failed("path is required"))?;
         let abs = ctx.ws.resolve_new(raw)?;
         if let Some(reason) = refusal(&ctx.ws, &abs) {
             return Err(reason);
         }
 
         let meta = std::fs::symlink_metadata(&abs)
-            .map_err(|_| ToolError::failed(format!("не найдено: {raw}")))?;
+            .map_err(|_| ToolError::failed(format!("not found: {raw}")))?;
         if meta.file_type().is_symlink() {
             return Err(ToolError::failed(format!(
-                "{raw} — ссылка, а не каталог; удалять ссылку или то, на что она \
-                 указывает, — разные просьбы"
+                "{raw} is a symlink, not a directory; deleting a symlink vs what it \
+                 points to are different requests"
             )));
         }
         if !meta.is_dir() {
             return Err(ToolError::failed(format!(
-                "{raw} — файл; его удаляет Delete"
+                "{raw} is a file; delete it with Delete"
             )));
         }
 
@@ -137,7 +137,7 @@ impl Tool for DeleteDir {
             let contents = survey(&dir, None).map_err(|e| ToolError::failed(e.to_string()))?;
             if let Some(kept) = contents.kept {
                 return Err(ToolError::rejected(format!(
-                    "в {} есть {} — снимки его не хранят, и откат его не вернёт",
+                    "{} contains {} — snapshots do not store it, and rollback will not restore it",
                     ws.display(&dir),
                     ws.display(&kept)
                 )));
@@ -147,19 +147,19 @@ impl Tool for DeleteDir {
             }
             std::fs::remove_dir_all(&dir).map_err(|e| {
                 ToolError::failed(format!(
-                    "каталог {} удалён не целиком: {e}",
+                    "directory {} was not deleted completely: {e}",
                     ws.display(&dir)
                 ))
             })?;
             Ok(contents.files)
         })
         .await
-        .map_err(|_| ToolError::failed("удаление каталога не завершилось"))??;
+        .map_err(|_| ToolError::failed("directory deletion did not complete"))??;
 
         // Nothing read in there can be edited any more: it is gone.
         ctx.ws.forget_under(&abs);
 
-        Ok(ToolOutput::new(format!("Удалён каталог {rel}, файлов: {files}\n")).items(files))
+        Ok(ToolOutput::new(format!("Deleted directory {rel}, files: {files}\n")).items(files))
     }
 }
 
@@ -169,18 +169,18 @@ fn refusal(ws: &Workspace, abs: &Path) -> Option<ToolError> {
     // works inside, and deleting it would delete the boundary with its contents.
     if abs == ws.root() {
         return Some(ToolError::rejected(
-            "это корень проекта; целиком его не удаляют",
+            "this is the project root; it cannot be deleted entirely",
         ));
     }
     if ws.is_a_root(abs) {
         return Some(ToolError::rejected(
-            "это дополнительный корень воркспейса; целиком его не удаляют",
+            "this is an additional workspace root; it cannot be deleted entirely",
         ));
     }
     let name = abs.file_name()?;
     KEPT.iter().any(|kept| name == OsStr::new(kept)).then(|| {
         ToolError::rejected(format!(
-            "{} — снимки его не хранят, и откат его не вернёт",
+            "{} — snapshots do not store it, and rollback will not restore it",
             ws.display(abs)
         ))
     })
@@ -306,7 +306,7 @@ mod tests {
             .run(&ctx, json!({ "path": "nope" }))
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("не найдено"), "{err}");
+        assert!(err.to_string().contains("not found"), "{err}");
     }
 
     fn unsaved_of(dir: &TempDir, path: &str) -> Option<Unsaved> {

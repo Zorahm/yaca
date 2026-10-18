@@ -19,7 +19,7 @@ use super::Shared;
 /// the file's bytes do not change — so it is not tracked, and deleting a
 /// directory is not a content change either.
 pub(super) fn keeps(tool: &str) -> bool {
-    matches!(tool, "Write" | "Edit" | "Delete")
+    matches!(tool, "Write" | "Edit" | "NotebookEdit" | "Delete")
 }
 
 /// A writer's target as it was before the write.
@@ -62,7 +62,7 @@ pub(super) async fn after(shared: &Arc<Shared>, before: Before) {
         Err(err) => failed(
             &shared,
             "change_untracked",
-            format!("не удалось перечитать {} после правки: {err}", before.path),
+            format!("failed to reread {} after edit: {err}", before.path),
         ),
     })
     .await

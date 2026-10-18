@@ -38,7 +38,9 @@ impl Tool for SendText {
          or edited, a file they asked to see, output a command wrote to a file. The \
          human sees the text exactly as it is in the file; you get back only a note \
          that it was shown, so do not repeat the text in your answer. You do not \
-         need to Read the file first, and showing a file does not count as reading it."
+         need to Read the file first, and showing a file does not count as reading it. \
+         Instead of `path`, `command` shows what a background command has printed, \
+         by its id — the human sees its output without you copying it."
     }
 
     fn properties(&self) -> Value {
@@ -46,6 +48,11 @@ impl Tool for SendText {
             "path": {
                 "type": "string",
                 "description": "Path relative to the project root.",
+            },
+            "command": {
+                "type": "integer",
+                "description": "Id of a background command, instead of path: shows \
+                                what it has printed.",
             },
             "start_line": {
                 "type": "integer",
@@ -60,8 +67,9 @@ impl Tool for SendText {
         })
     }
 
+    /// One of `path` and `command`, which the schema cannot say.
     fn required(&self) -> &'static [&'static str] {
-        &["path"]
+        &[]
     }
 
     /// The text reaches the interface as `TextShown`.
@@ -78,17 +86,42 @@ impl Tool for SendText {
     }
 
     fn target(&self, input: &Value) -> Option<String> {
-        input["path"].as_str().map(str::to_owned)
+        input["path"]
+            .as_str()
+            .map(str::to_owned)
+            .or_else(|| input["command"].as_u64().map(|id| format!("command {id}")))
     }
 
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
-        let raw_path = input["path"]
-            .as_str()
-            .ok_or_else(|| ToolError::failed("не задан path"))?;
+        let (label, command, text) = match (input["path"].as_str(), input["command"].as_u64()) {
+            (Some(_), Some(_)) => return Err(ToolError::failed("either path or command, not both")),
+            (None, None) => return Err(ToolError::failed("missing path or command")),
+            (None, Some(id)) => {
+                let id = crate::process::ProcessId(
+                    u32::try_from(id).map_err(|_| ToolError::failed("no such background command"))?,
+                );
+                let (command, text) = ctx
+                    .processes
+                    .full_output(id)
+                    .ok_or_else(|| ToolError::failed(format!("no background command with id {id}")))?;
+                (format!("command {id}"), Some(command), text)
+            }
+            (Some(raw_path), None) => {
+                let (label, text) = file_text(ctx, raw_path).await?;
+                (label, None, text)
+            }
+        };
+        show(ctx, &input, label, command, &text)
+    }
+}
+
+/// The text of a file, with the name it is shown under.
+async fn file_text(ctx: &ToolCtx, raw_path: &str) -> Result<(String, String), ToolError> {
+    {
 
         if ctx.ws.resolve_new(raw_path).is_ok_and(|abs| crate::picture::is_picture(&abs)) {
             return Err(ToolError::failed_with(
-                format!("{raw_path} — изображение, а не текст"),
+                format!("{raw_path} is an image, not text"),
                 "This file is an image, and SendText shows text only.",
             ));
         }
@@ -99,38 +132,51 @@ impl Tool for SendText {
         let raw = raw_path.to_string();
         let target = tokio::task::spawn_blocking(move || files::look_in(&ws, &raw))
             .await
-            .map_err(|_| ToolError::failed("чтение файла не завершилось"))??;
+            .map_err(|_| ToolError::failed("failed to read file"))??;
 
         if target.abs.is_dir() {
-            return Err(ToolError::failed(format!("{raw_path} — каталог, не файл")));
+            return Err(ToolError::failed(format!("{raw_path} is a directory, not a file")));
         }
         let Some(text) = target.current else {
-            return Err(ToolError::failed(format!("не найдено: {raw_path}")));
+            return Err(ToolError::failed(format!("not found: {raw_path}")));
         };
+        Ok((target.rel, text))
+    }
+}
 
+/// Puts the asked-for lines of `text` in front of the human.
+fn show(
+    ctx: &ToolCtx,
+    input: &Value,
+    label: String,
+    command: Option<String>,
+    text: &str,
+) -> Result<ToolOutput, ToolError> {
+    let raw_path = label.as_str();
+    {
         let all: Vec<&str> = text.lines().collect();
         let total = all.len();
         if total == 0 {
-            return Err(ToolError::failed(format!("{raw_path} пуст, показывать нечего")));
+            return Err(ToolError::failed(format!("{raw_path} is empty, nothing to show")));
         }
 
         let first = input["start_line"].as_u64().unwrap_or(1).max(1) as usize;
         let last = input["end_line"].as_u64().map_or(total, |n| n as usize).min(total);
         if first > total {
             return Err(ToolError::failed(format!(
-                "в файле {total} строк, запрошена строка {first}"
+                "file has {total} lines, requested line {first}"
             )));
         }
         if last < first {
             return Err(ToolError::failed(format!(
-                "end_line ({last}) меньше start_line ({first})"
+                "end_line ({last}) is less than start_line ({first})"
             )));
         }
 
         let shown = all[first - 1..last].join("\n");
         if shown.len() > MAX_BYTES {
             return Err(ToolError::failed_with(
-                format!("{raw_path}: слишком много текста для одного блока"),
+                format!("{raw_path}: too much text for a single block"),
                 format!(
                     "Lines {first}–{last} are {} bytes, and one block holds at most {MAX_BYTES}. \
                      Show a narrower range with start_line and end_line, or tell the human \
@@ -142,7 +188,8 @@ impl Tool for SendText {
 
         let lines = last - first + 1;
         ctx.events.emit(AgentEvent::TextShown {
-            path: target.rel.clone(),
+            path: label.clone(),
+            command,
             first_line: first as u32,
             lines: lines as u32,
             total: total as u32,
@@ -157,9 +204,8 @@ impl Tool for SendText {
             format!("lines {first}–{last} of {total}")
         };
         Ok(ToolOutput::new(format!(
-            "Shown to the user: {}, {what}. They are looking at the text itself; \
-             do not repeat it in your answer.\n",
-            target.rel
+            "Shown to the user: {label}, {what}. They are looking at the text itself; \
+             do not repeat it in your answer.\n"
         )))
     }
 }
@@ -198,7 +244,7 @@ mod tests {
                 assert_eq!(text, "two\nthree");
                 assert_eq!(lines, 2);
             }
-            other => panic!("не то событие: {other:?}"),
+            other => panic!("unexpected event: {other:?}"),
         }
     }
 
@@ -245,5 +291,37 @@ mod tests {
             assert!(SendText.run(&ctx, json!({ "path": path })).await.is_err(), "{path}");
         }
         assert!(rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn a_background_commands_output_can_be_shown() {
+        let dir = TempDir::new();
+        let (ctx, mut rx) = ctx_with_events(&dir);
+        let id = ctx.processes.register("npm test".into(), ".".into(), None);
+        ctx.processes.output(id, vec!["PASS a".into(), "PASS b".into()]);
+
+        let out = SendText.run(&ctx, json!({ "command": id.0 })).await.unwrap();
+        assert!(out.text.contains(&format!("command {}", id.0)), "{}", out.text);
+        let mut shown = None;
+        while let Ok(event) = rx.try_recv() {
+            if let AgentEvent::TextShown { text, command, .. } = event {
+                shown = Some((text, command));
+            }
+        }
+        assert_eq!(shown, Some(("PASS a\nPASS b".to_string(), Some("npm test".to_string()))));
+
+        // Showing is not reading: the model's cursor has not moved.
+        let read = ctx.processes.read(id, 10_000).unwrap();
+        assert!(read.text.contains("PASS a"));
+    }
+
+    #[tokio::test]
+    async fn path_and_command_are_one_or_the_other() {
+        let dir = TempDir::new();
+        dir.write("a.rs", "x\n");
+        let (ctx, _ws) = ctx_for(&dir);
+        assert!(SendText.run(&ctx, json!({ "path": "a.rs", "command": 1 })).await.is_err());
+        assert!(SendText.run(&ctx, json!({})).await.is_err());
+        assert!(SendText.run(&ctx, json!({ "command": 42 })).await.is_err());
     }
 }

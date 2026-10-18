@@ -11,12 +11,13 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
 
-import { demoFinish, demoMcp, demoModels, demoScript, demoState, inTauri } from "./demo";
+import { demoFinish, demoLsp, demoMcp, demoModels, demoScript, demoState, inTauri } from "./demo";
 import { DEMO_FILE_PATH, demoFileView } from "./demoFile";
 import { demoSessions } from "./demoSessions";
 import { BUILTIN_PROVIDER_ID, PRESETS, isPreset, needsKey } from "./provider";
 
 import type { AgentEvent } from "./bindings/AgentEvent";
+import type { AttachedChat } from "./bindings/AttachedChat";
 import type { AttachmentLook } from "./bindings/AttachmentLook";
 import type { CheckpointChange } from "./bindings/CheckpointChange";
 import type { CheckpointId } from "./bindings/CheckpointId";
@@ -35,6 +36,12 @@ import type { McpServerSettings } from "./bindings/McpServerSettings";
 import type { McpServerSummary } from "./bindings/McpServerSummary";
 import type { McpSource } from "./bindings/McpSource";
 import type { McpStatus } from "./bindings/McpStatus";
+import type { LspServerSummary } from "./bindings/LspServerSummary";
+import type { ElicitField } from "./bindings/ElicitField";
+import type { ElicitKind } from "./bindings/ElicitKind";
+import type { ElicitationReply } from "./bindings/ElicitationReply";
+import type { ElicitationRequest } from "./bindings/ElicitationRequest";
+import type { LspStatus } from "./bindings/LspStatus";
 import type { ModelInfo } from "./bindings/ModelInfo";
 import type { OpenedChat } from "./bindings/OpenedChat";
 import type { PermissionAnswer } from "./bindings/PermissionAnswer";
@@ -55,6 +62,15 @@ import type { SessionId } from "./bindings/SessionId";
 import type { SessionMeta } from "./bindings/SessionMeta";
 import type { SessionState } from "./bindings/SessionState";
 import type { ShellChoice } from "./bindings/ShellChoice";
+import type { CatalogEntry } from "./bindings/CatalogEntry";
+import type { MarketplaceSummary } from "./bindings/MarketplaceSummary";
+import type { PluginReport } from "./bindings/PluginReport";
+import type { PluginSummary } from "./bindings/PluginSummary";
+import type { UpdateOutcome } from "./bindings/UpdateOutcome";
+import type { SkillDiagnostic } from "./bindings/SkillDiagnostic";
+import type { SkillInfo } from "./bindings/SkillInfo";
+import type { SkillReport } from "./bindings/SkillReport";
+import type { SkillScope } from "./bindings/SkillScope";
 import type { SlashCommand } from "./bindings/SlashCommand";
 import type { Span } from "./bindings/Span";
 import type { Protocol } from "./bindings/Protocol";
@@ -71,6 +87,7 @@ import type { ToolMeta } from "./bindings/ToolMeta";
 import type { UsageSnapshot } from "./bindings/UsageSnapshot";
 
 export type {
+  AttachedChat,
   AttachmentLook,
   ShellChoice,
   AgentEvent,
@@ -96,6 +113,12 @@ export type {
   McpServerSummary,
   McpSource,
   McpStatus,
+  LspServerSummary,
+  LspStatus,
+  ElicitField,
+  ElicitKind,
+  ElicitationReply,
+  ElicitationRequest,
   ModelInfo,
   OpenedChat,
   PermissionAnswer,
@@ -117,6 +140,15 @@ export type {
   SessionId,
   SessionMeta,
   SessionState,
+  CatalogEntry,
+  MarketplaceSummary,
+  PluginReport,
+  PluginSummary,
+  UpdateOutcome,
+  SkillDiagnostic,
+  SkillInfo,
+  SkillReport,
+  SkillScope,
   SlashCommand,
   Span,
   Startup,
@@ -331,7 +363,7 @@ export function openProject(
       id: recorded ? resume : startDemo(path),
       state: { ...demoState, projectRoot: path },
       mcp: structuredClone(demoMcp),
-      lsp: [],
+      lsp: structuredClone(demoLsp),
     });
   }
   return invoke<OpenedChat>("open_project", { path, resume, startup });
@@ -351,18 +383,19 @@ export function closeChat(session: SessionId): Promise<void> {
 }
 
 /**
- * Закрывает всё, что осталось в оболочке от прошлой жизни окна.
+ * Picks up the chats that kept running while the window was gone.
  *
- * Вебвью перезагружается, а сессии переживают перезагрузку: ленты у них уже
- * нет, а агент продолжает работать. Окно зовёт это на старте — невидимый
- * агент хуже прерванного.
+ * The webview reloads (Ctrl+R, a hot reload) and the sessions in the shell do
+ * not: the turn goes on, the commands go on, a question waits for its answer.
+ * Each chat comes back as the events its feed is the fold of, plus a new bridge
+ * whose frames carry the returned `epoch`; subscribe to `onEvents` first, or the
+ * frames between this call and the subscription are lost.
+ *
+ * The stand has no shell and nothing outlives its page.
  */
-export function closeAllChats(): Promise<void> {
-  if (!inTauri) {
-    stopAllDemos();
-    return Promise.resolve();
-  }
-  return invoke<void>("close_all_chats");
+export function attachChats(): Promise<AttachedChat[]> {
+  if (!inTauri) return Promise.resolve([]);
+  return invoke<AttachedChat[]>("attach_chats");
 }
 
 /**
@@ -430,6 +463,74 @@ export function projectCommands(project: string): Promise<SlashCommand[]> {
 }
 
 /**
+ * Skills a chat in this project sees: the project's and the human's own, with
+ * what is wrong with the files that did not load. For the slash menu and the
+ * settings window; the core expands `/name` itself when the message is sent.
+ *
+ * The stand has none, for the same reason it has no commands.
+ */
+export function projectSkills(project: string): Promise<SkillReport> {
+  return inTauri
+    ? invoke<SkillReport>("project_skills", { project })
+    : Promise.resolve({ skills: [], diagnostics: [] });
+}
+
+/**
+ * Plugins (Yaca's own and Claude Code's) with their switches. The stand has
+ * none: plugins are folders on a machine, and the stand has no machine.
+ */
+export function listPlugins(): Promise<PluginReport> {
+  return inTauri
+    ? invoke<PluginReport>("list_plugins")
+    : Promise.resolve({ plugins: [], diagnostics: [] });
+}
+
+/** The marketplaces plugins are installed from. None in the stand. */
+export function listMarketplaces(): Promise<MarketplaceSummary[]> {
+  return inTauri ? invoke<MarketplaceSummary[]>("list_marketplaces") : Promise.resolve([]);
+}
+
+const NO_STAND = () => Promise.reject(new Error("no plugins in the stand"));
+
+/** Adds a marketplace by address and fetches it. */
+export function addMarketplace(source: string): Promise<MarketplaceSummary> {
+  return inTauri ? invoke<MarketplaceSummary>("add_marketplace", { source }) : NO_STAND();
+}
+
+export function removeMarketplace(name: string): Promise<void> {
+  return inTauri ? invoke<void>("remove_marketplace", { name }) : NO_STAND();
+}
+
+export function refreshMarketplace(name: string): Promise<MarketplaceSummary> {
+  return inTauri ? invoke<MarketplaceSummary>("refresh_marketplace", { name }) : NO_STAND();
+}
+
+/** What a marketplace offers; the first look fetches it. */
+export function marketplaceCatalog(name: string): Promise<CatalogEntry[]> {
+  return inTauri ? invoke<CatalogEntry[]>("marketplace_catalog", { name }) : NO_STAND();
+}
+
+/** Installs `plugin@marketplace`; it is on afterwards. */
+export function installPlugin(id: string): Promise<PluginSummary> {
+  return inTauri ? invoke<PluginSummary>("install_plugin", { id }) : NO_STAND();
+}
+
+export function updatePlugin(id: string): Promise<UpdateOutcome> {
+  return inTauri ? invoke<UpdateOutcome>("update_plugin", { id }) : NO_STAND();
+}
+
+export function uninstallPlugin(id: string): Promise<void> {
+  return inTauri ? invoke<void>("uninstall_plugin", { id }) : NO_STAND();
+}
+
+/** Switches a plugin for the chats opened after this; returns the new list. */
+export function setPluginEnabled(id: string, enabled: boolean): Promise<PluginReport> {
+  return inTauri
+    ? invoke<PluginReport>("set_plugin_enabled", { id, enabled })
+    : Promise.reject(new Error("no plugins in the stand"));
+}
+
+/**
  * Провайдеры §10: список и правка.
  *
  * В стенде реестр живёт в памяти процесса и повторяет семантику ядра
@@ -442,9 +543,10 @@ let demoRegistry: Providers = {
   // Предустановленные те же, что в ядре, и тоже без моделей: их отдаёт сам
   // провайдер, а в стенде спросить некого — панель честно скажет, что моделей
   // нет. Кроме Anthropic: стенду нужно, на чём показать разговор.
-  list: PRESETS.map((preset) => ({
+  list: PRESETS.map(({ keyless, ...preset }) => ({
     ...preset,
-    headers: {},
+    // A server that never asks for a key drops the default `authorization`.
+    headers: keyless ? { authorization: "" } : {},
     models: preset.id === BUILTIN_PROVIDER_ID ? demoModels : [],
   })),
 };
@@ -580,6 +682,45 @@ export function models(): Promise<ModelInfo[]> {
   return invoke<ModelInfo[]>("models");
 }
 
+/** The provider id the model router is listed under; it is not in `providers.json`. */
+export const ROUTER_PROVIDER_ID = "router";
+
+/**
+ * What `routing.json` amounts to. `broken` is a state of its own and not
+ * `absent`: a router that quietly leaves the model list because of a typo is a
+ * setting the window lies about.
+ */
+export type RoutingStatus =
+  | { state: "absent" }
+  | { state: "ready"; model: ModelInfo }
+  | { state: "broken"; error: string };
+
+/** The stand has no `routing.json`: nothing is claimed, and nothing is offered. */
+export function routingStatus(): Promise<RoutingStatus> {
+  if (!inTauri) return Promise.resolve({ state: "absent" });
+  return invoke<RoutingStatus>("routing_status");
+}
+
+/** The file as it is on disk, or `null` when there is none. */
+export function routingText(): Promise<string | null> {
+  if (!inTauri) return Promise.resolve(null);
+  return invoke<string | null>("routing_text");
+}
+
+/**
+ * Checks the text with the core's own rules and writes it. A refusal rejects
+ * with the words the file would be refused with, and nothing is written.
+ */
+export function saveRouting(text: string): Promise<RoutingStatus> {
+  if (!inTauri) return Promise.reject(new Error("routing.json is written by the app only"));
+  return invoke<RoutingStatus>("save_routing", { text });
+}
+
+export function removeRouting(): Promise<void> {
+  if (!inTauri) return Promise.resolve();
+  return invoke<void>("remove_routing");
+}
+
 /**
  * Which of a provider's models are in memory right now (§7.1), for a server
  * that says. The stand has no server behind its providers, and an empty map
@@ -626,14 +767,14 @@ function answerInDemo(session: SessionId, command: Command): void {
     // The recorded turn stops on this question; answering it lets the turn
     // end, as it would with a core behind it.
     const events = demoFinish();
-    window.setTimeout(() => demoHandler?.({ session, events }), 0);
+    window.setTimeout(() => demoHandler?.({ session, epoch: 0, events }), 0);
     return;
   }
   if (command.type === "readFileView") {
     const events: AgentEvent[] = [
       { type: "fileViewLoaded", path: command.path, view: demoFileView(command.path) },
     ];
-    window.setTimeout(() => demoHandler?.({ session, events }), 0);
+    window.setTimeout(() => demoHandler?.({ session, epoch: 0, events }), 0);
     return;
   }
   if (command.type === "searchFiles") {
@@ -642,7 +783,7 @@ function answerInDemo(session: SessionId, command: Command): void {
     const query = command.query.toLowerCase();
     const paths = DEMO_FILE_PATH.toLowerCase().includes(query) ? [DEMO_FILE_PATH] : [];
     const events: AgentEvent[] = [{ type: "filesFound", query: command.query, paths }];
-    window.setTimeout(() => demoHandler?.({ session, events }), 0);
+    window.setTimeout(() => demoHandler?.({ session, epoch: 0, events }), 0);
     return;
   }
   if (command.type === "approveMcpServer" || command.type === "reconnectMcpServer") {
@@ -665,7 +806,7 @@ function answerInDemo(session: SessionId, command: Command): void {
     );
     demoMcpNow.set(session, servers);
     const events: AgentEvent[] = [{ type: "mcpUpdated", servers }];
-    window.setTimeout(() => demoHandler?.({ session, events }), 0);
+    window.setTimeout(() => demoHandler?.({ session, epoch: 0, events }), 0);
   }
 }
 
@@ -685,6 +826,7 @@ function startDemo(path: string): SessionId {
     const event = demoScript[at];
     demoHandler({
       session,
+      epoch: 0,
       events: [
         event.type === "stateChanged"
           ? { ...event, state: { ...event.state, projectRoot: path } }
@@ -740,6 +882,14 @@ export const commands = {
   searchFiles: (query: string): Command => ({ type: "searchFiles", query }),
   reconnectMcpServer: (server: string): Command => ({ type: "reconnectMcpServer", server }),
   approveMcpServer: (server: string): Command => ({ type: "approveMcpServer", server }),
+  restartLspServer: (server: string): Command => ({ type: "restartLspServer", server }),
+  loginMcpServer: (server: string): Command => ({ type: "loginMcpServer", server }),
+  logoutMcpServer: (server: string): Command => ({ type: "logoutMcpServer", server }),
+  answerElicitation: (requestId: string, reply: ElicitationReply): Command => ({
+    type: "answerElicitation",
+    requestId,
+    reply,
+  }),
   cancelQueued: (id: QueuedId): Command => ({ type: "cancelQueued", id }),
   previewCheckpoint: (id: CheckpointId): Command => ({
     type: "previewCheckpoint",

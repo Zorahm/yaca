@@ -8,16 +8,16 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum CoreError {
-    #[error("провайдер: {0}")]
+    #[error("provider: {0}")]
     Provider(#[from] ProviderError),
 
-    #[error("ввод-вывод: {0}")]
+    #[error("io: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("сериализация: {0}")]
+    #[error("serialization: {0}")]
     Json(#[from] serde_json::Error),
 
-    #[error("сессия остановлена")]
+    #[error("session cancelled")]
     Cancelled,
 
     #[error("{0}")]
@@ -26,7 +26,7 @@ pub enum CoreError {
 
 #[derive(Debug, Error)]
 pub enum ProviderError {
-    #[error("сеть: {0}")]
+    #[error("network: {0}")]
     Network(String),
 
     #[error("HTTP {status}: {message}")]
@@ -37,13 +37,13 @@ pub enum ProviderError {
         retry_after_s: Option<u64>,
     },
 
-    #[error("не разобрал поток: {0}")]
+    #[error("protocol parsing failed: {0}")]
     Protocol(String),
 
     /// The provider is described in a way that makes the request impossible to
     /// build: a bad header name, a bad value. Retrying will not help — the
     /// description has to be fixed.
-    #[error("описание провайдера: {0}")]
+    #[error("provider config: {0}")]
     Config(String),
 }
 
@@ -135,7 +135,7 @@ pub enum ToolError {
         detail: Option<String>,
     },
 
-    #[error("отменено")]
+    #[error("cancelled")]
     Cancelled,
 
     /// The human stopped this call themselves — the panel's "Stop", not a
@@ -144,7 +144,7 @@ pub enum ToolError {
     /// Kept apart from [`ToolError::Cancelled`], which means the whole turn was
     /// cancelled: this one arrives with the turn still running, and it is what
     /// ends it (§5.5).
-    #[error("остановлено вами")]
+    #[error("interrupted by user")]
     Interrupted,
 }
 

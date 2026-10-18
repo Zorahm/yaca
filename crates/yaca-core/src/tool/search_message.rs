@@ -101,11 +101,11 @@ impl Tool for SearchMessage {
         let transcript = ctx
             .transcript
             .clone()
-            .ok_or_else(|| ToolError::failed("у этой сессии нет журнала сообщений"))?;
+            .ok_or_else(|| ToolError::failed("this session has no transcript"))?;
         let entries = tokio::task::spawn_blocking(move || transcript.entries())
             .await
-            .map_err(|_| ToolError::failed("чтение журнала не завершилось"))?
-            .map_err(|e| ToolError::failed(format!("журнал сообщений не читается: {e}")))?;
+            .map_err(|_| ToolError::failed("failed to read transcript"))?
+            .map_err(|e| ToolError::failed(format!("failed to read transcript: {e}")))?;
 
         if let Some(number) = input["number"].as_u64() {
             let offset = input["offset"].as_u64().unwrap_or(0) as usize;
@@ -114,7 +114,7 @@ impl Tool for SearchMessage {
 
         let Some(needle) = input["query"].as_str().and_then(Needle::new) else {
             return Err(ToolError::failed_with(
-                "не задан ни query, ни number",
+                "neither query nor number provided",
                 "Give `query` to search the conversation or `number` to get one message.",
             ));
         };
@@ -129,8 +129,8 @@ impl Tool for SearchMessage {
 
 fn who(role: Role) -> &'static str {
     match role {
-        Role::User => "человек",
-        Role::Assistant => "агент",
+        Role::User => "user",
+        Role::Assistant => "assistant",
     }
 }
 
@@ -147,12 +147,12 @@ fn found(entries: &[Entry], needle: &Needle, role: Option<Role>) -> ToolOutput {
 
     let total = hits.len();
     if total == 0 {
-        return ToolOutput::new("Совпадений нет.\n".to_string()).items(0);
+        return ToolOutput::new("No matches found.\n".to_string()).items(0);
     }
     let mut text: String = hits[total.saturating_sub(MAX_HITS)..].concat();
     if total > MAX_HITS {
         text.push_str(&format!(
-            "\n[совпадений {total}, показаны последние {MAX_HITS}: уточни запрос]\n"
+            "\n[{total} matches found, showing last {MAX_HITS}: narrow down your query]\n"
         ));
     }
     ToolOutput::new(text)
@@ -167,7 +167,7 @@ fn whole(entries: &[Entry], number: usize, offset: usize) -> Result<ToolOutput, 
         .and_then(|index| entries.get(index))
         .ok_or_else(|| {
             ToolError::failed(format!(
-                "сообщения #{number} нет: в разговоре их {}",
+                "message #{number} does not exist: there are {} messages in the conversation",
                 entries.len()
             ))
         })?;
@@ -176,18 +176,18 @@ fn whole(entries: &[Entry], number: usize, offset: usize) -> Result<ToolOutput, 
     let total = chars.len();
     if offset >= total && total > 0 {
         return Err(ToolError::failed(format!(
-            "в сообщении #{number} {total} символов, запрошен offset {offset}"
+            "message #{number} has {total} characters, requested offset {offset}"
         )));
     }
     let end = (offset + DEFAULT_LIMIT).min(total);
     let body: String = chars[offset..end].iter().collect();
 
-    let mut text = format!("#{number} · {} · {total} симв.\n\n{body}\n", who(entry.role));
+    let mut text = format!("#{number} · {} · {total} chars\n\n{body}\n", who(entry.role));
     let truncated = end < total;
     if offset > 0 || truncated {
-        text.push_str(&format!("\n[показаны символы {}–{end} из {total}", offset + 1));
+        text.push_str(&format!("\n[showing characters {}–{end} of {total}", offset + 1));
         if truncated {
-            text.push_str(&format!("; дальше — offset {end}"));
+            text.push_str(&format!("; next — offset {end}"));
         }
         text.push_str("]\n");
     }
@@ -209,23 +209,23 @@ mod tests {
     #[test]
     fn more_hits_than_a_listing_holds_keeps_the_most_recent_and_says_so() {
         let entries: Vec<Entry> = (1..=25)
-            .map(|n| entry(n, Role::User, "про даты"))
+            .map(|n| entry(n, Role::User, "about dates"))
             .collect();
 
-        let out = found(&entries, &Needle::new("даты").unwrap(), None);
+        let out = found(&entries, &Needle::new("dates").unwrap(), None);
 
         let lines: Vec<&str> = out.text.lines().filter(|l| l.starts_with('#')).collect();
         assert_eq!(lines.len(), 20);
         assert!(lines[0].starts_with("#6 "), "{}", lines[0]);
         assert!(lines[19].starts_with("#25 "), "{}", lines[19]);
-        assert!(out.text.contains("совпадений 25"), "{}", out.text);
+        assert!(out.text.contains("25 matches found"), "{}", out.text);
         assert_eq!(out.meta.items, Some(25));
         assert!(out.meta.truncated);
     }
 
     #[test]
     fn a_long_message_comes_in_parts_that_say_where_the_next_starts() {
-        let long = "я".repeat(DEFAULT_LIMIT + 5);
+        let long = "x".repeat(DEFAULT_LIMIT + 5);
         let entries = [entry(1, Role::User, &long)];
 
         let first = whole(&entries, 1, 0).unwrap();
@@ -234,13 +234,13 @@ mod tests {
 
         let rest = whole(&entries, 1, DEFAULT_LIMIT).unwrap();
         assert!(!rest.meta.truncated);
-        assert_eq!(rest.text.matches('я').count(), 5);
+        assert_eq!(rest.text.matches('x').count(), 5);
     }
 
     #[test]
     fn an_offset_past_the_end_is_an_error_not_an_empty_answer() {
-        let entries = [entry(1, Role::User, "коротко")];
-        assert!(whole(&entries, 1, 7).is_err());
+        let entries = [entry(1, Role::User, "short")];
+        assert!(whole(&entries, 1, 6).is_err());
         assert!(whole(&entries, 0, 0).is_err());
     }
 }

@@ -44,7 +44,7 @@ async fn collect(rx: &mut Receiver<AgentEvent>) -> Vec<AgentEvent> {
     .await;
     assert!(
         deadline.is_ok(),
-        "турн не завершился за 5 с: {:?}",
+        "turn did not finish within 5 s: {:?}",
         names(&out)
     );
     out
@@ -53,7 +53,7 @@ async fn collect(rx: &mut Receiver<AgentEvent>) -> Vec<AgentEvent> {
 fn session(dir: &TempDir, provider: MockProvider, mode: Mode) -> SessionHandle {
     let mut cfg = SessionConfig::new(dir.path());
     cfg.mode = mode;
-    cfg.journal = false;
+    cfg.journal = None;
     cfg.model = "claude-opus-5".into();
     spawn(cfg, Arc::new(provider)).unwrap()
 }
@@ -69,12 +69,12 @@ async fn ask(handle: &SessionHandle, text: &str) {
 }
 
 #[tokio::test]
-async fn текстовый_ответ_даёт_ровно_ожидаемый_поток() {
+async fn text_response_yields_exact_expected_stream() {
     let dir = TempDir::new();
-    let handle = session(&dir, MockProvider::text("Это на Rust."), Mode::Plan);
+    let handle = session(&dir, MockProvider::text("This is in Rust."), Mode::Plan);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "на чём написано ядро?").await;
+    ask(&handle, "what language is core in?").await;
     let events = collect(&mut rx).await;
 
     assert_eq!(
@@ -95,19 +95,19 @@ async fn текстовый_ответ_даёт_ровно_ожидаемый_п
     );
 
     match &events[5] {
-        AgentEvent::TextDelta { text, .. } => assert_eq!(text, "Это на Rust."),
-        other => panic!("не дельта: {other:?}"),
+        AgentEvent::TextDelta { text, .. } => assert_eq!(text, "This is in Rust."),
+        other => panic!("not a delta: {other:?}"),
     }
     match &events[7] {
         AgentEvent::TurnFinished { stop_reason, .. } => {
             assert_eq!(*stop_reason, StopReason::EndTurn)
         }
-        other => panic!("не завершение: {other:?}"),
+        other => panic!("not a finish: {other:?}"),
     }
 }
 
 #[tokio::test]
-async fn вызов_тула_проходит_весь_путь_и_подпись_не_уезжает_модели() {
+async fn tool_call_completes_roundtrip_and_caption_does_not_go_to_model() {
     let dir = TempDir::new();
     dir.write("src/main.rs", "fn main() {}\n");
 
@@ -115,14 +115,14 @@ async fn вызов_тула_проходит_весь_путь_и_подпис�
         Turn::Events(script_tool_call(
             "toolu_1",
             "Read",
-            json!({ "path": "src/main.rs", "description": "Прочитал точку входа." }),
+            json!({ "path": "src/main.rs", "description": "Read entry point." }),
         )),
-        Turn::Events(script_text("Точка входа пустая.")),
+        Turn::Events(script_text("Entry point is empty.")),
     ]);
     let handle = session(&dir, provider, Mode::Plan);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "что в main?").await;
+    ask(&handle, "what is in main?").await;
     let events = collect(&mut rx).await;
 
     assert_eq!(
@@ -154,26 +154,26 @@ async fn вызов_тула_проходит_весь_путь_и_подпис�
         } => {
             assert_eq!(tool, "Read");
             // A caption without a full stop at the end — the §5.4.1 form.
-            assert_eq!(description.as_deref(), Some("Прочитал точку входа"));
+            assert_eq!(description.as_deref(), Some("Read entry point"));
             assert_eq!(target.as_deref(), Some("src/main.rs"));
             assert!(
                 input.get("description").is_none(),
-                "подпись — забота ленты, тулу она не аргумент"
+                "caption is feed concern, not an argument to tool"
             );
         }
-        other => panic!("не старт тула: {other:?}"),
+        other => panic!("not a tool start: {other:?}"),
     }
 
     match &events[7] {
         AgentEvent::ToolCallProgress { chunk, .. } => assert!(chunk.contains("fn main")),
-        other => panic!("не вывод: {other:?}"),
+        other => panic!("not tool output: {other:?}"),
     }
 }
 
 /// Usage arrives after every model response, not once per turn: the ring
 /// of state has to fill up in the middle of a turn with tools too.
 #[tokio::test]
-async fn расход_накапливается_на_каждом_ответе_модели() {
+async fn usage_accumulates_on_each_model_response() {
     let dir = TempDir::new();
     dir.write("src/main.rs", "fn main() {}\n");
 
@@ -181,17 +181,17 @@ async fn расход_накапливается_на_каждом_ответе_
         Turn::Events(script_tool_call(
             "toolu_1",
             "Read",
-            json!({ "path": "src/main.rs", "description": "Прочитал точку входа" }),
+            json!({ "path": "src/main.rs", "description": "Read entry point" }),
         )),
-        Turn::Events(script_text("Пусто.")),
+        Turn::Events(script_text("Empty.")),
     ]);
     let handle = session(&dir, provider, Mode::Plan);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "что в main?").await;
+    ask(&handle, "what is in main?").await;
     let events = collect(&mut rx).await;
 
-    let расходы: Vec<_> = events
+    let usage_totals: Vec<_> = events
         .iter()
         .filter_map(|e| match e {
             AgentEvent::UsageUpdated { usage } => Some(usage.total.output),
@@ -199,28 +199,28 @@ async fn расход_накапливается_на_каждом_ответе_
         })
         .collect();
     assert_eq!(
-        расходы,
+        usage_totals,
         vec![30, 50],
-        "счётчик за сессию должен накапливаться"
+        "session counter must accumulate"
     );
 }
 
 #[tokio::test]
-async fn выход_за_границы_проекта_это_отклонение_а_не_сбой() {
+async fn escaping_project_boundary_is_rejection_not_failure() {
     let dir = TempDir::new();
 
     let provider = MockProvider::new(vec![
         Turn::Events(script_tool_call(
             "toolu_1",
             "Read",
-            json!({ "path": "../../secrets.env", "description": "Заглянул наружу" }),
+            json!({ "path": "../../secrets.env", "description": "Peeking outside" }),
         )),
-        Turn::Events(script_text("Не вышло.")),
+        Turn::Events(script_text("Did not work.")),
     ]);
     let handle = session(&dir, provider, Mode::Plan);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "прочитай соседний проект").await;
+    ask(&handle, "read neighboring project").await;
     let events = collect(&mut rx).await;
 
     // §5.9: a tripped guard is painted `--vermilion-ink`, not `--rust`,
@@ -230,17 +230,17 @@ async fn выход_за_границы_проекта_это_отклонени
 }
 
 #[tokio::test]
-async fn неизвестный_тул_не_роняет_турн() {
+async fn unknown_tool_does_not_crash_turn() {
     let dir = TempDir::new();
 
     let provider = MockProvider::new(vec![
         Turn::Events(script_tool_call("t1", "Write", json!({ "path": "a" }))),
-        Turn::Events(script_text("Понял, такого нет.")),
+        Turn::Events(script_text("Got it, no such tool.")),
     ]);
     let handle = session(&dir, provider, Mode::Plan);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "перепиши файл").await;
+    ask(&handle, "rewrite file").await;
     let events = collect(&mut rx).await;
 
     assert!(names(&events).contains(&"toolCallFailed"));
@@ -254,7 +254,7 @@ async fn неизвестный_тул_не_роняет_турн() {
 }
 
 #[tokio::test]
-async fn ошибка_провайдера_гасит_кольцо_а_не_вешает_его() {
+async fn provider_error_clears_ring_rather_than_hanging() {
     let dir = TempDir::new();
 
     let provider = MockProvider::new(vec![Turn::Fail(ProviderError::Http {
@@ -265,7 +265,7 @@ async fn ошибка_провайдера_гасит_кольцо_а_не_ве�
     let handle = session(&dir, provider, Mode::Plan);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "привет").await;
+    ask(&handle, "hello").await;
     let events = collect(&mut rx).await;
 
     assert_eq!(
@@ -286,9 +286,9 @@ async fn ошибка_провайдера_гасит_кольцо_а_не_ве�
             code, retryable, ..
         } => {
             assert_eq!(code, "http_401");
-            assert!(!retryable, "401 повторять бессмысленно");
+            assert!(!retryable, "401 is pointless to retry");
         }
-        other => panic!("не ошибка: {other:?}"),
+        other => panic!("not an error: {other:?}"),
     }
     // Without `TurnFinished` the ring would spin forever — the interface would lie
     // about the state, which §0 does not allow.
@@ -302,7 +302,7 @@ async fn ошибка_провайдера_гасит_кольцо_а_не_ве�
 }
 
 #[tokio::test]
-async fn лимит_запросов_повторяется_и_показывает_счёт_попыток() {
+async fn rate_limit_retries_and_shows_attempt_count() {
     let dir = TempDir::new();
 
     let provider = MockProvider::new(vec![
@@ -313,12 +313,12 @@ async fn лимит_запросов_повторяется_и_показыва�
             // and the test does not sleep on it.
             retry_after_s: Some(0),
         }),
-        Turn::Events(script_text("Дошло со второй попытки.")),
+        Turn::Events(script_text("Reached on second attempt.")),
     ]);
     let handle = session(&dir, provider, Mode::Plan);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "привет").await;
+    ask(&handle, "hello").await;
     let events = collect(&mut rx).await;
 
     assert_eq!(
@@ -338,46 +338,46 @@ async fn лимит_запросов_повторяется_и_показыва�
     );
     match &events[5] {
         AgentEvent::RetryScheduled { attempt, of, .. } => {
-            // §5.10: «Повтор через 4 с · попытка 2 из 5».
+            // §5.10: "Retry in 4 s · attempt 2 of 5".
             assert_eq!((*attempt, *of), (2, 5));
         }
-        other => panic!("не повтор: {other:?}"),
+        other => panic!("not a retry: {other:?}"),
     }
 }
 
 #[tokio::test]
-async fn отмена_обрывает_турн_и_говорит_об_этом() {
+async fn cancellation_aborts_turn_and_notifies() {
     let dir = TempDir::new();
 
-    let provider = MockProvider::new(vec![Turn::Events(script_text("длинный ответ"))])
+    let provider = MockProvider::new(vec![Turn::Events(script_text("long response"))])
         .with_gap(Duration::from_millis(80));
     let handle = session(&dir, provider, Mode::Plan);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "расскажи всё").await;
+    ask(&handle, "tell everything").await;
     tokio::time::sleep(Duration::from_millis(120)).await;
     handle.send(Command::Cancel).await.unwrap();
 
     let events = collect(&mut rx).await;
     assert!(
         matches!(events.last(), Some(AgentEvent::TurnCancelled { .. })),
-        "получили {:?}",
+        "received {:?}",
         names(&events)
     );
     assert!(!names(&events).contains(&"turnFinished"));
 }
 
 #[tokio::test]
-async fn режим_plan_не_отдаёт_модели_пишущих_тулов() {
+async fn plan_mode_does_not_give_writing_tools_to_model() {
     let dir = TempDir::new();
-    let provider = Arc::new(MockProvider::text("ок"));
+    let provider = Arc::new(MockProvider::text("ok"));
     let mut cfg = SessionConfig::new(dir.path());
     cfg.mode = Mode::Plan;
-    cfg.journal = false;
+    cfg.journal = None;
     let handle = spawn(cfg, provider.clone()).unwrap();
     let mut rx = handle.subscribe();
 
-    ask(&handle, "привет").await;
+    ask(&handle, "hello").await;
     collect(&mut rx).await;
 
     let seen = provider.seen.lock().unwrap();
@@ -410,12 +410,12 @@ async fn режим_plan_не_отдаёт_модели_пишущих_туло�
 }
 
 #[tokio::test]
-async fn смена_режима_видна_и_доезжает_до_следующего_запроса() {
+async fn mode_change_is_observable_and_propagates_to_next_request() {
     let dir = TempDir::new();
-    let provider = Arc::new(MockProvider::new(vec![Turn::Events(script_text("ок"))]));
+    let provider = Arc::new(MockProvider::new(vec![Turn::Events(script_text("ok"))]));
     let mut cfg = SessionConfig::new(dir.path());
     cfg.mode = Mode::Manual;
-    cfg.journal = false;
+    cfg.journal = None;
     let handle = spawn(cfg, provider.clone()).unwrap();
     let mut rx = handle.subscribe();
 
@@ -430,11 +430,11 @@ async fn смена_режима_видна_и_доезжает_до_следу�
         .unwrap()
     {
         AgentEvent::StateChanged { state } => assert_eq!(state.mode, Mode::Plan),
-        other => panic!("не смена состояния: {other:?}"),
+        other => panic!("not a state change: {other:?}"),
     }
     assert_eq!(handle.state().mode, Mode::Plan);
 
-    ask(&handle, "составь план").await;
+    ask(&handle, "make a plan").await;
     collect(&mut rx).await;
 
     let seen = provider.seen.lock().unwrap();
@@ -445,19 +445,19 @@ async fn смена_режима_видна_и_доезжает_до_следу�
 }
 
 #[tokio::test]
-async fn вложенный_файл_считается_прочитанным() {
+async fn attached_file_is_considered_read() {
     let dir = TempDir::new();
-    dir.write("notes.md", "заметки");
+    dir.write("notes.md", "notes");
 
-    let provider = Arc::new(MockProvider::text("прочитал"));
+    let provider = Arc::new(MockProvider::text("read it"));
     let mut cfg = SessionConfig::new(dir.path());
-    cfg.journal = false;
+    cfg.journal = None;
     let handle = spawn(cfg, provider.clone()).unwrap();
     let mut rx = handle.subscribe();
 
     handle
         .send(Command::SendMessage {
-            text: "что тут?".into(),
+            text: "what is here?".into(),
             attachments: vec!["notes.md".into()],
         })
         .await
@@ -467,23 +467,22 @@ async fn вложенный_файл_считается_прочитанным()
     // §7.2: the human attached the file themselves; making the agent reread it would be silly.
     let seen = provider.seen.lock().unwrap();
     let first = format!("{:?}", seen[0].messages[0]);
-    assert!(first.contains("notes.md"), "вложение не попало в сообщение");
+    assert!(first.contains("notes.md"), "attachment did not reach message");
 }
 
 #[tokio::test]
-async fn журнал_переигрывается_в_тот_же_поток() {
+async fn journal_replays_into_identical_stream() {
     let dir = TempDir::new();
     let mut cfg = SessionConfig::new(dir.path());
-    cfg.journal = true;
-    let handle = spawn(cfg, Arc::new(MockProvider::text("привет"))).unwrap();
+    let chats = dir.path().join("chats");
+    cfg.journal = Some(chats.clone());
+    let handle = spawn(cfg, Arc::new(MockProvider::text("hello"))).unwrap();
     let mut rx = handle.subscribe();
 
-    ask(&handle, "здравствуй").await;
+    ask(&handle, "greetings").await;
     let live = collect(&mut rx).await;
 
-    let path = dir
-        .path()
-        .join(".yaca/sessions")
+    let path = crate::store::location::project_dir(&chats, dir.path())
         .join(format!("{}.jsonl", handle.id()));
     let replayed = log::replay(&path).unwrap();
 
@@ -499,7 +498,7 @@ async fn журнал_переигрывается_в_тот_же_поток() {
 
 // --- edits in the working tree (§6) -------------------------------------------
 
-fn правит(path: &str, old: &str, new: &str) -> Vec<crate::provider::ProviderEvent> {
+fn edit_call(path: &str, old: &str, new: &str) -> Vec<crate::provider::ProviderEvent> {
     script_tool_call(
         "toolu_edit",
         "Edit",
@@ -507,33 +506,33 @@ fn правит(path: &str, old: &str, new: &str) -> Vec<crate::provider::Provid
     )
 }
 
-fn читает(id: &str, path: &str) -> Vec<crate::provider::ProviderEvent> {
+fn read_call(id: &str, path: &str) -> Vec<crate::provider::ProviderEvent> {
     script_tool_call(
         id,
         "Read",
-        json!({ "path": path, "description": "Посмотрел файл" }),
+        json!({ "path": path, "description": "Looked at file" }),
     )
 }
 
 #[tokio::test]
-async fn правка_уезжает_в_дерево_и_даёт_ленте_дифф() {
+async fn edit_persists_to_tree_and_provides_diff_to_feed() {
     let dir = TempDir::new();
     let path = dir.write("src/a.rs", "let x = 1;\n");
 
     let provider = MockProvider::new(vec![
         // The mock too has to read before an edit: the invariant is not switched off.
-        Turn::Events(читает("toolu_read", "src/a.rs")),
-        Turn::Events(правит("src/a.rs", "let x = 1;", "let x = 42;")),
-        Turn::Events(script_text("Готово.")),
+        Turn::Events(read_call("toolu_read", "src/a.rs")),
+        Turn::Events(edit_call("src/a.rs", "let x = 1;", "let x = 42;")),
+        Turn::Events(script_text("Done.")),
     ]);
     let handle = session(&dir, provider, Mode::Auto);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "поменяй единицу на сорок два").await;
+    ask(&handle, "change one to forty two").await;
     let events = collect(&mut rx).await;
 
-    let имена = names(&events);
-    assert!(имена.contains(&"fileChanged"), "получили {имена:?}");
+    let names_list = names(&events);
+    assert!(names_list.contains(&"fileChanged"), "received {names_list:?}");
 
     let (fact, diff) = events
         .iter()
@@ -541,66 +540,66 @@ async fn правка_уезжает_в_дерево_и_даёт_ленте_ди
             AgentEvent::FileChanged { fact, diff, .. } => Some((fact, diff)),
             _ => None,
         })
-        .expect("события о правке не было");
+        .expect("no edit event found");
     assert_eq!(fact.path, "src/a.rs");
     assert_eq!(fact.kind, crate::change::ChangeKind::Modified);
     assert_eq!((fact.added, fact.removed), (1, 1));
-    assert!(!diff.hunks.is_empty(), "раскрытая строка без диффа пуста");
+    assert!(!diff.hunks.is_empty(), "expanded row without diff is empty");
 
     // §16.37: there is one confirmation and it is already given — the edit is on disk.
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "let x = 42;\n");
 }
 
 #[tokio::test]
-async fn агент_перечитывает_собственную_правку() {
+async fn agent_rereads_its_own_edit() {
     let dir = TempDir::new();
-    dir.write("a.rs", "старое\n");
+    dir.write("a.rs", "old\n");
 
     let provider = MockProvider::new(vec![
-        Turn::Events(читает("t1", "a.rs")),
-        Turn::Events(правит("a.rs", "старое", "новое")),
-        Turn::Events(читает("t3", "a.rs")),
-        Turn::Events(script_text("Всё на месте.")),
+        Turn::Events(read_call("t1", "a.rs")),
+        Turn::Events(edit_call("a.rs", "old", "new")),
+        Turn::Events(read_call("t3", "a.rs")),
+        Turn::Events(script_text("All in place.")),
     ]);
     let handle = session(&dir, provider, Mode::Auto);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "замени слово").await;
+    ask(&handle, "replace word").await;
     let events = collect(&mut rx).await;
 
     // The last read has to return the edit: it is already on disk, but the fingerprint
     // after the write must be fresh, or the read will hit the invariant.
-    let последний = events
+    let last_output = events
         .iter()
         .filter_map(|e| match e {
             AgentEvent::ToolCallProgress { chunk, .. } => Some(chunk.clone()),
             _ => None,
         })
         .next_back()
-        .expect("вывода тулов не было");
-    assert!(последний.contains("новое"), "прочитано: {последний}");
+        .expect("no tool output found");
+    assert!(last_output.contains("new"), "read: {last_output}");
 }
 
 #[tokio::test]
-async fn правка_непрочитанного_файла_отклоняется_а_не_падает() {
+async fn edit_to_unread_file_is_rejected_not_crashed() {
     let dir = TempDir::new();
-    let path = dir.write("a.rs", "чужой труд\n");
+    let path = dir.write("a.rs", "someone's work\n");
 
     let provider = MockProvider::new(vec![
-        Turn::Events(правит("a.rs", "чужой труд", "мой труд")),
-        Turn::Events(script_text("Понял, сначала читаю.")),
+        Turn::Events(edit_call("a.rs", "someone's work", "my work")),
+        Turn::Events(script_text("Understood, reading first.")),
     ]);
     let handle = session(&dir, provider, Mode::Auto);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "перепиши файл").await;
+    ask(&handle, "rewrite file").await;
     let events = collect(&mut rx).await;
 
     // §5.9: a tripped guard is not a failure, and it is painted differently.
-    let имена = names(&events);
-    assert!(имена.contains(&"toolCallRejected"), "получили {имена:?}");
-    assert!(!имена.contains(&"fileChanged"));
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), "чужой труд\n");
+    let names_list = names(&events);
+    assert!(names_list.contains(&"toolCallRejected"), "received {names_list:?}");
+    assert!(!names_list.contains(&"fileChanged"));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "someone's work\n");
 }
 
 #[tokio::test]
@@ -610,14 +609,14 @@ async fn naming_the_chat_leaves_no_row_in_the_stream() {
         Turn::Events(script_tool_call(
             "toolu_1",
             "SetTitle",
-            json!({ "title": "Разбор дат" }),
+            json!({ "title": "Parsing dates" }),
         )),
-        Turn::Events(script_text("Хорошо.")),
+        Turn::Events(script_text("Okay.")),
     ]);
     let handle = session(&dir, provider, Mode::Plan);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "привет").await;
+    ask(&handle, "hello").await;
     let events = collect(&mut rx).await;
 
     let kinds = names(&events);

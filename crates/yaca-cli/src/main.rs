@@ -7,6 +7,7 @@
 
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -16,11 +17,15 @@ use yaca_core::id::SessionId;
 use yaca_core::process::ProcessState;
 use yaca_core::provider;
 use yaca_core::provider::registry::{self, Providers};
+use yaca_core::provider::Provider;
+use yaca_core::router::{self, ROUTER_ID};
 use yaca_core::secrets;
 use yaca_core::{Command, Effort, Mode, PermissionAnswer, SessionConfig};
 
 mod mcp;
+mod plugins;
 mod sessions;
+mod skills;
 
 #[derive(Subcommand, Debug)]
 enum Cmd {
@@ -34,6 +39,29 @@ enum Cmd {
         /// again when its declaration changes.
         #[arg(long, value_name = "NAME")]
         approve: Option<String>,
+        /// Log in to a remote server that asks for it (OAuth): the browser
+        /// opens the server's login page, and the login is kept in the
+        /// system keychain.
+        #[arg(long, value_name = "NAME")]
+        login: Option<String>,
+        /// Forget the login to a remote server.
+        #[arg(long, value_name = "NAME")]
+        logout: Option<String>,
+    },
+
+    /// List the skills the project and you have, and what is wrong with the
+    /// ones that did not load.
+    Skills,
+
+    /// List your plugins — Yaca's own and those Claude Code installed — and
+    /// turn one on or off for the chats opened after this.
+    Plugins {
+        #[command(subcommand)]
+        action: Option<plugins::Action>,
+        #[arg(long, value_name = "ID")]
+        enable: Option<String>,
+        #[arg(long, value_name = "ID")]
+        disable: Option<String>,
     },
 }
 
@@ -92,7 +120,7 @@ struct Args {
     #[arg(long)]
     jsonl: bool,
 
-    /// Write a journal to `.yaca/sessions`.
+    /// Write a journal to the chats folder, beside the window's chats.
     #[arg(long)]
     journal: bool,
 
@@ -125,7 +153,11 @@ async fn main() -> Result<()> {
 
     match args.command {
         Some(Cmd::Session(cmd)) => return sessions::run(&args.project, cmd),
-        Some(Cmd::Mcp { approve }) => return mcp::run(&args.project, approve).await,
+        Some(Cmd::Mcp { approve, login, logout }) => {
+            return mcp::run(&args.project, approve, login, logout).await
+        }
+        Some(Cmd::Skills) => return skills::run(&args.project),
+        Some(Cmd::Plugins { action, enable, disable }) => return plugins::run(action, enable, disable),
         None => {}
     }
     let prompt = args
@@ -153,7 +185,15 @@ async fn main() -> Result<()> {
     config.mcp_servers = yaca_core::mcp::config::load_global(&config_dir)?;
     config.lsp_servers = yaca_core::lsp::config::load_global(&config_dir)?;
     config.lsp_autodetect = true;
-    config.mcp_approvals = Some(config_dir);
+    config.user_skills = yaca_core::skills::user_dirs(&config_dir);
+    config.user_agents = yaca_core::agents::user_dirs(&config_dir);
+    config.plugins = yaca_core::plugin::PluginSources::standard(&config_dir).load().enabled();
+    // The window's chats folder, so that a session recorded here is listed
+    // there, and one held there can be resumed here.
+    if args.journal || args.resume.is_some() {
+        config.journal = Some(yaca_core::store::chats_dir()?);
+    }
+    config.mcp_approvals = Some(config_dir.clone());
     if let Some(id) = args.resume {
         config.resume_session(SessionId::from(id));
     }
@@ -165,29 +205,18 @@ async fn main() -> Result<()> {
         args.provider.unwrap_or_default(),
         args.model.unwrap_or_default(),
     );
-    let (spec, model) = providers.resolve(&config.provider, &config.model)?;
-    let spec = spec.clone();
-
-    // Keychain first, environment second (§10). No key is not an error: the
-    // request goes without it, and a server that wants one refuses with a
-    // message naming the key. The source is reported on stderr, where it
-    // cannot be mistaken for part of the `--jsonl` stream.
-    let key = spec
-        .needs_key()
-        .then(|| secrets::api_key(&spec.id))
-        .and_then(|(key, source)| {
-            tracing::debug!(?source, provider = %spec.id, "ключ провайдера");
-            key
-        });
-
-    config.provider = spec.id.clone();
-    config.model = model;
-    config.models = spec.models.clone();
+    // The small model the `Decision` tool asks, when the Decision provider or
+    // the router has one: the same rule the window applies, from the same place.
+    config.decision = router::attach::decision_setup(&config_dir, &providers);
+    let provider = if config.provider == ROUTER_ID {
+        router::attach::attach(&config_dir, &providers, &mut config)?
+    } else {
+        resolve_provider(&providers, &mut config)?
+    };
     config.mode = parse_mode(&args.mode)?;
     config.effort = parse_effort(&args.effort)?;
-    config.journal = args.journal || config.resume.is_some();
 
-    let handle = yaca_core::spawn(config, provider::build_with_key(spec, key))?;
+    let handle = yaca_core::spawn(config, provider)?;
     let mut events = handle.subscribe();
 
     handle
@@ -240,6 +269,17 @@ async fn main() -> Result<()> {
                 .await?;
         }
 
+        // A server's form has no one to fill it in here: the server is told
+        // the person declined, rather than left waiting.
+        if let AgentEvent::ElicitationRequested { request } = &event {
+            handle
+                .send(Command::AnswerElicitation {
+                    request_id: request.id.clone(),
+                    reply: yaca_core::mcp::ElicitationReply::Decline,
+                })
+                .await?;
+        }
+
         if matches!(
             event,
             AgentEvent::TurnFinished { .. } | AgentEvent::TurnCancelled { .. }
@@ -283,11 +323,48 @@ fn checkpoint_reason(reason: &yaca_core::CheckpointReason) -> String {
     }
 }
 
+/// Chooses the provider from `providers.json` and sets the provider, model and
+/// model list on `config` to match. The key is read here, because only the
+/// provider knows whether it needs one.
+fn resolve_provider(
+    providers: &Providers,
+    config: &mut SessionConfig,
+) -> Result<Arc<dyn Provider>> {
+    let (spec, model) = providers.resolve(&config.provider, &config.model)?;
+    let spec = spec.clone();
+
+    // Keychain first, environment second (§10). No key is not an error: the
+    // request goes without it, and a server that wants one refuses with a
+    // message naming the key. The source is reported on stderr, where it
+    // cannot be mistaken for part of the `--jsonl` stream.
+    let key = spec
+        .needs_key()
+        .then(|| secrets::api_key(&spec.id))
+        .and_then(|(key, source)| {
+            tracing::debug!(?source, provider = %spec.id, "ключ провайдера");
+            key
+        });
+
+    config.provider = spec.id.clone();
+    config.model = model;
+    config.models = spec.models.clone();
+    Ok(provider::build_with_key(spec, key))
+}
+
 /// The human-readable form. Deliberately rough: this is not the feed, just a
 /// window on the stream.
 fn human(event: &AgentEvent) -> Option<String> {
     Some(match event {
         AgentEvent::TextDelta { text, .. } => text.clone(),
+        AgentEvent::RouteDecided {
+            route,
+            provider,
+            model,
+            ..
+        } => format!(
+            "\x1b[2mМаршрут: {} → {provider}/{model}\x1b[0m",
+            route.as_deref().unwrap_or("по умолчанию")
+        ),
         AgentEvent::ThinkingDelta { text, .. } => format!("\x1b[2m{text}\x1b[0m"),
         AgentEvent::ToolCallStarted {
             tool,
@@ -356,6 +433,8 @@ fn human(event: &AgentEvent) -> Option<String> {
                         McpStatus::NeedsApproval => {
                             format!("ждёт одобрения: yaca mcp --approve {}", s.name)
                         }
+                        McpStatus::NeedsLogin => format!("нужен вход: yaca mcp --login {}", s.name),
+                        McpStatus::LoggingIn => "идёт вход".to_string(),
                     };
                     format!("  {} · {что}", s.name)
                 })

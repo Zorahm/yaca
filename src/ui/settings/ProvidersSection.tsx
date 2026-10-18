@@ -22,16 +22,24 @@
 import { ArrowClockwise, CaretLeft, PencilSimple, Plus, X } from "@phosphor-icons/react";
 import { useState } from "react";
 
-import type { ProviderSpec } from "../../core/client";
+import type { ModelInfo, ProviderSpec } from "../../core/client";
 import { t, tp } from "../../i18n";
 import { PROTOCOL_NAME, ProviderMark } from "../brand";
 import { ProviderForm } from "./ProviderForm";
 import { draftFromSpec, emptyDraft, isPreset, type ProviderDraft } from "./provider";
+import { RoutingSection } from "./RoutingSection";
 import { useProviders } from "./useProviders";
 
 type Editing = { draft: ProviderDraft; isNew: boolean };
 
-export function ProvidersSection({ onChanged }: { onChanged: () => void }) {
+export function ProvidersSection({
+  models,
+  onChanged,
+}: {
+  /** Every model the providers listed: the router picks its three from them. */
+  models: ModelInfo[];
+  onChanged: () => void;
+}) {
   const { providers, error, save, remove } = useProviders();
   const [editing, setEditing] = useState<Editing | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -105,6 +113,9 @@ export function ProvidersSection({ onChanged }: { onChanged: () => void }) {
           </div>
         </>
       )}
+
+      {/* The router is made of the providers above, so it is set up under them. */}
+      <RoutingSection models={models} onChanged={onChanged} />
     </>
   );
 }

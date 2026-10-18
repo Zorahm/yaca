@@ -28,6 +28,7 @@ import {
   models as fetchModels,
   onProviders,
   projectCommands,
+  projectSkills,
   projects as listProjects,
   sessions,
   type Command,
@@ -37,7 +38,6 @@ import {
   type QuestionReply,
   type Preferences,
   type ProcessId,
-  type SlashCommand,
 } from "./core/client";
 import { agentsOf } from "./core/agents";
 import { touchedFiles, visible } from "./core/feed";
@@ -47,6 +47,7 @@ import { Feed, type FeedActions, type FeedJump } from "./ui/Feed";
 import { Notices } from "./ui/Bars";
 import { Composer, type ComposerActions } from "./ui/Composer";
 import { MODES } from "./ui/ModeMenu";
+import { mcpPrompts, withSkills, type MenuCommand } from "./ui/slash";
 import { Home } from "./ui/Home";
 import { imageActions } from "./ui/images";
 import { galleryOf } from "./ui/viewer/gallery";
@@ -56,6 +57,7 @@ import { TopBar } from "./ui/TopBar";
 import { Sidebar } from "./ui/sidebar/Sidebar";
 import { ProcessesPanel } from "./ui/panel/ProcessesPanel";
 import { McpPanel } from "./ui/panel/McpPanel";
+import { LspPanel } from "./ui/panel/LspPanel";
 import Settings, { type Section as SettingsSection } from "./Settings";
 import { ownTitleBar } from "./core/frame";
 import { setHelpMenu } from "./core/menu";
@@ -133,7 +135,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
   const [error, setError] = useState<string | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [projects, setProjects] = useState<string[]>([]);
-  const [slashCommands, setSlashCommands] = useState<SlashCommand[]>([]);
+  const [slashCommands, setSlashCommands] = useState<MenuCommand[]>([]);
   const [draft, setDraft] = useState<string | null>(null);
   const [panel, setPanel] = useState<PanelKind | null>(null);
   const [filePanelPath, setFilePanelPath] = useState<string | null>(null);
@@ -172,10 +174,19 @@ export default function App({ prefs }: { prefs: Preferences }) {
   const gallery = useMemo(() => galleryOf(activeFeed), [activeFeed]);
   const refreshCommands = useCallback(() => {
     if (project === null) return setSlashCommands([]);
-    void projectCommands(project).then(setSlashCommands, failed);
+    void Promise.all([projectCommands(project), projectSkills(project)]).then(
+      ([commands, skills]) => setSlashCommands(withSkills(commands, skills.skills)),
+      failed,
+    );
   }, [project, failed]);
 
   useEffect(refreshCommands, [refreshCommands]);
+  // The chat's own commands on top of the project's: its MCP servers' prompts.
+  const activeMcp = active?.feed.mcp ?? null;
+  const chatCommands = useMemo(
+    () => [...slashCommands, ...mcpPrompts(activeMcp)],
+    [slashCommands, activeMcp],
+  );
 
   useEffect(() => {
     // Проекты помнят глобальные настройки приложения: в самом проекте список
@@ -307,6 +318,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
         send(commands.answerPermission(active.feed.request.id, answer));
       }
     },
+    answerElicitation: (requestId, reply) => send(commands.answerElicitation(requestId, reply)),
     answerQuestion: (reply: QuestionReply) => {
       if (active?.feed.question) {
         send(commands.answerQuestion(active.feed.question.id, reply));
@@ -355,6 +367,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
     compact: () => send(commands.compact()),
     openCheckpoints: () => setPanel("checkpoints"),
     openMcp: () => setPanel("mcp"),
+    openLsp: () => setPanel("lsp"),
     newChat: () => {
       if (active !== null) newChat(active.project);
     },
@@ -532,6 +545,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
             feed={active.feed}
             onCompact={() => send(commands.compact())}
             onOpenMcp={() => setPanel("mcp")}
+            onOpenLsp={() => setPanel("lsp")}
           />
         </div>
 
@@ -550,7 +564,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
               ? models.filter((m) => !m.providerId || m.providerId === state.provider)
               : models
           }
-          commands={slashCommands}
+          commands={chatCommands}
           queued={active.feed.queued}
           found={active.feed.found}
           actions={composerActions}
@@ -597,6 +611,15 @@ export default function App({ prefs }: { prefs: Preferences }) {
               onRefresh={() => void chats.refreshMcp(active.id).catch(failed)}
               onReconnect={(server) => send(commands.reconnectMcpServer(server))}
               onApprove={(server) => send(commands.approveMcpServer(server))}
+              onLogin={(server) => send(commands.loginMcpServer(server))}
+              onLogout={(server) => send(commands.logoutMcpServer(server))}
+            />
+          )}
+
+          {panel === "lsp" && (
+            <LspPanel
+              servers={active.feed.lsp}
+              onRestart={(server) => send(commands.restartLspServer(server))}
             />
           )}
 

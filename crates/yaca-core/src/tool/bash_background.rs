@@ -73,7 +73,7 @@ pub(super) async fn to_background(
 
     let secs = waited.limit.as_secs();
     ctx.progress.push(format!(
-        "Не уложилась в {secs} с — продолжает работать в фоне под номером {id}\n"
+        "Did not complete within {secs} s — continues running in background with id {id}\n"
     ));
 
     let printed_so_far = if text.is_empty() {
@@ -137,7 +137,7 @@ impl OutputFile {
         }
         self.written += chunk.len() as u64;
         if self.written > OUTPUT_FILE_MAX_BYTES {
-            chunk.push_str("[вывод обрезан: файл достиг предела размера]\n");
+            chunk.push_str("[output truncated: file reached size limit]\n");
         }
         // A full disk is no reason to stop collecting into the buffer.
         let _ = self.file.write_all(chunk.as_bytes()).await;
@@ -169,7 +169,7 @@ pub(super) async fn drain_after_exit(
 /// Starts the command and leaves it in the process panel (§6.5).
 pub(super) fn background(ctx: &ToolCtx, command: &str, cwd: &Path) -> Result<ToolOutput, ToolError> {
     let spawned = shell::spawn(ctx.shell, command, cwd)
-        .map_err(|e| ToolError::failed(format!("не удалось запустить «{}»: {e}", head(command))))?;
+        .map_err(|e| ToolError::failed(format!("failed to start «{}»: {e}", head(command))))?;
     let shell::Spawned { child, pid, output } = spawned;
 
     let id = ctx
@@ -178,8 +178,9 @@ pub(super) fn background(ctx: &ToolCtx, command: &str, cwd: &Path) -> Result<Too
     tokio::spawn(collect(ctx.processes.downgrade(), id, child, output));
 
     Ok(ToolOutput::new(format!(
-        "Запущена в фоне под номером {id}. Читать её вывод — BashOutput, \
-         остановить — BashKill, перезапустить — BashRestart.\n"
+        "Running in background with id {id}. Read its output with BashOutput, \
+         wait for a line or its end with BashWait, stop with BashKill, restart with \
+         BashRestart.\n"
     ))
     .lines(1))
 }

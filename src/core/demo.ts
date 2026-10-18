@@ -12,6 +12,7 @@
  */
 
 import type { AgentEvent } from "./bindings/AgentEvent";
+import type { LspServerSummary } from "./bindings/LspServerSummary";
 import type { McpServerSummary } from "./bindings/McpServerSummary";
 import type { ModelInfo } from "./bindings/ModelInfo";
 import type { SessionState } from "./bindings/SessionState";
@@ -33,7 +34,41 @@ export const demoState: SessionState = {
  * Серверы MCP стенда: по одному на каждое состояние, которое панель `/mcp`
  * умеет рисовать с кнопкой, — готовый, ждущий одобрения и упавший.
  */
+/** The stand's language servers: one up, one that never started. */
+export const demoLsp: LspServerSummary[] = [
+  {
+    name: "rust-analyzer",
+    command: "rust-analyzer",
+    extensions: ["rs"],
+    status: "ready",
+    reason: null,
+    label: "rust-analyzer 1.85.0",
+  },
+  {
+    name: "typescript",
+    command: "typescript-language-server --stdio",
+    extensions: ["ts", "tsx", "js", "jsx"],
+    status: "idle",
+    reason: null,
+    label: null,
+  },
+];
+
 export const demoMcp: McpServerSummary[] = [
+  {
+    name: "linear",
+    source: "global",
+    transport: "http",
+    target: "https://mcp.linear.example/mcp",
+    status: "needsLogin",
+    reason: null,
+    label: null,
+    tools: [],
+    resources: false,
+    prompts: [],
+    loginUrl: null,
+    loggedIn: false,
+  },
   {
     name: "docs",
     source: "global",
@@ -47,6 +82,15 @@ export const demoMcp: McpServerSummary[] = [
       { name: "add_note", description: "Attach a note to a page.", readOnly: false },
     ],
     resources: true,
+    loginUrl: null,
+    loggedIn: true,
+    prompts: [
+      {
+        command: "mcp__docs__explain",
+        description: "Explain a page of the documentation.",
+        arguments: ["page", "audience"],
+      },
+    ],
   },
   {
     name: "files",
@@ -58,6 +102,9 @@ export const demoMcp: McpServerSummary[] = [
     label: null,
     tools: [],
     resources: false,
+    prompts: [],
+    loginUrl: null,
+    loggedIn: false,
   },
   {
     name: "tracker",
@@ -69,6 +116,9 @@ export const demoMcp: McpServerSummary[] = [
     label: null,
     tools: [],
     resources: false,
+    prompts: [],
+    loginUrl: null,
+    loggedIn: false,
   },
 ];
 
@@ -391,11 +441,15 @@ export const demoScript: AgentEvent[] = [
       "## Что изменилось\n\nПоправил `parseSegment`: смещение зоны теперь **прибавляется** после разбора.\n\n" +
       "```ts\nconst at = Date.parse(raw);\nreturn new Date(at + offset(raw));\n```\n\n" +
       '```python\ndef count_lines(path: str) -> int:\n    with open(path, encoding="utf-8") as f:\n        return sum(1 for _ in f)\n```\n\n' +
-      "- `segments.ts` — сам разбор\n- `app.rs` — правка не прошла\n\nПрогоню тесты.\n",
+      "- `segments.ts` — сам разбор\n- `app.rs` — правка не прошла\n\n" +
+      "| Файл | Строк | Статус |\n| :-- | --: | :-: |\n" +
+      "| `segments.ts` | 86 | **готово** |\n| `app.rs` | 412 | не прошла |\n| `a \\| b` | 3 | _ждёт_ |\n\n" +
+      "Прогоню тесты.\n",
   },
   {
     type: "textShown",
     path: "src/segments.ts",
+    command: null,
     firstLine: 12,
     lines: 4,
     total: 86,

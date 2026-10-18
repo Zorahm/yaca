@@ -1,7 +1,7 @@
 //! Sessions, storage and compaction end to end (§9, §5.11).
 //!
-//! Real files under `.yaca/`, and the core driven through the surface the
-//! interface has: `spawn`, `Command`, `AgentEvent`, plus the plain
+//! Real files in a chats folder of the test's own, and the core driven through
+//! the surface the interface has: `spawn`, `Command`, `AgentEvent`, plus the plain
 //! [`SessionStore`] the session panel is built on.
 
 mod common;
@@ -14,12 +14,11 @@ use yaca_core::message::{ContentBlock, Role};
 use yaca_core::provider::mock::{script_text, script_tool_call, MockProvider, Turn};
 use yaca_core::provider::ProviderRequest;
 use yaca_core::session::compact::SUMMARY_HEADER;
-use yaca_core::store::SessionStore;
 use yaca_core::{Command, Mode, SessionConfig, SessionHandle};
 
 use common::{ask, is_turn_over, until, TempProject};
 
-/// Like the shared helper, but writing to `.yaca/` — which is the whole point
+/// Like the shared helper, but writing the journals — which is the whole point
 /// here.
 fn recorded(
     dir: &TempProject,
@@ -28,7 +27,7 @@ fn recorded(
 ) -> SessionHandle {
     let mut config = SessionConfig::new(dir.path());
     config.mode = Mode::Manual;
-    config.journal = true;
+    config.journal = Some(dir.chats());
     config.resume = resume;
     yaca_core::spawn(config, provider).unwrap()
 }
@@ -72,7 +71,7 @@ async fn a_session_is_in_the_panel_before_it_has_finished() {
     ask(&handle, "почини разбор дат\nвот трейс").await;
     until(&mut rx, is_turn_over).await;
 
-    let store = SessionStore::open(dir.path());
+    let store = dir.store();
     let listed = store.list();
     assert_eq!(listed.len(), 1);
     // §3: the header is generated from the first message.
@@ -112,7 +111,7 @@ async fn a_session_reopens_with_the_conversation_the_model_had() {
     assert_eq!(meta.id, id);
     assert_eq!(meta.messages, 2);
     assert!(meta.cost_usd > spent, "{} против {spent}", meta.cost_usd);
-    assert_eq!(SessionStore::open(dir.path()).list().len(), 1);
+    assert_eq!(dir.store().list().len(), 1);
 }
 
 #[tokio::test]
@@ -139,7 +138,7 @@ async fn the_models_title_is_still_the_title_when_the_turn_ends() {
     // event that reached the window and not the index would show the name and
     // then take it back.
     assert_eq!(handle.meta().unwrap().title, "Обзор проекта");
-    let store = SessionStore::open(dir.path());
+    let store = dir.store();
     assert_eq!(store.list()[0].title, "Обзор проекта");
 
     // And it is in the journal, so a reopened feed and a rebuilt index have it.
@@ -159,7 +158,7 @@ async fn a_name_typed_while_the_session_is_open_survives_the_next_turn() {
 
     handle.rename("Мой заголовок").unwrap();
     // On disk at once: the panel reads the file, not the session.
-    let store = SessionStore::open(dir.path());
+    let store = dir.store();
     assert_eq!(store.list()[0].title, "Мой заголовок");
 
     // The session writes its index whole when a turn ends. A name that went
@@ -184,7 +183,7 @@ async fn a_reopened_session_gets_its_feed_back() {
     let id = first.id().clone();
     drop(first);
 
-    let store = SessionStore::open(dir.path());
+    let store = dir.store();
     let journal = store.events(&id);
     let feed = store.feed(&id);
 
@@ -210,11 +209,31 @@ async fn a_reopened_session_gets_its_feed_back() {
     );
     assert!(!feed.iter().any(|e| matches!(
         e,
-        AgentEvent::StateChanged { .. }
-            | AgentEvent::ProcessesUpdated { .. }
-            | AgentEvent::CheckpointCreated { .. }
-            | AgentEvent::CheckpointsUpdated { .. }
+        AgentEvent::StateChanged { .. } | AgentEvent::ProcessesUpdated { .. }
     )));
+
+    // The points are not left behind: the session keeps the list of them, so
+    // the reopened chat holds them and its dividers can be rolled back to.
+    let taken: Vec<_> = journal
+        .iter()
+        .filter_map(|e| match e {
+            AgentEvent::CheckpointCreated { checkpoint } => Some(checkpoint.id.clone()),
+            _ => None,
+        })
+        .collect();
+    let shown: Vec<_> = feed
+        .iter()
+        .filter_map(|e| match e {
+            AgentEvent::CheckpointCreated { checkpoint } => Some(checkpoint.id.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(shown, taken, "the dividers of the points the session holds");
+    let lists = feed
+        .iter()
+        .filter(|e| matches!(e, AgentEvent::CheckpointsUpdated { .. }))
+        .count();
+    assert_eq!(lists, 1, "and the panel's list, once, as it is now");
 
     // A session let go after its turn ended needs nothing closed for it.
     let started = feed
@@ -254,7 +273,7 @@ async fn a_duplicate_to_a_point_can_be_continued_from_there() {
     let id = handle.id().clone();
     drop(handle);
 
-    let store = SessionStore::open(dir.path());
+    let store = dir.store();
     let copy = store.duplicate(&id, Some(&turns[1])).unwrap();
 
     let provider = replies(1);
@@ -293,7 +312,7 @@ async fn search_finds_a_finished_session_by_what_was_said() {
     let other = two.id().clone();
     drop(two);
 
-    let store = SessionStore::open(dir.path());
+    let store = dir.store();
     let hits = store.search("падает", 10);
     assert_eq!(hits.len(), 1);
     assert_ne!(hits[0].session.id, other);

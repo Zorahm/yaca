@@ -18,13 +18,13 @@ use crate::message::{ContentBlock, Message, Role};
 use crate::picture;
 use crate::provider::{Provider, ProviderRequest, ProviderStream};
 use crate::slash;
-use crate::usage::UsageMeter;
+use crate::usage::{Pricing, UsageMeter};
 use crate::workspace::Workspace;
 
 use crate::checkpoint::CheckpointReason;
 
-use super::accumulator::Accumulator;
-use super::calls::Caller;
+use super::accumulator::{Accumulator, RouteDecision};
+use super::calls::{Caller, ModelPick};
 use super::binding::{self, Fingerprint};
 use super::guard::{self, Flow, RepeatGuard};
 use super::inbox::Inbox;
@@ -66,7 +66,12 @@ pub(super) struct Worker {
     pub(super) memory: Option<Arc<crate::tool::memory::store::MemoryIndex>>,
     /// The project's skills list, read once when the session starts, for the
     /// same reason as the memory index: it is part of the cached prefix.
-    pub(super) skills: Option<Arc<crate::tool::skill::Listing>>,
+    pub(super) skills: Option<Arc<crate::skills::Listing>>,
+    /// The named subagents' catalog, for the system prompt (`agents`).
+    pub(super) agents_section: Option<Arc<str>>,
+    /// What the plugins' `SessionStart` hooks said, for the system prompt
+    /// (`plugin_hooks`).
+    pub(super) plugin_context: Option<Arc<str>>,
     pub(super) history: Vec<Message>,
     /// What the reasoning in `history` was produced under (`binding`).
     /// `None` until the first request, or for a session recorded before
@@ -85,6 +90,7 @@ pub(super) struct Worker {
 
 impl Worker {
     pub(super) async fn run(mut self, rx: mpsc::Receiver<Job>) {
+        self.session_start().await;
         let mut inbox = Inbox::new(rx);
         while let Some(job) = inbox.next().await {
             let token = CancellationToken::new();
@@ -114,6 +120,8 @@ impl Worker {
 
             self.set_busy(false);
         }
+        // The handle is gone: nobody will send this session anything again.
+        self.session_end("exit").await;
     }
 
     /// The cancel token of the job now running, and the busy window it opens.
@@ -142,7 +150,7 @@ impl Worker {
         };
         self.emit(AgentEvent::Error {
             code: "isolation_commit_failed".into(),
-            message: format!("Правки чата не сохранены в его ветке: {failure}"),
+            message: format!("Chat edits were not saved to its branch: {failure}"),
             retryable: false,
         });
     }
@@ -197,7 +205,10 @@ impl Worker {
         cancel: &CancellationToken,
         inbox: &mut Inbox,
     ) -> End {
-        let mut opening = self.hear(turn_id, text, attachments).await;
+        let Some(mut opening) = self.hear_checked(turn_id, text, attachments, cancel).await else {
+            // A plugin's hook kept the message from the model, and said why.
+            return End::Finished(StopReason::EndTurn);
+        };
         // Ahead of what the human said: it is what happened before they spoke.
         if let Some(note) = self.process_note() {
             opening.content.insert(0, note);
@@ -234,6 +245,10 @@ impl Worker {
         let max_steps = self.shared.settings.max_steps();
         let mut steps = 0u32;
         let mut repeats = RepeatGuard::default();
+        let mut stop_returns = 0u32;
+        // The route last shown to the human in this turn (`show_route`). Local
+        // to the turn, so the next message starts without one and shows its own.
+        let mut shown_route: Option<RouteDecision> = None;
         loop {
             if cancel.is_cancelled() {
                 return End::Cancelled;
@@ -276,6 +291,9 @@ impl Worker {
                             for out in acc.push(event) {
                                 self.emit(out);
                             }
+                            // Before the text that follows it in the stream: the
+                            // human sees which model answered before what it said.
+                            self.show_route(acc.route(), &mut shown_route);
                         }
                         Some(Err(err)) => return End::Failed(err),
                     },
@@ -285,10 +303,8 @@ impl Worker {
             let done = acc.finish();
             steps += 1;
 
-            let info = self
-                .shared
-                .model_info(&self.shared.state.lock().unwrap().model);
-            self.usage.record(done.usage, info.pricing);
+            let pricing = self.pricing_of(done.routed.as_ref());
+            self.usage.record(done.usage, pricing);
 
             if !done.blocks.is_empty() {
                 self.remember(turn_id, Message::assistant(done.blocks));
@@ -312,6 +328,10 @@ impl Worker {
                 // Nothing left to do is not the end while subagents are still
                 // out: their reports are what the agent sent them for.
                 if !self.shared.background.pending() {
+                    if let Some(back) = self.stop_hooks(&mut stop_returns, cancel).await {
+                        self.remember(turn_id, back);
+                        continue;
+                    }
                     return End::Finished(done.stop_reason);
                 }
                 match self.await_news(turn_id, cancel, inbox).await {
@@ -359,12 +379,46 @@ impl Worker {
                     message.content.push(note);
                 }
                 for queued in inbox.messages(&self.shared.queue) {
-                    let said = self.hear(turn_id, queued.text, queued.attachments).await;
-                    message.content.extend(said.content);
+                    let heard = self.hear_checked(turn_id, queued.text, queued.attachments, cancel);
+                    if let Some(said) = heard.await {
+                        message.content.extend(said.content);
+                    }
                 }
             }
             self.remember(turn_id, message);
         }
+    }
+
+    /// Shows the model a routing provider picked, unless this turn has already
+    /// shown that same choice.
+    ///
+    /// Once per change and not per request: a turn of many calls makes a
+    /// request for every step, and each would repeat the same chip in the feed.
+    /// `shown` is the turn's memory of what it last showed, so a choice that
+    /// goes away and comes back is shown again.
+    fn show_route(&self, route: Option<&RouteDecision>, shown: &mut Option<RouteDecision>) {
+        let Some(route) = route else {
+            return;
+        };
+        if shown.as_ref() == Some(route) {
+            return;
+        }
+        self.emit(AgentEvent::RouteDecided {
+            route: route.route.clone(),
+            provider: route.provider.clone(),
+            model: route.model.clone(),
+            matched: route.matched.clone(),
+        });
+        *shown = Some(route.clone());
+    }
+
+    /// The price of one request: by the model that answered when the request
+    /// was routed (see `Shared::pricing_of`), otherwise by the session's model,
+    /// which is `unknown_model` (free) if that is not listed either.
+    fn pricing_of(&self, routed: Option<&(String, String)>) -> Pricing {
+        let session = self.shared.state.lock().unwrap().model.clone();
+        self.shared
+            .pricing_of(routed, self.shared.model_info(&session).pricing)
     }
 
     /// Background commands that ended on their own since the model last heard
@@ -451,18 +505,36 @@ impl Worker {
         // §7.3: what the human typed is a name, and what the model gets is the
         // prompt the project keeps under it — the same split the attachments
         // below make. The feed and the journal keep the typed line, so a
-        // reopened session shows `/review` and not what it stood for.
-        let text = slash::expand(self.ws.home(), &text).unwrap_or(text);
+        // reopened session shows `/review` and not what it stood for. A skill
+        // answers to `/name` the same way, after the commands. An MCP server's
+        // prompt is `/mcp__server__prompt`, a name nothing else can have.
+        let text = match self.shared.mcp.expand_prompt(&text).await {
+            Some(Ok(expanded)) => expanded,
+            Some(Err(why)) => {
+                self.emit(AgentEvent::Error {
+                    code: "mcp_prompt".into(),
+                    message: why.clone(),
+                    retryable: false,
+                });
+                format!("{text}
+
+[The MCP prompt this names could not be fetched: {why}]")
+            }
+            None => slash::expand(self.ws.home(), &text)
+                .or_else(|| slash::expand_in(&self.shared.plugins.commands, &text))
+                .or_else(|| crate::skills::activate::expand(&self.shared.skills, &text))
+                .unwrap_or(text),
+        };
 
         if attachments.is_empty() {
             return Message::user_text(text);
         }
 
-        let mut head = String::from("Человек приложил файлы:\n");
+        let mut head = String::from("The user attached files:\n");
         let mut pictures = Vec::new();
         for raw in &attachments {
             let Some(path) = self.attached(raw) else {
-                head.push_str(&format!("- {raw} (не найден)\n"));
+                head.push_str(&format!("- {raw} (not found)\n"));
                 continue;
             };
             let name = self.ws.display(&path);
@@ -476,11 +548,11 @@ impl Worker {
             // open: the human put it in front of the model by attaching it.
             match tokio::task::spawn_blocking(move || picture::load(&path)).await {
                 Ok(Ok(picture)) => {
-                    head.push_str(&format!("- {name} (изображение, показано ниже)\n"));
+                    head.push_str(&format!("- {name} (image, shown below)\n"));
                     pictures.push((name, picture));
                 }
                 Ok(Err(err)) => head.push_str(&format!("- {name} ({err})\n")),
-                Err(_) => head.push_str(&format!("- {name} (изображение не прочитано)\n")),
+                Err(_) => head.push_str(&format!("- {name} (image could not be read)\n")),
             }
         }
         head.push('\n');
@@ -529,9 +601,9 @@ impl Worker {
         // answer "no servers" is a line in every request for nothing.
         if !self.shared.lsp.names().is_empty() {
             more.push(Arc::new(crate::tool::lsp::LspQuery));
+            more.push(Arc::new(crate::tool::rename::Rename));
         }
-        self.registry =
-            Arc::new(ToolRegistry::of_session(self.shared.recorder.is_some()).with(more));
+        self.registry = Arc::new(self.shared.tools(more));
         self.mcp_notes = self.shared.mcp.prompt_section().map(Arc::from);
     }
 
@@ -591,6 +663,7 @@ impl Worker {
             skills: self.skills.clone(),
             mcp_notes: self.mcp_notes.clone(),
             under: None,
+            model: ModelPick::Default,
         }
     }
 
@@ -622,8 +695,8 @@ impl Worker {
         self.emit(AgentEvent::Error {
             code: "step_limit".to_string(),
             message: format!(
-                "Ход остановлен: исчерпан лимит в {max_steps} шагов. Напишите «продолжай», \
-                 чтобы дать модели новый ход, или поменяйте `maxSteps` в .yaca/settings.json."
+                "Turn stopped: limit of {max_steps} steps reached. Say \"continue\" \
+                 to give the model another turn, or change `maxSteps` in .yaca/settings.json."
             ),
             retryable: false,
         });

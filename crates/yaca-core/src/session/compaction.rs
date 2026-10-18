@@ -76,12 +76,23 @@ impl Worker {
         measured.saturating_add(u32::try_from(estimated).unwrap_or(u32::MAX))
     }
 
-    /// «Сжать» (§5.11). Says whether the history was replaced.
+    /// "Compact" (§5.11). Says whether the history was replaced.
     ///
     /// `turn` is the turn it happens inside, if any. The replaced history is
     /// written down under it, so that a copy made up to that turn (§9) keeps
     /// the rest of the turn too; between turns it gets a name of its own.
     pub(super) async fn compact(&mut self, cancel: &CancellationToken, turn: Option<&TurnId>) -> bool {
+        // Inside a turn it was the window filling up; between turns the human
+        // asked for it.
+        let trigger = if turn.is_some() { "auto" } else { "manual" };
+        self.shared
+            .inform(
+                crate::plugin::hooks::HookEvent::PreCompact,
+                trigger,
+                serde_json::json!({ "trigger": trigger }),
+                cancel,
+            )
+            .await;
         let Some(plan) = compact::plan(&self.history) else {
             // A button that silently does nothing is an interface lying about
             // state (§0), so this is said out loud even though nothing broke.
@@ -118,9 +129,11 @@ impl Worker {
             }
         };
 
-        let freed = compact::freed(before, &plan, summary.chars().count());
+        let kept = self.kept_skills(&plan.skills);
+        let kept_chars: usize = kept.iter().map(|t| t.chars().count()).sum();
+        let freed = compact::freed(before, &plan, summary.chars().count() + kept_chars);
 
-        self.history = compact::rebuilt(&summary, plan.tail);
+        self.history = compact::rebuilt(&summary, &kept, plan.tail);
         self.compacted = true;
         // The provider's figure less what was freed now stands for the whole
         // history; the next answer measures it properly.
@@ -146,11 +159,33 @@ impl Worker {
                 retryable: false,
             });
         }
+        let kept = compact::kept_skills(&self.history);
         let tail = self.history.split_off(1);
-        self.history = compact::rebuilt(&text, tail);
+        self.history = compact::rebuilt(&text, &kept, tail);
         self.measured = self.history.len();
         self.persist_history(None);
         self.emit(AgentEvent::SummaryEdited { summary: text });
+    }
+
+    /// The blocks that bring `names` back after a summary, read from the
+    /// skills' files now. A skill that has gone since it was loaded stays gone.
+    fn kept_skills(&self, names: &[String]) -> Vec<String> {
+        if names.is_empty() {
+            return Vec::new();
+        }
+        let catalog = self.shared.skills.scan();
+        let texts: Vec<String> = names
+            .iter()
+            .filter_map(|name| catalog.get(name))
+            .filter_map(|skill| crate::skills::activate::content(skill).ok())
+            .map(|(text, _)| text)
+            .collect();
+        if texts.is_empty() {
+            return Vec::new();
+        }
+        std::iter::once(compact::KEPT_SKILLS_HEADER.to_string())
+            .chain(texts)
+            .collect()
     }
 
     fn persist_history(&self, turn: Option<&TurnId>) {
@@ -199,23 +234,33 @@ impl Worker {
 
         let mut stream = self.open_stream(request, cancel).await?;
         let mut summary = String::new();
+        // A routing provider says which model it chose before anything else of
+        // the reply, so the usage events below are priced by it.
+        let mut pricing = info.pricing;
         loop {
             tokio::select! {
                 biased;
                 _ = cancel.cancelled() => {
-                    return Err(ProviderError::Network("сжатие отменено".into()))
+                    return Err(ProviderError::Network("compaction cancelled".into()))
                 }
                 item = stream.next() => match item {
                     None => break,
                     Some(Ok(ProviderEvent::TextDelta { text, .. })) => summary.push_str(&text),
+                    Some(Ok(ProviderEvent::Routed { provider, model, .. })) => {
+                        pricing = self
+                            .shared
+                            .pricing_of(Some(&(provider, model)), info.pricing);
+                    }
                     Some(Ok(ProviderEvent::MessageStart { usage, .. })) => {
-                        self.usage.record_aside(usage, info.pricing);
+                        self.usage.record_aside(usage, pricing);
                     }
                     // The summary costs money like anything else, and §7.1
                     // shows the money.
                     Some(Ok(ProviderEvent::MessageDelta { usage, .. })) => {
-                        self.usage.record_aside(usage, info.pricing);
+                        self.usage.record_aside(usage, pricing);
                     }
+                    // The rest of the blocks: a summary has no feed to show
+                    // them in, and the routed model is not shown either.
                     Some(Ok(_)) => {}
                     Some(Err(err)) => return Err(err),
                 },

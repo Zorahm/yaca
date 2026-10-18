@@ -1,31 +1,28 @@
-//! `robots.txt`: чей запрет Yaca соблюдает и как он попадает в отказ тула.
+//! `robots.txt`: whose restriction Yaca obeys and how it turns into a tool refusal.
 //!
-//! Свой разбор вместо зависимости — по той же причине, по которой в окне свой
-//! i18n: нужны группы, `Allow`/`Disallow` и два джокера, а не дерево крейтов.
-//! Правила ниже — RFC 9309, и отклонения от него помечены там, где сделаны.
+//! Custom parsing instead of a dependency — for the same reason the window has
+//! its own i18n: groups, `Allow`/`Disallow`, and two wildcards are needed, not a
+//! crate tree. The rules below follow RFC 9309, with deviations noted where made.
 //!
-//! **Сверяется продуктовый токен, а не вся строка `User-Agent`.** То есть
-//! `YacaTraveler` из [`super::net`], без учёта регистра; своей группы нет —
-//! берётся `*`. Отсюда и требование к имени: оно обязано быть таким, чтобы
-//! правило о нём не задело ничего другого.
+//! **The product token is matched, not the full `User-Agent` string.** That is
+//! `YacaTraveler` from [`super::net`], case-insensitively; if its own group is
+//! absent, `*` is used. Hence the requirement for the name: it must be specific
+//! enough that a rule for it touches nothing else.
 //!
-//! **Победа самого длинного совпадения.** Путь может попасть и под `Allow`, и
-//! под `Disallow`; выигрывает тот образец, что длиннее, а при равной длине —
-//! `Allow`. Это RFC 9309 §2.2.2, и оно же единственная тонкость, ради которой
-//! правила нельзя просто перебрать по порядку.
+//! **Longest match wins.** A path may match both `Allow` and `Disallow`; the
+//! longer pattern wins, and on equal length — `Allow`. This is RFC 9309 §2.2.2,
+//! and the only reason rules cannot be simply iterated in order.
 //!
-//! **Процентное кодирование сверяется как есть.** RFC просит сначала привести
-//! путь и образец к одному виду; здесь сравниваются те байты, что пришли, —
-//! `url.path()` уже закодирован, и правила обычно пишут так же. Расходится это
-//! на редкой экзотике вроде `Disallow: /пример` против `/%D0%BF...`, и честнее
-//! назвать границу здесь, чем чинить её вслепую.
+//! **Percent-encoding is matched as-is.** The RFC asks to normalize path and
+//! pattern first; here the incoming bytes are compared directly — `url.path()`
+//! is already encoded, and rules are usually written the same way.
 //!
-//! **Недоступность — не запрет.** RFC велит считать неотвеченный `robots.txt`
-//! полным запретом. Для краулера это правильно, для Yaca нет: человек только
-//! что руками разрешил этот домен (§5.7), и упавший на секунду сервер закрыл
-//! бы страницу по причине, которой никто не видит. Поэтому ошибка сети и 5xx
-//! разрешают, как и 404. Запрещает только прочитанный файл, в котором запрет
-//! написан.
+//! **Unavailability is not a restriction.** The RFC says an unanswered `robots.txt`
+//! is a complete ban. For a crawler that is right, for Yaca it is not: the user
+//! just manually allowed this domain (§5.7), and a server down for a second
+//! should not block the page for a reason no one can see. Therefore network
+//! errors and 5xx allow, as does 404. Only a parsed file with an explicit rule
+//! restricts.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
@@ -37,55 +34,54 @@ use super::net;
 use super::ToolCtx;
 use crate::error::ToolError;
 
-/// Сколько разобранный файл живёт в памяти процесса.
+/// How long the parsed file lives in process memory.
 ///
-/// Без кэша каждая страница — два запроса, и `robots.txt` одного хоста
-/// вытягивался бы по десятку раз за ход. Час — верхняя граница, которую RFC
-/// называет разумной; сессии короче, так что на деле файл читается один раз.
+/// Without cache each page would take two requests, fetching `robots.txt`
+/// repeatedly. One hour is the upper bound the RFC considers reasonable;
+/// sessions are shorter, so in practice the file is read once.
 const TTL: Duration = Duration::from_secs(60 * 60);
 
-/// Потолок на сам файл. RFC просит разбирать хотя бы 500 КиБ; всё, что
-/// больше, — уже не правила, а чья-то ошибка, и тянуть её в память незачем.
+/// Ceiling on the file itself. RFC asks to parse at least 500 KiB; anything
+/// larger is someone's mistake, with no need to pull it into memory.
 const MAX_BYTES: usize = 512 * 1024;
 
-/// Сколько редиректов `robots.txt` проходит. Клиент их не следует сам
-/// ([`net::client`]), а RFC просит пройти хотя бы пять.
+/// How many redirects `robots.txt` follows. The client does not follow them
+/// automatically ([`net::client`]), but RFC asks to follow at least five.
 const MAX_REDIRECTS: usize = 5;
 
-/// Одно правило: образец пути и что он значит.
+/// A single rule: path pattern and whether it allows access.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Rule {
     pattern: String,
     allow: bool,
 }
 
-/// Разобранный файл — только та группа, что относится к нам.
+/// Parsed file — only the group applicable to us.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Rules {
     rules: Vec<Rule>,
 }
 
 impl Rules {
-    /// Пустые правила: файла нет, он не ответил или в нём нет нашей группы.
+    /// Empty rules: file is absent, did not respond, or has no group for us.
     pub fn allow_all() -> Self {
         Rules::default()
     }
 
-    /// Разбирает файл для продуктового токена `agent`.
+    /// Parses the file for the given product token `agent`.
     ///
-    /// Групп в файле много, и склеивать их нельзя: правила чужой группы к нам
-    /// не относятся. Берётся своя, а не нашлась — `*`.
+    /// There are many groups in the file, and they cannot be merged: rules of
+    /// another group do not apply to us. Our group is preferred; if absent, `*`.
     pub fn parse(text: &str, agent: &str) -> Self {
         let agent = agent.to_ascii_lowercase();
         let mut mine: Option<Vec<Rule>> = None;
         let mut fallback: Option<Vec<Rule>> = None;
 
-        // Идущие подряд `User-agent` — одна группа на всех. Флаги говорят,
-        // кому достаются правила, которые пойдут следом.
+        // Consecutive `User-agent` lines form one group. Flags indicate
+        // who receives the following rules.
         let mut for_me = false;
         let mut for_all = false;
-        // Правило после группы закрывает её: следующий `User-agent` начинает
-        // новую, а не дописывает в эту.
+        // A rule after a group closes it: next `User-agent` starts a new group.
         let mut collecting = false;
 
         for line in text.lines() {
@@ -110,8 +106,8 @@ impl Rules {
                 "allow" | "disallow" => {
                     collecting = true;
                     let allow = field == "allow";
-                    // Пустой `Disallow` — это «ничего не запрещено», то есть
-                    // отсутствие правила, а не запрет пустого пути.
+                    // An empty `Disallow` means "nothing forbidden", i.e. absence
+                    // of restriction, not forbidding an empty path.
                     if !allow && value.is_empty() {
                         continue;
                     }
@@ -126,8 +122,8 @@ impl Rules {
                         fallback.get_or_insert_with(Vec::new).push(rule);
                     }
                 }
-                // `Crawl-delay`, `Sitemap` и прочее Yaca не читает: она не
-                // обходит сайт, а берёт одну страницу по просьбе человека.
+                // `Crawl-delay`, `Sitemap`, etc. are ignored: Yaca fetches single
+                // pages on user request, not crawling the site.
                 _ => {}
             }
         }
@@ -137,12 +133,8 @@ impl Rules {
         }
     }
 
-    /// Правило, решающее судьбу пути: самый длинный подошедший образец, при
-    /// равной длине — разрешающий (RFC 9309 §2.2.2).
-    ///
-    /// Одно место на оба вопроса — «пустят ли» и «что именно не пустило»:
-    /// два прохода с чуть разным выбором лучшего расходятся на первой же
-    /// правке.
+    /// Finds the rule deciding the fate of the path: longest matching pattern,
+    /// on tie — allow (RFC 9309 §2.2.2).
     fn best(&self, path: &str) -> Option<&Rule> {
         self.rules
             .iter()
@@ -156,11 +148,7 @@ impl Rules {
             })
     }
 
-    /// Образец, который не пускает, — или `None`, если путь разрешён.
-    ///
-    /// Один вопрос вместо двух: «пустят ли» без «чем именно не пустило» тут
-    /// никому не нужен — отказ обязан назвать правило, иначе человеку нечего
-    /// чинить, а модели нечего сказать.
+    /// The blocking pattern, or `None` if the path is allowed.
     fn blocking(&self, path: &str) -> Option<&str> {
         self.best(path)
             .filter(|rule| !rule.allow)
@@ -168,7 +156,7 @@ impl Rules {
     }
 }
 
-/// `field: value` с обрезанным комментарием. Строка не той формы пропускается.
+/// `field: value` with comment stripped.
 fn split(line: &str) -> Option<(String, &str)> {
     let line = line.split('#').next().unwrap_or("").trim();
     let (field, value) = line.split_once(':')?;
@@ -179,11 +167,8 @@ fn split(line: &str) -> Option<(String, &str)> {
     Some((field, value.trim()))
 }
 
-/// Совпадение образца с путём: `*` — любая последовательность, `$` в конце —
-/// конец строки, остальное буквально.
-///
-/// Поиск в лоб с возвратом: образцы в `robots.txt` короткие, и городить
-/// автомат ради десятка строк было бы работой не по задаче.
+/// Matches pattern against path: `*` matches any sequence, `$` at the end pins
+/// the end of string, remainder is literal.
 fn matches(pattern: &str, path: &str) -> bool {
     let anchored = pattern.ends_with('$');
     let pattern = if anchored {
@@ -199,8 +184,7 @@ fn matches(pattern: &str, path: &str) -> bool {
         if part.is_empty() {
             continue;
         }
-        // Первый кусок обязан стоять в начале: образец без ведущего `*`
-        // привязан к началу пути.
+        // First part must match at the beginning if pattern lacks leading `*`.
         if index == 0 {
             if !path[at..].starts_with(part) {
                 return false;
@@ -217,15 +201,14 @@ fn matches(pattern: &str, path: &str) -> bool {
     if !anchored {
         return true;
     }
-    // С `$` последний кусок обязан упереться в конец — если он не `*`.
+    // With `$`, last part must reach the end if it is not `*`.
     match parts.last() {
         Some(last) if !last.is_empty() => at == path.len(),
         _ => true,
     }
 }
 
-/// Кэш по origin. Ключ — `scheme://host:port`: у `robots.txt` своя область на
-/// каждую схему и порт, и правила `http://` к `https://` не относятся.
+/// Cache by origin. Key is `scheme://host:port`.
 type Cache = Mutex<HashMap<String, (Rules, Instant)>>;
 
 fn cache() -> &'static Cache {
@@ -237,26 +220,24 @@ fn origin_of(url: &Url) -> String {
     url.origin().ascii_serialization()
 }
 
-/// Проверяет адрес и, если он запрещён, возвращает отказ.
+/// Checks the URL and, if disallowed, returns a rejection error.
 ///
-/// [`ToolError::Rejected`], а не `Failed`: ничего не сломалось — сработала
-/// граница, ровно как у редиректа на чужой хост. Модель получает объяснение с
-/// образцом, который её остановил, и может попросить другое.
+/// [`ToolError::Rejected`], not `Failed`: a safeguard tripped.
 pub async fn check(ctx: &ToolCtx, url: &Url) -> Result<(), ToolError> {
     let rules = rules_for(ctx, url).await;
     let path = path_of(url);
 
     if let Some(pattern) = rules.blocking(&path) {
         return Err(ToolError::Rejected(format!(
-            "robots.txt на {} запрещает этот путь правилом `Disallow: {pattern}`. \
-             Yaca такие запреты соблюдает; выключается в настройках, раздел «Инструменты».",
+            "robots.txt on {} disallows this path with rule `Disallow: {pattern}`. \
+             Yaca respects such rules; this can be turned off in settings under \"Tools\".",
             url.host_str().unwrap_or_default()
         )));
     }
     Ok(())
 }
 
-/// Путь вместе со строкой запроса: правила `robots.txt` пишутся и по ней.
+/// Path along with query string: robots.txt rules can match queries too.
 fn path_of(url: &Url) -> String {
     match url.query() {
         Some(query) => format!("{}?{}", url.path(), query),
@@ -264,7 +245,7 @@ fn path_of(url: &Url) -> String {
     }
 }
 
-/// Правила хоста: из кэша или с сервера.
+/// Host rules: from cache or from server.
 async fn rules_for(ctx: &ToolCtx, url: &Url) -> Rules {
     let origin = origin_of(url);
 
@@ -282,7 +263,7 @@ async fn rules_for(ctx: &ToolCtx, url: &Url) -> Rules {
     rules
 }
 
-/// Тянет и разбирает `robots.txt`. Любая неудача — разрешение: см. шапку.
+/// Fetches and parses `robots.txt`. Any failure allows access.
 async fn fetch(ctx: &ToolCtx, url: &Url) -> Rules {
     let Ok(mut at) = url.join("/robots.txt") else {
         return Rules::allow_all();
@@ -312,8 +293,7 @@ async fn fetch(ctx: &ToolCtx, url: &Url) -> Rules {
             }
         }
 
-        // 404 и родня — правил нет. 5xx — сервер не ответил, и по причинам из
-        // шапки это тоже разрешение, а не запрет.
+        // 404 and similar mean no rules. 5xx also allows rather than forbids.
         if !response.status().is_success() {
             return Rules::allow_all();
         }
@@ -336,8 +316,7 @@ mod tests {
         Rules::parse(text, "yacatraveler")
     }
 
-    /// Пускают ли. Обёртка над [`Rules::blocking`]: тесты про правила, а не
-    /// про то, как выглядит их ответ.
+    /// Whether access is allowed. Wrapper over [`Rules::blocking`].
     fn allows(rules: &Rules, path: &str) -> bool {
         rules.blocking(path).is_none()
     }
@@ -354,12 +333,11 @@ mod tests {
         assert!(allows(&r, "/public"));
     }
 
-    /// Своя группа перебивает `*` целиком, а не дополняет её: правила чужой
-    /// группы к нам не относятся, и `*` — тоже чужая, когда есть своя.
+    /// Our own group replaces `*` entirely rather than augmenting it.
     #[test]
     fn our_own_group_replaces_the_star_group() {
         let r = rules("User-agent: *\nDisallow: /\n\nUser-agent: YacaTraveler\nDisallow: /secret\n");
-        assert!(allows(&r, "/anything"), "запрет из `*` к нам не относится");
+        assert!(allows(&r, "/anything"), "rules from `*` do not apply to us");
         assert!(!allows(&r, "/secret"));
     }
 
@@ -369,15 +347,14 @@ mod tests {
         assert!(!allows(&r, "/x"));
     }
 
-    /// Идущие подряд `User-agent` делят одну группу правил.
+    /// Consecutive `User-agent` share one group of rules.
     #[test]
     fn agents_listed_together_share_their_rules() {
         let r = rules("User-agent: SomeBot\nUser-agent: YacaTraveler\nDisallow: /both\n");
         assert!(!allows(&r, "/both"));
     }
 
-    /// Правило после группы закрывает её: следующий `User-agent` начинает
-    /// новую, и чужой запрет к нам не прилипает.
+    /// A rule after a group closes it: next `User-agent` starts a new group.
     #[test]
     fn a_new_group_starts_after_the_rules_of_the_previous_one() {
         let r = rules("User-agent: YacaTraveler\nDisallow: /mine\nUser-agent: Other\nDisallow: /theirs\n");
@@ -385,15 +362,14 @@ mod tests {
         assert!(allows(&r, "/theirs"));
     }
 
-    /// Самый длинный образец побеждает — иначе порядок строк решал бы, что
-    /// значит файл (RFC 9309 §2.2.2).
+    /// Longest pattern wins over order of lines (RFC 9309 §2.2.2).
     #[test]
     fn the_longest_pattern_wins_over_the_order_of_lines() {
         let r = rules("User-agent: *\nDisallow: /docs\nAllow: /docs/public\n");
         assert!(!allows(&r, "/docs/secret"));
         assert!(allows(&r, "/docs/public/page"));
 
-        // И в обратном порядке строк — ответ тот же.
+        // Same result with reversed line order.
         let r = rules("User-agent: *\nAllow: /docs/public\nDisallow: /docs\n");
         assert!(allows(&r, "/docs/public/page"));
     }
@@ -412,7 +388,7 @@ mod tests {
 
     #[test]
     fn comments_and_odd_spacing_are_survived() {
-        let r = rules("# заметка\n  User-agent :  *  # кто\n Disallow : /x  \n");
+        let r = rules("# note\n  User-agent :  *  # who\n Disallow : /x  \n");
         assert!(!allows(&r, "/x"));
     }
 
@@ -431,7 +407,7 @@ mod tests {
         assert!(allows(&r, "/paper.pdf.html"));
     }
 
-    /// Запрет пишется и по строке запроса, поэтому путь сверяется вместе с ней.
+    /// Query string is part of the path checked by robots.txt rules.
     #[test]
     fn the_query_string_is_part_of_the_path() {
         let r = rules("User-agent: *\nDisallow: /search?q=\n");
@@ -446,7 +422,7 @@ mod tests {
         assert_eq!(r.blocking("/public"), None);
     }
 
-    /// Разрешение — не «запретивший образец»: объяснять нечего.
+    /// Allowed path has no blocking pattern.
     #[test]
     fn an_allowed_path_has_no_blocking_pattern() {
         let r = rules("User-agent: *\nDisallow: /docs\nAllow: /docs/ok\n");

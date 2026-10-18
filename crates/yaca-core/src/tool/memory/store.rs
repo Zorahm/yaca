@@ -68,8 +68,8 @@ fn check_name(name: &str) -> Result<(), ToolError> {
         Ok(())
     } else {
         Err(ToolError::rejected(format!(
-            "{name} — недопустимое имя заметки: строчные латинские буквы, цифры и дефис, суффикс .md; \
-             имена memory, con, nul и подобные заняты"
+            "{name} is an invalid note name: lowercase ASCII letters, digits, hyphen, with .md suffix; \
+             reserved names include memory, con, nul, etc."
         )))
     }
 }
@@ -103,17 +103,17 @@ pub fn write(
     let hook = one_line(hook);
     if hook.is_empty() {
         return Err(ToolError::failed(
-            "нужна строка hook: одно предложение о том, что в заметке",
+            "hook is required: one sentence describing the note",
         ));
     }
     if hook.chars().count() > MAX_HOOK_CHARS {
         return Err(ToolError::failed(format!(
-            "hook длиннее {MAX_HOOK_CHARS} символов — сократи его"
+            "hook exceeds {MAX_HOOK_CHARS} characters — please shorten it"
         )));
     }
     if body.len() > MAX_NOTE_BYTES {
         return Err(ToolError::failed(format!(
-            "заметка длиннее {MAX_NOTE_BYTES} байт — раздели её на несколько"
+            "note exceeds {MAX_NOTE_BYTES} bytes — please split it into multiple notes"
         )));
     }
 
@@ -138,7 +138,7 @@ pub fn read(ws: &Workspace, name: &str) -> Result<String, ToolError> {
     check_name(name)?;
     let path = ws.resolve_new(&rel(name))?;
     if !path.is_file() {
-        return Err(ToolError::failed(format!("нет заметки {name}")));
+        return Err(ToolError::failed(format!("note {name} does not exist")));
     }
     Ok(fs::read_to_string(&path)?)
 }
@@ -147,7 +147,7 @@ pub fn delete(ws: &Workspace, name: &str) -> Result<(), ToolError> {
     check_name(name)?;
     let path = ws.resolve_new(&rel(name))?;
     if !path.is_file() {
-        return Err(ToolError::failed(format!("нет заметки {name}")));
+        return Err(ToolError::failed(format!("note {name} does not exist")));
     }
     fs::remove_file(&path)?;
     rebuild_index(&dir_of(ws))?;
@@ -453,7 +453,7 @@ mod tests {
         // but a hand edit or a long list of notes can.
         std::fs::write(
             dir.path().join(".yaca/memory/MEMORY.md"),
-            "- [x](x.md) — ".to_string() + &"я".repeat(MAX_INDEX_BYTES),
+            "- [x](x.md) — ".to_string() + &"é".repeat(MAX_INDEX_BYTES),
         )
         .unwrap();
         let index = load(&ws).unwrap();
@@ -461,7 +461,7 @@ mod tests {
         assert!(index.text.len() <= MAX_INDEX_BYTES);
         // The cut fell inside a two-byte character: the split one is dropped,
         // the whole ones before it are kept.
-        assert!(index.text.starts_with("- [x](x.md) — я"));
+        assert!(index.text.starts_with("- [x](x.md) — é"));
     }
 
     #[test]

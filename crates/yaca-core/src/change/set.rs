@@ -125,7 +125,7 @@ mod tests {
     #[test]
     fn a_created_file_is_shown_as_created() {
         let set = ChangeSet::new();
-        set.record("a.txt".into(), abs("a.txt"), None, Some("первая\n".into()));
+        set.record("a.txt".into(), abs("a.txt"), None, Some("first\n".into()));
 
         assert_eq!(set.view("a.txt").unwrap().fact.unwrap().kind, ChangeKind::Created);
     }

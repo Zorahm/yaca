@@ -28,7 +28,7 @@ fn draft(number: usize) -> String {
 fn recorded(dir: &TempProject, provider: Arc<MockProvider>) -> SessionHandle {
     let mut config = SessionConfig::new(dir.path());
     config.mode = Mode::Auto;
-    config.journal = true;
+    config.journal = Some(dir.chats());
     config.resume = Some(SessionId::from(SESSION));
     yaca_core::spawn(config, provider).unwrap()
 }
@@ -51,14 +51,14 @@ async fn the_humans_text_is_changed_in_place_and_shown_back() {
         step(
             "e1",
             "Edit",
-            json!({ "path": draft(1), "old_string": "красный", "new_string": "синий" }),
+            json!({ "path": draft(1), "old_string": "red", "new_string": "blue" }),
         ),
         step("s1", "SendText", json!({ "path": draft(1) })),
-        Turn::Events(script_text("Поправил.")),
+        Turn::Events(script_text("Fixed.")),
     ]));
     let handle = recorded(&dir, provider.clone());
 
-    let seen = say(&handle, "Дом красный.\nЗабор высокий.").await;
+    let seen = say(&handle, "House is red.\nFence is high.").await;
 
     // The file holds the message as it was typed, and the model is told where.
     let requests = provider.seen.lock().unwrap().clone();
@@ -85,7 +85,7 @@ async fn the_humans_text_is_changed_in_place_and_shown_back() {
             _ => None,
         })
         .collect();
-    assert_eq!(shown, vec!["Дом синий.\nЗабор высокий."]);
+    assert_eq!(shown, vec!["House is blue.\nFence is high."]);
 
     let (result, is_error) = tool_result_of(&provider, "s1");
     assert!(!is_error, "{result}");
@@ -96,10 +96,10 @@ async fn the_draft_is_the_message_and_nothing_else() {
     let dir = TempProject::new();
     let provider = Arc::new(MockProvider::new(vec![
         step("x1", "ExtractMessage", json!({})),
-        Turn::Events(script_text("ок")),
+        Turn::Events(script_text("ok")),
     ]));
     let handle = recorded(&dir, provider.clone());
-    let text = "  Отступ в начале.\n\nИ пустая строка выше.";
+    let text = "  Indent at the start.\n\nAnd empty line above.";
 
     say(&handle, text).await;
 
@@ -111,17 +111,17 @@ async fn the_draft_is_the_message_and_nothing_else() {
 async fn a_number_picks_any_earlier_message_of_either_side() {
     let dir = TempProject::new();
     let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(script_text("Черновик письма: уважаемый коллега.")),
+        Turn::Events(script_text("Letter draft: dear colleague.")),
         step("x1", "ExtractMessage", json!({ "number": 2 })),
-        Turn::Events(script_text("ок")),
+        Turn::Events(script_text("ok")),
     ]));
     let handle = recorded(&dir, provider.clone());
 
-    say(&handle, "напиши письмо").await;
-    say(&handle, "вынеси свой черновик в файл").await;
+    say(&handle, "write a letter").await;
+    say(&handle, "extract your draft to a file").await;
 
     let on_disk = std::fs::read_to_string(dir.path().join(draft(2))).unwrap();
-    assert_eq!(on_disk, "Черновик письма: уважаемый коллега.");
+    assert_eq!(on_disk, "Letter draft: dear colleague.");
     let (result, is_error) = tool_result_of(&provider, "x1");
     assert!(!is_error, "{result}");
     assert!(result.contains(&draft(2)), "{result}");
@@ -132,11 +132,11 @@ async fn a_message_that_does_not_exist_writes_nothing() {
     let dir = TempProject::new();
     let provider = Arc::new(MockProvider::new(vec![
         step("x1", "ExtractMessage", json!({ "number": 40 })),
-        Turn::Events(script_text("ок")),
+        Turn::Events(script_text("ok")),
     ]));
     let handle = recorded(&dir, provider.clone());
 
-    say(&handle, "привет").await;
+    say(&handle, "hello").await;
 
     let (result, is_error) = tool_result_of(&provider, "x1");
     assert!(is_error, "{result}");
@@ -151,17 +151,17 @@ async fn extracting_again_keeps_the_edits_already_made() {
         step(
             "e1",
             "Edit",
-            json!({ "path": draft(1), "old_string": "красный", "new_string": "синий" }),
+            json!({ "path": draft(1), "old_string": "red", "new_string": "blue" }),
         ),
         step("x2", "ExtractMessage", json!({ "number": 1 })),
-        Turn::Events(script_text("ок")),
+        Turn::Events(script_text("ok")),
     ]));
     let handle = recorded(&dir, provider.clone());
 
-    say(&handle, "Дом красный.").await;
+    say(&handle, "House is red.").await;
 
     let on_disk = std::fs::read_to_string(dir.path().join(draft(1))).unwrap();
-    assert_eq!(on_disk, "Дом синий.");
+    assert_eq!(on_disk, "House is blue.");
     let (result, is_error) = tool_result_of(&provider, "x2");
     assert!(!is_error, "{result}");
     assert!(result.contains(&draft(1)), "{result}");

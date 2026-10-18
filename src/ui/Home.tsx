@@ -24,10 +24,10 @@ import {
   projectStartup,
   userName,
   type ModelInfo,
-  type SlashCommand,
   type Startup,
 } from "../core/client";
 import { t } from "../i18n";
+import type { MenuCommand } from "./slash";
 import { Composer, type ComposerActions, type ComposerSettings } from "./Composer";
 import { plainPath, relativeTo } from "./format";
 import { imageActions } from "./images";
@@ -44,7 +44,7 @@ export function Home({
 }: {
   models: ModelInfo[];
   /** Слэш-команды проекта §7.3 — тот же композер, то же меню. */
-  commands: SlashCommand[];
+  commands: MenuCommand[];
   onRefreshCommands: () => void;
   /** Проект, выбранный в окне: список сессий рядом читает его же (§9.1). */
   project: string | null;

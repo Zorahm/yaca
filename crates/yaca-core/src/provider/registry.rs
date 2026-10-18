@@ -43,7 +43,7 @@ const CONFIG_DIR: &str = "Yaca";
 
 mod presets;
 
-pub use presets::{is_preset, ANTHROPIC_ID, OPENAI_ID};
+pub use presets::{is_preset, ANTHROPIC_ID, DECISION_ID, OPENAI_ID};
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 
@@ -412,23 +412,32 @@ impl Providers {
 /// window configured would make the core untestable without a webview, which
 /// is the one thing the crate boundary exists to prevent.
 ///
+/// On Windows this is `%LOCALAPPDATA%\Yaca`, the folder the installer puts
+/// the program and its uninstaller in: settings and chats (`store::location`)
+/// sit beside them, so "delete all data" in the uninstaller has one folder to
+/// take. Roaming would carry chat journals between machines, which is not
+/// what they are for.
+///
 /// The directory the edoC build used is moved here on the first call, for the
 /// same reason: whichever of the two starts first finds it — see
-/// [`crate::legacy`].
+/// [`crate::legacy`]. On Windows the edoC settings were in Roaming, so that is
+/// where they are looked for.
 pub fn config_dir() -> Result<PathBuf, CoreError> {
-    let base = if cfg!(windows) {
-        std::env::var_os("APPDATA").map(PathBuf::from)
+    let var = |name| std::env::var_os(name).map(PathBuf::from);
+    let (old_base, base) = if cfg!(windows) {
+        (var("APPDATA"), var("LOCALAPPDATA"))
     } else if cfg!(target_os = "macos") {
-        std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support"))
+        let base = var("HOME").map(|h| h.join("Library/Application Support"));
+        (base.clone(), base)
     } else {
-        std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+        let base = var("XDG_CONFIG_HOME").or_else(|| var("HOME").map(|h| h.join(".config")));
+        (base.clone(), base)
     };
 
-    let base = base
-        .ok_or_else(|| CoreError::Config("не нашёлся каталог настроек пользователя".into()))?;
-    Ok(legacy::adopt_dir(&base.join(legacy::NAME), &base.join(CONFIG_DIR)))
+    let missing = || CoreError::Config("не нашёлся каталог настроек пользователя".into());
+    let base = base.ok_or_else(missing)?;
+    let old_base = old_base.unwrap_or_else(|| base.clone());
+    Ok(legacy::adopt_dir(&old_base.join(legacy::NAME), &base.join(CONFIG_DIR)))
 }
 
 #[cfg(test)]

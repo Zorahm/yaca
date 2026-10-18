@@ -25,7 +25,7 @@
 import { ArrowUp, Plus, Stop } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ClipboardEvent } from "react";
 
-import type { Effort, Mode, ModelInfo, SlashCommand, UsageSnapshot } from "../core/client";
+import type { Effort, Mode, ModelInfo, UsageSnapshot } from "../core/client";
 import type { Feed } from "../core/feed";
 import type { QueuedMessage } from "../core/bindings/QueuedMessage";
 import { t } from "../i18n";
@@ -37,7 +37,7 @@ import { withoutMention, type Mention } from "./mention";
 import { QueuedChip } from "./QueuedChip";
 import { SlashMenu } from "./SlashMenu";
 import { Attachment } from "./Attachment";
-import { builtinFor, menuFor, type Builtin, type SlashItem } from "./slash";
+import { builtinFor, menuFor, type Builtin, type MenuCommand, type SlashItem } from "./slash";
 import { ContextWindow } from "./ContextWindow";
 import { ContextRing } from "./ContextRing";
 
@@ -64,6 +64,7 @@ export type ComposerActions = {
   openCheckpoints?: () => void;
   /** `/mcp` (§7.3) — серверы этого разговора и состояние каждого. */
   openMcp?: () => void;
+  openLsp?: () => void;
   /**
    * `＋` (§7.2): спросить файлы и вернуть пути от корня проекта.
    *
@@ -127,7 +128,7 @@ export function Composer({
   usage: UsageSnapshot | null;
   models: ModelInfo[];
   /** Слэш-команды проекта (§7.3) — вторая половина меню над полем. */
-  commands: SlashCommand[];
+  commands: MenuCommand[];
   /** Сообщения, которые ждут очереди ядра (§7.4), по порядку. */
   queued: QueuedMessage[];
   /** Последний ответ `@`-поиска (§7.2); показывается, только если запрос тот же. */
@@ -210,6 +211,7 @@ export function Composer({
   if (actions.newChat) builtins.push("clear");
   if (actions.openCheckpoints) builtins.push("checkpoints");
   if (actions.openMcp) builtins.push("mcp");
+  if (actions.openLsp) builtins.push("lsp");
 
   const slash = menuFor(text, commands, builtins);
   const slashIndex = slash === null ? 0 : Math.min(slashAt, slash.length - 1);
@@ -272,6 +274,7 @@ export function Composer({
     if (builtin === "clear") actions.newChat?.();
     if (builtin === "checkpoints") actions.openCheckpoints?.();
     if (builtin === "mcp") actions.openMcp?.();
+    if (builtin === "lsp") actions.openLsp?.();
     if (builtin === "model") setMenu("model");
     clear();
   }
@@ -344,7 +347,7 @@ export function Composer({
         <div className="composer-input">
         <div className="menu-anchor composer-field">
           {slash !== null && (
-            <SlashMenu items={slash} at={slashIndex} onPick={pick} />
+            <SlashMenu items={slash} at={slashIndex} onPick={pick} onHover={setSlashAt} />
           )}
           {mentions.open !== null && (
             <MentionMenu paths={mentions.paths} at={mentions.at} onPick={mentions.pick} />

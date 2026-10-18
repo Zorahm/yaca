@@ -48,8 +48,8 @@ impl Lsp {
 
         if !arrived && changed {
             return Some(format!(
-                "Диагностика {name} не пришла за {} с: сервер ещё не ответил. \
-                 Запроси её через Lsp (action: diagnostics).",
+                "Diagnostics from {name} did not arrive within {} s: server has not replied yet. \
+                 Request them via Lsp (action: diagnostics).",
                 WAIT.as_secs()
             ));
         }
@@ -58,9 +58,9 @@ impl Lsp {
             return None;
         }
         let total = listed.lines().count() + rest;
-        let mut note = format!("Диагностика {name}: ошибок {total}\n{listed}");
+        let mut note = format!("Diagnostics from {name}: {total} errors\n{listed}");
         if rest > 0 {
-            note.push_str(&format!("[и ещё {rest}]\n"));
+            note.push_str(&format!("[and {rest} more]\n"));
         }
         Some(note.trim_end().to_string())
     }

@@ -16,7 +16,7 @@ use yaca_core::message::ContentBlock;
 use yaca_core::provider::mock::{script_text, MockProvider, Turn};
 use yaca_core::provider::ProviderEvent;
 use yaca_core::question::{QuestionReply, QuestionRequest};
-use yaca_core::{Command, Mode, PermissionAnswer, SessionConfig, SessionHandle, SessionStore};
+use yaca_core::{Command, Mode, PermissionAnswer, SessionConfig, SessionHandle};
 
 use common::{ask, calls, is_turn_over, session, until, TempProject};
 
@@ -60,7 +60,7 @@ fn tool_results(messages: &[yaca_core::message::Message]) -> Vec<(String, bool)>
 fn journaled(dir: &TempProject, provider: Arc<MockProvider>) -> SessionHandle {
     let mut cfg = SessionConfig::new(dir.path());
     cfg.mode = Mode::Manual;
-    cfg.journal = true;
+    cfg.journal = Some(dir.chats());
     yaca_core::spawn(cfg, provider).unwrap()
 }
 
@@ -152,6 +152,69 @@ async fn an_own_answer_is_passed_on_in_the_users_words() {
         results.iter().any(|(text, _)| text
             == "The user answered in their own words: \"only the parser\"."),
         "{results:?}"
+    );
+}
+
+/// Asks one question with `multi_select` as given, answers it with a pick
+/// and a written text, and returns what the model was told.
+async fn answered_with_pick_and_text(multi_select: bool, selected: Vec<u32>) -> String {
+    let dir = TempProject::new();
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(calls(&[(
+            "t1",
+            "AskUser",
+            json!({
+                "question": "Which parts?",
+                "multi_select": multi_select,
+                "options": [{ "label": "Parser" }, { "label": "Lexer" }, { "label": "Docs" }],
+            }),
+        )])),
+        Turn::Events(script_text("Noted.")),
+    ]));
+    let handle = session(&dir, provider.clone(), Mode::Manual);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "go").await;
+    let seen = until(&mut rx, |e| matches!(e, AgentEvent::QuestionAsked { .. })).await;
+    let request = asked(&seen);
+    assert_eq!(request.multi_select, multi_select);
+
+    handle
+        .send(Command::AnswerQuestion {
+            request_id: request.id,
+            answer: QuestionReply::Answered {
+                selected,
+                other: Some("and the tests".into()),
+            },
+        })
+        .await
+        .unwrap();
+    until(&mut rx, is_turn_over).await;
+
+    let seen = provider.seen.lock().unwrap();
+    let results = tool_results(&seen[1].messages);
+    results
+        .into_iter()
+        .find(|(_, is_error)| !is_error)
+        .map(|(text, _)| text)
+        .expect("the model got no answer")
+}
+
+#[tokio::test]
+async fn checkboxes_pass_the_ticked_options_and_the_text_together() {
+    let text = answered_with_pick_and_text(true, vec![0, 2]).await;
+    assert_eq!(
+        text,
+        "The user chose: \"Parser\", \"Docs\". They also wrote: \"and the tests\"."
+    );
+}
+
+#[tokio::test]
+async fn radio_passes_only_the_text_when_a_pick_and_text_are_both_given() {
+    let text = answered_with_pick_and_text(false, vec![1]).await;
+    assert_eq!(
+        text,
+        "The user answered in their own words: \"and the tests\"."
     );
 }
 
@@ -429,7 +492,7 @@ async fn a_recorded_question_and_its_answer_replay_as_they_happened() {
         .unwrap();
     until(&mut rx, is_turn_over).await;
 
-    let store = SessionStore::open(dir.path());
+    let store = dir.store();
     let session_id = handle.id().clone();
     let journal = store.events(&session_id);
     let asks = journal

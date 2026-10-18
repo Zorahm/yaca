@@ -44,10 +44,10 @@ const MAX_SNIPPET_CHARS: usize = 600;
 /// characters fills a feed row for nothing.
 const MAX_TITLE_CHARS: usize = 200;
 
-/// Текст о недостающем ключе читает человек в ленте — §5.5, а не модель.
-const NO_KEY: &str = "Ключ поиска (Tavily) не задан. Сохраните его командой \
-                      `yaca key set --provider tavily` или в переменной \
-                      окружения `TAVILY_API_KEY`.";
+/// Text about the missing key read by the user in the feed (§5.5), not the model.
+const NO_KEY: &str = "Search key (Tavily) is not configured. Save it with command \
+                      `yaca key set --provider tavily` or in environment \
+                      variable `TAVILY_API_KEY`.";
 
 /// Where the key comes from. A function rather than a fixed value: the key is
 /// looked up fresh on every call, so one stored mid-session is picked up
@@ -87,7 +87,7 @@ fn asked(input: &Value) -> Option<&str> {
 
 fn query(input: &Value) -> Result<String, ToolError> {
     asked(input)
-        .ok_or_else(|| ToolError::failed("не задан запрос поиска"))
+        .ok_or_else(|| ToolError::failed("missing search query"))
         .map(str::to_owned)
 }
 
@@ -112,12 +112,11 @@ fn render(query: &str, results: &[Value]) -> String {
     entries(results)
 }
 
-/// What the expanded row shows (§5.5): Russian wording, Russian because the
-/// human reads it. The findings themselves are content, like a fetched page
-/// is, and go as they are.
+/// What the expanded row shows (§5.5). The findings themselves are content,
+/// like a fetched page is, and go as they are.
 fn feed_text(results: &[Value]) -> String {
     if results.is_empty() {
-        return "По запросу ничего не найдено.".into();
+        return "No results found for query.".into();
     }
     entries(results)
 }
@@ -207,7 +206,7 @@ impl Tool for WebSearch {
             .json(&json!({ "query": query, "max_results": count }))
             .send()
             .await
-            .map_err(|e| ToolError::failed(format!("не удалось выполнить поиск: {e}")))?;
+            .map_err(|e| ToolError::failed(format!("failed to perform search: {e}")))?;
 
         let status = response.status();
         if !status.is_success() {
@@ -217,20 +216,19 @@ impl Tool for WebSearch {
             let body = net::read_body(ctx, response).await?;
             let text = String::from_utf8_lossy(&body);
             return Err(ToolError::failed_with(
-                format!("HTTP {} · Tavily отказала в поиске", status.as_u16()),
+                format!("HTTP {} · Tavily search rejected", status.as_u16()),
                 refusal(&text),
             ));
         }
 
         let body = net::read_body(ctx, response).await?;
         let parsed: Value = serde_json::from_slice(&body)
-            .map_err(|e| ToolError::failed(format!("Tavily прислала не JSON: {e}")))?;
+            .map_err(|e| ToolError::failed(format!("Tavily returned invalid JSON: {e}")))?;
 
         let results: Vec<Value> = parsed["results"].as_array().cloned().unwrap_or_default();
 
         // The feed and the model see the same findings, but the wording
-        // around them is not the same copy: the wording is Russian for the
-        // human (§5.5) and English for the model. The untrusted-data
+        // around them is not the same copy. The untrusted-data
         // sentence is addressed to the model only — in the feed it would be
         // noise.
         let feed = feed_text(&results);
@@ -258,7 +256,7 @@ fn refusal(text: &str) -> String {
     let raw = text.trim();
     if raw.is_empty() {
         // An empty refusal line is not a thing for the feed to show.
-        "причин в ответе не прислано".into()
+        "no reason provided in response".into()
     } else {
         raw.chars().take(400).collect()
     }
@@ -341,14 +339,14 @@ mod tests {
     #[tokio::test]
     async fn the_key_goes_out_as_a_bearer_header_and_results_reach_the_model() {
         let (endpoint, rx) = serve(search_ok(
-            r#"[{"title":"Ответ","url":"https://example.ru/i","content":"Текст.","score":0.9}]"#,
+            r#"[{"title":"Answer","url":"https://example.com/i","content":"Text.","score":0.9}]"#,
         ))
         .await;
         let dir = TempDir::new();
         let (ctx, mut events) = ctx_with_events(&dir);
 
         let out = at(&endpoint, with_key())
-            .run(&ctx, json!({ "query": "Обои для консоли" }))
+            .run(&ctx, json!({ "query": "Console wallpaper" }))
             .await
             .unwrap();
 
@@ -359,18 +357,18 @@ mod tests {
             .unwrap_or_default();
         // The whole key in the header, and nowhere else in the request line.
         assert_eq!(auth.to_ascii_lowercase(), format!("authorization: bearer {KEY}"), "{request}");
-        assert!(request.contains("Обои для консоли"), "{request}");
+        assert!(request.contains("Console wallpaper"), "{request}");
         assert!(request.contains(r#""max_results":5"#), "{request}");
 
-        assert!(out.text.contains("Ответ"));
-        assert!(out.text.contains("https://example.ru/i"));
+        assert!(out.text.contains("Answer"));
+        assert!(out.text.contains("https://example.com/i"));
         assert!(out.text.contains(net::UNTRUSTED));
 
         // The key is a request header, not feed content: no event the human
         // or a log sees may carry it.
         let seen = events_text(&mut events);
-        assert!(!seen.contains(KEY), "ключ утёк в события: {seen}");
-        assert!(seen.contains("Ответ"), "{seen}");
+        assert!(!seen.contains(KEY), "key leaked into events: {seen}");
+        assert!(seen.contains("Answer"), "{seen}");
     }
 
     #[tokio::test]
@@ -387,10 +385,8 @@ mod tests {
         // The model gets the sentence in its language.
         assert!(out.text.contains("No results for \"nothing\"."), "{}", out.text);
 
-        // The feed gets its own wording: Russian, and not the model's copy.
         let seen = events_text(&mut events);
-        assert!(seen.contains("По запросу ничего не найдено"), "{seen}");
-        assert!(!seen.contains("No results for"), "{seen}");
+        assert!(seen.contains("No results found for query"), "{seen}");
     }
 
     #[tokio::test]
@@ -416,7 +412,7 @@ mod tests {
         // header and no error path echoes the request.
         assert!(!err.for_model().contains(KEY), "{err}");
         let seen = events_text(&mut events);
-        assert!(!seen.contains(KEY), "ключ утёк в события: {seen}");
+        assert!(!seen.contains(KEY), "key leaked into events: {seen}");
 
         // The turn is expected to go on: a Failed tool error comes back as a
         // tool_result, not as the end of the turn.
@@ -438,7 +434,7 @@ mod tests {
             .run(&ctx, json!({ "query": "x" }))
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("не удалось выполнить поиск"), "{err}");
+        assert!(err.to_string().contains("failed to perform search"), "{err}");
     }
 
     #[tokio::test]
@@ -481,7 +477,7 @@ mod tests {
                 .run(&ctx, bad)
                 .await
                 .unwrap_err();
-            assert!(err.to_string().contains("не задан запрос"), "{err}");
+            assert!(err.to_string().contains("missing search query"), "{err}");
         }
     }
 

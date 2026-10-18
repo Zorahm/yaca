@@ -7,14 +7,14 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { SlashCommand } from "../core/client";
-import { builtinFor, menuFor, type Builtin } from "./slash";
+import type { SkillInfo } from "../core/client";
+import { builtinFor, menuFor, mcpPrompts, withSkills, type Builtin, type MenuCommand } from "./slash";
 
 const BUILTINS: Builtin[] = ["model", "compact", "clear"];
 
-const project: SlashCommand[] = [
-  { name: "review", description: "Просмотреть изменения", body: "..." },
-  { name: "compact", description: "Файл, назвавшийся встроенной", body: "..." },
+const project: MenuCommand[] = [
+  { name: "review", description: "Просмотреть изменения", body: "...", kind: "command" },
+  { name: "compact", description: "Файл, назвавшийся встроенной", body: "...", kind: "command" },
 ];
 
 const names = (text: string, builtins = BUILTINS) =>
@@ -72,5 +72,66 @@ describe("отправка", () => {
   it("не считает командой строку с аргументами: встроенные их не берут", () => {
     expect(builtinFor("/compact хвост", BUILTINS)).toBeNull();
     expect(builtinFor("обычное сообщение", BUILTINS)).toBeNull();
+  });
+});
+
+describe("skills in the menu", () => {
+  const skill = (name: string, userInvocable = true): SkillInfo => ({
+    name,
+    description: `skill ${name}`,
+    path: `/skills/${name}/SKILL.md`,
+    scope: "project",
+    modelInvocable: true,
+    userInvocable,
+  });
+
+  it("join the commands in name order", () => {
+    const merged = withSkills(project, [skill("audit"), skill("zeta")]);
+    expect(merged.map((c) => c.name)).toEqual(["audit", "compact", "review", "zeta"]);
+  });
+
+  it("give way to a command of the same name, as the core does", () => {
+    const merged = withSkills(project, [skill("review")]);
+    expect(merged.filter((c) => c.name === "review").map((c) => c.kind)).toEqual(["command"]);
+  });
+
+  it("say where each command comes from", () => {
+    const plugin = { name: "tools:lint", description: "", body: "" };
+    const merged = withSkills([plugin, project[0]], [skill("audit")]);
+    expect(merged.map((c) => [c.name, c.kind, c.scope])).toEqual([
+      ["audit", "skill", "project"],
+      ["review", "command", undefined],
+      ["tools:lint", "pluginCommand", undefined],
+    ]);
+  });
+
+  it("leave out the ones kept from the menu", () => {
+    expect(withSkills([], [skill("hidden", false)])).toEqual([]);
+  });
+});
+
+describe("mcpPrompts", () => {
+  it("offers the prompts of ready servers, arguments named in order", () => {
+    const server = (status: "ready" | "failed") => ({
+      name: "docs",
+      source: "global" as const,
+      transport: "http" as const,
+      target: "https://x",
+      status,
+      reason: null,
+      label: null,
+      tools: [],
+      resources: false,
+      loginUrl: null,
+      loggedIn: false,
+      prompts: [{ command: "mcp__docs__explain", description: "Explain a page.", arguments: ["page", "audience"] }],
+    });
+    const offered = mcpPrompts([server("ready")]);
+    expect(offered).toHaveLength(1);
+    expect(offered[0].name).toBe("mcp__docs__explain");
+    expect(offered[0].kind).toBe("mcpPrompt");
+    expect(offered[0].description).toBe("<page> <audience> — Explain a page.");
+    expect(mcpPrompts([server("failed")])).toEqual([]);
+    expect(mcpPrompts(null)).toEqual([]);
   });
 });

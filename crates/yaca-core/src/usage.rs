@@ -6,7 +6,7 @@ use ts_rs::TS;
 
 use crate::provider::registry::ANTHROPIC_ID;
 
-/// Сырые счётчики одного ответа провайдера.
+/// Raw token counts of a single provider response.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
@@ -357,21 +357,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn кеш_дешевле_свежего_ввода() {
+    fn cache_is_cheaper_than_fresh_input() {
         let p = Pricing {
             input: 5.0,
             output: 25.0,
         };
-        let свежий = p.cost(TokenCounts {
+        let fresh = p.cost(TokenCounts {
             input: 1_000_000,
             ..Default::default()
         });
-        let из_кеша = p.cost(TokenCounts {
+        let from_cache = p.cost(TokenCounts {
             cache_read: 1_000_000,
             ..Default::default()
         });
-        assert_eq!(свежий, 5.0);
-        assert!((из_кеша - 0.5).abs() < 1e-9);
+        assert_eq!(fresh, 5.0);
+        assert!((from_cache - 0.5).abs() < 1e-9);
     }
 
     #[test]
@@ -425,7 +425,7 @@ mod tests {
         assert_eq!(
             meter.snapshot(200_000).cost_usd,
             spent,
-            "деньги не возвращаются"
+            "money is not returned"
         );
 
         // The next answer is measured, not estimated.
@@ -443,7 +443,7 @@ mod tests {
     }
 
     #[test]
-    fn неизвестная_модель_не_роняет_учёт() {
+    fn unknown_model_does_not_break_accounting() {
         let info = unknown_model("qwen2.5-coder:32b");
         assert_eq!(
             info.pricing.cost(TokenCounts {

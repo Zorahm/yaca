@@ -3,6 +3,6 @@ import type { Hunk } from "./Hunk";
 
 export type FileDiff = { hunks: Array<Hunk>, added: number, removed: number, 
 /**
- * Дифф обрезан по [`MAX_LINES`].
+ * Diff is cut off at [`MAX_LINES`].
  */
 truncated: boolean, };

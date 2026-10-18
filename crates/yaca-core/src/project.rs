@@ -1,5 +1,6 @@
-//! Where a project keeps its own things (§9): settings, the session journals,
-//! the shadow store and its slash commands, all in one folder at its root.
+//! Where a project keeps its own things (§9): settings, the shadow store and
+//! its slash commands, all in one folder at its root. Its chats are kept by the
+//! application instead — see `store::location`.
 //!
 //! One function computes the path, so the name is written once, and the folder
 //! the edoC build left behind is brought over the first time anyone asks —

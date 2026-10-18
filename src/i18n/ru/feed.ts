@@ -86,6 +86,20 @@ export const feed = {
   "err.change_model": "Сменить модель",
   "err.retry_in": "Повтор через {seconds} с · попытка {attempt} из {of}",
   "err.stopped": "Остановлено",
+  "hook.blocked_prompt": "Хук плагина {plugin} не пропустил сообщение:",
+  "hook.blocked_stop": "Хук плагина {plugin} вернул агента к работе:",
+  "hook.said": "Хук плагина {plugin} ({event}):",
+  "elicit.from": "MCP-сервер {server} просит:",
+  "elicit.send": "Отправить",
+  "elicit.decline": "Отклонить",
+  "elicit.choose": "Выберите…",
+  "elicit.accepted": "Отправлено серверу {server}",
+  "elicit.declined": "Отклонено",
+  "elicit.cancelled": "Закрыто без ответа",
+  "elicit.expired": "Сервер перестал ждать",
+  "hook.project_blocked_prompt": "Хук проекта не пропустил сообщение:",
+  "hook.project_blocked_stop": "Хук проекта вернул агента к работе:",
+  "hook.project_said": "Хук проекта ({event}):",
   "err.send_failed": "Не удалось отправить команду ядру",
 
   // --- history compaction ----------------------------------------------
@@ -111,6 +125,7 @@ export const feed = {
 
   "notice.mcp_approval": "Сервер MCP ждёт одобрения: {names}",
   "notice.mcp_failed": "Сервер MCP не подключился: {names}",
+  "notice.mcp_login": "MCP-сервер просит войти: {names}",
   "notice.lsp_failed": "Языковой сервер не отвечает: {names}",
   "notice.open": "Открыть",
 

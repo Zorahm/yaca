@@ -343,7 +343,7 @@ mod tests {
     fn a_huge_file_is_cut_on_a_character_boundary() {
         let dir = TempDir::new();
         // Two-byte characters with an odd cap would split one in half.
-        dir.write("AGENTS.md", &format!("x{}", "я".repeat(MAX_BYTES)));
+        dir.write("AGENTS.md", &format!("x{}", "é".repeat(MAX_BYTES)));
 
         let found = root_of(&dir).unwrap();
         assert!(found.truncated);

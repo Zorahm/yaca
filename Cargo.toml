@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/yaca-core", "crates/yaca-cli", "crates/yaca-evals", "src-tauri"]
 
 [workspace.package]
-version = "1.0.2-alpha"
+version = "1.0.4-alpha"
 authors = ["ZorahM"]
 edition = "2021"
 license = "MIT"
@@ -27,6 +27,9 @@ ignore = "0.4"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 libc = "0.2"
+# Text of a PDF for `Read`. Pure Rust: no poppler or other system library to
+# install next to the app.
+pdf-extract = "0.12"
 regex = "1"
 reqwest = { version = "0.12", default-features = false, features = [
     "json",
@@ -37,15 +40,20 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] }
 serde = { version = "1", features = ["derive", "rc"] }
 similar = { version = "2", features = ["inline"] }
+# PKCE (S256) for the OAuth login of remote MCP servers.
+sha2 = "0.10"
 serde_json = "1"
 thiserror = "2"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "fs", "time", "io-util", "process"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "fs", "time", "io-util", "process", "net"] }
 tokio-stream = "0.1"
 tokio-util = "0.7"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ts-rs = { version = "10", features = ["serde-json-impl"] }
 uuid = { version = "1", features = ["v4"] }
+# Skill headers are YAML written for other clients: block scalars and nested
+# `metadata` are common, and a `key: value` reader loses both.
+yaml-rust2 = { version = "0.13", default-features = false }
 windows-sys = { version = "0.61", features = ["Win32_Globalization", "Win32_System_SystemInformation"] }
 
 [profile.dev]

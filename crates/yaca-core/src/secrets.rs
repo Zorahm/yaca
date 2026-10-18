@@ -86,12 +86,12 @@ pub fn tavily_key() -> Option<String> {
 /// Puts the key in the platform's store, replacing whatever was there.
 pub fn store_api_key(provider: &str, key: &str) -> Result<(), CoreError> {
     if key.trim().is_empty() {
-        return Err(CoreError::Config("пустой ключ не сохраняется".into()));
+        return Err(CoreError::Config("empty key cannot be saved".into()));
     }
     let _serial = serial();
     entry(provider)?
         .set_password(key)
-        .map_err(|e| CoreError::Config(format!("не сохранить ключ в кейчейне: {e}")))
+        .map_err(|e| CoreError::Config(format!("cannot save key in keychain: {e}")))
 }
 
 /// Removes the key. Missing is not a failure: the goal was that it be gone.
@@ -104,8 +104,68 @@ pub fn forget_api_key(provider: &str) -> Result<(), CoreError> {
         Ok(()) => Ok(()),
         Err(keyring::Error::NoEntry) => Ok(()),
         Err(e) => Err(CoreError::Config(format!(
-            "не удалить ключ из кейчейна: {e}"
+            "cannot delete key from keychain: {e}"
         ))),
+    }
+}
+
+/// How much of a secret one keychain entry holds. Windows keeps a credential
+/// in at most 2560 bytes, as UTF-16: an OAuth grant with two JWTs in it is
+/// longer, so a long secret is kept in parts.
+const PART_CHARS: usize = 1000;
+
+/// A secret other than a provider's key — an MCP server's OAuth grant — under
+/// `account`. The first entry holds the number of parts and the first part;
+/// the rest are `account#1`, `account#2`…
+pub(crate) fn store_secret(account: &str, value: &str) -> Result<(), CoreError> {
+    let chars: Vec<char> = value.chars().collect();
+    let parts: Vec<String> = chars.chunks(PART_CHARS).map(|c| c.iter().collect()).collect();
+    let parts = if parts.is_empty() { vec![String::new()] } else { parts };
+    forget_secret(account);
+    let _serial = serial();
+    let set = |name: &str, text: &str| {
+        keyring::Entry::new(SERVICE, name)
+            .and_then(|entry| entry.set_password(text))
+            .map_err(|e| CoreError::Config(format!("cannot save to keychain: {e}")))
+    };
+    set(account, &format!("{}|{}", parts.len(), parts[0]))?;
+    for (at, part) in parts.iter().enumerate().skip(1) {
+        set(&format!("{account}#{at}"), part)?;
+    }
+    Ok(())
+}
+
+/// The secret under `account`, put back together. `None` when there is none,
+/// or a part of it is missing.
+pub(crate) fn read_secret(account: &str) -> Option<String> {
+    let _serial = serial();
+    let get = |name: &str| keyring::Entry::new(SERVICE, name).ok()?.get_password().ok();
+    let first = get(account)?;
+    let (count, head) = first.split_once('|')?;
+    let count: usize = count.parse().ok()?;
+    let mut out = head.to_string();
+    for at in 1..count {
+        out.push_str(&get(&format!("{account}#{at}"))?);
+    }
+    Some(out)
+}
+
+/// Removes the secret under `account`, every part. Missing is not a failure.
+pub(crate) fn forget_secret(account: &str) {
+    let _serial = serial();
+    let delete = |name: &str| {
+        if let Ok(entry) = keyring::Entry::new(SERVICE, name) {
+            let _ = entry.delete_credential();
+        }
+    };
+    let count = keyring::Entry::new(SERVICE, account)
+        .ok()
+        .and_then(|e| e.get_password().ok())
+        .and_then(|first| first.split_once('|').and_then(|(n, _)| n.parse::<usize>().ok()))
+        .unwrap_or(1);
+    delete(account);
+    for at in 1..count {
+        delete(&format!("{account}#{at}"));
     }
 }
 
@@ -126,7 +186,7 @@ fn resolve(keychain: Option<String>, env: Option<String>) -> (Option<String>, Ke
 fn entry(provider: &str) -> Result<keyring::Entry, CoreError> {
     legacy::adopt_key(legacy::NAME, SERVICE, provider);
     keyring::Entry::new(SERVICE, provider)
-        .map_err(|e| CoreError::Config(format!("кейчейн недоступен: {e}")))
+        .map_err(|e| CoreError::Config(format!("keychain is unavailable: {e}")))
 }
 
 /// `None` for both "no such entry" and "no keychain at all": from here the two

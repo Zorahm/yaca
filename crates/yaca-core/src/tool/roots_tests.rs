@@ -100,7 +100,7 @@ async fn an_edit_in_the_additional_root_needs_a_read_first_like_anywhere_else() 
         )
         .await
         .unwrap_err();
-    assert!(err.to_string().contains("не прочитан"), "{err}");
+    assert!(err.to_string().contains("was not read in this session"), "{err}");
 }
 
 #[tokio::test]
@@ -168,7 +168,7 @@ async fn delete_dir_refuses_the_additional_root_itself() {
     let input = json!({ "path": roots::plain(extra.path()) });
 
     let err = DeleteDir.run(&ctx, input.clone()).await.unwrap_err();
-    assert!(err.to_string().contains("дополнительный корень"), "{err}");
+    assert!(err.to_string().contains("additional workspace root"), "{err}");
     assert!(extra.path().join("keep.txt").exists(), "the root and its files stay");
 
     // Refused before any question: there is nothing to ask about.

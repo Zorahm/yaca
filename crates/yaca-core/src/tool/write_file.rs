@@ -1,5 +1,5 @@
-//! Создание файла и запись целиком. Подписывает интерфейс (§5.4.1):
-//! «Создан segments.ts +124 −0» — факт, который он выводит сам.
+//! Creating a file and writing it completely. The interface captions it (§5.4.1):
+//! "Created segments.ts +124 −0" — a fact derived by the tool itself.
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -49,9 +49,9 @@ impl Tool for WriteFile {
         input["path"].as_str().map(str::to_owned)
     }
 
-    /// Спрашивается в «Ручном» (§8). Счётчиков `+12 −3` здесь нет: они
-    /// известны только после записи, а смысл запроса — остановить агента
-    /// до того, как файл будет тронут.
+    /// Asked in "Manual" mode (§8). There are no `+12 −3` counters here: they
+    /// are known only after writing, and the purpose of the request is to stop
+    /// the agent before the file is touched.
     fn permission(&self, ws: &Workspace, input: &Value) -> Option<PermissionNeed> {
         let raw = input["path"].as_str()?;
         let abs = ws.resolve_new(raw).ok()?;
@@ -61,17 +61,17 @@ impl Tool for WriteFile {
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let raw = input["path"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан path"))?;
+            .ok_or_else(|| ToolError::failed("path is required"))?;
         let content = input["content"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан content"))?
+            .ok_or_else(|| ToolError::failed("content is required"))?
             .to_string();
 
-        // Перезапись существующего файла — та самая правка вслепую, от которой
-        // и защищает read-before-edit. Создание нового ничего не затирает.
+        // Overwriting an existing file is the blind edit that read-before-edit
+        // guards against. Creating a new file does not overwrite anything.
         let probe = files::look(ctx, raw)?;
         if probe.abs.is_dir() {
-            return Err(ToolError::failed(format!("{raw} — каталог")));
+            return Err(ToolError::failed(format!("{raw} is a directory")));
         }
         let target = if probe.current.is_some() {
             files::look_editable(ctx, raw)?
@@ -79,17 +79,17 @@ impl Tool for WriteFile {
             probe
         };
 
-        let было = target.current.is_some();
-        let kind = if было {
+        let existed = target.current.is_some();
+        let kind = if existed {
             ChangeKind::Modified
         } else {
             ChangeKind::Created
         };
         let (fact, diff) = files::write(ctx, &target, kind, Some(&content))?;
 
-        let глагол = if было { "Изменён" } else { "Создан" };
+        let verb = if existed { "Modified" } else { "Created" };
         Ok(ToolOutput::new(format!(
-            "{глагол} {} (+{} −{})\n",
+            "{verb} {} (+{} −{})\n",
             target.rel, fact.added, fact.removed
         ))
         .changed(FileChange { fact, diff }))
@@ -104,14 +104,14 @@ mod tests {
     use crate::tool::tests_support::ctx_for;
 
     #[tokio::test]
-    async fn создаёт_файл_вместе_с_каталогом() {
+    async fn creates_file_along_with_directory() {
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
 
         let out = WriteFile
             .run(
                 &ctx,
-                json!({ "path": "src/новый.rs", "content": "fn main() {}\n" }),
+                json!({ "path": "src/new.rs", "content": "fn main() {}\n" }),
             )
             .await
             .unwrap();
@@ -120,35 +120,35 @@ mod tests {
         assert_eq!(changed.fact.kind, ChangeKind::Created);
         assert_eq!(changed.fact.added, 1);
         assert_eq!(
-            std::fs::read_to_string(dir.path().join("src/новый.rs")).unwrap(),
+            std::fs::read_to_string(dir.path().join("src/new.rs")).unwrap(),
             "fn main() {}\n"
         );
     }
 
     #[tokio::test]
-    async fn перезапись_непрочитанного_файла_отклоняется() {
+    async fn overwriting_unread_file_is_rejected() {
         let dir = TempDir::new();
-        dir.write("a.rs", "чужой труд\n");
+        dir.write("a.rs", "foreign work\n");
         let (ctx, _ws) = ctx_for(&dir);
 
         let err = WriteFile
-            .run(&ctx, json!({ "path": "a.rs", "content": "моё\n" }))
+            .run(&ctx, json!({ "path": "a.rs", "content": "mine\n" }))
             .await
             .unwrap_err();
 
-        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
-        assert!(err.to_string().contains("не прочитан"));
+        assert!(matches!(err, ToolError::Rejected(_)), "got {err:?}");
+        assert!(err.to_string().contains("was not read"));
     }
 
     #[tokio::test]
-    async fn перезапись_прочитанного_файла_считается_правкой() {
+    async fn overwriting_read_file_counts_as_edit() {
         let dir = TempDir::new();
-        let path = dir.write("a.rs", "раз\n");
+        let path = dir.write("a.rs", "one\n");
         let (ctx, ws) = ctx_for(&dir);
         ws.mark_read(&path);
 
         let out = WriteFile
-            .run(&ctx, json!({ "path": "a.rs", "content": "раз\nдва\n" }))
+            .run(&ctx, json!({ "path": "a.rs", "content": "one\ntwo\n" }))
             .await
             .unwrap();
 
@@ -158,18 +158,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn созданный_файл_можно_дописать_без_перечитывания() {
+    async fn created_file_can_be_written_again_without_rereading() {
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
 
         WriteFile
-            .run(&ctx, json!({ "path": "новый.rs", "content": "раз\n" }))
+            .run(&ctx, json!({ "path": "new.rs", "content": "one\n" }))
             .await
             .unwrap();
-        // Запись отмечает файл прочитанным: иначе агент упёрся бы во «файл
-        // изменился после чтения» из-за собственной же правки.
+        // Writing marks the file as read: otherwise the agent would hit "file
+        // changed after reading" because of its own edit.
         let out = WriteFile
-            .run(&ctx, json!({ "path": "новый.rs", "content": "раз\nдва\n" }))
+            .run(&ctx, json!({ "path": "new.rs", "content": "one\ntwo\n" }))
             .await
             .unwrap();
 
@@ -177,14 +177,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn запись_за_пределы_проекта_отклоняется() {
+    async fn writing_outside_project_is_rejected() {
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
 
         let err = WriteFile
-            .run(&ctx, json!({ "path": "../снаружи.rs", "content": "x" }))
+            .run(&ctx, json!({ "path": "../outside.rs", "content": "x" }))
             .await
             .unwrap_err();
-        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
+        assert!(matches!(err, ToolError::Rejected(_)), "got {err:?}");
     }
 }

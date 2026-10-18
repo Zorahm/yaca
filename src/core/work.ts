@@ -162,7 +162,7 @@ export function isLiveWork(items: FeedItem[], index: number, busy: boolean): boo
   if (!busy) return false;
   for (let i = index + 1; i < items.length; i += 1) {
     const kind = items[i].kind;
-    if (kind !== "todos" && kind !== "permission" && kind !== "question") return false;
+    if (kind !== "todos" && kind !== "permission" && kind !== "question" && kind !== "elicitation") return false;
   }
   return true;
 }

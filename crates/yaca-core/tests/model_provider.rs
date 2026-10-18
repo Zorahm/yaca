@@ -43,14 +43,15 @@ fn pair(provider: &str, model: &str) -> (String, String) {
 fn a_session_recorded_before_it_named_its_provider_reopens_on_its_own_model() {
     let project = TempProject::new();
     // The index as it was written before `provider` was added to it.
-    project.write(
-        ".yaca/sessions/ses_old.meta.json",
+    project.write_journal(
+        "ses_old.meta.json",
         r#"{"id":"ses_old","title":"slugify","createdAt":1,"updatedAt":1,
             "model":"ornith","messages":1}"#,
     );
     let (_dir, providers) = local();
 
     let mut config = SessionConfig::open(project.path()).unwrap();
+    config.journal = Some(project.chats());
     config.resume_session(SessionId::from("ses_old"));
 
     assert_eq!(resolved(&providers, &config), pair("unsloth", "ornith"));
@@ -63,14 +64,15 @@ fn a_resumed_session_keeps_its_model_over_the_project_default() {
         ".yaca/settings.json",
         r#"{"provider":"anthropic","model":"claude-opus-5"}"#,
     );
-    project.write(
-        ".yaca/sessions/ses_local.meta.json",
+    project.write_journal(
+        "ses_local.meta.json",
         r#"{"id":"ses_local","title":"slugify","createdAt":1,"updatedAt":1,
             "provider":"unsloth","model":"ornith"}"#,
     );
     let (_dir, providers) = local();
 
     let mut config = SessionConfig::open(project.path()).unwrap();
+    config.journal = Some(project.chats());
     config.resume_session(SessionId::from("ses_local"));
 
     // The conversation was held with this model; the default changing since

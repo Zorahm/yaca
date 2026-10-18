@@ -27,7 +27,7 @@ use crate::id::{CallId, TurnId};
 use crate::message::ContentBlock;
 use crate::instructions::Instructions;
 use crate::tool::memory::store::MemoryIndex;
-use crate::tool::skill::Listing;
+use crate::skills::Listing;
 use crate::intent::Intent;
 use crate::provider::Provider;
 use crate::tool::{take_description, Progress, ToolCtx, ToolRegistry};
@@ -37,6 +37,7 @@ use crate::workspace::Workspace;
 
 use super::accumulator::{Garbled, PendingCall};
 use super::asking::{Answer, Gate, Queue};
+use super::plugin_hooks::PluginPre;
 use super::changeset;
 use super::checkpoints;
 use super::questions::Questions;
@@ -74,6 +75,19 @@ pub(super) struct Caller {
     pub(super) mcp_notes: Option<Arc<str>>,
     /// The `Task` row these calls are drawn under. `None` for the agent's own.
     pub(super) under: Option<CallId>,
+    /// The model a named agent asked for.
+    pub(super) model: ModelPick,
+}
+
+/// Which model a caller's requests go to.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(super) enum ModelPick {
+    /// The session's, or for a subagent the subagent model from settings.
+    #[default]
+    Default,
+    /// The conversation's own model (`model: inherit`).
+    Session,
+    Exact(String),
 }
 
 /// A call that has been dealt with.
@@ -91,9 +105,10 @@ impl Caller {
     /// project gives its subagents.
     pub(super) fn model(&self) -> ModelInfo {
         let session = self.shared.state.lock().unwrap().model.clone();
-        let id = match self.under {
-            Some(_) => self.shared.settings.subagent_model_or(&session),
-            None => &session,
+        let id = match (&self.model, &self.under) {
+            (ModelPick::Exact(id), _) => id.as_str(),
+            (ModelPick::Session, _) | (ModelPick::Default, None) => &session,
+            (ModelPick::Default, Some(_)) => self.shared.settings.subagent_model_or(&session),
         };
         self.shared.model_info(id)
     }
@@ -283,7 +298,7 @@ impl Caller {
         }
 
         let Some(tool) = tool else {
-            let err = ToolError::failed(format!("неизвестный инструмент: {}", call.name));
+            let err = ToolError::failed(format!("unknown tool: {}", call.name));
             let result = self.failed_unrun(turn_id, call_id, &call.name, description, input, err);
             return (result, false);
         };
@@ -330,6 +345,8 @@ impl Caller {
             }
         };
 
+        // What the model is told about arguments a hook rewrote.
+        let mut rewritten: Vec<String> = Vec::new();
         // Hooks answer before the permission question (§5.7): a call a hook
         // refuses was never going to run, so the human is not asked about it. After
         // the lane, so a hook that reads the tree sees what the call would see.
@@ -343,7 +360,15 @@ impl Caller {
         )
         .await
         {
-            PreOutcome::Go => {}
+            PreOutcome::Go(None) => {}
+            PreOutcome::Go(Some(updated)) => {
+                self.emit(AgentEvent::ToolCallProgress {
+                    call_id: call_id.clone(),
+                    chunk: "Project hook changed the call's arguments\n".to_string(),
+                });
+                rewritten.push(super::plugin_hooks::rewritten_note("The project's", &updated));
+                input = updated;
+            }
             PreOutcome::Refused(refusal) => {
                 self.emit(AgentEvent::ToolCallRejected {
                     call_id,
@@ -356,9 +381,42 @@ impl Caller {
             }
         }
 
+        // The plugins' hooks after the project's: the project's guard has the
+        // first word. A plugin can refuse a call or ask for the question; it
+        // cannot answer the question for the human.
+        let (mut pre_context, force_ask) = match self.plugin_pre(&call_id, &call.name, &mut input, cancel).await {
+            PluginPre::Go(context) => (context, false),
+            PluginPre::Ask(context) => (context, true),
+            PluginPre::Blocked { for_human, for_model } => {
+                self.emit(AgentEvent::ToolCallRejected {
+                    call_id,
+                    reason: for_human,
+                });
+                return (tool_result(&call.id, for_model, true), false);
+            }
+        };
+        rewritten.append(&mut pre_context);
+        let pre_context = rewritten;
+        if cancel.is_cancelled() {
+            return (self.stopped_by_human(&call.id, call_id, cancel), false);
+        }
+
         let mut asked_here = false;
         if let Some(need) = tool.permission(self.ws.as_ref(), &input) {
-            match self.gate(&need) {
+            let mut gate = match self.gate(&need) {
+                Gate::Pass if force_ask => Gate::Ask,
+                gate => gate,
+            };
+            // Auto: a model reads the call before the human is bothered. Its
+            // "safe" removes the question; anything else leaves it.
+            if matches!(gate, Gate::Ask)
+                && !force_ask
+                && self.reviewable(&need)
+                && self.review_approves(&need, cancel).await
+            {
+                gate = Gate::Pass;
+            }
+            match gate {
                 Gate::Pass => {}
                 Gate::Refused(reason) => {
                     return (self.refused(&call.id, call_id, reason, true), false);
@@ -409,12 +467,15 @@ impl Caller {
                 .is_some_and(|r| !r.meta().title_open_to_model()),
             transcript: self.shared.recorder.as_ref().map(|r| r.transcript()),
             lsp: Some(self.shared.lsp.clone()),
+            skills: self.shared.skills.clone(),
         };
 
         // Copied only when a post hook will read it: most calls have none, and
         // a large write should not be copied for nothing.
-        let for_hooks =
-            hooks::wants_post(self.shared.settings.hooks(), &call.name).then(|| input.clone());
+        let for_hooks = (hooks::wants_post(self.shared.settings.hooks(), &call.name)
+            || self.shared.plugins.hooks.has(crate::plugin::hooks::HookEvent::PostToolUse)
+            || !pre_context.is_empty())
+        .then(|| input.clone());
 
         // §6.3: what the file held before a writer touched it, so one hunk of
         // the write can be reverted later. Taken after the gate, like the
@@ -451,6 +512,20 @@ impl Caller {
                         }
                     }
                 }
+                // The same for each file of a call that changed many. The
+                // server was told the new text by the tool itself, so this
+                // reads what it has published rather than waiting for it.
+                for file in &out.edited {
+                    let note = self
+                        .shared
+                        .lsp
+                        .after_edit(&file.abs, &file.change.fact.path, cancel)
+                        .await;
+                    if let Some(note) = note {
+                        out.text.push_str("\n\n");
+                        out.text.push_str(&note);
+                    }
+                }
                 // The feed gets the text exactly once. A streaming tool has already handed
                 // it over along the way — the command writes to the feed while it runs (§0) —
                 // the session hands it to everyone else from here.
@@ -473,8 +548,21 @@ impl Caller {
                 if let (true, Some(before)) = (changed, before) {
                     changeset::after(&self.shared, before).await;
                 }
+                for file in std::mem::take(&mut out.edited) {
+                    self.emit(AgentEvent::FileChanged {
+                        call_id: call_id.clone(),
+                        fact: file.change.fact.clone(),
+                        diff: file.change.diff,
+                    });
+                    self.shared.changes.record(
+                        file.change.fact.path,
+                        file.abs,
+                        Some(file.before),
+                        Some(file.after),
+                    );
+                }
                 let text = self
-                    .after_hooks(&call.name, for_hooks, false, out.text, &call_id, cancel)
+                    .after_hooks(&call.name, for_hooks, false, out.text, &call_id, &pre_context, cancel)
                     .await;
                 if !out.detached {
                     self.emit(AgentEvent::ToolCallFinished {
@@ -510,7 +598,7 @@ impl Caller {
                 // the output of a failed command in an action's caption would be a wall of text,
                 // and without it the model has nothing to fix.
                 let text = self
-                    .after_hooks(&call.name, for_hooks, true, err.for_model(), &call_id, cancel)
+                    .after_hooks(&call.name, for_hooks, true, err.for_model(), &call_id, &pre_context, cancel)
                     .await;
                 self.emit(AgentEvent::ToolCallFailed {
                     call_id,
@@ -552,6 +640,10 @@ impl Caller {
     /// The post hooks of a call that ran. What they say goes into the call's row
     /// and onto the end of the text the model reads. A hook cannot change whether
     /// the call is an error: the flag is the tool's own, passed through.
+    ///
+    /// The project's hooks first, then the plugins', then what the plugins'
+    /// `PreToolUse` hooks wanted the model to read with the result.
+    #[allow(clippy::too_many_arguments)]
     async fn after_hooks(
         &self,
         tool: &str,
@@ -559,11 +651,29 @@ impl Caller {
         failed: bool,
         text: String,
         call_id: &CallId,
+        pre_context: &[String],
         cancel: &CancellationToken,
     ) -> String {
         let Some(input) = input else {
             return text;
         };
+        let text = self.project_after_hooks(tool, &input, failed, text, call_id, cancel).await;
+        let mut text = self.plugin_post(call_id, tool, &input, failed, text, cancel).await;
+        for context in pre_context {
+            text.push_str(context);
+        }
+        text
+    }
+
+    async fn project_after_hooks(
+        &self,
+        tool: &str,
+        input: &Value,
+        failed: bool,
+        text: String,
+        call_id: &CallId,
+        cancel: &CancellationToken,
+    ) -> String {
         let finished = Finished {
             failed,
             result: &text,
@@ -573,7 +683,7 @@ impl Caller {
             self.ws.as_ref(),
             self.shared.shell,
             tool,
-            &input,
+            input,
             finished,
             cancel,
         )
@@ -662,7 +772,7 @@ fn refusal_for_model(reason: Option<&str>, standing: bool) -> String {
 fn garbled(kind: Garbled) -> ToolError {
     match kind {
         Garbled::Cut => ToolError::failed_with(
-            "ответ оборвался на лимите, вызов не выполнен",
+            "response was cut off by output limit, call was not run",
             "Your response reached its output limit while the arguments of this call \
              were still being written, so it was not run and nothing changed. Make the \
              call again with less in it: write a large file in parts — create it with \
@@ -670,7 +780,7 @@ fn garbled(kind: Garbled) -> ToolError {
              with Edit rather than rewriting it.",
         ),
         Garbled::Invalid => ToolError::failed_with(
-            "аргументы вызова — не JSON, вызов не выполнен",
+            "call arguments are not valid JSON, call was not run",
             "The arguments of this call were not valid JSON, so it was not run and \
              nothing changed. Make the call again with its arguments as one JSON object.",
         ),

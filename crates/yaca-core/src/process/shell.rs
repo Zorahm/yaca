@@ -268,7 +268,7 @@ fn shell_command(shell: Shell, command: &str) -> std::io::Result<std::process::C
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             format!(
-                "команда длиннее {MAX_COMMAND_CHARS} символов — запишите её в файл .ps1 и запустите его"
+                "command is longer than {MAX_COMMAND_CHARS} characters — write it to a .ps1 file and run it"
             ),
         ));
     }
@@ -390,9 +390,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn russian_comes_out_as_utf8() {
-        let (_, out) = run("Write-Output 'привет'").await;
-        assert_eq!(out.trim(), "привет");
+    async fn unicode_comes_out_as_utf8() {
+        let (_, out) = run("Write-Output 'café'").await;
+        assert_eq!(out.trim(), "café");
     }
 
     #[tokio::test]

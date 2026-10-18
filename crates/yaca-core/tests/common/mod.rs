@@ -37,18 +37,44 @@ impl TempProject {
     }
 
     pub fn write(&self, rel: &str, contents: &str) -> PathBuf {
-        let p = self.0.join(rel);
-        if let Some(parent) = p.parent() {
-            std::fs::create_dir_all(parent).unwrap();
-        }
-        std::fs::write(&p, contents).unwrap();
-        p
+        write_file(&self.0.join(rel), contents)
     }
+
+    /// The chats folder this project's sessions are journaled into — beside
+    /// the project rather than the human's own, which a test must not touch.
+    pub fn chats(&self) -> PathBuf {
+        let mut name = self.0.as_os_str().to_owned();
+        name.push(".chats");
+        PathBuf::from(name)
+    }
+
+    /// The folder the project's journals land in under [`TempProject::chats`].
+    pub fn journals(&self) -> PathBuf {
+        yaca_core::store::location::project_dir(&self.chats(), &self.0)
+    }
+
+    /// Writes a journal file as an earlier run would have left it.
+    pub fn write_journal(&self, file: &str, contents: &str) -> PathBuf {
+        write_file(&self.journals().join(file), contents)
+    }
+
+    pub fn store(&self) -> yaca_core::SessionStore {
+        yaca_core::SessionStore::open(&self.chats(), &self.0)
+    }
+}
+
+fn write_file(path: &Path, contents: &str) -> PathBuf {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
+    std::fs::write(path, contents).unwrap();
+    path.to_path_buf()
 }
 
 impl Drop for TempProject {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
+        let _ = std::fs::remove_dir_all(self.chats());
     }
 }
 
@@ -72,7 +98,7 @@ pub fn unique() -> String {
 pub fn session(dir: &TempProject, provider: Arc<MockProvider>, mode: Mode) -> SessionHandle {
     let mut cfg = SessionConfig::new(dir.path());
     cfg.mode = mode;
-    cfg.journal = false;
+    cfg.journal = None;
     yaca_core::spawn(cfg, provider).unwrap()
 }
 
@@ -85,7 +111,7 @@ pub fn session_with_roots(
 ) -> SessionHandle {
     let mut cfg = SessionConfig::new(dir.path());
     cfg.mode = mode;
-    cfg.journal = false;
+    cfg.journal = None;
     cfg.additional_roots = extra.iter().map(|d| d.path().to_path_buf()).collect();
     yaca_core::spawn(cfg, provider).unwrap()
 }
@@ -209,9 +235,21 @@ pub fn fixture(name: &str) -> PathBuf {
 
     // `cargo test --test <one>` builds that one target and no examples. Built
     // here then, once per test binary; the build directory is not locked while
-    // tests run.
+    // tests run. Also when the binary is older than its source: a fixture
+    // edited since the last build would otherwise answer as the old one did.
+    // Not on every run, because the build here goes without the caller's
+    // `--config`, and would rebuild the library under another profile.
     static BUILT: std::sync::Once = std::sync::Once::new();
-    if !path.exists() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("examples")
+        .join(format!("{name}.rs"));
+    let modified = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    let stale = match (modified(&path), modified(&source)) {
+        (Some(built), Some(written)) => built < written,
+        (None, _) => true,
+        _ => false,
+    };
+    if stale {
         BUILT.call_once(|| {
             let mut cargo = std::process::Command::new(env!("CARGO"));
             cargo.args(["build", "--quiet", "-p", "yaca-core", "--example", name]);

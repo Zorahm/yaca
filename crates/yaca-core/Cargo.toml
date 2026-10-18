@@ -18,10 +18,12 @@ htmd.workspace = true
 ignore.workspace = true
 image.workspace = true
 keyring.workspace = true
+pdf-extract.workspace = true
 regex.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 similar.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
@@ -30,6 +32,7 @@ tokio-util.workspace = true
 tracing.workspace = true
 ts-rs.workspace = true
 uuid.workspace = true
+yaml-rust2.workspace = true
 
 # Killing a background command must reach the whole tree it started (§6.5),
 # and `Child::kill` only reaches the direct child.

@@ -63,7 +63,7 @@ impl Tool for Glob {
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let pattern = input["pattern"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан pattern"))?
+            .ok_or_else(|| ToolError::failed("pattern is required"))?
             .to_string();
         let given = match input["path"].as_str() {
             Some(p) => Some(ctx.ws.resolve_existing(p)?),
@@ -74,7 +74,7 @@ impl Tool for Glob {
         let matcher = globset::GlobBuilder::new(&pattern)
             .literal_separator(true)
             .build()
-            .map_err(|e| ToolError::failed(format!("плохой шаблон `{pattern}`: {e}")))?
+            .map_err(|e| ToolError::failed(format!("bad pattern `{pattern}`: {e}")))?
             .compile_matcher();
 
         let ws = ctx.ws.clone();
@@ -113,7 +113,7 @@ impl Tool for Glob {
             Ok(hits)
         })
         .await
-        .map_err(|e| ToolError::failed(format!("обход упал: {e}")))??;
+        .map_err(|e| ToolError::failed(format!("directory traversal failed: {e}")))??;
 
         let total = found.len();
         let truncated = total > MAX_RESULTS;
@@ -125,10 +125,10 @@ impl Tool for Glob {
             out.push('\n');
         }
         if total == 0 {
-            out.push_str("[ничего не найдено]\n");
+            out.push_str("[nothing found]\n");
         }
         if truncated {
-            out.push_str(&format!("\n[показаны {MAX_RESULTS} из {total}]\n"));
+            out.push_str(&format!("\n[showing {MAX_RESULTS} of {total}]\n"));
         }
 
         Ok(ToolOutput::new(out)
@@ -144,7 +144,7 @@ mod tests {
     use crate::tool::tests_support::ctx_for;
 
     #[tokio::test]
-    async fn находит_по_шаблону_и_не_лезет_в_игнор() {
+    async fn finds_by_pattern_and_skips_ignored() {
         let dir = TempDir::new();
         dir.write(".gitignore", "node_modules\n");
         dir.write("src/a.rs", "");
@@ -165,7 +165,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn игнор_действует_и_вне_git_репозитория() {
+    async fn ignore_applies_outside_git_repository_too() {
         let dir = TempDir::new();
         dir.write(".gitignore", "node_modules
 target
@@ -180,13 +180,13 @@ target
             .await
             .unwrap();
 
-        assert!(out.text.contains("src/a.rs"), "получили: {}", out.text);
-        assert!(!out.text.contains("node_modules"), "получили: {}", out.text);
-        assert!(!out.text.contains("target"), "получили: {}", out.text);
+        assert!(out.text.contains("src/a.rs"), "got: {}", out.text);
+        assert!(!out.text.contains("node_modules"), "got: {}", out.text);
+        assert!(!out.text.contains("target"), "got: {}", out.text);
     }
 
     #[tokio::test]
-    async fn пустой_результат_говорит_об_этом_прямо() {
+    async fn empty_result_states_so_directly() {
         let dir = TempDir::new();
         dir.write("a.txt", "");
         let (ctx, _ws) = ctx_for(&dir);
@@ -195,12 +195,12 @@ target
             .run(&ctx, json!({ "pattern": "**/*.rs" }))
             .await
             .unwrap();
-        assert!(out.text.contains("ничего не найдено"));
+        assert!(out.text.contains("nothing found"));
         assert_eq!(out.meta.items, Some(0));
     }
 
     #[tokio::test]
-    async fn кривой_шаблон_это_сбой_а_не_паника() {
+    async fn invalid_pattern_is_failure_not_panic() {
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
         let err = Glob.run(&ctx, json!({ "pattern": "[" })).await.unwrap_err();

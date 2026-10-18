@@ -3,7 +3,7 @@
 use super::*;
 
 #[test]
-fn подпись_обязательна_только_у_тулов_модели() {
+fn description_is_only_required_for_model_tools() {
     let reg = ToolRegistry::standard();
     let schemas = reg.schemas(Intent::Agent);
 
@@ -14,15 +14,15 @@ fn подпись_обязательна_только_у_тулов_модели
         .unwrap()
         .contains(&json!("description")));
 
-    // Список задач рисует интерфейс, подпись ему не нужна.
-    // Файловые действия и список задач подписывает интерфейс: он знает
-    // факт и не может ошибиться, а лишнее поле модель тратила бы зря.
-    // Команду подписывает модель: из строки запуска интерфейс не поймёт,
-    // зачем её звали, — смысл действия знает только она (§5.4.1).
+    // The task list is drawn by the UI; it does not need a description.
+    // File operations and task list are labeled by the UI: it knows
+    // the fact and cannot make a mistake, while an extra field would waste the model's budget.
+    // Commands are described by the model: the UI cannot infer why a command was run
+    // from its command line — only the model knows the intent (§5.4.1).
     let bash = schemas.iter().find(|s| s.name == "Bash").unwrap();
     assert!(bash.input_schema["properties"]["description"].is_object());
 
-    for имя in [
+    for name in [
         "TodoWrite",
         "Write",
         "Edit",
@@ -30,16 +30,16 @@ fn подпись_обязательна_только_у_тулов_модели
         "DeleteDir",
         "Move",
     ] {
-        let t = schemas.iter().find(|s| s.name == имя).unwrap();
+        let t = schemas.iter().find(|s| s.name == name).unwrap();
         assert!(
             t.input_schema["properties"]["description"].is_null(),
-            "{имя} не должен просить подпись у модели"
+            "{name} should not request a description from the model"
         );
     }
 }
 
 #[test]
-fn режим_plan_читает_и_планирует_но_не_пишет() {
+fn plan_mode_reads_and_plans_but_does_not_write() {
     let reg = ToolRegistry::standard();
     let names: Vec<_> = reg
         .schemas(Intent::Plan)
@@ -52,10 +52,10 @@ fn режим_plan_читает_и_планирует_но_не_пишет() {
     assert!(names.contains(&"ExitPlanMode".to_string()));
     // A subagent only reads, so sending one changes nothing either.
     assert!(names.contains(&"Task".to_string()));
-    // §7.1: пишущие тулы не отдаются модели вообще, а не запрещаются
-    // текстом промпта, — слабая модель запрет проигнорирует. Команда —
-    // там же: план обещает ничего не менять, а команда может всё.
-    for пишущий in [
+    // §7.1: writing tools are not given to the model at all, rather than
+    // forbidden via prompt text — a weaker model would ignore the prohibition. Command
+    // is treated the same: the plan promises not to change anything, while a command could do anything.
+    for writing in [
         "Write",
         "Edit",
         "Delete",
@@ -64,8 +64,8 @@ fn режим_plan_читает_и_планирует_но_не_пишет() {
         "BashOutput",
     ] {
         assert!(
-            !names.contains(&пишущий.to_string()),
-            "{пишущий} утёк в plan"
+            !names.contains(&writing.to_string()),
+            "{writing} leaked into plan"
         );
     }
     // Bash is offered, and each call is judged when it arrives: a read-only
@@ -74,14 +74,14 @@ fn режим_plan_читает_и_планирует_но_не_пишет() {
 }
 
 #[test]
-fn пишущие_тулы_есть_только_в_режиме_agent() {
+fn writing_tools_are_only_present_in_agent_mode() {
     let reg = ToolRegistry::standard();
     let names: Vec<_> = reg
         .schemas(Intent::Agent)
         .into_iter()
         .map(|s| s.name)
         .collect();
-    for пишущий in [
+    for writing in [
         "Write",
         "Edit",
         "Delete",
@@ -90,7 +90,7 @@ fn пишущие_тулы_есть_только_в_режиме_agent() {
         "Bash",
         "BashOutput",
     ] {
-        assert!(names.contains(&пишущий.to_string()), "{пишущий} потерялся");
+        assert!(names.contains(&writing.to_string()), "{writing} missing");
     }
 }
 
@@ -127,7 +127,7 @@ fn a_subagent_has_the_agents_tools_less_the_agents_own() {
 }
 
 #[test]
-fn порядок_схем_устойчив_иначе_кеш_промпта_обнуляется() {
+fn schema_order_is_stable_otherwise_prompt_cache_is_invalidated() {
     let reg = ToolRegistry::standard();
     let a: Vec<_> = reg
         .schemas(Intent::Agent)
@@ -146,25 +146,25 @@ fn порядок_схем_устойчив_иначе_кеш_промпта_о�
 }
 
 #[test]
-fn подпись_чистится_по_правилам_спеки() {
-    let mut v = json!({ "description": "Сверил байты строки схемы." });
+fn description_is_sanitized_according_to_spec() {
+    let mut v = json!({ "description": "Checked schema string bytes." });
     assert_eq!(
         take_description(&mut v).as_deref(),
-        Some("Сверил байты строки схемы")
+        Some("Checked schema string bytes")
     );
     assert!(
         v.get("description").is_none(),
-        "поле должно уйти из аргументов"
+        "field should be removed from arguments"
     );
 
-    let mut long = json!({ "description": "я".repeat(80) });
+    let mut long = json!({ "description": "a".repeat(80) });
     let cut = take_description(&mut long).unwrap();
     assert_eq!(cut.chars().count(), DESCRIPTION_MAX_CHARS);
 
-    let mut multiline = json!({ "description": "Первая строка\nвторая" });
+    let mut multiline = json!({ "description": "First line\nsecond" });
     assert_eq!(
         take_description(&mut multiline).as_deref(),
-        Some("Первая строка")
+        Some("First line")
     );
 
     let mut empty = json!({ "description": "  " });

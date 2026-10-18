@@ -50,6 +50,8 @@ impl Questions {
         let id = RequestId::new();
         let request = question.into_request(id.clone(), self.call_id.clone());
         let rx = self.shared.questions.open(id.clone(), request.clone());
+        self.shared
+            .notify("question", format!("Yaca has a question: {}", request.question));
         self.shared.emit(AgentEvent::QuestionAsked { request });
 
         let reply = tokio::select! {

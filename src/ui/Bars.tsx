@@ -31,10 +31,12 @@ export function Notices({
   feed,
   onCompact,
   onOpenMcp,
+  onOpenLsp,
 }: {
   feed: Feed;
   onCompact: () => void;
   onOpenMcp: () => void;
+  onOpenLsp: () => void;
 }) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const hide = (id: string) => setDismissed(new Set(dismissed).add(id));
@@ -50,11 +52,13 @@ export function Notices({
     servers.filter((server) => server.status === status).map((server) => server.name);
   const unapproved = named("needsApproval");
   const failed = named("failed");
+  const loginNeeded = named("needsLogin");
   // The names are part of the key: closing the bar about one server must not
   // hide the next one that fails.
   const mcpBars = [
     { id: `mcp-approval:${unapproved.join(",")}`, names: unapproved, note: "notice.mcp_approval" },
     { id: `mcp-failed:${failed.join(",")}`, names: failed, note: "notice.mcp_failed" },
+    { id: `mcp-login:${loginNeeded.join(",")}`, names: loginNeeded, note: "notice.mcp_login" },
   ] as const;
 
   // A server that was never asked for is not a problem, and one that is
@@ -75,6 +79,9 @@ export function Notices({
         <div className="bar" key={lspBar.id}>
           <span className="bar-icon"><Warning size={15} /></span>
           <span className="bar-note">{t(lspBar.note, { names: lspBar.names.join(", ") })}</span>
+          <button className="btn btn-small" onClick={onOpenLsp}>
+            {t("notice.open")}
+          </button>
           <button
             className="bar-close"
             onClick={() => hide(lspBar.id)}

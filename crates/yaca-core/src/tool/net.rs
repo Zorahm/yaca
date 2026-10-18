@@ -78,11 +78,11 @@ pub(crate) async fn read_body(
         };
 
         let Some(chunk) = next else { break };
-        let chunk = chunk.map_err(|e| ToolError::failed(format!("оборвалась загрузка: {e}")))?;
+        let chunk = chunk.map_err(|e| ToolError::failed(format!("download interrupted: {e}")))?;
 
         if body.len() + chunk.len() > MAX_BODY_BYTES {
             return Err(ToolError::failed(format!(
-                "ответ больше {} МиБ",
+                "response exceeds {} MiB",
                 MAX_BODY_BYTES / (1024 * 1024)
             )));
         }

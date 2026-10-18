@@ -47,7 +47,7 @@ fn isolated(dir: &TempProject, file: &str) -> SessionHandle {
     ]));
     let mut cfg = SessionConfig::new(dir.path());
     cfg.mode = Mode::Auto;
-    cfg.journal = false;
+    cfg.journal = None;
     cfg.isolate = true;
     yaca_core::spawn(cfg, provider).unwrap()
 }
@@ -132,7 +132,7 @@ async fn a_rollback_in_one_chat_leaves_the_other_alone() {
 fn a_project_outside_git_is_refused_at_start() {
     let dir = TempProject::new();
     let mut cfg = SessionConfig::new(dir.path());
-    cfg.journal = false;
+    cfg.journal = None;
     cfg.isolate = true;
     let provider = Arc::new(MockProvider::new(vec![]));
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();

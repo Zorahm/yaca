@@ -31,7 +31,7 @@ fn process_id(input: &Value) -> Result<ProcessId, ToolError> {
         .as_u64()
         .and_then(|n| u32::try_from(n).ok())
         .map(ProcessId)
-        .ok_or_else(|| ToolError::failed("не задан id"))
+        .ok_or_else(|| ToolError::failed("id is required"))
 }
 
 /// Kills the command and waits for it to be gone. `false` — it is still there.
@@ -82,20 +82,20 @@ impl Tool for BashKill {
         let summary = ctx
             .processes
             .summary(id)
-            .ok_or_else(|| ToolError::failed(format!("нет фоновой команды под номером {id}")))?;
+            .ok_or_else(|| ToolError::failed(format!("no background command with id {id}")))?;
 
         if summary.state != ProcessState::Running {
             return Ok(ToolOutput::new(format!(
-                "Команда {id} уже не работает.\n"
+                "Command {id} is no longer running.\n"
             )));
         }
         if !stop(ctx, id).await {
             return Err(ToolError::failed(format!(
-                "команда {id} не остановилась за {} с",
+                "command {id} did not stop within {} s",
                 STOP_WAIT.as_secs()
             )));
         }
-        Ok(ToolOutput::new(format!("Команда {id} остановлена.\n")))
+        Ok(ToolOutput::new(format!("Command {id} stopped.\n")))
     }
 }
 
@@ -141,14 +141,14 @@ impl Tool for BashRestart {
         let summary = ctx
             .processes
             .summary(id)
-            .ok_or_else(|| ToolError::failed(format!("нет фоновой команды под номером {id}")))?;
+            .ok_or_else(|| ToolError::failed(format!("no background command with id {id}")))?;
         // Restarting runs the command again without a question, which is only
         // sound for commands that were never questions of their own (§8). A
         // commit or a push is asked about every time it runs, however it got
         // started, so it is run again through `Bash`, where the question is.
         if invariant::of_command(&summary.command).is_some() {
             return Err(ToolError::failed(format!(
-                "команду {id} нельзя перезапустить: коммит и пуш запускаются                  только через Bash, с вопросом человеку"
+                "command {id} cannot be restarted: commit and push can only be run via Bash, with permission from the human"
             )));
         }
         // Resolved before anything is killed: a directory that is gone should
@@ -157,14 +157,14 @@ impl Tool for BashRestart {
 
         if summary.state == ProcessState::Running && !stop(ctx, id).await {
             return Err(ToolError::failed(format!(
-                "команда {id} не остановилась за {} с, перезапуск отменён",
+                "command {id} did not stop within {} s, restart cancelled",
                 STOP_WAIT.as_secs()
             )));
         }
 
         let head = summary.command.split_whitespace().next().unwrap_or("");
         let shell::Spawned { child, pid, output } = shell::spawn(ctx.shell, &summary.command, &dir)
-            .map_err(|e| ToolError::failed(format!("не удалось запустить «{head}»: {e}")))?;
+            .map_err(|e| ToolError::failed(format!("failed to start \"{head}\": {e}")))?;
 
         if !ctx.processes.restart(id, pid) {
             // Someone else restarted it first, or the row is gone. The process
@@ -173,13 +173,13 @@ impl Tool for BashRestart {
                 let _ = tokio::task::spawn_blocking(move || kill::tree(pid)).await;
             }
             return Err(ToolError::failed(format!(
-                "команда {id} уже запущена заново"
+                "command {id} has already been restarted"
             )));
         }
         tokio::spawn(collect(ctx.processes.downgrade(), id, child, output));
 
         Ok(ToolOutput::new(format!(
-            "Команда {id} перезапущена. Читать её вывод — BashOutput.\n"
+            "Command {id} restarted. Read its output with BashOutput.\n"
         ))
         .lines(1))
     }
@@ -214,7 +214,7 @@ mod tests {
         let id = start(&ctx, sleeps()).await;
 
         let out = BashKill.run(&ctx, json!({ "id": id.0 })).await.unwrap();
-        assert!(out.text.contains("остановлена"), "{}", out.text);
+        assert!(out.text.contains("stopped"), "{}", out.text);
         assert_eq!(ctx.processes.summary(id).unwrap().state, ProcessState::Stopped);
 
         // It was the model's own act: reading the row afterwards is not an
@@ -233,7 +233,7 @@ mod tests {
         ctx.processes.finished(id, Some(0));
 
         let out = BashKill.run(&ctx, json!({ "id": id.0 })).await.unwrap();
-        assert!(out.text.contains("уже не работает"), "{}", out.text);
+        assert!(out.text.contains("no longer running"), "{}", out.text);
     }
 
     #[tokio::test]
@@ -245,7 +245,7 @@ mod tests {
             BashKill.run(&ctx, json!({ "id": 9 })).await.unwrap_err(),
             BashRestart.run(&ctx, json!({ "id": 9 })).await.unwrap_err(),
         ] {
-            assert!(matches!(err, ToolError::Failed { .. }), "получили {err:?}");
+            assert!(matches!(err, ToolError::Failed { .. }), "got {err:?}");
         }
     }
 
@@ -257,7 +257,7 @@ mod tests {
         ctx.processes.output(id, vec!["first run".into()]);
 
         let out = BashRestart.run(&ctx, json!({ "id": id.0 })).await.unwrap();
-        assert!(out.text.contains("перезапущена"), "{}", out.text);
+        assert!(out.text.contains("restarted"), "{}", out.text);
 
         // One row, running again, under the same number.
         let panel = ctx.processes.summaries();
@@ -270,7 +270,7 @@ mod tests {
         // apart.
         let read = ctx.processes.read(id, 10_000).unwrap();
         assert!(read.text.contains("first run"), "{}", read.text);
-        assert!(read.text.contains("перезапуск"), "{}", read.text);
+        assert!(read.text.contains("restart"), "{}", read.text);
         assert!(!read.stopped_by_human && !read.stopped_by_model);
 
         BashKill.run(&ctx, json!({ "id": id.0 })).await.unwrap();
@@ -304,7 +304,7 @@ mod tests {
         ctx.processes.finished(id, Some(0));
 
         let err = BashRestart.run(&ctx, json!({ "id": id.0 })).await.unwrap_err();
-        assert!(err.to_string().contains("нельзя перезапустить"), "{err}");
+        assert!(err.to_string().contains("cannot be restarted"), "{err}");
         // Nothing was started: the row is still the finished one.
         assert_eq!(
             ctx.processes.summary(id).unwrap().state,

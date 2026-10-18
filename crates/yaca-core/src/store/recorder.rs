@@ -25,6 +25,7 @@ use super::meta::SessionMeta;
 use super::transcript::Transcript;
 
 pub struct Recorder {
+    /// The project's folder of journals ([`super::location`]).
     root: PathBuf,
     events: EventLog,
     messages: MessageLog,
@@ -47,6 +48,19 @@ impl Recorder {
         // ends: a session that crashed on its first turn still happened.
         recorder.flush();
         Ok(recorder)
+    }
+
+    /// The journal's length now, a boundary between two events. See
+    /// [`Recorder::events_to`].
+    pub fn journal_len(&self) -> u64 {
+        self.events.len()
+    }
+
+    /// The events written before `len` ([`Recorder::journal_len`]), as written:
+    /// nothing is trimmed, because this is for a window that was there for all
+    /// of it and lost only its memory.
+    pub fn events_to(&self, len: u64) -> Vec<AgentEvent> {
+        crate::session::log::replay_prefix(self.events.path(), len).unwrap_or_default()
     }
 
     pub fn meta(&self) -> SessionMeta {
@@ -95,7 +109,7 @@ impl Recorder {
             meta.rename(title);
             meta.clone()
         };
-        meta.save(&self.root)
+        self.save(&meta)
     }
 
     pub fn message(&self, turn: &TurnId, message: &Message) {
@@ -106,6 +120,11 @@ impl Recorder {
     }
 
     /// The conversation as it was said, for the tools that look back into it.
+    /// The session's message journal on disk.
+    pub fn messages_file(&self) -> PathBuf {
+        super::history::MessageLog::path(&self.root, &self.meta.lock().unwrap().id)
+    }
+
     pub fn transcript(&self) -> Transcript {
         Transcript::new(&self.root, self.meta.lock().unwrap().id.clone())
     }
@@ -137,7 +156,21 @@ impl Recorder {
     /// and the index is rebuilt from them when it is missing or behind.
     pub fn flush(&self) {
         let meta = self.meta.lock().unwrap().clone();
-        let _ = meta.save(&self.root);
+        let _ = self.save(&meta);
+    }
+
+    /// The index is written only while the session's feed journal is there.
+    ///
+    /// A session deleted from the panel while it runs keeps this recorder until
+    /// its turn winds down, and the end of a turn writes the index whole. That
+    /// write would bring back a file the human just deleted. The feed journal is
+    /// created when the recorder opens, so its absence means a delete, not a
+    /// session that has not started.
+    fn save(&self, meta: &SessionMeta) -> std::io::Result<()> {
+        if !self.events.path().exists() {
+            return Ok(());
+        }
+        meta.save(&self.root)
     }
 }
 
@@ -183,10 +216,10 @@ mod tests {
         let dir = TempDir::new();
         let r = recorder(&dir);
 
-        r.prompt(&TurnId::from("t1"), "почини разбор дат\nвот трейс");
+        r.prompt(&TurnId::from("t1"), "fix date parsing\nhere is trace");
         r.event(&AgentEvent::UserMessage {
             turn_id: TurnId::from("t1"),
-            text: "почини разбор дат\nвот трейс".into(),
+            text: "fix date parsing\nhere is trace".into(),
             attachments: Vec::new(),
         });
         r.event(&AgentEvent::TurnStarted {
@@ -213,11 +246,32 @@ mod tests {
         });
 
         let saved = SessionMeta::load(dir.path(), &r.meta().id).unwrap();
-        assert_eq!(saved.title, "почини разбор дат");
+        assert_eq!(saved.title, "fix date parsing");
         assert_eq!(saved.messages, 1);
         assert_eq!(saved.files, vec!["src/a.rs"]);
         assert_eq!(saved.cost_usd, 0.31);
         assert_eq!(saved.tokens.input, 100);
         assert_eq!(saved.updated_at, TsMillis(1_700_000_000_000));
+    }
+
+    #[test]
+    fn a_session_deleted_while_it_runs_does_not_come_back() {
+        let dir = TempDir::new();
+        let r = recorder(&dir);
+        let id = r.meta().id;
+        crate::store::SessionStore::at(dir.path().to_path_buf())
+            .delete(&id)
+            .unwrap();
+
+        // The turn the human was watching ends after the delete; its index
+        // must not be written back over the deletion.
+        r.event(&AgentEvent::TurnCancelled {
+            turn_id: TurnId::from("t1"),
+            at: Default::default(),
+        });
+        r.rename("after deletion").unwrap();
+
+        assert!(SessionMeta::load(dir.path(), &id).is_none());
+        assert!(!SessionMeta::path(dir.path(), &id).exists());
     }
 }

@@ -1,20 +1,20 @@
-//! Построение диффа (§6.3).
+//! Diff calculation (§6.3).
 //!
-//! Считается в ядре, а не в вебвью, по трём причинам: результат одинаков в
-//! ленте и в панели, он попадает в поток событий как данные, и §12 требует
-//! 60 fps во время стриминга — разбирать текст в вебвью параллельно дельтам
-//! не выйдет.
+//! Computed in the core, not in the webview, for three reasons: the outcome is identical in
+//! the feed and the panel, it lands in the event stream as data, and §12 requires
+//! 60 fps during streaming — parsing text in webview concurrently with deltas
+//! would not work.
 
 use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, InlineChange, TextDiff};
 use ts_rs::TS;
 
-/// Строк контекста вокруг изменения. Три — то, что показывают все,
-/// и то, чего хватает, чтобы узнать место.
+/// Context lines around the change. Three is what everyone shows,
+/// and enough to recognize the location.
 const CONTEXT: usize = 3;
 
-/// §12: дифф длиннее двух тысяч строк рендерится окном. Дальше этого
-/// предела ядру нечего отдавать — интерфейс всё равно покажет часть.
+/// §12: a diff longer than two thousand lines is rendered windowed. Past this
+/// limit the core has nothing to give — the UI will show only part of it anyway.
 const MAX_LINES: usize = 2_000;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -24,7 +24,7 @@ pub struct FileDiff {
     pub hunks: Vec<Hunk>,
     pub added: u32,
     pub removed: u32,
-    /// Дифф обрезан по [`MAX_LINES`].
+    /// Diff is cut off at [`MAX_LINES`].
     pub truncated: bool,
 }
 
@@ -40,7 +40,7 @@ pub struct Hunk {
 }
 
 impl Hunk {
-    /// `@@ -12,7 +12,9 @@` — заголовок ханка (§6.3).
+    /// `@@ -12,7 +12,9 @@` — hunk header (§6.3).
     pub fn header(&self) -> String {
         format!(
             "@@ -{},{} +{},{} @@",
@@ -54,12 +54,12 @@ impl Hunk {
 #[serde(rename_all = "camelCase")]
 pub struct DiffLine {
     pub kind: LineKind,
-    /// Номер строки до правки, считая от 1. Жёлоб слева (§6.3).
+    /// Line number before edit, 1-based. Left gutter (§6.3).
     pub old_line: Option<u32>,
     pub new_line: Option<u32>,
     pub text: String,
-    /// Что именно изменилось внутри строки — пословная подсветка (§6.3).
-    /// Диапазоны в символах, не в байтах: интерфейс режет строку по символам.
+    /// What exactly changed inside the line — word-level highlighting (§6.3).
+    /// Spans in characters, not in bytes: the interface slices strings by characters.
     pub spans: Vec<Span>,
 }
 
@@ -85,8 +85,8 @@ pub fn compute(before: &str, after: &str) -> FileDiff {
 
     let mut out = FileDiff::default();
 
-    // Счётчики считаются по всем операциям, а не по отрисованным строкам:
-    // `+597 −16` в полосе (§6.1) — про весь файл, даже если показан кусок.
+    // Counts are computed across all operations, not just rendered lines:
+    // `+597 −16` in the bar (§6.1) is about the whole file, even if a slice is shown.
     for op in diff.ops() {
         use similar::DiffTag;
         match op.tag() {
@@ -108,15 +108,15 @@ pub fn compute(before: &str, after: &str) -> FileDiff {
         let new_start = first.new_range().start as u32 + 1;
 
         let mut lines: Vec<DiffLine> = Vec::new();
-        let mut оборван = false;
+        let mut truncated = false;
 
         for op in &group {
             for change in diff.iter_inline_changes(op) {
-                // Предел проверяется на каждой строке, а не на каждом ханке.
-                // Иначе один ханк на пять тысяч строк проезжает мимо лимита:
-                // подряд идущие изменения группируются в одну группу.
+                // Limit is checked on every line, not on every hunk.
+                // Otherwise one hunk of 5000 lines blows past the limit:
+                // contiguous changes are grouped into one hunk.
                 if emitted >= MAX_LINES {
-                    оборван = true;
+                    truncated = true;
                     break;
                 }
 
@@ -135,16 +135,16 @@ pub fn compute(before: &str, after: &str) -> FileDiff {
                 });
                 emitted += 1;
             }
-            if оборван {
+            if truncated {
                 break;
             }
         }
 
-        // Длины считаются по выданным строкам: заголовок ханка должен
-        // описывать то, что в нём лежит, а не то, что могло бы лежать.
+        // Lengths are computed over emitted lines: the hunk header must
+        // describe what is in it, not what could have been in it.
         push_hunk(&mut out, old_start, new_start, lines);
 
-        if оборван {
+        if truncated {
             out.truncated = true;
             break 'groups;
         }
@@ -168,7 +168,7 @@ fn push_hunk(out: &mut FileDiff, old_start: u32, new_start: u32, lines: Vec<Diff
     });
 }
 
-/// Собирает текст строки и диапазоны изменившихся кусков.
+/// Collects line text and spans of changed chunks.
 pub(super) fn inline(change: &InlineChange<'_, str>) -> (String, Vec<Span>) {
     let mut text = String::new();
     let mut spans: Vec<Span> = Vec::new();
@@ -179,8 +179,8 @@ pub(super) fn inline(change: &InlineChange<'_, str>) -> (String, Vec<Span>) {
         text.push_str(&value);
         chars += value.chars().count() as u32;
         if emphasized && chars > start {
-            // Соседние подсвеченные куски склеиваем: интерфейсу проще
-            // отрисовать один диапазон, чем цепочку из трёх букв.
+            // Merge adjacent highlighted spans: it is simpler for the UI
+            // to render one range than a chain of three letters.
             match spans.last_mut() {
                 Some(prev) if prev.end == start => prev.end = chars,
                 _ => spans.push(Span { start, end: chars }),
@@ -188,7 +188,7 @@ pub(super) fn inline(change: &InlineChange<'_, str>) -> (String, Vec<Span>) {
         }
     }
 
-    // Перевод строки в дифф не едет: жёлоб и фон рисуются по строке целиком.
+    // Newline does not go into diff: gutter and background are drawn for the line as a whole.
     let trimmed = text.trim_end_matches(['\n', '\r']);
     let limit = trimmed.chars().count() as u32;
     text.truncate(trimmed.len());
@@ -206,21 +206,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn считает_добавленное_и_удалённое() {
-        let d = compute("раз\nдва\nтри\n", "раз\nдва с половиной\nтри\nчетыре\n");
+    fn counts_added_and_removed() {
+        let d = compute("one\ntwo\nthree\n", "one\ntwo and a half\nthree\nfour\n");
         assert_eq!((d.added, d.removed), (2, 1));
         assert!(!d.truncated);
     }
 
     #[test]
-    fn одинаковые_файлы_дают_пустой_дифф() {
-        let d = compute("одно и то же\n", "одно и то же\n");
+    fn identical_files_produce_empty_diff() {
+        let d = compute("same\n", "same\n");
         assert!(d.hunks.is_empty());
         assert_eq!((d.added, d.removed), (0, 0));
     }
 
     #[test]
-    fn номера_строк_считаются_от_единицы() {
+    fn line_numbers_start_at_one() {
         let d = compute("a\nb\nc\n", "a\nB\nc\n");
         let lines = &d.hunks[0].lines;
 
@@ -238,18 +238,18 @@ mod tests {
     }
 
     #[test]
-    fn перевод_строки_не_едет_в_текст() {
+    fn newline_does_not_go_into_text() {
         let d = compute("a\n", "b\n");
         for line in &d.hunks[0].lines {
             assert!(
                 !line.text.contains('\n'),
-                "в тексте строки перевод: {line:?}"
+                "newline in line text: {line:?}"
             );
         }
     }
 
     #[test]
-    fn пословная_подсветка_отмечает_только_изменившееся() {
+    fn word_level_highlighting_marks_only_changed_parts() {
         let d = compute("let x = 1;\n", "let x = 42;\n");
         let add = d.hunks[0]
             .lines
@@ -257,15 +257,15 @@ mod tests {
             .find(|l| l.kind == LineKind::Add)
             .unwrap();
 
-        assert!(!add.spans.is_empty(), "подсветка должна быть");
-        // Диапазоны обязаны лежать внутри строки, иначе интерфейс порежет
-        // её не там и покажет мусор.
+        assert!(!add.spans.is_empty(), "highlighting must be present");
+        // Spans must lie inside the line, otherwise the interface slices it
+        // in the wrong place and shows garbage.
         let len = add.text.chars().count() as u32;
         for s in &add.spans {
-            assert!(s.start < s.end && s.end <= len, "{s:?} вне строки {len}");
+            assert!(s.start < s.end && s.end <= len, "{s:?} outside line {len}");
         }
 
-        let подсвечено: String = add
+        let highlighted: String = add
             .spans
             .iter()
             .flat_map(|s| {
@@ -275,13 +275,13 @@ mod tests {
                     .take((s.end - s.start) as usize)
             })
             .collect();
-        assert!(подсвечено.contains("42"), "подсвечено: {подсвечено:?}");
-        assert!(!подсвечено.contains("let"), "контекст подсвечивать нечего");
+        assert!(highlighted.contains("42"), "highlighted: {highlighted:?}");
+        assert!(!highlighted.contains("let"), "no context to highlight");
     }
 
     #[test]
-    fn кириллица_не_ломает_диапазоны() {
-        let d = compute("привет мир\n", "привет город\n");
+    fn multi_byte_characters_do_not_break_spans() {
+        let d = compute("café world\n", "café city\n");
         let add = d.hunks[0]
             .lines
             .iter()
@@ -289,13 +289,13 @@ mod tests {
             .unwrap();
         let len = add.text.chars().count() as u32;
         for s in &add.spans {
-            assert!(s.end <= len, "{s:?} вне строки длиной {len}");
+            assert!(s.end <= len, "{s:?} outside line length {len}");
         }
     }
 
     #[test]
-    fn создание_файла_это_один_ханк_из_добавлений() {
-        let d = compute("", "первая\nвторая\n");
+    fn file_creation_is_one_hunk_of_additions() {
+        let d = compute("", "first\nsecond\n");
         assert_eq!(d.hunks.len(), 1);
         assert_eq!(d.added, 2);
         assert_eq!(d.removed, 0);
@@ -303,19 +303,19 @@ mod tests {
     }
 
     #[test]
-    fn огромный_дифф_обрезается_а_не_вываливается_целиком() {
-        let before: String = (0..5_000).map(|i| format!("строка {i}\n")).collect();
-        let after: String = (0..5_000).map(|i| format!("СТРОКА {i}\n")).collect();
+    fn huge_diff_is_truncated_rather_than_dumped_whole() {
+        let before: String = (0..5_000).map(|i| format!("line {i}\n")).collect();
+        let after: String = (0..5_000).map(|i| format!("LINE {i}\n")).collect();
         let d = compute(&before, &after);
         assert!(d.truncated);
-        let всего: usize = d.hunks.iter().map(|h| h.lines.len()).sum();
-        assert_eq!(всего, MAX_LINES, "выдано {всего} строк");
-        // Счётчики полосы — про весь файл, а не про показанный кусок.
+        let total: usize = d.hunks.iter().map(|h| h.lines.len()).sum();
+        assert_eq!(total, MAX_LINES, "emitted {total} lines");
+        // Bar counts are for the whole file, not the shown chunk.
         assert_eq!((d.added, d.removed), (5_000, 5_000));
     }
 
     #[test]
-    fn заголовок_ханка_читается_как_дифф() {
+    fn hunk_header_reads_like_a_diff() {
         let d = compute("a\nb\nc\n", "a\nB\nc\n");
         assert_eq!(d.hunks[0].header(), "@@ -1,3 +1,3 @@");
     }

@@ -940,10 +940,61 @@
   background: var(--sunk);
 }
 
-/* A picked option in a multi-choice question keeps its teal edge. */
-.question-option[aria-pressed="true"] {
+/* A picked option keeps its teal edge. */
+.question-option[aria-checked="true"] {
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+
+/* Radio with text typed: the text replaces the pick, so the pick steps back. */
+.question-option.is-overridden {
+  opacity: 0.55;
+}
+
+/* Round mark for one-of-many, square for any-of-many. */
+.question-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  border: 1.5px solid var(--line-strong);
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+}
+
+.question-mark.is-radio {
+  border-radius: 50%;
+}
+
+.question-mark.is-check {
+  border-radius: 3px;
+}
+
+.question-option[aria-checked="true"] .question-mark {
+  border-color: var(--accent);
+}
+
+.question-option[aria-checked="true"] .question-mark.is-radio::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.question-option[aria-checked="true"] .question-mark.is-check {
+  background: var(--accent);
+}
+
+.question-option[aria-checked="true"] .question-mark.is-check::after {
+  content: "";
+  width: 4px;
+  height: 7px;
+  margin-top: -1px;
+  border: solid var(--surface);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
 }
 
 .question-option-text {
@@ -1181,4 +1232,123 @@
 
 .plan {
   min-width: 0;
+}
+
+/* A plugin hook speaking outside any call row: quiet like a divider, but it
+   wraps, since a hook's reason is a sentence rather than a label. */
+.hook-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.hook-note-who {
+  font-weight: 500;
+}
+
+.hook-note[data-blocked] .hook-note-who {
+  color: var(--ink);
+}
+
+/* Which model a router chose for the turn. */
+.route-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* Tables: scroll sideways inside the wrap instead of stretching the answer. */
+.agent .agent-table-wrap {
+  margin: 12px 0;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+}
+
+.agent-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: normal;
+}
+
+.agent-table th,
+.agent-table td {
+  padding: 6px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.agent-table th {
+  font-weight: 650;
+  background: var(--sunk);
+  border-bottom: 1px solid var(--line-strong);
+  white-space: nowrap;
+}
+
+.agent-table td + td,
+.agent-table th + th {
+  border-left: 1px solid var(--line);
+}
+
+.agent-table tbody tr + tr td {
+  border-top: 1px solid var(--line);
+}
+
+/* --- a form from an MCP server (elicitation) ------------------------------ */
+
+.elicit-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.elicit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.elicit-label {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.elicit-required {
+  color: var(--err);
+}
+
+.elicit-field input[type="text"],
+.elicit-field input[type="number"],
+.elicit-field select {
+  height: var(--h-button);
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  font: inherit;
+  color: var(--ink);
+  user-select: text;
+}
+
+.elicit-check {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.elicit-check input {
+  margin-top: 3px;
+}
+
+.elicit-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }

@@ -8,6 +8,11 @@
 //! the session identifier, and the window sorts it into the feeds itself. A channel per
 //! chat would mean subscribing and unsubscribing on every open — an extra chance to
 //! lose the events of the one working in the background.
+//!
+//! A bridge also has an epoch. The window can lose its feed while the session runs on (a
+//! reload) and then attaches again, which puts a new bridge in place of the old one. A
+//! frame of the old one can still be on its way to the window when the new one's snapshot
+//! arrives, and folding it would draw its events twice; the epoch is what tells them apart.
 
 use std::time::Duration;
 
@@ -28,6 +33,9 @@ const FRAME: Duration = Duration::from_millis(16);
 #[serde(rename_all = "camelCase")]
 pub struct EventFrame {
     pub session: SessionId,
+    /// Which bridge of the chat sent this. The window folds only the frames of the epoch
+    /// its feed was built at.
+    pub epoch: u32,
     pub events: Vec<AgentEvent>,
 }
 
@@ -37,6 +45,7 @@ pub async fn pump(
     stop: CancellationToken,
     channel: &'static str,
     session: SessionId,
+    epoch: u32,
 ) {
     let mut batch: Vec<AgentEvent> = Vec::new();
     let mut ticker = tokio::time::interval(FRAME);
@@ -49,7 +58,7 @@ pub async fn pump(
             _ = ticker.tick() => {
                 if !batch.is_empty() {
                     let events = coalesce(std::mem::take(&mut batch));
-                    let _ = app.emit(channel, EventFrame { session: session.clone(), events });
+                    let _ = app.emit(channel, EventFrame { session: session.clone(), epoch, events });
                 }
             }
 
@@ -65,13 +74,13 @@ pub async fn pump(
 
     if !batch.is_empty() {
         let events = coalesce(batch);
-        let _ = app.emit(channel, EventFrame { session, events });
+        let _ = app.emit(channel, EventFrame { session, epoch, events });
     }
 }
 
 /// Merges consecutive deltas of one block. Everything else passes through as is:
 /// the order of events is the contract itself, and it must not be shuffled.
-fn coalesce(batch: Vec<AgentEvent>) -> Vec<AgentEvent> {
+pub(crate) fn coalesce(batch: Vec<AgentEvent>) -> Vec<AgentEvent> {
     let mut out: Vec<AgentEvent> = Vec::with_capacity(batch.len());
 
     for event in batch {

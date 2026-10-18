@@ -27,6 +27,7 @@ export const shell = {
   "top.processes": "Процессы",
   "top.checkpoints": "Чекпоинты",
   "panel.tab_mcp": "MCP",
+  "panel.tab_lsp": "LSP",
   "panel.toggle": "Правая панель",
   "panel.resize": "Ширина панели",
   "panel.tab_agents": "Агенты",

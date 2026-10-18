@@ -74,13 +74,13 @@ impl Wire {
 
         let mut child = cmd
             .spawn()
-            .map_err(|e| LspError::Transport(format!("не запустить «{program}»: {e}")))?;
+            .map_err(|e| LspError::Transport(format!("failed to start \"{program}\": {e}")))?;
         let pid = child.id();
         // All three were asked for as pipes just above.
         let (Some(stdin), Some(stdout), Some(stderr)) =
             (child.stdin.take(), child.stdout.take(), child.stderr.take())
         else {
-            return Err(LspError::Transport(format!("у «{program}» нет стандартных потоков")));
+            return Err(LspError::Transport(format!("\"{program}\" has no standard streams")));
         };
 
         let tail = Tail::default();
@@ -94,7 +94,7 @@ impl Wire {
     pub(crate) fn send(&self, message: &Value) -> Result<(), LspError> {
         self.out
             .send(encode(message))
-            .map_err(|_| LspError::Closed("процесс сервера завершился".into()))
+            .map_err(|_| LspError::Closed("server process exited".into()))
     }
 }
 
@@ -141,7 +141,7 @@ pub(crate) async fn read_message(
                 .map_err(|e| e.to_string())?;
             if n == 0 {
                 return if seen_any {
-                    Err("поток оборвался посреди заголовка".into())
+                    Err("stream ended mid-header".into())
                 } else {
                     Ok(None)
                 };
@@ -153,7 +153,7 @@ pub(crate) async fn read_message(
                 break;
             }
             if !line.ends_with(b"\n") {
-                return Err("заголовок длиннее допустимого".into());
+                return Err("header exceeds maximum allowed length".into());
             }
             if let Some((name, value)) = text.split_once(':') {
                 if name.trim().eq_ignore_ascii_case("content-length") {
@@ -163,16 +163,16 @@ pub(crate) async fn read_message(
         }
 
         let Some(length) = length else {
-            return Err("в заголовке нет Content-Length".into());
+            return Err("missing Content-Length in header".into());
         };
         if length > MAX_MESSAGE_BYTES {
-            return Err(format!("сообщение в {length} байт"));
+            return Err(format!("message is {length} bytes"));
         }
         let mut body = vec![0; length];
         reader
             .read_exact(&mut body)
             .await
-            .map_err(|_| "поток оборвался посреди сообщения".to_string())?;
+            .map_err(|_| "stream ended mid-message".to_string())?;
         match serde_json::from_slice(&body) {
             Ok(value) => return Ok(Some(value)),
             Err(_) => tracing::debug!("LSP server sent a body that is not JSON"),
@@ -214,9 +214,9 @@ async fn read_frames(mut child: Child, stdout: ChildStdout, tail: Tail, inbox: I
     let said = tail.lock().unwrap().iter().cloned().collect::<Vec<_>>().join("\n");
 
     let mut reason = match (broken, code) {
-        (Some(why), _) => format!("сервер нарушил протокол: {why}"),
-        (None, Some(code)) => format!("процесс сервера завершился с кодом {code}"),
-        (None, None) => "процесс сервера завершился".to_string(),
+        (Some(why), _) => format!("server violated protocol: {why}"),
+        (None, Some(code)) => format!("server process exited with code {code}"),
+        (None, None) => "server process exited".to_string(),
     };
     if !said.is_empty() {
         reason.push_str(":\n");
@@ -268,7 +268,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_message_survives_the_trip() {
-        let message = json!({ "jsonrpc": "2.0", "id": 1, "method": "ё", "params": { "x": "日本" } });
+        let message = json!({ "jsonrpc": "2.0", "id": 1, "method": "test", "params": { "x": "日本" } });
         let got = read_all(&encode(&message)).await;
         assert_eq!(got[0], Ok(Some(message)));
         assert_eq!(got[1], Ok(None));
@@ -276,7 +276,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_length_counts_bytes_not_characters() {
-        let frame = encode(&json!({ "t": "ёё" }));
+        let frame = encode(&json!({ "t": "éé" }));
         let text = String::from_utf8(frame).unwrap();
         let (header, body) = text.split_once("\r\n\r\n").unwrap();
         assert_eq!(header, format!("Content-Length: {}", body.len()));

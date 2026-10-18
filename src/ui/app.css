@@ -689,13 +689,83 @@
   color: var(--muted);
 }
 
-/* Меню слэш-команд Над полем, по его ширине, а не по ширине чипа. */
+/* Меню слэш-команд Над полем, по его ширине, а не по ширине чипа. Names on
+   the left, what the highlighted one does on the right; each column scrolls
+   on its own, so a long description does not push the list away. */
 .menu-slash {
   right: auto;
   left: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
   width: 100%;
-  max-height: 280px;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* As tall as the longer column, up to a ceiling each column scrolls under. */
+.slash-list,
+.slash-detail {
+  max-height: min(300px, 50vh);
   overflow-y: auto;
+}
+
+.slash-list {
+  padding: 6px;
+}
+
+.slash-list .menu-item {
+  align-items: baseline;
+}
+
+.slash-name {
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slash-list .menu-note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slash-detail {
+  padding: 12px 14px;
+  border-left: 1px solid var(--line);
+}
+
+.slash-detail-name {
+  font: 500 12.5px var(--mono);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.slash-detail-kind {
+  margin: 2px 0 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.slash-detail-text {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Too narrow for two columns: the names alone, as before. */
+@media (max-width: 640px) {
+  .menu-slash {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .slash-detail {
+    display: none;
+  }
 }
 
 /* Подсвеченная строка — та, которую возьмут `⇥` и `⏎`. */

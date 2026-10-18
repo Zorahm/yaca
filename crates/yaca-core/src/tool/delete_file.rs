@@ -3,7 +3,7 @@
 //! Read-before-edit is deliberately not required here. The invariant guards
 //! against editing blind — against the model overwriting code it never saw.
 //! Deletion overwrites nothing, and the safety comes from §8: both deleting
-//! and moving ask for permission everywhere except «Авто».
+//! and moving ask for permission everywhere except "Auto".
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -72,22 +72,22 @@ impl Tool for DeleteFile {
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let raw = input["path"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан path"))?;
+            .ok_or_else(|| ToolError::failed("path is required"))?;
 
         let target = files::look_any(ctx, raw)?;
         if target.abs.is_dir() {
             return Err(ToolError::failed(format!(
-                "{raw} — каталог; его удаляет DeleteDir"
+                "{raw} is a directory; delete it with DeleteDir"
             )));
         }
         if !target.exists {
-            return Err(ToolError::failed(format!("не найдено: {raw}")));
+            return Err(ToolError::failed(format!("not found: {raw}")));
         }
 
         let rel = target.rel.clone();
         let (fact, diff) = files::write(ctx, &target, ChangeKind::Deleted, None)?;
 
-        Ok(ToolOutput::new(format!("Удалён {rel}\n")).changed(FileChange { fact, diff }))
+        Ok(ToolOutput::new(format!("Deleted {rel}\n")).changed(FileChange { fact, diff }))
     }
 }
 
@@ -151,24 +151,24 @@ impl Tool for MoveFile {
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let raw_from = input["from"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан from"))?;
+            .ok_or_else(|| ToolError::failed("from is required"))?;
         let raw_to = input["to"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан to"))?;
+            .ok_or_else(|| ToolError::failed("to is required"))?;
 
         let from = files::look_any(ctx, raw_from)?;
         let to = files::look_any(ctx, raw_to)?;
 
         if !from.exists {
-            return Err(ToolError::failed(format!("не найдено: {raw_from}")));
+            return Err(ToolError::failed(format!("not found: {raw_from}")));
         }
         if to.exists {
             return Err(ToolError::failed(format!(
-                "{raw_to} уже существует — перемещение затёрло бы его"
+                "{raw_to} already exists — move would overwrite it"
             )));
         }
         if from.abs == to.abs {
-            return Err(ToolError::failed("from и to совпадают"));
+            return Err(ToolError::failed("from and to are the same"));
         }
 
         if let Some(parent) = to.abs.parent() {
@@ -189,7 +189,7 @@ impl Tool for MoveFile {
         };
 
         Ok(
-            ToolOutput::new(format!("Перемещён {} → {}\n", from.rel, to.rel)).changed(FileChange {
+            ToolOutput::new(format!("Moved {} → {}\n", from.rel, to.rel)).changed(FileChange {
                 fact,
                 diff: Default::default(),
             }),
@@ -212,13 +212,13 @@ mod tests {
     use crate::tool::tests_support::ctx_for;
 
     #[tokio::test]
-    async fn удаление_уносит_файл_с_диска() {
+    async fn deletion_removes_file_from_disk() {
         let dir = TempDir::new();
-        let path = dir.write("лишний.rs", "тело\n");
+        let path = dir.write("extra.rs", "body\n");
         let (ctx, _ws) = ctx_for(&dir);
 
         let out = DeleteFile
-            .run(&ctx, json!({ "path": "лишний.rs" }))
+            .run(&ctx, json!({ "path": "extra.rs" }))
             .await
             .unwrap();
 
@@ -227,9 +227,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn удалённый_файл_больше_не_читается() {
+    async fn deleted_file_can_no_longer_be_read() {
         let dir = TempDir::new();
-        dir.write("a.rs", "тело\n");
+        dir.write("a.rs", "body\n");
         let (ctx, _ws) = ctx_for(&dir);
 
         DeleteFile
@@ -241,7 +241,7 @@ mod tests {
             .run(&ctx, json!({ "path": "a.rs" }))
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("не найдено"));
+        assert!(err.to_string().contains("not found"));
     }
 
     fn write_binary(dir: &TempDir, name: &str) -> std::path::PathBuf {
@@ -295,43 +295,43 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert!(err.to_string().contains("уже существует"));
+        assert!(err.to_string().contains("already exists"));
         assert!(target.exists());
     }
 
     #[tokio::test]
-    async fn перемещение_даёт_одну_строку_а_не_две() {
+    async fn move_produces_one_line_not_two() {
         let dir = TempDir::new();
-        let from = dir.write("было.rs", "тело\n");
+        let from = dir.write("was.rs", "body\n");
         let (ctx, _ws) = ctx_for(&dir);
 
         let out = MoveFile
-            .run(&ctx, json!({ "from": "было.rs", "to": "src/стало.rs" }))
+            .run(&ctx, json!({ "from": "was.rs", "to": "src/became.rs" }))
             .await
             .unwrap();
 
         let fact = out.changed.unwrap().fact;
         assert_eq!(fact.kind, ChangeKind::Moved);
-        assert_eq!(fact.moved_from.as_deref(), Some("было.rs"));
+        assert_eq!(fact.moved_from.as_deref(), Some("was.rs"));
         assert!(!from.exists());
         assert_eq!(
-            std::fs::read_to_string(dir.path().join("src/стало.rs")).unwrap(),
-            "тело\n"
+            std::fs::read_to_string(dir.path().join("src/became.rs")).unwrap(),
+            "body\n"
         );
     }
 
     #[tokio::test]
-    async fn перемещение_поверх_существующего_файла_запрещено() {
+    async fn moving_over_existing_file_is_forbidden() {
         let dir = TempDir::new();
-        dir.write("a.rs", "первый\n");
-        dir.write("b.rs", "второй\n");
+        dir.write("a.rs", "first\n");
+        dir.write("b.rs", "second\n");
         let (ctx, _ws) = ctx_for(&dir);
 
         let err = MoveFile
             .run(&ctx, json!({ "from": "a.rs", "to": "b.rs" }))
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("уже существует"));
+        assert!(err.to_string().contains("already exists"));
     }
 }
 

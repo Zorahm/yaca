@@ -81,9 +81,9 @@ pub enum TrustMode {
     /// Nothing without asking.
     #[default]
     Manual,
-    /// Всё кроме выполнения команд.
+    /// Everything except command execution.
     Auto,
-    /// Применять правки, спрашивать остальное.
+    /// Apply edits, ask for the rest.
     Edits,
 }
 
@@ -132,7 +132,7 @@ mod tests {
     }
 
     #[test]
-    fn только_план_снимает_с_модели_пишущие_тулы() {
+    fn only_plan_removes_writing_tools_from_the_model() {
         assert_eq!(Mode::Plan.intent(), Intent::Plan);
         for mode in [Mode::Manual, Mode::Auto, Mode::Edits] {
             assert_eq!(mode.intent(), Intent::Agent, "{mode:?}");
@@ -140,21 +140,21 @@ mod tests {
     }
 
     #[test]
-    fn план_спрашивает_про_сеть() {
+    fn plan_asks_about_the_network() {
         // There are no writing tools in plan, but `web_fetch` is, and the §8 row
-        // is needed for it. `Ручной` is taken: plan is reconnaissance, and a
+        // is needed for it. "Manual" is taken: plan is reconnaissance, and a
         // question about the network fits in it.
         let reach = PermissionKind::FetchUrl;
         assert_eq!(policy(Mode::Plan).verdict(reach), Verdict::Ask);
         assert_eq!(policy(Mode::Manual).verdict(reach), Verdict::Ask);
-        // But «Авто» does not ask about the network: plan behaves like «Ручной».
-        assert_eq!(policy(Mode::Auto).verdict(reach), Verdict::Allow);
+        // "Auto" asks too, and its reviewer model answers instead of the human.
+        assert_eq!(policy(Mode::Auto).verdict(reach), Verdict::Ask);
     }
 
     #[test]
-    fn план_ведёт_себя_как_ручной_и_в_вопросе_о_правке() {
+    fn plan_behaves_like_manual_also_for_edits() {
         // There are no writing tools in plan, but if it came to a question, the
-        // answer is the same as for «Ручного»: ask.
+        // answer is the same as for "Manual": ask.
         assert_eq!(
             policy(Mode::Plan).verdict(PermissionKind::EditFile),
             Verdict::Ask

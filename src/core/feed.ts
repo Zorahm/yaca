@@ -29,6 +29,8 @@ import type { ProcessId } from "./bindings/ProcessId";
 import type { QueuedMessage } from "./bindings/QueuedMessage";
 import type { QuestionReply } from "./bindings/QuestionReply";
 import type { QuestionRequest } from "./bindings/QuestionRequest";
+import type { ElicitationReply } from "./bindings/ElicitationReply";
+import type { ElicitationRequest } from "./bindings/ElicitationRequest";
 import type { ProcessSummary } from "./bindings/ProcessSummary";
 import type { SessionState } from "./bindings/SessionState";
 import type { TodoItem } from "./bindings/TodoItem";
@@ -40,6 +42,14 @@ import type { UsageSnapshot } from "./bindings/UsageSnapshot";
 export type ActionState = "running" | "done" | "failed" | "rejected" | "denied" | "stopped";
 
 /** Одна строка в группе действий. */
+/**
+ * Tools whose one call changes many files (`Rename`). Each file arrives as a
+ * `fileChanged` of its own under the call, and becomes a row nested under the
+ * call's row instead of taking its place: the row is the rename, the rows
+ * under it are the files.
+ */
+export const MULTI_FILE_TOOLS: ReadonlySet<string> = new Set(["Rename"]);
+
 export type ActionRow = {
   callId: string;
   /** Имя тула. В ленте не показывается — нужно, чтобы выбрать форму. */
@@ -80,6 +90,12 @@ export type ActionRow = {
  */
 export type QuestionStatus = "open" | "answered" | "dismissed" | "unanswered";
 
+/**
+ * Where an MCP server's form stands: waiting, or what became of it.
+ * `expired` — the server stopped waiting before anyone answered.
+ */
+export type ElicitationStatus = "open" | "accepted" | "declined" | "cancelled" | "expired";
+
 export type FeedBlock =
   | { kind: "human"; key: string; text: string; attachments: string[] }
   | { kind: "agent"; key: string; blockId: string; text: string }
@@ -95,6 +111,12 @@ export type FeedBlock =
       /** Что выбрано, когда ответ есть; `null`, пока открыто или без ответа. */
       reply: QuestionReply | null;
     }
+  | {
+      kind: "elicitation";
+      key: string;
+      request: ElicitationRequest;
+      status: ElicitationStatus;
+    }
   | { kind: "checkpoint"; key: string; checkpoint: CheckpointSummary }
   | { kind: "restored"; key: string; at: number; files: number }
   | { kind: "compacted"; key: string; summary: string; freed: number }
@@ -107,6 +129,8 @@ export type FeedBlock =
       kind: "shown";
       key: string;
       path: string;
+      /** The command line, when this is a background command's output. */
+      command: string | null;
       /** 1-indexed. */
       firstLine: number;
       lines: number;
@@ -116,7 +140,10 @@ export type FeedBlock =
     }
   | { kind: "error"; key: string; code: string; message: string; retryable: boolean }
   | { kind: "retry"; key: string; attempt: number; of: number; delayMs: number }
+  | { kind: "route"; key: string; route: string | null; provider: string; model: string }
   | { kind: "stopped"; key: string }
+  /** What a plugin hook said where no call row stands (`hookReported`). */
+  | { kind: "hook"; key: string; plugin: string; event: string; text: string; blocked: boolean }
   /**
    * How long a turn took and when it ended, under what it said. Made of
    * `TurnStarted.at` and the end event's `at`: the core's clock, not the
@@ -332,11 +359,11 @@ function apply(feed: Feed, event: AgentEvent): void {
       // последнее, что ядро прислало по этому пути.
       feed.diffs = { ...feed.diffs, [event.fact.path]: event.diff };
       feed.writes += 1;
-      patchRow(feed, event.callId, (row) => ({
-        ...row,
-        fact: event.fact,
-        diff: event.diff,
-      }));
+      patchRow(feed, event.callId, (row) =>
+        MULTI_FILE_TOOLS.has(row.tool)
+          ? { ...row, children: withFile(row, event.fact, event.diff) }
+          : { ...row, fact: event.fact, diff: event.diff },
+      );
       return;
 
     case "fileViewLoaded":
@@ -387,6 +414,24 @@ function apply(feed: Feed, event: AgentEvent): void {
       settleQuestion(feed, event.requestId, event.reply);
       return;
 
+    case "elicitationRequested":
+      // A window that reconnects is sent the open forms again: one block per
+      // form, whichever way it arrived.
+      if (feed.blocks.some((b) => b.kind === "elicitation" && b.request.id === event.request.id)) {
+        return;
+      }
+      feed.blocks.push({
+        kind: "elicitation",
+        key: key("elicit"),
+        request: event.request,
+        status: "open",
+      });
+      return;
+
+    case "elicitationResolved":
+      settleElicitation(feed, event.requestId, event.reply);
+      return;
+
     case "planProposed":
       feed.blocks.push({ kind: "plan", key: key("plan"), plan: event.plan });
       return;
@@ -396,6 +441,7 @@ function apply(feed: Feed, event: AgentEvent): void {
         kind: "shown",
         key: key("shown"),
         path: event.path,
+        command: event.command,
         firstLine: event.firstLine,
         lines: event.lines,
         total: event.total,
@@ -463,6 +509,30 @@ function apply(feed: Feed, event: AgentEvent): void {
         attempt: event.attempt,
         of: event.of,
         delayMs: event.delayMs,
+      });
+      return;
+
+    // Which model answers this turn: a line of its own before the text, so the
+    // reader knows who wrote it. The core sends it once per user message, not
+    // once per request of the tool loop.
+    case "routeDecided":
+      feed.blocks.push({
+        kind: "route",
+        key: key("route"),
+        route: event.route,
+        provider: event.provider,
+        model: event.model,
+      });
+      return;
+
+    case "hookReported":
+      feed.blocks.push({
+        kind: "hook",
+        key: key("hook"),
+        plugin: event.plugin,
+        event: event.event,
+        text: event.text,
+        blocked: event.blocked,
       });
       return;
 
@@ -659,6 +729,33 @@ function cancelled(row: ActionRow): ActionRow {
  * создано, какой дифф последний. Файл, изменённый подагентом, изменён — и в
  * шапке группы, и в панели файла он стоит наравне с остальными.
  */
+/**
+ * The rows under a many-file call, with this file's in place: an edit of the
+ * file it already has replaces that row rather than adding a second.
+ */
+function withFile(row: ActionRow, fact: FileFact, diff: FileDiff): ActionRow[] {
+  const file: ActionRow = {
+    callId: `${row.callId}#${fact.path}`,
+    tool: "Edit",
+    description: null,
+    target: fact.path,
+    input: null,
+    state: "done",
+    message: null,
+    meta: null,
+    output: "",
+    fact,
+    diff,
+    children: [],
+    tokens: null,
+  };
+  const at = row.children.findIndex((child) => child.fact?.path === fact.path);
+  if (at === -1) return [...row.children, file];
+  const children = row.children.slice();
+  children[at] = file;
+  return children;
+}
+
 export function flatRows(rows: ActionRow[]): ActionRow[] {
   return rows.flatMap((row) => [row, ...flatRows(row.children)]);
 }
@@ -694,6 +791,22 @@ function settleQuestion(
   const status: QuestionStatus =
     reply === null ? "unanswered" : reply.type === "dismissed" ? "dismissed" : "answered";
   feed.blocks[at] = { ...block, status, reply };
+}
+
+function settleElicitation(feed: Feed, requestId: string, reply: ElicitationReply | null): void {
+  const at = lastIndex(feed, (b) => b.kind === "elicitation" && b.request.id === requestId);
+  if (at === -1) return;
+  const block = feed.blocks[at];
+  if (block.kind !== "elicitation") return;
+  const status: ElicitationStatus =
+    reply === null
+      ? "expired"
+      : reply.type === "accept"
+        ? "accepted"
+        : reply.type === "decline"
+          ? "declined"
+          : "cancelled";
+  feed.blocks[at] = { ...block, status };
 }
 
 function lastIndex(feed: Feed, match: (b: FeedBlock) => boolean): number {

@@ -42,6 +42,10 @@ impl Worker {
             self.memory.as_deref(),
             self.skills.as_deref(),
         );
+        let system = prompt::with_mcp(system, self.agents_section.as_deref());
+        // After the project's own sections, ahead of the MCP servers': it is
+        // the human's setup speaking, not an external program.
+        let system = prompt::with_mcp(system, self.plugin_context.as_deref());
         let system = prompt::with_mcp(system, self.mcp_notes.as_deref());
         (system, self.registry.schemas(intent))
     }
@@ -66,7 +70,9 @@ impl Worker {
         // Each section goes into the prompt after a newline of its own
         // (`prompt::build_with_memory`), and that newline is the section's.
         let section = |text: Option<String>| text.map_or(0, |s| s.chars().count() + 1);
-        let instructions = section(self.instructions.as_deref().map(prompt::project_section));
+        // The plugins' start-up context is standing instructions too.
+        let instructions = section(self.instructions.as_deref().map(prompt::project_section))
+            + section(self.plugin_context.as_deref().map(str::to_string));
         let memory = section(self.memory.as_deref().map(prompt::memory_section));
         let skills = section(self.skills.as_deref().map(prompt::skills_section));
         let mcp_notes = section(self.mcp_notes.as_deref().map(str::to_string));

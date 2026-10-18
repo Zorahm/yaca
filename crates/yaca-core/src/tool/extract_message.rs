@@ -80,13 +80,13 @@ impl Tool for ExtractMessage {
         let transcript = ctx
             .transcript
             .clone()
-            .ok_or_else(|| ToolError::failed("у этой сессии нет журнала сообщений"))?;
+            .ok_or_else(|| ToolError::failed("this session has no transcript"))?;
         let entries = {
             let transcript = transcript.clone();
             tokio::task::spawn_blocking(move || transcript.entries())
                 .await
-                .map_err(|_| ToolError::failed("чтение журнала не завершилось"))?
-                .map_err(|e| ToolError::failed(format!("журнал сообщений не читается: {e}")))?
+                .map_err(|_| ToolError::failed("failed to read transcript"))?
+                .map_err(|e| ToolError::failed(format!("failed to read transcript: {e}")))?
         };
 
         let entry = match input["number"].as_u64() {
@@ -95,7 +95,7 @@ impl Tool for ExtractMessage {
                 .and_then(|index| entries.get(index))
                 .ok_or_else(|| {
                     ToolError::failed(format!(
-                        "сообщения #{number} нет: в разговоре их {}",
+                        "message #{number} does not exist: there are {} messages in the conversation",
                         entries.len()
                     ))
                 })?,
@@ -103,7 +103,7 @@ impl Tool for ExtractMessage {
                 .iter()
                 .rev()
                 .find(|entry| entry.role == Role::User)
-                .ok_or_else(|| ToolError::failed("в разговоре нет сообщений человека"))?,
+                .ok_or_else(|| ToolError::failed("the conversation contains no user messages"))?,
         };
 
         let abs = draft_path(&ctx.ws, &transcript, entry.number);
@@ -114,7 +114,7 @@ impl Tool for ExtractMessage {
         if abs.exists() {
             ctx.ws.mark_read(&abs);
             return Ok(ToolOutput::new(format!(
-                "Сообщение #{} уже в файле {rel}, он не перезаписан.\n",
+                "Message #{} is already in {rel}, not overwritten.\n",
                 entry.number
             )));
         }
@@ -128,7 +128,7 @@ impl Tool for ExtractMessage {
         ctx.ws.mark_read(&abs);
 
         Ok(ToolOutput::new(format!(
-            "Сообщение #{} сохранено в {rel} · строк: {}\n",
+            "Message #{} saved to {rel} · lines: {}\n",
             entry.number,
             entry.text.lines().count()
         )))

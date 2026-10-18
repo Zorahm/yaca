@@ -47,20 +47,24 @@ function Open({
   const own = text.trim();
   const ready = picked.length > 0 || own !== "";
 
+  // Radio: text the human wrote replaces the pick, so the pick is not sent
+  // along. Checkboxes: the ticked options and the text go together.
+  const overridden = !request.multiSelect && own !== "";
+
   const submit = () => {
     if (!ready) return;
     onAnswer({
       type: "answered",
-      selected: [...picked].sort((a, b) => a - b),
+      selected: overridden ? [] : [...picked].sort((a, b) => a - b),
       other: own === "" ? null : own,
     });
   };
 
-  // One pick settles a single-choice question at once, as a button does; a
-  // multi-choice question collects picks until it is answered.
+  // Both kinds only mark the pick; the answer goes with Send or Enter, so a
+  // pick can still be joined by text.
   const pick = (index: number) => {
     if (!request.multiSelect) {
-      onAnswer({ type: "answered", selected: [index], other: null });
+      setPicked([index]);
       return;
     }
     setPicked((current) =>
@@ -110,16 +114,25 @@ function Open({
 
       {request.multiSelect && <div className="ask-target">{t("question.multi_hint")}</div>}
 
-      <div className="question-options">
+      <div
+        className="question-options"
+        role={request.multiSelect ? "group" : "radiogroup"}
+        aria-label={request.question}
+      >
         {request.options.map((option, index) => {
           const on = picked.includes(index);
           return (
             <button
               key={index}
-              className="question-option"
-              aria-pressed={request.multiSelect ? on : undefined}
+              className={`question-option${overridden && on ? " is-overridden" : ""}`}
+              role={request.multiSelect ? "checkbox" : "radio"}
+              aria-checked={on}
               onClick={() => pick(index)}
             >
+              <span
+                className={`question-mark ${request.multiSelect ? "is-check" : "is-radio"}`}
+                aria-hidden="true"
+              />
               <span className="keycap">{index + 1}</span>
               <span className="question-option-text">
                 <span className="question-option-label">{option.label}</span>

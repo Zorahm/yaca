@@ -487,6 +487,17 @@
   margin-top: 4px;
 }
 
+/* The login page's address, for when the browser did not open by itself. */
+.mcp-note .link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .mcp-reason {
   margin: 4px 0 0;
   max-height: 180px;
@@ -542,4 +553,228 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* --- Markdown preview of the file panel ---------------------------------- */
+
+/* The Code / Preview switch: two segments in the file bar. */
+.file-view {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  margin-right: 6px;
+  padding: 2px;
+  border-radius: var(--radius-s);
+  background: var(--sunk);
+}
+
+.file-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: calc(var(--radius-s) - 2px);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.file-view-btn:hover {
+  color: var(--ink);
+}
+
+.file-view-btn[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.md-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 24px 32px;
+}
+
+.md-note {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.md-doc {
+  max-width: 78ch;
+  margin: 0 auto;
+  color: var(--ink);
+  font-size: 14.5px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.md-doc > :first-child {
+  margin-top: 0;
+}
+
+.md-doc p,
+.md-doc ul,
+.md-doc ol,
+.md-doc blockquote,
+.md-doc .code-wrap,
+.md-doc .md-table-wrap {
+  margin: 0 0 12px;
+}
+
+.md-doc h1,
+.md-doc h2,
+.md-doc h3,
+.md-doc h4,
+.md-doc h5,
+.md-doc h6 {
+  margin: 24px 0 10px;
+  font-weight: 650;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+.md-doc h1 {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  font-size: 24px;
+}
+
+.md-doc h2 {
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--line);
+  font-size: 19px;
+}
+
+.md-doc h3 {
+  font-size: 16px;
+}
+
+.md-doc h4,
+.md-doc h5,
+.md-doc h6 {
+  font-size: 14.5px;
+}
+
+.md-doc h5,
+.md-doc h6 {
+  color: var(--muted);
+}
+
+.md-doc ul,
+.md-doc ol {
+  padding-left: 24px;
+}
+
+.md-doc li {
+  margin: 3px 0;
+}
+
+.md-doc li > ul,
+.md-doc li > ol,
+.md-doc li > p {
+  margin: 4px 0;
+}
+
+.md-doc li::marker {
+  color: var(--muted);
+}
+
+.md-doc li.md-task {
+  list-style: none;
+  margin-left: -20px;
+}
+
+.md-doc li.md-task > input {
+  margin: 0 8px 0 0;
+  vertical-align: -1px;
+  accent-color: var(--accent);
+}
+
+.md-doc blockquote {
+  padding: 1px 0 1px 14px;
+  border-left: 3px solid var(--line-strong);
+  color: var(--muted);
+}
+
+.md-doc blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.md-doc hr {
+  height: 0;
+  margin: 22px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.md-doc a {
+  color: var(--accent-ink);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.md-doc a.md-dead {
+  color: inherit;
+  text-decoration-style: dotted;
+  cursor: default;
+}
+
+.md-doc del {
+  color: var(--muted);
+}
+
+.md-image {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--sunk);
+  color: var(--muted);
+  font-size: 0.92em;
+}
+
+.md-doc .md-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+}
+
+.md-doc table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  line-height: 1.5;
+  overflow-wrap: normal;
+}
+
+.md-doc th,
+.md-doc td {
+  padding: 6px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.md-doc th {
+  background: var(--sunk);
+  border-bottom: 1px solid var(--line-strong);
+  font-weight: 650;
+}
+
+.md-doc th + th,
+.md-doc td + td {
+  border-left: 1px solid var(--line);
+}
+
+.md-doc tbody tr + tr td {
+  border-top: 1px solid var(--line);
 }

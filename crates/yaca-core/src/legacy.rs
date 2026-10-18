@@ -43,7 +43,7 @@ pub fn adopt_dir(old: &Path, new: &Path) -> PathBuf {
         // The window and the CLI can start together; the other one moved it.
         Err(_) if new.exists() => new.to_path_buf(),
         Err(e) => {
-            tracing::warn!("не перенести {} в {}: {e}", old.display(), new.display());
+            tracing::warn!("failed to move {} to {}: {e}", old.display(), new.display());
             old.to_path_buf()
         }
     }
@@ -77,11 +77,11 @@ pub(crate) fn adopt_key(old_service: &str, new_service: &str, provider: &str) {
         Ok(_) => {}
         Err(keyring::Error::NoEntry) => {
             if let Err(e) = new.set_password(&key) {
-                tracing::warn!(provider, "ключ не перенесён под новое имя: {e}");
+                tracing::warn!(provider, "key was not migrated to new name: {e}");
                 return;
             }
             if new.get_password().ok().as_deref() != Some(key.as_str()) {
-                tracing::warn!(provider, "ключ под новым именем не читается, старый оставлен");
+                tracing::warn!(provider, "key under new name cannot be read, keeping old key");
                 return;
             }
         }

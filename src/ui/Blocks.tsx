@@ -98,9 +98,14 @@ export function ShownText({
   return (
     <div className="shown">
       <div className="shown-head">
-        <button className="shown-path" onClick={() => onOpen(block.path)}>
-          {block.path}
-        </button>
+        {block.command !== null ? (
+          // A command's output has no file to open: its line is the name.
+          <span className="shown-path shown-command">$ {block.command}</span>
+        ) : (
+          <button className="shown-path" onClick={() => onOpen(block.path)}>
+            {block.path}
+          </button>
+        )}
         {!whole && (
           <span className="shown-lines">
             {t("shown.lines", {
@@ -111,7 +116,7 @@ export function ShownText({
           </span>
         )}
       </div>
-      {MARKDOWN.has(extension) ? (
+      {block.command === null && MARKDOWN.has(extension) ? (
         <Markdown text={block.text} />
       ) : (
         <CodeBlock text={block.text} info={extension} />
@@ -318,4 +323,54 @@ export function ErrorBlock({
 
 export function Simple({ textKey }: { textKey: Key }) {
   return <div className="divider">{t(textKey)}</div>;
+}
+
+/**
+ * A hook's word where no call row stands: a message it kept from the model, a
+ * turn it sent back to work, or what it had to say. A project hook comes with
+ * an empty `plugin`.
+ */
+export function HookNote({
+  block,
+}: {
+  block: { plugin: string; event: string; text: string; blocked: boolean };
+}) {
+  const project = block.plugin === "";
+  const backToWork = block.event === "Stop" || block.event === "SubagentStop";
+  const label = !block.blocked
+    ? project
+      ? t("hook.project_said", { event: block.event })
+      : t("hook.said", { plugin: block.plugin, event: block.event })
+    : backToWork
+      ? project
+        ? t("hook.project_blocked_stop")
+        : t("hook.blocked_stop", { plugin: block.plugin })
+      : project
+        ? t("hook.project_blocked_prompt")
+        : t("hook.blocked_prompt", { plugin: block.plugin });
+  return (
+    <div className="hook-note" data-blocked={block.blocked || undefined}>
+      <span className="hook-note-who">{label}</span> {block.text}
+    </div>
+  );
+}
+
+/**
+ * Which model answers this turn, when a router chose it. Quiet, like the other
+ * notes of the feed: it says who is about to write, and is not an event of the
+ * work itself.
+ */
+export function RouteNote({
+  block,
+}: {
+  block: { route: string | null; model: string };
+}) {
+  return (
+    <div className="route-note">
+      {t("routing.chip", {
+        route: block.route ?? t("routing.default_route"),
+        model: block.model,
+      })}
+    </div>
+  );
 }

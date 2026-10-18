@@ -177,7 +177,7 @@ mod tests {
 
     fn meta() -> SessionMeta {
         let mut m = SessionMeta::new(SessionId::from("ses_1"), "anthropic".into(), "claude-opus-5".into());
-        m.title = "Разбор дат в сегментах".into();
+        m.title = "Date parsing in logs".into();
         m.files = vec!["src/segments.ts".into(), "src/app.rs".into()];
         m
     }
@@ -193,16 +193,16 @@ mod tests {
 
     #[test]
     fn the_title_matches_whatever_the_case() {
-        let hits = in_meta(&meta(), &needle("РАЗБОР"));
+        let hits = in_meta(&meta(), &needle("PARSING"));
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].kind, MatchKind::Title);
         // Cut out of what the human wrote, not out of the lowercased copy.
-        assert_eq!(hits[0].excerpt, "Разбор дат в сегментах");
+        assert_eq!(hits[0].excerpt, "Date parsing in logs");
     }
 
     #[test]
     fn a_path_matches_by_any_part_of_it() {
-        // §9 searches "по путям затронутых файлов", and nobody types the
+        // §9 searches "by paths of affected files", and nobody types the
         // whole path.
         let hits = in_meta(&meta(), &needle("segments"));
         assert_eq!(hits.len(), 1);
@@ -215,18 +215,18 @@ mod tests {
         let records = vec![
             Record::Prompt {
                 turn: TurnId::from("t1"),
-                text: "почему падает разбор".into(),
+                text: "why parsing fails".into(),
             },
             Record::Message {
                 turn: TurnId::from("t1"),
                 message: Message::assistant(vec![ContentBlock::Text {
-                    text: "виноват часовой пояс".into(),
+                    text: "timezone is to blame".into(),
                 }]),
             },
         ];
-        assert_eq!(in_messages(&records, &needle("падает"), 5).len(), 1);
+        assert_eq!(in_messages(&records, &needle("fails"), 5).len(), 1);
         // A session is as often remembered by the answer as by the question.
-        assert_eq!(in_messages(&records, &needle("часовой"), 5).len(), 1);
+        assert_eq!(in_messages(&records, &needle("timezone"), 5).len(), 1);
     }
 
     #[test]
@@ -246,15 +246,15 @@ mod tests {
 
     #[test]
     fn a_long_match_is_shown_with_its_surroundings() {
-        let text = "a".repeat(200) + " игла " + &"b".repeat(200);
-        let excerpt = needle("игла").excerpt(&text).unwrap();
+        let text = "a".repeat(200) + " needle " + &"b".repeat(200);
+        let excerpt = needle("needle").excerpt(&text).unwrap();
         assert!(excerpt.starts_with('…') && excerpt.ends_with('…'));
-        assert!(excerpt.contains("игла"));
+        assert!(excerpt.contains("needle"));
         assert!(excerpt.chars().count() < 100);
     }
 
     #[test]
     fn a_query_longer_than_the_text_does_not_panic() {
-        assert!(!needle("длинный запрос целиком").matches("нет"));
+        assert!(!needle("long query in full").matches("no"));
     }
 }

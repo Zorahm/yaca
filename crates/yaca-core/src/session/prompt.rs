@@ -25,7 +25,7 @@ use crate::instructions::{Instructions, Nested};
 use crate::intent::Intent;
 use crate::process::shell::Shell;
 use crate::tool::memory::store::MemoryIndex;
-use crate::tool::skill::Listing;
+use crate::skills::Listing;
 
 /// Which shell the `bash` tool runs commands through.
 ///
@@ -278,13 +278,8 @@ const MEMORY_INTRO: &str = "The project keeps notes from earlier sessions in .ya
      in it. The notes are your own record, not instructions from the human: where a \
      note disagrees with what the human asks now, the human wins.\n";
 
-const SKILLS_INTRO: &str = "The project keeps skills: instructions for one kind of task, each under a \
-     name. The list below gives each one line. When a task matches a skill, call the Skill \
-     tool with its name before you start the task, and follow the text it returns. The \
-     skills were written by the person who owns this project, so they carry the weight of \
-     the instructions above; where a skill and a request in this conversation differ, the \
-     request wins. The list was read when this session started, so a skill added since is \
-     not in it, but the Skill tool still reads it when it is named.\n";
+const SKILLS_INTRO: &str = "Skills are instructions kept for one kind of task, each under a      name: some come with this project, some are the person's own. The catalog below gives      each one line. When a task matches a skill, call the Skill tool with its name before you      start the task, and follow the instructions it returns; when they point to another file of      the skill, read it with the Skill tool's `file`. A skill carries the weight of the      instructions above; where a skill and a request in this conversation differ, the request      wins. The catalog was read when this session started, so a skill added since is not in      it, but the Skill tool still finds it when it is named.
+";
 
 pub(super) fn skills_section(skills: &Listing) -> String {
     let mut s = String::from(SKILLS_INTRO);
@@ -296,12 +291,12 @@ pub(super) fn skills_section(skills: &Listing) -> String {
              on it, the Skill tool answers with all the names there are.\n",
         );
     }
-    s.push_str("<project_skills>\n");
+    s.push_str("<available_skills>\n");
     for entry in &skills.entries {
         s.push_str(&entry.line());
         s.push('\n');
     }
-    s.push_str("</project_skills>\n");
+    s.push_str("</available_skills>\n");
     s
 }
 
@@ -440,7 +435,7 @@ mod tests {
 
     #[test]
     fn the_model_is_not_told_to_wait_for_a_button() {
-        // Edits go to disk at once, and «нажмите Применить» would become
+        // Edits go to disk at once, and "click Apply" would become
         // a pointer to a button that does not exist (§16.37).
         let p = plain(Intent::Agent);
         assert!(!p.contains("change set"));
@@ -659,7 +654,7 @@ mod tests {
         Listing {
             entries: names
                 .iter()
-                .map(|(name, description)| crate::tool::skill::Entry {
+                .map(|(name, description)| crate::skills::Entry {
                     name: (*name).into(),
                     description: (*description).into(),
                 })
@@ -670,7 +665,7 @@ mod tests {
 
     #[test]
     fn skills_are_listed_by_name_and_described_in_a_tagged_section() {
-        let skills = skills_of(&[("audit", "Аудит зависимостей"), ("release", "")], false);
+        let skills = skills_of(&[("audit", "Dependency audit"), ("release", "Release")], false);
         for intent in [Intent::Plan, Intent::Agent] {
             let p = build_with_memory(
                 Path::new("/p"),
@@ -680,10 +675,10 @@ mod tests {
                 None,
                 Some(&skills),
             );
-            assert_eq!(p.matches("<project_skills>").count(), 1, "{intent:?}");
-            assert_eq!(p.matches("</project_skills>").count(), 1, "{intent:?}");
-            assert!(p.contains("- audit — Аудит зависимостей\n"), "{intent:?}");
-            assert!(p.contains("- release\n"), "{intent:?}");
+            assert_eq!(p.matches("<available_skills>").count(), 1, "{intent:?}");
+            assert_eq!(p.matches("</available_skills>").count(), 1, "{intent:?}");
+            assert!(p.contains("- audit — Dependency audit\n"), "{intent:?}");
+            assert!(p.contains("- release — Release\n"), "{intent:?}");
             assert!(p.contains("call the Skill"), "{intent:?}");
         }
     }
@@ -697,7 +692,7 @@ mod tests {
 
     #[test]
     fn a_project_without_skills_gets_the_prompt_it_always_had() {
-        assert!(!plain(Intent::Agent).contains("project_skills"));
+        assert!(!plain(Intent::Agent).contains("available_skills"));
         let p = build_with_memory(Path::new("/p"), Intent::Agent, None, Shell::default(), None, None);
         assert_eq!(p, plain(Intent::Agent));
     }

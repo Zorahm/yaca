@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { translate } from "../i18n";
+import { LOCALE_CODES, translate } from "../i18n";
 import {
   alwaysOffered,
   allowDigit,
@@ -68,9 +68,9 @@ describe("invariant explanation", () => {
     expect(INVARIANT_LINE.gitConfig).toBe("ask.invariant.git_config");
   });
 
-  it("is translated in both languages, never the raw key", () => {
+  it("is translated in every language, never the raw key", () => {
     for (const key of Object.values(INVARIANT_LINE)) {
-      for (const locale of ["ru", "en"] as const) {
+      for (const locale of LOCALE_CODES) {
         const text = translate(locale, key);
         expect(text).not.toBe(key);
         expect(text.length).toBeGreaterThan(0);

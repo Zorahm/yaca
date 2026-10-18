@@ -30,15 +30,26 @@
 //! the same as a background command, so a hook that starts a server cannot hold
 //! the turn.
 //!
+//! A pre hook may also rewrite the call: a JSON object with `updatedInput` on
+//! its standard output, exit code 0, replaces the call's arguments. The
+//! rewritten call is the one the permission question is then asked about, so
+//! a rewrite can narrow a call or fix it but never slip one past the human.
+//!
+//! The events that are not about a call — the session's start and end, a
+//! message from the human, the end of a turn, a compaction, a question waiting
+//! for the human — run through [`on_event`], which only reports how each hook
+//! ended. What an ending means is the session's to decide, per event.
+//!
 //! This module knows nothing about turns or modes. The wiring is in
-//! `session::calls`, and the tests here run real processes in a real project.
+//! `session::calls` and `session::plugin_hooks`, and the tests here run real
+//! processes in a real project.
 
 use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
 use crate::process::kill;
 use crate::process::shell::{self, Shell};
-use crate::settings::{HookSettings, HooksSettings};
+use crate::settings::{EventHookSettings, HookSettings, HooksSettings};
 use crate::workspace::Workspace;
 
 /// What the runner keeps of a hook's output. Past this the output is read and
@@ -60,8 +71,9 @@ const REAP_SECS: u64 = 5;
 /// What a pre hook decided about a call.
 #[derive(Debug, PartialEq, Eq)]
 pub enum PreOutcome {
-    /// Every matching hook exited 0.
-    Go,
+    /// Every matching hook exited 0. `Some` when one of them rewrote the
+    /// call's arguments: the call runs with these.
+    Go(Option<Value>),
     /// A hook refused the call. Nothing it would have done was done.
     Refused(Refusal),
     /// The human stopped the turn while a hook ran.
@@ -103,10 +115,18 @@ pub async fn before(
     input: &Value,
     cancel: &CancellationToken,
 ) -> PreOutcome {
-    let stdin = json!({ "event": "preToolUse", "tool": tool, "input": input }).to_string();
+    let mut updated: Option<Value> = None;
     for hook in hooks.pre_tool_use.iter().filter(|h| h.applies_to(tool)) {
-        match run(hook, ws, shell, tool, stdin.as_bytes(), cancel).await {
-            Ending::Exited { success: true, .. } => {}
+        // Each hook is told the call as the hooks before it left it.
+        let current = updated.as_ref().unwrap_or(input);
+        let stdin = json!({ "event": "preToolUse", "tool": tool, "input": current }).to_string();
+        let env = [("YACA_TOOL", tool)];
+        match run(hook.command(), hook.timeout(), ws, shell, &env, stdin.as_bytes(), cancel).await {
+            Ending::Exited { success: true, output, .. } => {
+                if let Some(input) = updated_input(&output) {
+                    updated = Some(input);
+                }
+            }
             Ending::Exited { code, output, .. } => {
                 return PreOutcome::Refused(refusal_by_exit(hook, code, &output));
             }
@@ -117,7 +137,99 @@ pub async fn before(
             Ending::Stopped => return PreOutcome::Stopped,
         }
     }
-    PreOutcome::Go
+    PreOutcome::Go(updated)
+}
+
+/// `{"updatedInput": {...}}` on a successful pre hook's output. Anything else
+/// it prints is its own business, as before.
+fn updated_input(output: &str) -> Option<Value> {
+    let parsed: Value = serde_json::from_str(output.trim()).ok()?;
+    let input = parsed.get("updatedInput")?;
+    input.is_object().then(|| input.clone())
+}
+
+/// How one hook of an event ended.
+#[derive(Debug, PartialEq, Eq)]
+pub enum EventEnding {
+    /// Exit code 0, with what it printed.
+    Passed(String),
+    /// Any other exit code, with what it printed.
+    Failed { code: Option<i32>, output: String },
+    TimedOut(u64),
+    /// Could not be started.
+    Broken(String),
+}
+
+/// One hook of an event and how it ended.
+#[derive(Debug)]
+pub struct EventSaid {
+    pub command: String,
+    pub ending: EventEnding,
+}
+
+impl EventSaid {
+    /// What the hook printed, cut for the model; empty when it printed nothing.
+    pub fn output_for_model(&self) -> String {
+        match &self.ending {
+            EventEnding::Passed(output) | EventEnding::Failed { output, .. } => {
+                if output.trim().is_empty() {
+                    String::new()
+                } else {
+                    clip(output, MODEL_BYTES)
+                }
+            }
+            _ => String::new(),
+        }
+    }
+
+    /// One line for the feed about a hook that did not pass.
+    pub fn failure_for_human(&self) -> Option<String> {
+        let command = &self.command;
+        match &self.ending {
+            EventEnding::Passed(_) => None,
+            EventEnding::Failed { code, output } => Some(format!(
+                "`{command}` {}\n{}",
+                english_exited(*code),
+                clip(body(output), FEED_BYTES)
+            )),
+            EventEnding::TimedOut(secs) => Some(format!("`{command}` did not respond within {secs} s")),
+            EventEnding::Broken(why) => Some(format!("`{command}` failed to start: {why}")),
+        }
+    }
+}
+
+/// Runs the hooks of an event in the order they are written, each told
+/// `payload` with the event's name added. `None` when the turn was stopped
+/// while one ran: nobody is waiting for the answer any more.
+pub async fn on_event(
+    list: &[EventHookSettings],
+    ws: &Workspace,
+    shell: Shell,
+    event: &str,
+    payload: Value,
+    cancel: &CancellationToken,
+) -> Option<Vec<EventSaid>> {
+    let mut stdin = json!({ "event": event });
+    if let (Value::Object(base), Value::Object(more)) = (&mut stdin, payload) {
+        base.extend(more);
+    }
+    let stdin = stdin.to_string();
+    let env = [("YACA_HOOK_EVENT", event)];
+    let mut out = Vec::new();
+    for hook in list {
+        let ending = match run(hook.command(), hook.timeout(), ws, shell, &env, stdin.as_bytes(), cancel).await {
+            Ending::Exited { success: true, output, .. } => EventEnding::Passed(output),
+            Ending::Exited { code, output, .. } => EventEnding::Failed { code, output },
+            Ending::TimedOut { secs } => EventEnding::TimedOut(secs),
+            Ending::Broken(why) => EventEnding::Broken(why),
+            Ending::Stopped => return None,
+        };
+        out.push(EventSaid {
+            command: hook.command().to_string(),
+            ending,
+        });
+    }
+    Some(out)
 }
 
 /// How a call ended, as a post hook is told it: whether its result is an error,
@@ -152,10 +264,11 @@ pub async fn after(
         for_model: String::new(),
     };
     for hook in hooks.post_tool_use.iter().filter(|h| h.applies_to(tool)) {
-        let said = match run(hook, ws, shell, tool, stdin.as_bytes(), cancel).await {
+        let env = [("YACA_TOOL", tool)];
+        let said = match run(hook.command(), hook.timeout(), ws, shell, &env, stdin.as_bytes(), cancel).await {
             Ending::Exited { success: true, output, .. } if output.trim().is_empty() => continue,
             Ending::Exited { success: true, output, .. } => Said {
-                human: format!("Хук «{}» после вызова:\n{}\n", hook.command(), clip(&output, FEED_BYTES)),
+                human: format!("Hook \"{}\" after call:\n{}\n", hook.command(), clip(&output, FEED_BYTES)),
                 model: format!(
                     "\n\n[hook] Output of `{}` after this call:\n{}",
                     hook.command(),
@@ -164,9 +277,9 @@ pub async fn after(
             },
             Ending::Exited { code, output, .. } => Said {
                 human: format!(
-                    "Хук «{}» после вызова завершился {}\n{}\n",
+                    "Hook \"{}\" after call {}\n{}\n",
                     hook.command(),
-                    how_exited(code),
+                    english_exited(code),
                     clip(&output, FEED_BYTES)
                 ),
                 model: format!(
@@ -177,14 +290,14 @@ pub async fn after(
                 ),
             },
             Ending::TimedOut { secs, .. } => Said {
-                human: format!("Хук «{}» после вызова не ответил за {secs} с\n", hook.command()),
+                human: format!("Hook \"{}\" after call did not respond within {secs} s\n", hook.command()),
                 model: format!(
                     "\n\n[hook] `{}` did not finish within {secs} s after this call, so it is only a note on the call.",
                     hook.command()
                 ),
             },
             Ending::Broken(why) => Said {
-                human: format!("Хук «{}» после вызова не запустился: {why}\n", hook.command()),
+                human: format!("Hook \"{}\" after call failed to start: {why}\n", hook.command()),
                 model: format!(
                     "\n\n[hook] `{}` could not be started after this call ({why}), so it is only a note on the call.",
                     hook.command()
@@ -210,8 +323,8 @@ fn refusal_by_exit(hook: &HookSettings, code: Option<i32>, output: &str) -> Refu
     let command = hook.command();
     Refusal {
         for_human: format!(
-            "Хук «{command}» не пропустил вызов: {}\n{}",
-            how_exited(code),
+            "Hook \"{command}\" blocked the call: {}\n{}",
+            english_exited(code),
             clip(body(output), FEED_BYTES)
         ),
         for_model: format!(
@@ -226,7 +339,7 @@ fn refusal_by_exit(hook: &HookSettings, code: Option<i32>, output: &str) -> Refu
 fn refusal_by_timeout(hook: &HookSettings, secs: u64) -> Refusal {
     let command = hook.command();
     Refusal {
-        for_human: format!("Хук «{command}» не ответил за {secs} с, вызов не выполнен"),
+        for_human: format!("Hook \"{command}\" did not respond within {secs} s, call was not executed"),
         for_model: format!(
             "[hook] The PreToolUse hook `{command}` did not finish within {secs} s, so the call was refused and not run. A hook that does not answer counts as a refusal. Tell the user, or change the call."
         ),
@@ -236,18 +349,10 @@ fn refusal_by_timeout(hook: &HookSettings, secs: u64) -> Refusal {
 fn refusal_by_start(hook: &HookSettings, why: &str) -> Refusal {
     let command = hook.command();
     Refusal {
-        for_human: format!("Хук «{command}» не запустился: {why}; вызов не выполнен"),
+        for_human: format!("Hook \"{command}\" failed to start: {why}; call was not executed"),
         for_model: format!(
             "[hook] The PreToolUse hook `{command}` could not be started ({why}), so the call was refused and not run. Tell the user, or change the call."
         ),
-    }
-}
-
-/// `кодом 3`, or `сигналом` when the process ended by one.
-fn how_exited(code: Option<i32>) -> String {
-    match code {
-        Some(code) => format!("кодом {code}"),
-        None => "сигналом".to_string(),
     }
 }
 
@@ -260,7 +365,7 @@ fn english_exited(code: Option<i32>) -> String {
 
 fn body(output: &str) -> &str {
     if output.trim().is_empty() {
-        "(без вывода)"
+        "(no output)"
     } else {
         output
     }
@@ -312,27 +417,28 @@ enum Halt {
 /// deadline: a command that closes its pipes and keeps running must not hold the
 /// turn past the timeout any more than one that keeps talking.
 async fn run(
-    hook: &HookSettings,
+    command: &str,
+    limit: std::time::Duration,
     ws: &Workspace,
     shell: Shell,
-    tool: &str,
+    env: &[(&str, &str)],
     stdin: &[u8],
     cancel: &CancellationToken,
 ) -> Ending {
     // Hooks are the project's own (`.yaca/settings.json`) and run in the
     // primary root, whatever additional roots the session has.
     let root = ws.root().display().to_string();
-    let env = [("YACA_TOOL", tool), ("YACA_PROJECT_ROOT", root.as_str())];
+    let mut env = env.to_vec();
+    env.push(("YACA_PROJECT_ROOT", root.as_str()));
     let shell::Spawned {
         mut child,
         pid,
         mut output,
-    } = match shell::spawn_with(shell, hook.command(), ws.root(), &env, Some(stdin.to_vec())) {
+    } = match shell::spawn_with(shell, command, ws.root(), &env, Some(stdin.to_vec())) {
         Ok(spawned) => spawned,
         Err(err) => return Ending::Broken(err.to_string()),
     };
 
-    let limit = hook.timeout();
     let deadline = tokio::time::sleep(limit);
     tokio::pin!(deadline);
 
@@ -427,6 +533,7 @@ mod tests {
         let hooks = HooksSettings {
             pre_tool_use: vec![hook("Write", "x", None)],
             post_tool_use: vec![hook("Edit", "x", None)],
+            ..HooksSettings::default()
         };
         assert!(wants_post(&hooks, "Edit"));
         assert!(
@@ -452,7 +559,7 @@ mod tests {
             &CancellationToken::new(),
         )
         .await;
-        assert_eq!(outcome, PreOutcome::Go);
+        assert_eq!(outcome, PreOutcome::Go(None));
     }
 
     #[tokio::test]
@@ -476,7 +583,7 @@ mod tests {
             panic!("expected a refusal, got {outcome:?}");
         };
         assert!(
-            refusal.for_human.contains("не пропустил"),
+            refusal.for_human.contains("blocked the call"),
             "{}",
             refusal.for_human
         );
@@ -515,7 +622,7 @@ mod tests {
             &CancellationToken::new(),
         )
         .await;
-        assert_eq!(outcome, PreOutcome::Go);
+        assert_eq!(outcome, PreOutcome::Go(None));
     }
 
     #[tokio::test]
@@ -553,7 +660,7 @@ mod tests {
             refusal.for_model
         );
         assert!(
-            refusal.for_human.contains("не ответил за 1 с"),
+            refusal.for_human.contains("did not respond within 1 s"),
             "{}",
             refusal.for_human
         );
@@ -584,7 +691,7 @@ mod tests {
             panic!("a hook that cannot start must refuse: {outcome:?}");
         };
         assert!(
-            refusal.for_human.contains("не запустился"),
+            refusal.for_human.contains("failed to start"),
             "{}",
             refusal.for_human
         );
@@ -620,7 +727,7 @@ mod tests {
             &json!({ "path": "a.rs" }),
             Finished {
                 failed: false,
-                result: "Записан файл a.rs",
+                result: "File a.rs written",
             },
             &CancellationToken::new(),
         )
@@ -662,7 +769,7 @@ mod tests {
             "{}",
             note.for_model
         );
-        assert!(note.for_human.contains("кодом 3"), "{}", note.for_human);
+        assert!(note.for_human.contains("exited with code 3"), "{}", note.for_human);
     }
 
     #[tokio::test]
@@ -691,7 +798,7 @@ mod tests {
 
     #[test]
     fn a_long_output_is_cut_at_a_character_boundary() {
-        let text = "я".repeat(3_000); // two bytes each
+        let text = "é".repeat(3_000); // two bytes each
         let cut = clip(&text, 101);
         assert!(cut.contains("output cut at 101 bytes"), "{cut}");
         assert!(cut.len() <= 101 + 40, "{}", cut.len());
@@ -726,5 +833,51 @@ mod tests {
         .await
         .unwrap();
         assert!(note.for_model.contains("Grep"), "{}", note.for_model);
+    }
+
+    #[tokio::test]
+    async fn a_pre_hook_may_rewrite_the_call() {
+        let dir = TempDir::new();
+        let ws = Workspace::open(dir.path()).unwrap();
+        let hooks = HooksSettings {
+            pre_tool_use: vec![hook("Bash", r#"echo '{"updatedInput":{"command":"ls -la"}}'"#, None)],
+            ..HooksSettings::default()
+        };
+        let outcome = before(
+            &hooks,
+            &ws,
+            Shell::default(),
+            "Bash",
+            &json!({ "command": "ls" }),
+            &CancellationToken::new(),
+        )
+        .await;
+        assert_eq!(outcome, PreOutcome::Go(Some(json!({ "command": "ls -la" }))));
+    }
+
+    #[test]
+    fn only_an_object_is_taken_as_updated_input() {
+        assert_eq!(updated_input(r#"{"updatedInput":{"a":1}}"#), Some(json!({ "a": 1 })));
+        assert_eq!(updated_input(r#"{"updatedInput":"x"}"#), None);
+        assert_eq!(updated_input("plain words"), None);
+    }
+
+    #[tokio::test]
+    async fn event_hooks_report_how_each_ended() {
+        let dir = TempDir::new();
+        let ws = Workspace::open(dir.path()).unwrap();
+        let list = vec![
+            EventHookSettings { command: echo_and_exit("fine", 0), timeout_secs: None },
+            EventHookSettings { command: echo_and_exit("tests-fail", 1), timeout_secs: None },
+        ];
+        let said = on_event(&list, &ws, Shell::default(), "stop", json!({}), &CancellationToken::new())
+            .await
+            .unwrap();
+        assert_eq!(said.len(), 2);
+        assert!(matches!(&said[0].ending, EventEnding::Passed(out) if out.contains("fine")));
+        assert!(matches!(&said[1].ending, EventEnding::Failed { code: Some(1), .. }));
+        assert!(said[1].output_for_model().contains("tests-fail"));
+        assert!(said[1].failure_for_human().unwrap().contains("exited with code 1"));
+        assert!(said[0].failure_for_human().is_none());
     }
 }

@@ -12,6 +12,7 @@ pub mod models;
 pub mod openai;
 pub mod registry;
 pub mod sse;
+pub mod systemone;
 
 use std::pin::Pin;
 use std::sync::Arc;
@@ -47,6 +48,16 @@ pub fn build(spec: registry::ProviderSpec) -> Arc<dyn Provider> {
     build_with_key(spec, key)
 }
 
+/// The typed-decision client of a provider, with its key from the keychain as
+/// for [`build`].
+pub fn build_systemone(spec: registry::ProviderSpec) -> Arc<systemone::SystemOne> {
+    let key = spec
+        .needs_key()
+        .then(|| crate::secrets::api_key(&spec.id).0)
+        .flatten();
+    Arc::new(systemone::SystemOne::new(spec, key))
+}
+
 /// The same with an explicit key: used by the CLI with a key from the environment, and by tests.
 pub fn build_with_key(spec: registry::ProviderSpec, key: Option<String>) -> Arc<dyn Provider> {
     match spec.protocol {
@@ -80,6 +91,15 @@ pub struct ToolSchema {
 /// the provider must emit it monotonically, the core builds its assembly on that.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProviderEvent {
+    /// Emitted by a routing provider before `MessageStart`: which model it chose for this request and why.
+    Routed {
+        /// The name of the matched decision; `None` when the default was used.
+        route: Option<String>,
+        provider: String,
+        model: String,
+        /// The names of the signals that were read to make the choice.
+        matched: Vec<String>,
+    },
     MessageStart {
         model: String,
         usage: TokenCounts,

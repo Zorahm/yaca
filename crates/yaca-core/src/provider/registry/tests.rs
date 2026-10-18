@@ -218,7 +218,7 @@ fn presets_are_all_there_by_id() {
     let ids: Vec<_> = Providers::default().list.into_iter().map(|p| p.id).collect();
     assert_eq!(
         ids,
-        ["openai", "anthropic", "google", "openrouter", "deepseek", "zai"]
+        ["openai", "anthropic", "google", "openrouter", "deepseek", "zai", "decision"]
     );
     assert!(ids.iter().all(|id| is_preset(id)));
     assert!(!is_preset("gateway"));
@@ -245,7 +245,7 @@ fn a_file_from_before_a_preset_existed_gains_it_at_the_end() {
     let ids: Vec<_> = providers.list.iter().map(|p| p.id.as_str()).collect();
     assert_eq!(
         ids,
-        ["anthropic", "openai", "google", "openrouter", "deepseek", "zai"]
+        ["anthropic", "openai", "google", "openrouter", "deepseek", "zai", "decision"]
     );
     assert_eq!(
         providers.get(ANTHROPIC_ID).unwrap().base_url,
@@ -289,4 +289,26 @@ fn an_address_that_names_its_version_is_not_given_another() {
         s.base_url = base.into();
         assert_eq!(s.api("/models"), expected);
     }
+}
+
+/// The place the router's small model lives. It is a ready entry, and it must
+/// not demand a key before it can be used: a local server never asks for one.
+#[test]
+fn the_decision_preset_is_a_keyless_openai_shaped_slot() {
+    let providers = Providers::default();
+    let decision = providers.get(DECISION_ID).expect("the Decision preset");
+
+    assert_eq!(decision.protocol, Protocol::OpenAi);
+    assert!(!decision.needs_key());
+    // The protocol's `Bearer {key}` is overridden to nothing, so no credential
+    // goes out — not even a half-filled `Bearer ` — which is how the rest of
+    // the core writes a keyless server down.
+    assert!(decision
+        .headers_for(None)
+        .iter()
+        .all(|(name, value)| name != "authorization" || value.is_empty()));
+    assert!(is_preset(DECISION_ID));
+    // The preset cannot be deleted: the next load would put it back.
+    let mut providers = providers;
+    assert!(providers.remove(DECISION_ID).is_err());
 }

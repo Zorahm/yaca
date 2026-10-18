@@ -29,6 +29,7 @@ import {
   Info,
   Palette,
   Plugs,
+  PuzzlePiece,
   ShieldCheck,
   Wrench,
 } from "@phosphor-icons/react";
@@ -46,12 +47,14 @@ import {
 } from "./core/client";
 import { t, type Key } from "./i18n";
 import { McpMark } from "./ui/brand";
+import { plainPath } from "./ui/format";
 import { usePreferences } from "./ui/prefs";
 import { AboutSection } from "./ui/settings/AboutSection";
 import { AppearanceSection } from "./ui/settings/AppearanceSection";
 import { McpSection, type McpServers } from "./ui/settings/McpSection";
 import { ModelsSection } from "./ui/settings/ModelsSection";
 import { NoticesSection } from "./ui/settings/NoticesSection";
+import { PluginsSection } from "./ui/settings/PluginsSection";
 import { ProjectSection } from "./ui/settings/ProjectSection";
 import { ProvidersSection } from "./ui/settings/ProvidersSection";
 import { Select } from "./ui/settings/Row";
@@ -69,6 +72,7 @@ export type Section =
   | "providers"
   | "tools"
   | "mcp"
+  | "plugins"
   | "appearance"
   | "notices"
   | "about"
@@ -83,6 +87,7 @@ const APP_SECTIONS: Item[] = [
   { id: "providers", name: "prov.title", icon: <Plugs size={15} /> },
   { id: "tools", name: "tools.title", icon: <Wrench size={15} /> },
   { id: "mcp", name: "mcp.title", icon: <McpMark size={15} /> },
+  { id: "plugins", name: "plug.title", icon: <PuzzlePiece size={15} /> },
   { id: "appearance", name: "look.title", icon: <Palette size={15} /> },
   { id: "notices", name: "notices.title", icon: <Bell size={15} /> },
   { id: "about", name: "about.title", icon: <Info size={15} /> },
@@ -94,6 +99,9 @@ const PROJECT_SECTIONS: Item[] = [
   { id: "projectMcp", name: "mcp.title", icon: <McpMark size={15} /> },
   { id: "project", name: "proj.title", icon: <FolderSimple size={15} /> },
 ];
+
+/** U+200E, the left-to-right mark. By code: the character itself is invisible in source. */
+const LTR_MARK = String.fromCharCode(0x200e);
 
 function isProjectSection(section: Section): boolean {
   return PROJECT_SECTIONS.some((item) => item.id === section);
@@ -185,7 +193,14 @@ export default function Settings({
               className="set-project"
               label={t("set.project")}
               value={project}
-              options={projects.map((path) => ({ value: path, label: path }))}
+              // Shown without the `\\?\` prefix, like everywhere else a path is
+              // read. The mark in front pins the text left-to-right: the chip
+              // is `rtl` to cut a long path on the left, and without it the
+              // slashes a path starts with are drawn at its far end.
+              options={projects.map((path) => ({
+                value: path,
+                label: LTR_MARK + plainPath(path),
+              }))}
               onChange={setProject}
             />
             {PROJECT_SECTIONS.map((item) => (
@@ -197,7 +212,7 @@ export default function Settings({
 
       <main className="set-pane">
         <div className="set-scroll">
-          {shown === "providers" && <ProvidersSection onChanged={refreshModels} />}
+          {shown === "providers" && <ProvidersSection models={models} onChanged={refreshModels} />}
           {shown === "tools" && <ToolsSection prefs={prefs} onPatch={patchPrefs} />}
           {shown === "mcp" && (
             <McpSection
@@ -208,6 +223,7 @@ export default function Settings({
               onSave={ownMcp.save}
             />
           )}
+          {shown === "plugins" && <PluginsSection />}
           {shown === "appearance" && <AppearanceSection prefs={prefs} onPatch={patchPrefs} />}
           {shown === "notices" && <NoticesSection prefs={prefs} onPatch={patchPrefs} />}
           {shown === "about" && <AboutSection />}

@@ -66,14 +66,14 @@ impl Tool for ReadImage {
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let raw = input["path"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан path"))?;
+            .ok_or_else(|| ToolError::failed("missing path"))?;
 
         // Before the disk is touched: there is nothing this could give a
         // model that cannot see, and a result saying "here is the image"
         // with no image after it would have it describe what it never saw.
         if !ctx.vision {
             return Err(ToolError::failed_with(
-                "модель не видит изображений",
+                "model does not support images",
                 "The model in use does not accept images, so the file cannot be \
                  shown to you. Say so, rather than guessing at what is in it.",
             ));
@@ -81,7 +81,7 @@ impl Tool for ReadImage {
 
         let abs = ctx.ws.resolve_existing(raw)?;
         if abs.is_dir() {
-            return Err(ToolError::failed(format!("{raw} — каталог, не файл")));
+            return Err(ToolError::failed(format!("{raw} is a directory, not a file")));
         }
         let name = ctx.ws.display(&abs);
 
@@ -89,7 +89,7 @@ impl Tool for ReadImage {
         // should not wait behind it.
         let loaded = tokio::task::spawn_blocking(move || picture::load(&abs))
             .await
-            .map_err(|_| ToolError::failed("чтение изображения не завершилось"))?;
+            .map_err(|_| ToolError::failed("failed to read image"))?;
         let picture = loaded.map_err(|err| match err {
             PictureError::NotAPicture => ToolError::failed_with(
                 format!("{name}: {err}"),
@@ -101,7 +101,7 @@ impl Tool for ReadImage {
 
         let mut text = format!("{name}: {}×{}", picture.width, picture.height);
         if let Some((width, height)) = picture.scaled_from {
-            text.push_str(&format!(", уменьшено с {width}×{height}"));
+            text.push_str(&format!(", scaled down from {width}×{height}"));
         }
         Ok(ToolOutput::new(text).picture(name, picture))
     }
@@ -144,7 +144,7 @@ mod tests {
 
         // Coordinates the model reads off the image are of the scaled one,
         // and it has to know that to say anything about the original.
-        assert_eq!(out.text, "wide.png: 1568×50, уменьшено с 3136×100");
+        assert_eq!(out.text, "wide.png: 1568×50, scaled down from 3136×100");
     }
 
     #[tokio::test]

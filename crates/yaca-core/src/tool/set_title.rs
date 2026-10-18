@@ -1,7 +1,7 @@
 //! Naming the conversation.
 //!
 //! Without this the title is the first line of the first message (§3), which
-//! is often «привет» or a pasted stack trace. The model has read the whole
+//! is often "hello" or a pasted stack trace. The model has read the whole
 //! request by the time it answers, so it is the one that can say what the
 //! conversation is about.
 //!
@@ -37,7 +37,7 @@ impl Tool for SetTitle {
          can be set only once: later calls are refused, and so is any call after \
          the human has renamed the chat. A title is a short noun phrase in the \
          human's language, at most 60 characters, with no quotes and no \
-         trailing period: «Разбор дат в логах», not «Помогаю разобрать даты»."
+         trailing period: \"Log date parsing\", not \"Helping to parse dates\"."
     }
 
     fn properties(&self) -> Value {
@@ -74,26 +74,26 @@ impl Tool for SetTitle {
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let raw = input["title"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан title"))?;
+            .ok_or_else(|| ToolError::failed("missing title"))?;
 
         // A name is given once, and a human's name is final: the model cannot
         // race them for it. The index would ignore a second one anyway; the
         // refusal is so the model is told, not left thinking it worked.
         if ctx.title_locked {
             return Err(ToolError::failed(
-                "название чата уже задано и больше не меняется",
+                "chat title has already been set and cannot be changed",
             ));
         }
 
         let title = clean(raw);
         if title.is_empty() {
-            return Err(ToolError::failed("title пуст"));
+            return Err(ToolError::failed("title is empty"));
         }
 
         ctx.events.emit(AgentEvent::TitleSet {
             title: title.clone(),
         });
-        Ok(ToolOutput::new(format!("Название чата: {title}\n")))
+        Ok(ToolOutput::new(format!("Chat title: {title}\n")))
     }
 }
 
@@ -101,7 +101,7 @@ impl Tool for SetTitle {
 /// cut to the header's width.
 fn clean(raw: &str) -> String {
     // One trim for all of it: the full stop may sit outside the quotes
-    // («Разбор дат».) or inside them, and the order is not worth guessing.
+    // ("Date parsing".) or inside them, and the order is not worth guessing.
     let line = title_of(raw);
     let line = line.trim_matches(|c: char| {
         c.is_whitespace() || matches!(c, '"' | '\'' | '«' | '»' | '“' | '”' | '.')
@@ -118,14 +118,14 @@ mod tests {
 
     #[test]
     fn quotes_and_the_closing_full_stop_are_not_part_of_a_title() {
-        assert_eq!(clean("«Разбор дат в логах»."), "Разбор дат в логах");
+        assert_eq!(clean("«Log date parsing»."), "Log date parsing");
         assert_eq!(clean("  \"Fix the parser\"  "), "Fix the parser");
     }
 
     #[test]
     fn only_the_first_line_is_kept_and_a_long_one_is_cut() {
         assert_eq!(clean("Parser fix\nand more"), "Parser fix");
-        assert!(clean(&"слово ".repeat(40)).chars().count() <= TITLE_MAX_CHARS);
+        assert!(clean(&"word ".repeat(40)).chars().count() <= TITLE_MAX_CHARS);
     }
 
     #[tokio::test]
@@ -134,14 +134,14 @@ mod tests {
         let (ctx, mut rx) = ctx_with_events(&dir);
 
         let out = SetTitle
-            .run(&ctx, json!({ "title": "«Разбор дат»." }))
+            .run(&ctx, json!({ "title": "«Date parsing»." }))
             .await
             .unwrap();
 
-        assert!(out.text.contains("Разбор дат"));
+        assert!(out.text.contains("Date parsing"));
         match rx.try_recv().unwrap() {
-            AgentEvent::TitleSet { title } => assert_eq!(title, "Разбор дат"),
-            other => panic!("не то событие: {other:?}"),
+            AgentEvent::TitleSet { title } => assert_eq!(title, "Date parsing"),
+            other => panic!("unexpected event: {other:?}"),
         }
     }
 
@@ -155,7 +155,7 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert!(err.to_string().contains("пуст"));
+        assert!(err.to_string().contains("empty"));
     }
 }
 
@@ -172,11 +172,11 @@ mod once_tests {
         ctx.title_locked = true;
 
         let err = SetTitle
-            .run(&ctx, json!({ "title": "Другое название" }))
+            .run(&ctx, json!({ "title": "Another title" }))
             .await
             .unwrap_err();
 
-        assert!(err.to_string().contains("уже задано"));
+        assert!(err.to_string().contains("already been set"));
         assert!(rx.try_recv().is_err());
     }
 }

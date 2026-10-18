@@ -132,18 +132,18 @@ pub(super) async fn put_to_human(
 ) -> (Flow, ContentBlock) {
     let question = Question {
         question: format!(
-            "Модель трижды подряд вызвала {} с теми же аргументами и получила тот же \
-             результат. Похоже, она ходит по кругу. Что делать?",
+            "The model called {} three times in a row with the same arguments and received the same \
+             result. It seems to be in a loop. What should be done?",
             repeat.tool
         ),
         options: vec![
             QuestionOption {
-                label: "Продолжить".to_string(),
-                description: Some("Модель получит предупреждение и попробует иначе".to_string()),
+                label: "Continue".to_string(),
+                description: Some("The model will receive a warning and try a different approach".to_string()),
             },
             QuestionOption {
-                label: "Остановить".to_string(),
-                description: Some("Закончить ход; дальше вы скажете, что делать".to_string()),
+                label: "Stop".to_string(),
+                description: Some("End the turn; you will then decide what to do next".to_string()),
             },
         ],
         allow_other: true,
@@ -162,7 +162,7 @@ pub(super) async fn put_to_human(
         Ok(QuestionReply::Answered { selected, .. }) if selected.contains(&0) => {
             (Flow::Go, note(CHANGE_COURSE.to_string()))
         }
-        // "Остановить", a dismissed question, or a turn cancelled while it
+        // "Stop", a dismissed question, or a turn cancelled while it
         // was on screen: the human did not say to go on.
         _ => (Flow::Stop, note(STOPPED_ON_REPEAT.to_string())),
     }

@@ -13,10 +13,10 @@ use std::time::Duration;
 
 use yaca_core::checkpoint::{CheckpointReason, CheckpointSummary};
 use yaca_core::event::AgentEvent;
-use yaca_core::id::CheckpointId;
+use yaca_core::id::{CheckpointId, SessionId};
 use yaca_core::provider::mock::{script_text, MockProvider, Turn};
 use yaca_core::provider::ProviderEvent;
-use yaca_core::{Command, Mode, PermissionAnswer, SessionHandle};
+use yaca_core::{Command, Mode, PermissionAnswer, SessionConfig, SessionHandle};
 use serde_json::json;
 use tokio::sync::broadcast::Receiver;
 
@@ -330,4 +330,90 @@ async fn the_panel_gets_the_whole_list_and_a_rollback_adds_to_it() {
         "{:?}",
         checkpoints.iter().map(|c| &c.reason).collect::<Vec<_>>()
     );
+}
+
+/// A session that writes its journals, so the list of its points is kept too.
+fn recorded(
+    dir: &TempProject,
+    provider: Arc<MockProvider>,
+    resume: Option<SessionId>,
+) -> SessionHandle {
+    let mut config = SessionConfig::new(dir.path());
+    config.mode = Mode::Auto;
+    config.journal = Some(dir.chats());
+    config.resume = resume;
+    yaca_core::spawn(config, provider).unwrap()
+}
+
+/// What a reload of the window, a closed chat or a restart used to lose: the
+/// snapshots were on disk, but the list of them was in the session's memory.
+#[tokio::test]
+async fn a_point_outlives_the_session_that_took_it() {
+    let dir = TempProject::new();
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(writes("t1", "src/new.rs", "fn one() {}
+")),
+        Turn::Events(script_text("Written.")),
+    ]));
+    let first = recorded(&dir, provider, None);
+    let mut rx = first.subscribe();
+
+    ask(&first, "add a file").await;
+    let seen = until(&mut rx, is_turn_over).await;
+    let created = dir.path().join("src/new.rs");
+    assert!(created.exists());
+    let point = points(&seen)
+        .into_iter()
+        .find(|p| p.reason == CheckpointReason::Message)
+        .expect("a point is taken before the message");
+    let id = first.id().clone();
+    drop(first);
+
+    // The chat is closed. What the window draws when it is opened again has
+    // the divider, and the panel has its list.
+    let feed = dir.store().feed(&id);
+    assert!(
+        points(&feed).iter().any(|p| p.id == point.id),
+        "the divider of a point that can be rolled back to stays"
+    );
+    assert!(feed.iter().any(|e| matches!(
+        e,
+        AgentEvent::CheckpointsUpdated { checkpoints } if checkpoints.iter().any(|p| p.id == point.id)
+    )));
+
+    // And the session that is opened holds that point: the rollback works.
+    let again = recorded(&dir, Arc::new(MockProvider::new(vec![])), Some(id));
+    let mut rx = again.subscribe();
+    let files = roll_back_to(&again, &mut rx, &point.id).await;
+    assert_eq!(files, 1);
+    assert!(!created.exists(), "the file the first session wrote is gone");
+}
+
+/// The list belongs to its session: deleting the chat takes its points with it,
+/// and a copy of the chat does not pretend to have any.
+#[tokio::test]
+async fn a_deleted_or_copied_chat_has_no_points_to_offer() {
+    let dir = TempProject::new();
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(writes("t1", "src/new.rs", "fn one() {}
+")),
+        Turn::Events(script_text("Written.")),
+    ]));
+    let first = recorded(&dir, provider, None);
+    let mut rx = first.subscribe();
+    ask(&first, "add a file").await;
+    until(&mut rx, is_turn_over).await;
+    let id = first.id().clone();
+    drop(first);
+
+    let store = dir.store();
+    let copy = store.duplicate(&id, None).unwrap();
+    assert!(
+        points(&store.feed(&copy.id)).is_empty(),
+        "a copy has no list of its own, so its feed offers no rollback"
+    );
+
+    store.delete(&id).unwrap();
+    assert!(store.feed(&id).is_empty());
+    assert!(!yaca_core::checkpoint::ledger::path(&dir.journals(), &id).exists());
 }

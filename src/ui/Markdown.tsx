@@ -14,9 +14,10 @@
  * ведёт, — это интерфейс, врущий про состояние (§0).
  */
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { CodeBlock } from "./CodeBlock";
+import { type Align, parseTable } from "./markdownTable";
 
 export function Markdown({ text }: { text: string }): ReactNode {
   return <div className="agent">{blocks(text)}</div>;
@@ -77,6 +78,43 @@ function blocks(text: string): ReactNode[] {
       continue;
     }
 
+    // A table needs its delimiter row; until that line arrives the header
+    // is an ordinary paragraph.
+    const table = parseTable(lines, i);
+    if (table) {
+      flush();
+      out.push(
+        <div className="agent-table-wrap" key={out.length}>
+          <table className="agent-table">
+            <thead>
+              <tr>
+                {table.header.map((cell, k) => (
+                  <th key={k} style={alignStyle(table.aligns[k])}>
+                    {inline(cell)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            {table.rows.length > 0 && (
+              <tbody>
+                {table.rows.map((row, j) => (
+                  <tr key={j}>
+                    {row.map((cell, k) => (
+                      <td key={k} style={alignStyle(table.aligns[k])}>
+                        {inline(cell)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            )}
+          </table>
+        </div>,
+      );
+      i = table.end - 1;
+      continue;
+    }
+
     const bullet = /^\s*[-*+]\s+(.*)$/.exec(line);
     const numbered = /^\s*\d+[.)]\s+(.*)$/.exec(line);
     if (bullet || numbered) {
@@ -110,11 +148,15 @@ function blocks(text: string): ReactNode[] {
   return out;
 }
 
+function alignStyle(align: Align): CSSProperties | undefined {
+  return align ? { textAlign: align } : undefined;
+}
+
 /** Инлайн-код, полужирный, курсив. Остальное — текст как есть. */
 function inline(text: string): ReactNode[] {
   const out: ReactNode[] = [];
   // Порядок важен: код первым, чтобы `**` внутри него остались собой.
-  const pattern = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\n]+\*)|(_[^_\n]+_)/g;
+  const pattern = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*(?!\s)[^*\n]*[^*\s]\*)|((?<!\w)_(?!\s)[^_\n]*[^_\s]_(?!\w))/g;
 
   let at = 0;
   let match: RegExpExecArray | null;

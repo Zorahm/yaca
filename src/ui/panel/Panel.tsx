@@ -29,7 +29,7 @@ import { baseName } from "../format";
 import type { Bounds } from "../resize";
 import { Splitter } from "../Splitter";
 
-export type PanelKind = "checkpoints" | "processes" | "mcp" | "agents" | "file";
+export type PanelKind = "checkpoints" | "processes" | "mcp" | "lsp" | "agents" | "file";
 
 export type PanelFrame = {
   current: PanelKind;
@@ -56,6 +56,7 @@ const TABS: { kind: Exclude<PanelKind, "file">; label: Key }[] = [
   { kind: "checkpoints", label: "top.checkpoints" },
   { kind: "processes", label: "top.processes" },
   { kind: "mcp", label: "panel.tab_mcp" },
+  { kind: "lsp", label: "panel.tab_lsp" },
   { kind: "agents", label: "panel.tab_agents" },
 ];
 

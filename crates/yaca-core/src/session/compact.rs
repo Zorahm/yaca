@@ -96,6 +96,11 @@ pub struct Plan {
     /// Characters dropped, against the whole, for estimating what was freed.
     pub dropped_chars: usize,
     pub total_chars: usize,
+    /// Skills whose instructions are in the part being dropped and not in the
+    /// tail, in the order they were first loaded. Their text goes back in after
+    /// the summary: a summary keeps what happened, not the instructions the
+    /// agent was following.
+    pub skills: Vec<String>,
 }
 
 /// Splits the history, or `None` when there is not enough of it to be worth
@@ -107,12 +112,59 @@ pub fn plan(history: &[Message]) -> Option<Plan> {
     let dropped_chars = weight(head);
     let total_chars = dropped_chars + weight(tail);
 
+    let in_tail: Vec<String> = activated(tail);
+    let skills = activated(head)
+        .into_iter()
+        .filter(|name| !in_tail.contains(name))
+        .collect();
+
     Some(Plan {
         transcript: transcript(head),
         tail: tail.to_vec(),
         dropped_chars,
         total_chars,
+        skills,
     })
+}
+
+/// The skills whose content appears in `messages`, each once, first seen first.
+fn activated(messages: &[Message]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for block in messages.iter().flat_map(|m| &m.content) {
+        let text = match block {
+            ContentBlock::Text { text } => text,
+            ContentBlock::ToolResult { content, .. } => content,
+            _ => continue,
+        };
+        for name in crate::skills::activate::activated_in(text) {
+            if !out.iter().any(|n| n == name) {
+                out.push(name.to_string());
+            }
+        }
+    }
+    out
+}
+
+/// Opens the block of skills kept through a compaction, after the summary.
+pub const KEPT_SKILLS_HEADER: &str =
+    "[Instructions of the skills loaded earlier in this conversation, kept through the \
+     compaction. Go on following them where they apply.]";
+
+/// The kept skills of a compacted history: the text blocks after the summary in
+/// its first message. What an edited summary has to carry over.
+pub fn kept_skills(history: &[Message]) -> Vec<String> {
+    if !is_summary(history.first()) {
+        return Vec::new();
+    }
+    history[0]
+        .content
+        .iter()
+        .skip(1)
+        .filter_map(|b| match b {
+            ContentBlock::Text { text } => Some(text.clone()),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Where to cut, in messages.
@@ -227,12 +279,18 @@ fn transcript(messages: &[Message]) -> String {
 /// Also what an edited summary (§5.11) rebuilds with, and the reasoning goes
 /// there for the same reason: every turn after the summary thought with the
 /// old one in front of it.
-pub fn rebuilt(summary: &str, tail: Vec<Message>) -> Vec<Message> {
+///
+/// `skills` are the kept skills' blocks: a [`KEPT_SKILLS_HEADER`] and the
+/// `<skill_content>` of each, as [`kept_skills`] gives them back. Blocks of the
+/// summary's own message rather than messages of their own, so the history
+/// keeps its alternation and an edited summary keeps them by position.
+pub fn rebuilt(summary: &str, skills: &[String], tail: Vec<Message>) -> Vec<Message> {
     let mut out = Vec::with_capacity(tail.len() + 1);
-    out.push(Message::user_text(format!(
-        "{SUMMARY_HEADER}\n\n{}",
-        summary.trim()
-    )));
+    let mut first = Message::user_text(format!("{SUMMARY_HEADER}\n\n{}", summary.trim()));
+    first
+        .content
+        .extend(skills.iter().map(|text| ContentBlock::Text { text: text.clone() }));
+    out.push(first);
     out.extend(tail);
     strip_thinking(&mut out);
     out
@@ -287,7 +345,7 @@ fn clip(text: &str) -> String {
     trimmed
         .chars()
         .take(RESULT_MAX_CHARS)
-        .chain("… (обрезано)".chars())
+        .chain("… (truncated)".chars())
         .collect()
 }
 

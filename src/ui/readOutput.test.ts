@@ -17,14 +17,14 @@ describe("parseRead", () => {
   });
 
   it("keeps the tool's remark after the lines as a note", () => {
-    const parsed = parseRead("     1\ta\n     2\tb\n\n[показаны строки 1–2 из 40]\n");
+    const parsed = parseRead("     1\ta\n     2\tb\n\n[showing lines 1–2 of 40]\n");
 
     expect(parsed?.lines).toHaveLength(2);
-    expect(parsed?.note).toBe("[показаны строки 1–2 из 40]");
+    expect(parsed?.note).toBe("[showing lines 1–2 of 40]");
   });
 
   it("gives up on output with no numbered line", () => {
-    expect(parseRead("[файл пуст]\n")).toBeNull();
+    expect(parseRead("[file is empty]\n")).toBeNull();
     expect(parseRead("")).toBeNull();
   });
 });

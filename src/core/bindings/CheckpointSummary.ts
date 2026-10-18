@@ -8,7 +8,7 @@ import type { TsMillis } from "./TsMillis";
  */
 export type CheckpointSummary = { id: CheckpointId, at: TsMillis, reason: CheckpointReason, 
 /**
- * How many files the snapshot holds. Not the `3 файла` of a rollback —
+ * How many files the snapshot holds. Not the `3 files` of a rollback —
  * that number is counted against the tree at the moment of rolling back.
  */
 tracked: number, };

@@ -23,7 +23,7 @@ const ROPE: Duration = Duration::from_secs(30);
 fn open(dir: &TempProject, provider: Arc<MockProvider>, flag: Option<&str>) -> SessionHandle {
     let mut config = SessionConfig::new(dir.path());
     config.mode = Mode::Auto;
-    config.journal = false;
+    config.journal = None;
     if let Some(flag) = flag {
         config.lsp_servers.insert(
             "fixture".into(),
@@ -89,7 +89,7 @@ async fn a_definition_names_the_place_and_shows_the_line() {
     let (text, is_error) = one(
         &dir,
         "",
-        json!({ "action": "definition", "path": "a.zz", "line": 3, "symbol": "go", "description": "Нашёл go" }),
+        json!({ "action": "definition", "path": "a.zz", "line": 3, "symbol": "go", "description": "Found go" }),
     )
     .await;
     assert!(!is_error, "{text}");
@@ -103,7 +103,7 @@ async fn the_column_comes_from_the_symbol_not_from_the_model() {
     let (text, is_error) = one(
         &dir,
         "",
-        json!({ "action": "hover", "path": "a.zz", "line": 3, "symbol": "go", "description": "Посмотрел" }),
+        json!({ "action": "hover", "path": "a.zz", "line": 3, "symbol": "go", "description": "Looked" }),
     )
     .await;
     assert!(!is_error, "{text}");
@@ -119,7 +119,7 @@ async fn references_list_every_place() {
     let (text, _) = one(
         &dir,
         "",
-        json!({ "action": "references", "path": "a.zz", "line": 1, "symbol": "Thing", "description": "Нашёл" }),
+        json!({ "action": "references", "path": "a.zz", "line": 1, "symbol": "Thing", "description": "Found" }),
     )
     .await;
     assert!(text.contains("a.zz:1:4"), "{text}");
@@ -130,13 +130,13 @@ async fn references_list_every_place() {
 async fn an_outline_and_a_name_search() {
     let dir = source();
     let (text, _) =
-        one(&dir, "", json!({ "action": "symbols", "path": "a.zz", "description": "Обзор" })).await;
+        one(&dir, "", json!({ "action": "symbols", "path": "a.zz", "description": "Overview" })).await;
     assert!(text.starts_with("struct Thing  :1\n  method go  :3"), "{text}");
 
     let (text, _) = one(
         &dir,
         "",
-        json!({ "action": "workspace_symbols", "query": "needle", "description": "Поиск" }),
+        json!({ "action": "workspace_symbols", "query": "needle", "description": "Search" }),
     )
     .await;
     assert!(text.contains("function needle (lib)"), "{text}");
@@ -149,7 +149,7 @@ async fn diagnostics_are_asked_for_by_name() {
     let (text, is_error) = one(
         &dir,
         "",
-        json!({ "action": "diagnostics", "path": "a.zz", "description": "Проверил" }),
+        json!({ "action": "diagnostics", "path": "a.zz", "description": "Checked" }),
     )
     .await;
     assert!(!is_error, "{text}");
@@ -159,10 +159,10 @@ async fn diagnostics_are_asked_for_by_name() {
     let (text, _) = one(
         &clean,
         "",
-        json!({ "action": "diagnostics", "path": "a.zz", "description": "Проверил" }),
+        json!({ "action": "diagnostics", "path": "a.zz", "description": "Checked" }),
     )
     .await;
-    assert!(text.contains("нет"), "{text}");
+    assert!(text.contains("No errors or warnings in a.zz"), "{text}");
 }
 
 #[tokio::test]
@@ -170,7 +170,7 @@ async fn an_edit_reports_what_it_broke_in_the_same_result() {
     let dir = source();
     let provider = Arc::new(MockProvider::new(vec![
         // Starts the server: an edit alone does not.
-        lsp("t1", json!({ "action": "symbols", "path": "a.zz", "description": "Обзор" })),
+        lsp("t1", json!({ "action": "symbols", "path": "a.zz", "description": "Overview" })),
         Turn::Events(calls(&[(
             "t2",
             "Write",
@@ -185,7 +185,7 @@ async fn an_edit_reports_what_it_broke_in_the_same_result() {
 
     let (text, is_error) = tool_result_of(&provider, "t2");
     assert!(!is_error, "{text}");
-    assert!(text.contains("Диагностика fixture: ошибок 1"), "{text}");
+    assert!(text.contains("Diagnostics from fixture: 1 errors"), "{text}");
     assert!(text.contains("error b.zz:2:9 this line is BROKEN"), "{text}");
 }
 
@@ -202,7 +202,7 @@ async fn an_edit_alone_does_not_start_a_server() {
     turn(&mut rx).await;
 
     let (text, _) = tool_result_of(&provider, "t1");
-    assert!(!text.contains("Диагностика"), "{text}");
+    assert!(!text.contains("Diagnostics from"), "{text}");
     assert_eq!(handle.lsp()[0].status, LspStatus::Idle);
 }
 
@@ -210,7 +210,7 @@ async fn an_edit_alone_does_not_start_a_server() {
 async fn a_server_that_does_not_answer_is_said_so_not_taken_for_clean() {
     let dir = source();
     let provider = Arc::new(MockProvider::new(vec![
-        lsp("t1", json!({ "action": "symbols", "path": "a.zz", "description": "Обзор" })),
+        lsp("t1", json!({ "action": "symbols", "path": "a.zz", "description": "Overview" })),
         Turn::Events(calls(&[("t2", "Write", json!({ "path": "b.zz", "content": "BROKEN\n" }))])),
         Turn::Events(script_text("Done.")),
     ]));
@@ -220,14 +220,14 @@ async fn a_server_that_does_not_answer_is_said_so_not_taken_for_clean() {
     turn(&mut rx).await;
 
     let (text, _) = tool_result_of(&provider, "t2");
-    assert!(text.contains("не пришла"), "{text}");
+    assert!(text.contains("did not arrive"), "{text}");
 }
 
 #[tokio::test]
 async fn a_server_that_cannot_start_fails_with_its_own_words() {
     let dir = source();
     let provider = Arc::new(MockProvider::new(vec![
-        lsp("t1", json!({ "action": "hover", "path": "a.zz", "line": 1, "description": "Посмотрел" })),
+        lsp("t1", json!({ "action": "hover", "path": "a.zz", "line": 1, "description": "Looked" })),
         Turn::Events(script_text("Done.")),
     ]));
     let handle = open(&dir, provider.clone(), Some("--crash"));
@@ -260,7 +260,7 @@ async fn a_server_that_dies_mid_session_is_failed_with_the_reason() {
     let (text, is_error) = one(
         &dir,
         "--crash-on-hover",
-        json!({ "action": "hover", "path": "a.zz", "line": 1, "description": "Посмотрел" }),
+        json!({ "action": "hover", "path": "a.zz", "line": 1, "description": "Looked" }),
     )
     .await;
     assert!(is_error);
@@ -274,9 +274,127 @@ async fn a_file_no_server_answers_for_says_which_servers_there_are() {
     let (text, is_error) = one(
         &dir,
         "",
-        json!({ "action": "symbols", "path": "a.txt", "description": "Обзор" }),
+        json!({ "action": "symbols", "path": "a.txt", "description": "Overview" }),
     )
     .await;
     assert!(is_error);
     assert!(text.contains("fixture (zz)"), "{text}");
+}
+
+fn contents(dir: &TempProject, rel: &str) -> String {
+    std::fs::read_to_string(dir.path().join(rel)).unwrap()
+}
+
+fn renamed() -> TempProject {
+    let dir = TempProject::new();
+    dir.write("a.zz", "struct Thing {\n}\nfn go() {}\n");
+    dir.write("b.zz", "use Thing;\nfn other() {}\n");
+    dir
+}
+
+/// One `Rename` call, answered: the result and the turn's events.
+async fn rename(dir: &TempProject, input: Value) -> ((String, bool), Vec<AgentEvent>) {
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(calls(&[("t1", "Rename", input)])),
+        Turn::Events(script_text("Done.")),
+    ]));
+    let handle = open(dir, provider.clone(), Some(""));
+    let mut rx = handle.subscribe();
+    ask(&handle, "rename").await;
+    let events = turn(&mut rx).await;
+    (tool_result_of(&provider, "t1"), events)
+}
+
+#[tokio::test]
+async fn a_rename_changes_every_file_the_server_names() {
+    let dir = renamed();
+    let ((text, is_error), events) = rename(
+        &dir,
+        json!({ "path": "a.zz", "line": 1, "symbol": "Thing", "new_name": "Widget", "description": "Renamed" }),
+    )
+    .await;
+    assert!(!is_error, "{text}");
+    assert!(text.contains("Renamed `Thing` to `Widget` in 2 files"), "{text}");
+    assert_eq!(contents(&dir, "a.zz"), "struct Widget {\n}\nfn go() {}\n");
+    assert_eq!(contents(&dir, "b.zz"), "use Widget;\nfn other() {}\n");
+
+    // Each file reaches the feed under the call's row, with its own diff.
+    let changed: Vec<String> = events
+        .iter()
+        .filter_map(|e| match e {
+            AgentEvent::FileChanged { call_id, fact, .. } if call_id.as_str() == "t1" => {
+                Some(fact.path.clone())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(changed, vec!["a.zz".to_string(), "b.zz".to_string()]);
+}
+
+#[tokio::test]
+async fn a_rename_off_the_name_is_refused_before_anything_changes() {
+    let dir = renamed();
+    let ((text, is_error), _) = rename(
+        &dir,
+        json!({ "path": "a.zz", "line": 3, "symbol": "go", "new_name": "run", "description": "Renamed" }),
+    )
+    .await;
+    assert!(is_error, "{text}");
+    assert!(text.contains("nothing to rename at this position"), "{text}");
+    assert_eq!(contents(&dir, "a.zz"), "struct Thing {\n}\nfn go() {}\n");
+}
+
+#[tokio::test]
+async fn a_rename_that_would_move_a_file_changes_nothing() {
+    let dir = renamed();
+    let ((text, is_error), _) = rename(
+        &dir,
+        json!({ "path": "a.zz", "line": 1, "symbol": "Thing", "new_name": "Moved", "description": "Renamed" }),
+    )
+    .await;
+    assert!(is_error, "{text}");
+    assert!(text.contains("Move"), "{text}");
+    assert_eq!(contents(&dir, "a.zz"), "struct Thing {\n}\nfn go() {}\n");
+    assert_eq!(contents(&dir, "b.zz"), "use Thing;\nfn other() {}\n");
+}
+
+#[tokio::test]
+async fn a_server_that_only_answers_when_asked_is_asked() {
+    let dir = TempProject::new();
+    dir.write("a.zz", "fine\nlet x = BROKEN;\n");
+    let (text, is_error) = one(
+        &dir,
+        "--pull",
+        json!({ "action": "diagnostics", "path": "a.zz", "description": "Checked" }),
+    )
+    .await;
+    assert!(!is_error, "{text}");
+    assert!(text.contains("error a.zz:2:9 this line is BROKEN [fixture E1]"), "{text}");
+}
+
+#[tokio::test]
+async fn a_server_can_be_restarted_from_the_panel() {
+    let dir = source();
+    let provider = Arc::new(MockProvider::new(vec![
+        lsp("t1", json!({ "action": "symbols", "path": "a.zz", "description": "Overview" })),
+        Turn::Events(script_text("Done.")),
+    ]));
+    let handle = open(&dir, provider.clone(), Some(""));
+    let mut rx = handle.subscribe();
+    ask(&handle, "look").await;
+    turn(&mut rx).await;
+
+    handle
+        .send(yaca_core::Command::RestartLspServer { server: "fixture".into() })
+        .await
+        .unwrap();
+    // Down first, then up again: the panel sees both.
+    let seen = until_within(&mut rx, ROPE, |e| {
+        matches!(e, AgentEvent::LspUpdated { servers } if servers[0].status == LspStatus::Ready)
+    })
+    .await;
+    assert!(seen.iter().any(|e| matches!(
+        e,
+        AgentEvent::LspUpdated { servers } if servers[0].status == LspStatus::Idle
+    )), "{seen:?}");
 }

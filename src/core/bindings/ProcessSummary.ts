@@ -12,7 +12,7 @@ export type ProcessSummary = { id: ProcessId, command: string,
  */
 cwd: string, state: ProcessState, startedAt: TsMillis, 
 /**
- * `None` while running. The `время работы` column is the difference
+ * `None` while running. The "uptime" column is the difference
  * between these two, counted by the interface — a core that ticked a
  * clock event every second would say nothing new each time.
  */

@@ -43,7 +43,10 @@ const TAIL_BYTES: usize = 3_500;
 /// reports a count, not a change, so the name is the only thing the core knows
 /// it changed the tree.
 pub fn changes_files(tool: &str) -> bool {
-    matches!(tool, "Write" | "Edit" | "Delete" | "DeleteDir" | "Move")
+    matches!(
+        tool,
+        "Write" | "Edit" | "NotebookEdit" | "Rename" | "Delete" | "DeleteDir" | "Move"
+    )
 }
 
 /// How a check ended.
@@ -82,7 +85,7 @@ pub async fn run(
 ) -> Verdict {
     let cwd = match ws.resolve_existing(settings.cwd()) {
         Ok(dir) if dir.is_dir() => dir,
-        Ok(_) => return Verdict::Broken(format!("{} — не каталог", settings.cwd())),
+        Ok(_) => return Verdict::Broken(format!("{} is not a directory", settings.cwd())),
         Err(err) => return Verdict::Broken(err.to_string()),
     };
 
@@ -197,24 +200,24 @@ impl Capture {
     }
 }
 
-/// The line the human sees in the feed, Russian like the rest of the feed.
+/// The line the human sees in the feed, English like the rest of the feed.
 /// It goes into the expanded row of the file change that triggered the check.
 pub fn for_human(command: &str, verdict: &Verdict) -> String {
     match verdict {
-        Verdict::Passed => format!("Проверка «{command}»: без ошибок\n"),
+        Verdict::Passed => format!("Check \"{command}\": passed\n"),
         Verdict::Failed { code, output } => {
             let how = match code {
-                Some(code) => format!("кодом {code}"),
-                None => "сигналом".to_string(),
+                Some(code) => format!("with exit code {code}"),
+                None => "with a signal".to_string(),
             };
-            format!("Проверка «{command}» завершилась {how}\n{}\n", body(output))
+            format!("Check \"{command}\" finished {how}\n{}\n", body(output))
         }
         Verdict::TimedOut { secs, output } => format!(
-            "Проверка «{command}» не уложилась в {secs} с и остановлена\n{}\n",
+            "Check \"{command}\" timed out after {secs}s and was stopped\n{}\n",
             body(output)
         ),
-        Verdict::Stopped => format!("Проверка «{command}» остановлена\n"),
-        Verdict::Broken(why) => format!("Проверка «{command}» не запустилась: {why}\n"),
+        Verdict::Stopped => format!("Check \"{command}\" stopped\n"),
+        Verdict::Broken(why) => format!("Check \"{command}\" failed to start: {why}\n"),
     }
 }
 
@@ -292,7 +295,7 @@ mod tests {
 
     #[test]
     fn only_changes_that_write_files_earn_a_check() {
-        for tool in ["Write", "Edit", "Delete", "DeleteDir", "Move"] {
+        for tool in ["Write", "Edit", "NotebookEdit", "Rename", "Delete", "DeleteDir", "Move"] {
             assert!(changes_files(tool), "{tool}");
         }
         for tool in ["Read", "Bash", "Grep", "Glob", "TodoWrite"] {

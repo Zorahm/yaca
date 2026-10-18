@@ -79,8 +79,9 @@ impl Tool for Bash {
             "background": {
                 "type": "boolean",
                 "description": "Start the command and return at once. Read what it \
-                                has printed since with BashOutput. Stop it with \
-                                BashKill, restart it with BashRestart.",
+                                has printed since with BashOutput, or wait for a line \
+                                or for its end with BashWait. Stop it with BashKill, \
+                                restart it with BashRestart.",
             },
         })
     }
@@ -113,9 +114,9 @@ impl Tool for Bash {
             return Ok(());
         }
         Err(format!(
-            "В плане можно только читать: «{}» может что-то изменить. Чтение, \
-             поиск и листинг выполняются и здесь; запуск команды — в режиме «Ручной» \
-             или «Авто».",
+            "In Plan mode you can only read: \"{}\" may modify something. Reading, \
+             search, and listing can be performed here too; run commands in Manual \
+             or Auto mode.",
             head(command)
         ))
     }
@@ -127,7 +128,7 @@ impl Tool for Bash {
 
     fn permission(&self, ws: &Workspace, input: &Value) -> Option<PermissionNeed> {
         let command = command_of(input)?;
-        // §5.7, row "Команда": the target is the first word, the detail is the
+        // §5.7, row "Command": the target is the first word, the detail is the
         // whole line, and the dimmed second line is the working directory. The
         // detail is never shortened here — it is the place a human notices
         // `&& rm -rf`, and shortening happens in the feed if anywhere.
@@ -181,7 +182,7 @@ impl Tool for Bash {
 
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let command = command_of(&input)
-            .ok_or_else(|| ToolError::failed("не задан command"))?
+            .ok_or_else(|| ToolError::failed("command is required"))?
             .to_string();
         let cwd = working_dir(ctx.ws.as_ref(), &input)?;
 
@@ -231,7 +232,7 @@ fn working_dir(ws: &Workspace, input: &Value) -> Result<PathBuf, ToolError> {
     };
     let dir = ws.resolve_existing(raw)?;
     if !dir.is_dir() {
-        return Err(ToolError::failed(format!("{raw} — не каталог")));
+        return Err(ToolError::failed(format!("{raw} is not a directory")));
     }
     Ok(dir)
 }
@@ -252,7 +253,7 @@ async fn foreground(
     limit: Duration,
 ) -> Result<ToolOutput, ToolError> {
     let spawned = shell::spawn(ctx.shell, command, cwd)
-        .map_err(|e| ToolError::failed(format!("не удалось запустить «{}»: {e}", head(command))))?;
+        .map_err(|e| ToolError::failed(format!("failed to start \"{}\": {e}", head(command))))?;
     let shell::Spawned {
         mut child,
         pid,
@@ -341,10 +342,10 @@ async fn foreground(
     let status = child
         .wait()
         .await
-        .map_err(|e| ToolError::failed(format!("не дождался «{}»: {e}", head(command))))?;
+        .map_err(|e| ToolError::failed(format!("failed to wait for \"{}\": {e}", head(command))))?;
 
     let body = if text.is_empty() {
-        "[команда ничего не вывела]\n".to_string()
+        "[command produced no output]\n".to_string()
     } else {
         text
     };
@@ -357,8 +358,8 @@ async fn foreground(
     }
     Err(ToolError::failed_with(
         match status.code() {
-            Some(code) => format!("«{}» завершилась с кодом {code}", head(command)),
-            None => format!("«{}» убита сигналом", head(command)),
+            Some(code) => format!("\"{}\" exited with code {code}", head(command)),
+            None => format!("\"{}\" killed by signal", head(command)),
         },
         out.text,
     ))
@@ -401,7 +402,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(out.text.contains("hello"), "получили: {}", out.text);
+        assert!(out.text.contains("hello"), "got: {}", out.text);
         assert_eq!(out.meta.lines, 1);
     }
 
@@ -412,7 +413,7 @@ mod tests {
 
         let out = Bash.run(&ctx, json!({ "command": "cd ." })).await.unwrap();
 
-        assert!(out.text.contains("ничего не вывела"), "{}", out.text);
+        assert!(out.text.contains("command produced no output"), "{}", out.text);
     }
 
     #[tokio::test]
@@ -435,12 +436,12 @@ mod tests {
         let first = chunks
             .iter()
             .position(|c| c.contains("one"))
-            .expect("«one» не доехало в ленту");
+            .expect("'one' did not arrive in feed");
         let second = chunks
             .iter()
             .position(|c| c.contains("two"))
-            .expect("«two» не доехало в ленту");
-        assert!(first < second, "вывод приехал одним куском: {chunks:?}");
+            .expect("'two' did not arrive in feed");
+        assert!(first < second, "output arrived in one chunk: {chunks:?}");
     }
 
     #[tokio::test]
@@ -454,10 +455,10 @@ mod tests {
             .unwrap_err();
 
         let ToolError::Failed { message, detail } = err else {
-            panic!("ожидали неудачу, получили {err:?}");
+            panic!("expected failure, got {err:?}");
         };
         // §5.5: the feed gets a line, not five hundred lines of build log.
-        assert!(message.contains("кодом 3"), "{message}");
+        assert!(message.contains("code 3"), "{message}");
         assert!(!message.contains("broken"), "{message}");
         // The model gets the output, or it has nothing to fix.
         assert!(detail.unwrap_or_default().contains("broken"));
@@ -540,7 +541,7 @@ mod tests {
             .run(&ctx, json!({ "command": sleeps() }))
             .await
             .unwrap_err();
-        assert!(matches!(err, ToolError::Cancelled), "получили {err:?}");
+        assert!(matches!(err, ToolError::Cancelled), "got {err:?}");
     }
 
     #[tokio::test]
@@ -556,9 +557,9 @@ mod tests {
 
         assert!(
             started.elapsed() < Duration::from_secs(3),
-            "фоновая команда не должна ждать завершения"
+            "background command should not wait for completion"
         );
-        assert!(out.text.contains("в фоне"), "{}", out.text);
+        assert!(out.text.contains("background"), "{}", out.text);
 
         let panel = ctx.processes.summaries();
         assert_eq!(panel.len(), 1);
@@ -632,8 +633,8 @@ mod tests {
         }
 
         let read = ctx.processes.read(id, 10_000).unwrap();
-        assert!(read.text.contains("one"), "получили: {}", read.text);
-        assert!(read.text.contains("two"), "получили: {}", read.text);
+        assert!(read.text.contains("one"), "got: {}", read.text);
+        assert!(read.text.contains("two"), "got: {}", read.text);
         assert_eq!(read.state, ProcessState::Exited { code: Some(0) });
     }
 
@@ -646,7 +647,7 @@ mod tests {
             .run(&ctx, json!({ "command": "echo hi", "cwd": "../.." }))
             .await
             .unwrap_err();
-        assert!(matches!(err, ToolError::Rejected(_)), "получили {err:?}");
+        assert!(matches!(err, ToolError::Rejected(_)), "got {err:?}");
     }
 
     #[test]
@@ -711,8 +712,8 @@ mod tests {
         let refusal = Bash
             .plan_check(&ws, &json!({ "command": "npm ci" }))
             .unwrap_err();
-        assert!(refusal.contains("В плане"), "{refusal}");
-        assert!(refusal.contains("Ручной"), "{refusal}");
+        assert!(refusal.contains("Plan mode"), "{refusal}");
+        assert!(refusal.contains("Manual"), "{refusal}");
     }
 
     #[test]

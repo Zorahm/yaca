@@ -54,7 +54,7 @@ invariant: Invariant | null,
  */
 unsaved: Unsaved | null, 
 /**
- * The MCP server the call goes to (§5.7: "изменить данные в Asana"). The
+ * The MCP server the call goes to (§5.7: "modify data in Asana"). The
  * feed names it in the question. `default` for the same reason as `files`.
  */
 server: string | null, 

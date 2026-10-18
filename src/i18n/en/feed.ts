@@ -80,6 +80,20 @@ export const feed = {
   "err.change_model": "Change model",
   "err.retry_in": "Retrying in {seconds}s · attempt {attempt} of {of}",
   "err.stopped": "Stopped",
+  "hook.blocked_prompt": "The {plugin} plugin's hook blocked the message:",
+  "hook.blocked_stop": "The {plugin} plugin's hook sent the agent back to work:",
+  "hook.said": "The {plugin} plugin's hook ({event}):",
+  "elicit.from": "The MCP server {server} asks:",
+  "elicit.send": "Send",
+  "elicit.decline": "Decline",
+  "elicit.choose": "Choose…",
+  "elicit.accepted": "Sent to {server}",
+  "elicit.declined": "Declined",
+  "elicit.cancelled": "Closed without an answer",
+  "elicit.expired": "The server stopped waiting",
+  "hook.project_blocked_prompt": "A project hook blocked the message:",
+  "hook.project_blocked_stop": "A project hook sent the agent back to work:",
+  "hook.project_said": "Project hook ({event}):",
   "err.send_failed": "Could not reach the core",
 
   "compact.divider": "history compacted · ~{tokens} tokens freed",
@@ -101,6 +115,7 @@ export const feed = {
 
   "notice.mcp_approval": "An MCP server is waiting for approval: {names}",
   "notice.mcp_failed": "An MCP server did not connect: {names}",
+  "notice.mcp_login": "An MCP server asks you to log in: {names}",
   "notice.lsp_failed": "A language server is not responding: {names}",
   "notice.open": "Open",
 

@@ -27,16 +27,17 @@
 //! The kind of reason is part of that comparison, and the value is not. Two
 //! commands over an unchanged tree are one point, because rolling back to
 //! either does the same thing. A message and an apply over an unchanged tree
-//! are two, because the divider is also a label, and `перед применением
-//! 3 файлов` is what the human will be looking for when they want that apply
+//! are two, because the divider is also a label, and `before applying
+//! 3 files` is what the human will be looking for when they want that apply
 //! undone.
 //!
 //! What the core does not do here is write the sentence. The reason is
-//! structured — [`CheckpointReason`] — and `перед применением 3 файлов` is
+//! structured — [`CheckpointReason`] — and `before applying 3 files` is
 //! written by the feed, on the same rule as §5.4.1 and the permission block:
 //! the core names the action, the interface words it.
 
 pub mod gc;
+pub mod ledger;
 pub mod manifest;
 pub mod restore;
 pub mod scan;
@@ -83,7 +84,7 @@ pub struct CheckpointSummary {
     pub id: CheckpointId,
     pub at: TsMillis,
     pub reason: CheckpointReason,
-    /// How many files the snapshot holds. Not the `3 файла` of a rollback —
+    /// How many files the snapshot holds. Not the `3 files` of a rollback —
     /// that number is counted against the tree at the moment of rolling back.
     pub tracked: u32,
 }
@@ -106,7 +107,7 @@ pub struct CheckpointChange {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Restored {
     /// The point that was rolled back to — the feed needs its time for
-    /// `Откачено к 14:32`.
+    /// `Rolled back to 14:32`.
     pub checkpoint: CheckpointSummary,
     /// Paths that were written or removed, relative to the project root.
     pub touched: Vec<String>,
@@ -130,6 +131,8 @@ struct State {
 struct Inner {
     root: PathBuf,
     store: Store,
+    /// Where the list of points is kept between runs, if it is (`ledger`).
+    ledger: Option<PathBuf>,
     /// Scanning and recording under one lock. Every entry point here blocks on
     /// the filesystem and is called from a blocking task; two snapshots racing
     /// each other would only duplicate the walk.
@@ -144,31 +147,46 @@ pub struct Checkpoints {
 
 impl Checkpoints {
     /// `exclude` is what the project added to the built-in skip list (§10).
+    ///
+    /// The list of points lives in memory only: for a run that is not written
+    /// down, which is what a one-shot CLI run is.
     pub fn open(root: impl Into<PathBuf>, exclude: &[String]) -> io::Result<Self> {
         let root = root.into();
-        Self::open_in(root.clone(), &root, exclude)
+        Self::open_in(root.clone(), &root, exclude, None)
     }
 
     /// A tree that is not where the project's `.yaca` is — a chat's worktree
     /// (`isolation`). The points are of `root` and only of it; the objects go
     /// to the project's store, which is safe to share because a name is the
     /// hash of what is under it.
+    ///
+    /// `ledger` is the file the list of points is kept in. It is read now —
+    /// a session that is reopened, or whose window was reloaded, finds the
+    /// points it had — and rewritten whenever the list grows.
     pub fn open_in(
         root: impl Into<PathBuf>,
         home: &std::path::Path,
         exclude: &[String],
+        ledger: Option<PathBuf>,
     ) -> io::Result<Self> {
         let root = root.into();
         let store = Store::open(home)?;
         let scanner = Scanner::with_excludes(root.clone(), exclude);
+        let records = match &ledger {
+            Some(path) => ledger::load(path, &store),
+            None => Vec::new(),
+        };
+        // Held by this process from the first moment, so a sweep running as
+        // the session starts cannot take what the list is about to show.
+        for record in &records {
+            gc::remember(&store, record.manifest);
+        }
         Ok(Checkpoints {
             inner: Arc::new(Inner {
                 root,
                 store,
-                state: Mutex::new(State {
-                    scanner,
-                    records: Vec::new(),
-                }),
+                ledger,
+                state: Mutex::new(State { scanner, records }),
             }),
         })
     }
@@ -208,7 +226,7 @@ impl Checkpoints {
         let inner = self.inner.clone();
         // Detached on purpose. A sweep that fails or panics costs disk space,
         // never the session.
-        tokio::task::spawn_blocking(move || gc::run(&inner.store));
+        tokio::task::spawn_blocking(move || gc::run_keeping(&inner.store, &inner.kept()));
     }
 
     /// What rolling back would touch. `None` — no such point.
@@ -282,7 +300,26 @@ impl Inner {
             summary: summary.clone(),
             manifest: hash,
         });
+        // The point exists whether or not it could be written down; the only
+        // thing lost is that a reload will not find it, and the log says so.
+        // Failing the snapshot over it would trade a missing safety net for a
+        // dead agent, the same trade `session::checkpoints::create` refuses.
+        if let Some(path) = &self.ledger {
+            if let Err(e) = ledger::save(path, &state.records) {
+                tracing::warn!(path = %path.display(), error = %e, "could not save the checkpoint list");
+            }
+        }
         Ok(Some(summary))
+    }
+
+    /// The manifests the saved lists of the project's sessions name — the
+    /// sleeping ones too — read now, at the time of a sweep and not before.
+    fn kept(&self) -> std::collections::HashSet<Hash> {
+        self.ledger
+            .as_deref()
+            .and_then(|path| path.parent())
+            .map(ledger::manifests)
+            .unwrap_or_default()
     }
 
     fn manifest_of(&self, hash: &Hash) -> io::Result<Manifest> {
@@ -397,9 +434,10 @@ mod tests {
         assert_eq!(ck.list().len(), 1, "and adds no point either");
     }
 
-    /// What survives a restart, pinned down. Content does; the list does not.
-    /// A new instance knows no earlier point, so it cannot list one or roll
-    /// back to one, and it records the same tree again as a new point.
+    /// What survives a restart for a run whose list is not saved (a one-shot
+    /// CLI run), pinned down. Content does; the list does not. A new instance
+    /// knows no earlier point, so it cannot list one or roll back to one, and
+    /// it records the same tree again as a new point.
     #[test]
     fn a_reopened_store_keeps_content_but_not_the_list() {
         let dir = TempDir::new();
@@ -418,6 +456,132 @@ mod tests {
         // The bytes are still on disk for anything that still holds the name.
         let store = Store::open(dir.path()).unwrap();
         assert!(store.has(&Store::hash(b"kept\n")));
+    }
+
+    /// The project of a session whose list is saved. The list lives in a
+    /// folder of its own beside it, as the journals do: inside the project it
+    /// would be one more file the snapshots take.
+    fn project(dir: &TempDir) -> PathBuf {
+        dir.mkdir("project")
+    }
+
+    fn persisted(dir: &TempDir) -> io::Result<Checkpoints> {
+        let ledger = ledger::path(&dir.path().join("chats"), &"ses_a".into());
+        let root = project(dir);
+        Checkpoints::open_in(root.clone(), &root, &[], Some(ledger))
+    }
+
+    #[test]
+    fn a_saved_list_comes_back_and_still_rolls_back() {
+        let dir = TempDir::new();
+        let file = dir.write("project/a.rs", "one
+");
+        let first = {
+            let ck = persisted(&dir).unwrap();
+            ck.create(CheckpointReason::Message).unwrap().unwrap()
+        };
+        tick();
+        std::fs::write(&file, "two
+").unwrap();
+
+        // The window was reloaded, or the chat was closed and opened again:
+        // a new instance over the same list.
+        let reopened = persisted(&dir).unwrap();
+        assert_eq!(reopened.list(), vec![first.clone()]);
+
+        let preview = reopened.preview(&first.id).unwrap().unwrap();
+        assert_eq!(preview.len(), 1);
+        reopened.restore(&first.id).unwrap().unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "one
+");
+    }
+
+    #[test]
+    fn a_reopened_list_does_not_repeat_the_tree_it_already_holds() {
+        let dir = TempDir::new();
+        dir.write("project/a.rs", "one
+");
+        persisted(&dir)
+            .unwrap()
+            .create(CheckpointReason::Message)
+            .unwrap()
+            .unwrap();
+
+        let reopened = persisted(&dir).unwrap();
+        tick();
+        // A reload must not add a divider that rolls back to where we are.
+        assert!(reopened.create(CheckpointReason::Message).unwrap().is_none());
+        assert_eq!(reopened.list().len(), 1);
+    }
+
+    #[test]
+    fn the_list_keeps_growing_across_reopens() {
+        let dir = TempDir::new();
+        let file = dir.write("project/a.rs", "one
+");
+        let first = persisted(&dir)
+            .unwrap()
+            .create(CheckpointReason::Message)
+            .unwrap()
+            .unwrap();
+        tick();
+        std::fs::write(&file, "two
+").unwrap();
+
+        let reopened = persisted(&dir).unwrap();
+        let second = reopened
+            .create(CheckpointReason::Message)
+            .unwrap()
+            .unwrap();
+
+        let third = persisted(&dir).unwrap();
+        let ids: Vec<_> = third.list().into_iter().map(|c| c.id).collect();
+        assert_eq!(ids, vec![first.id, second.id]);
+    }
+
+    #[test]
+    fn a_rollback_is_saved_with_the_points_it_made() {
+        let dir = TempDir::new();
+        let file = dir.write("project/a.rs", "one
+");
+        let ck = persisted(&dir).unwrap();
+        let first = ck.create(CheckpointReason::Message).unwrap().unwrap();
+        tick();
+        std::fs::write(&file, "two
+").unwrap();
+        ck.restore(&first.id).unwrap().unwrap();
+
+        let reopened = persisted(&dir).unwrap();
+        assert!(reopened
+            .list()
+            .iter()
+            .any(|c| c.reason == CheckpointReason::Rollback));
+    }
+
+    #[test]
+    fn the_sweep_is_told_about_the_points_of_every_saved_list() {
+        let dir = TempDir::new();
+        dir.write("project/a.rs", "one
+");
+        let ck = persisted(&dir).unwrap();
+        let point = ck.create(CheckpointReason::Message).unwrap().unwrap();
+        let manifest = ck.manifest_name(&point.id).unwrap();
+
+        // Another session of the project, asleep: its list is a file, and
+        // that is all that tells the sweep its snapshot is wanted.
+        let root = project(&dir);
+        let other = Checkpoints::open_in(
+            root.clone(),
+            &root,
+            &[],
+            Some(ledger::path(&dir.path().join("chats"), &"ses_b".into())),
+        )
+        .unwrap();
+        assert!(other.inner.kept().contains(&manifest));
+        assert!(
+            Checkpoints::open(project(&dir), &[]).unwrap().inner.kept().is_empty(),
+            "a run that saves nothing names nothing"
+        );
     }
 
     #[test]

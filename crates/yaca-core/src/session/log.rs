@@ -18,10 +18,10 @@ pub struct EventLog {
 }
 
 impl EventLog {
-    /// Opens `<root>/.yaca/sessions/<id>.jsonl` for appending.
-    pub fn open(root: &Path, id: &SessionId) -> std::io::Result<Self> {
-        let dir = crate::store::dir(root);
-        std::fs::create_dir_all(&dir)?;
+    /// Opens `<dir>/<id>.jsonl` for appending, `dir` being the project's
+    /// folder of journals (`store::location`).
+    pub fn open(dir: &Path, id: &SessionId) -> std::io::Result<Self> {
+        std::fs::create_dir_all(dir)?;
         let path = dir.join(format!("{id}.jsonl"));
         let file = OpenOptions::new().create(true).append(true).open(&path)?;
         Ok(EventLog {
@@ -32,6 +32,16 @@ impl EventLog {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// How many bytes the journal holds now. Every event is one whole line, so
+    /// a length read between two appends is a boundary between events.
+    pub fn len(&self) -> u64 {
+        self.file
+            .lock()
+            .ok()
+            .and_then(|file| file.metadata().ok())
+            .map_or(0, |meta| meta.len())
     }
 
     /// A write failure must not bring the turn down: the log is useful, but not critical.
@@ -50,15 +60,29 @@ impl EventLog {
 /// though not in full.
 pub fn replay(path: &Path) -> std::io::Result<Vec<AgentEvent>> {
     let text = std::fs::read_to_string(path)?;
-    Ok(text
-        .lines()
+    Ok(parse(&text))
+}
+
+/// The first `len` bytes of a journal — the events up to a boundary taken from
+/// [`EventLog::len`]. The journal is append-only, so those bytes do not change
+/// while a session keeps writing past them.
+pub fn replay_prefix(path: &Path, len: u64) -> std::io::Result<Vec<AgentEvent>> {
+    use std::io::Read;
+
+    let mut bytes = Vec::new();
+    File::open(path)?.take(len).read_to_end(&mut bytes)?;
+    Ok(parse(&String::from_utf8_lossy(&bytes)))
+}
+
+fn parse(text: &str) -> Vec<AgentEvent> {
+    text.lines()
         .filter(|l| !l.trim().is_empty())
         .filter_map(|l| {
             let mut event: AgentEvent = serde_json::from_str(l).ok()?;
             canonicalize_event(&mut event);
             Some(event)
         })
-        .collect())
+        .collect()
 }
 
 fn canonicalize_event(event: &mut AgentEvent) {
@@ -85,7 +109,7 @@ mod tests {
     use crate::testutil::TempDir;
 
     #[test]
-    fn записанное_читается_обратно() {
+    fn recorded_events_are_read_back() {
         let dir = TempDir::new();
         let id = SessionId::from("ses_test");
         let log = EventLog::open(dir.path(), &id).unwrap();
@@ -106,11 +130,36 @@ mod tests {
     }
 
     #[test]
-    fn нечитаемая_строка_не_ломает_остальные() {
+    fn a_prefix_ends_where_the_length_said_and_not_after() {
+        let dir = TempDir::new();
+        let id = SessionId::from("ses_test");
+        let log = EventLog::open(dir.path(), &id).unwrap();
+        let started = AgentEvent::TurnStarted {
+            turn_id: TurnId::from("t1"),
+            at: crate::event::TsMillis(1),
+        };
+
+        log.append(&started);
+        let boundary = log.len();
+        log.append(&AgentEvent::TurnFinished {
+            turn_id: TurnId::from("t1"),
+            stop_reason: StopReason::EndTurn,
+            at: Default::default(),
+        });
+
+        // The session wrote on after the boundary was taken; the prefix is
+        // still exactly what was there.
+        assert_eq!(replay_prefix(log.path(), boundary).unwrap(), vec![started]);
+        assert_eq!(replay(log.path()).unwrap().len(), 2);
+        assert_eq!(replay_prefix(log.path(), 0).unwrap(), vec![]);
+    }
+
+    #[test]
+    fn unreadable_line_does_not_break_the_rest() {
         let dir = TempDir::new();
         let p = dir.write(
             "s.jsonl",
-            "{\"type\":\"turnCancelled\",\"turnId\":\"t\"}\nмусор\n",
+            "{\"type\":\"turnCancelled\",\"turnId\":\"t\"}\ngarbage\n",
         );
         let back = replay(&p).unwrap();
         assert_eq!(back.len(), 1);

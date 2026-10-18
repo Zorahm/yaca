@@ -1,13 +1,14 @@
 //! The sessions of one project (§9).
 //!
-//! Everything a project keeps lives under `.yaca/` — settings, permission
-//! rules, history, the shadow repository — and this is the history. Three files
-//! per session, all of them append-only:
+//! The project keeps its settings, permission rules and shadow repository
+//! under its own `.yaca/`; its history lives in the application's chats folder
+//! instead — see [`location`] for where and why. Three files per session, all
+//! of them append-only:
 //!
 //! ```text
-//! .yaca/sessions/<id>.jsonl           the feed, event per line
-//! .yaca/sessions/<id>.messages.jsonl  the model's history, as it was sent
-//! .yaca/sessions/<id>.meta.json       the index the panel reads
+//! <chats>/<project>-<hash>/<id>.jsonl           the feed, event per line
+//! <chats>/<project>-<hash>/<id>.messages.jsonl  the model's history, as it was sent
+//! <chats>/<project>-<hash>/<id>.meta.json       the index the panel reads
 //! ```
 //!
 //! Only the third one is derived, and it is derived on purpose: an index that
@@ -23,6 +24,7 @@
 
 pub mod export;
 pub mod history;
+pub mod location;
 pub mod meta;
 pub mod recorder;
 pub mod replay;
@@ -39,22 +41,36 @@ use crate::provider::registry::ANTHROPIC_ID;
 use crate::session::log;
 
 pub use history::Record;
+pub use location::chats_dir;
 pub use meta::SessionMeta;
 pub use recorder::Recorder;
 pub use search::{Match, MatchKind, SearchHit};
 
-/// Where the sessions of a project live.
-pub fn dir(root: &Path) -> PathBuf {
-    crate::project::dir(root).join("sessions")
-}
-
 pub struct SessionStore {
+    /// The project's own folder under the chats folder, where its journals
+    /// are — not the project.
     root: PathBuf,
+    /// The project itself, whose shadow store the saved checkpoint lists are
+    /// checked against. A store made over a folder of journals alone has none.
+    project: Option<PathBuf>,
 }
 
 impl SessionStore {
-    pub fn open(root: impl Into<PathBuf>) -> Self {
-        SessionStore { root: root.into() }
+    /// The sessions `project` has under the chats folder `chats`
+    /// ([`chats_dir`] in the applications, a temporary folder in tests).
+    pub fn open(chats: &Path, project: &Path) -> Self {
+        SessionStore {
+            project: Some(project.to_path_buf()),
+            ..SessionStore::at(location::project_dir(chats, project))
+        }
+    }
+
+    /// The store over a folder of journals already located.
+    pub(crate) fn at(dir: PathBuf) -> Self {
+        SessionStore {
+            root: dir,
+            project: None,
+        }
     }
 
     /// Every session of the project, most recently touched first.
@@ -91,8 +107,16 @@ impl SessionStore {
 
     /// The feed as a reopened session may draw it — the human's side of
     /// [`SessionStore::history`]. See [`replay`] for what a replay leaves out.
+    ///
+    /// The session's saved checkpoints come with it: they are what the reopened
+    /// session will hold, so its dividers are the ones that can be rolled back
+    /// to.
     pub fn feed(&self, id: &SessionId) -> Vec<AgentEvent> {
-        replay::feed(self.events(id))
+        let held = crate::checkpoint::ledger::alive(
+            &crate::checkpoint::ledger::path(&self.root, id),
+            self.project.as_deref(),
+        );
+        replay::with_checkpoints(self.events(id), &held)
     }
 
     /// §9: rename. The new name sticks — a rebuilt index will not take it back.
@@ -103,19 +127,23 @@ impl SessionStore {
     pub fn rename(&self, id: &SessionId, title: &str) -> Result<(), CoreError> {
         let mut meta = self
             .meta(id)
-            .ok_or_else(|| CoreError::Config(format!("нет сессии {id}")))?;
+            .ok_or_else(|| CoreError::Config(format!("session {id} not found")))?;
         meta.rename(title);
         meta.save(&self.root)?;
         Ok(())
     }
 
-    /// §9: delete. All three files, and no complaint about the ones that were
+    /// §9: delete. All the files, and no complaint about the ones that were
     /// already gone — the goal was that the session not be there.
+    ///
+    /// The saved checkpoint list goes with them, which is what frees its
+    /// snapshots: the next sweep no longer finds anything that names them.
     pub fn delete(&self, id: &SessionId) -> Result<(), CoreError> {
         for path in [
             events_path(&self.root, id),
             history::MessageLog::path(&self.root, id),
             SessionMeta::path(&self.root, id),
+            crate::checkpoint::ledger::path(&self.root, id),
         ] {
             match std::fs::remove_file(&path) {
                 Ok(()) => {}
@@ -123,7 +151,35 @@ impl SessionStore {
                 Err(e) => return Err(CoreError::Io(e)),
             }
         }
+        // The drafts `ExtractMessage` left in the project: they belong to the
+        // conversation they were cut from, and nothing else reads them.
+        if let Some(drafts) = self.drafts_dir() {
+            let _ = std::fs::remove_dir_all(drafts.join(id.to_string()));
+        }
         Ok(())
+    }
+
+    /// The project's `.yaca/drafts`, where each session has a folder.
+    fn drafts_dir(&self) -> Option<PathBuf> {
+        Some(crate::project::dir(self.project.as_ref()?).join("drafts"))
+    }
+
+    /// Removes the draft folders of sessions that are gone: deleted before
+    /// drafts went with them, or deleted from another copy of the app.
+    /// A folder that does not look like a session's is left alone.
+    pub fn sweep_drafts(&self) {
+        let Some(drafts) = self.drafts_dir() else { return };
+        let Ok(entries) = std::fs::read_dir(&drafts) else { return };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !name.starts_with("ses_") {
+                continue;
+            }
+            let id = SessionId::from(name);
+            if entry.path().is_dir() && !events_path(&self.root, &id).exists() {
+                let _ = std::fs::remove_dir_all(entry.path());
+            }
+        }
     }
 
     /// §9: duplicate, optionally up to a point.
@@ -139,7 +195,7 @@ impl SessionStore {
     ) -> Result<SessionMeta, CoreError> {
         let source = self
             .meta(id)
-            .ok_or_else(|| CoreError::Config(format!("нет сессии {id}")))?;
+            .ok_or_else(|| CoreError::Config(format!("session {id} not found")))?;
 
         let mut records = self.records(id);
         let mut events = self.events(id);
@@ -175,7 +231,7 @@ impl SessionStore {
     pub fn export_markdown(&self, id: &SessionId) -> Result<String, CoreError> {
         let meta = self
             .meta(id)
-            .ok_or_else(|| CoreError::Config(format!("нет сессии {id}")))?;
+            .ok_or_else(|| CoreError::Config(format!("session {id} not found")))?;
         Ok(export::markdown(&meta, &self.records(id)))
     }
 
@@ -213,7 +269,7 @@ impl SessionStore {
 
     /// Session ids the project has journals for.
     fn ids(&self) -> Vec<SessionId> {
-        let Ok(entries) = std::fs::read_dir(dir(&self.root)) else {
+        let Ok(entries) = std::fs::read_dir(&self.root) else {
             return Vec::new();
         };
         entries
@@ -273,7 +329,7 @@ fn session_id_of(file_name: &str) -> Option<SessionId> {
 }
 
 fn events_path(root: &Path, id: &SessionId) -> PathBuf {
-    dir(root).join(format!("{id}.jsonl"))
+    root.join(format!("{id}.jsonl"))
 }
 
 /// The feed up to the end of `turn`. Cut at the same place the conversation is,
@@ -324,7 +380,7 @@ mod tests {
             let text = if index == 0 {
                 prompt.to_string()
             } else {
-                format!("{prompt} ещё раз {index}")
+                format!("{prompt} again {index}")
             };
             recorder.prompt(&turn_id, &text);
             recorder.event(&AgentEvent::UserMessage {
@@ -340,7 +396,7 @@ mod tests {
             recorder.message(
                 &turn_id,
                 &Message::assistant(vec![ContentBlock::Text {
-                    text: format!("ответ {index}"),
+                    text: format!("answer {index}"),
                 }]),
             );
             recorder.event(&AgentEvent::TurnFinished {
@@ -353,31 +409,31 @@ mod tests {
     }
 
     fn store(dir: &TempDir) -> SessionStore {
-        SessionStore::open(dir.path())
+        SessionStore::at(dir.path().to_path_buf())
     }
 
     #[test]
     fn the_list_is_newest_first() {
         let dir = TempDir::new();
-        write_session(&dir, "ses_a", "первая", &["t1"]);
-        write_session(&dir, "ses_b", "вторая", &["t1", "t2"]);
+        write_session(&dir, "ses_a", "first", &["t1"]);
+        write_session(&dir, "ses_b", "second", &["t1", "t2"]);
 
         let listed = store(&dir).list();
         assert_eq!(listed.len(), 2);
         assert_eq!(listed[0].id.as_str(), "ses_b");
-        assert_eq!(listed[0].title, "вторая");
+        assert_eq!(listed[0].title, "second");
         assert_eq!(listed[0].messages, 2);
     }
 
     #[test]
     fn the_index_can_be_deleted_and_comes_back() {
         let dir = TempDir::new();
-        let id = write_session(&dir, "ses_a", "разбор дат", &["t1"]);
+        let id = write_session(&dir, "ses_a", "date parsing", &["t1"]);
         std::fs::remove_file(SessionMeta::path(dir.path(), &id)).unwrap();
 
         // An index that cannot be thrown away is a second version of the truth.
         let meta = store(&dir).meta(&id).unwrap();
-        assert_eq!(meta.title, "разбор дат");
+        assert_eq!(meta.title, "date parsing");
         assert_eq!(meta.messages, 1);
     }
 
@@ -391,24 +447,27 @@ mod tests {
     #[test]
     fn renaming_survives_a_rebuild() {
         let dir = TempDir::new();
-        let id = write_session(&dir, "ses_a", "разбор дат", &["t1"]);
+        let id = write_session(&dir, "ses_a", "date parsing", &["t1"]);
         let s = store(&dir);
-        s.rename(&id, "Даты и пояса").unwrap();
+        s.rename(&id, "Dates and zones").unwrap();
 
-        assert_eq!(s.meta(&id).unwrap().title, "Даты и пояса");
+        assert_eq!(s.meta(&id).unwrap().title, "Dates and zones");
         // The name is the human's now; a rebuild must not take it back.
         assert!(s.meta(&id).unwrap().title_custom);
     }
 
     #[test]
-    fn deleting_takes_all_three_files() {
+    fn deleting_takes_all_the_files() {
         let dir = TempDir::new();
-        let id = write_session(&dir, "ses_a", "разбор", &["t1"]);
+        let id = write_session(&dir, "ses_a", "parsing", &["t1"]);
+        let ledger = crate::checkpoint::ledger::path(dir.path(), &id);
+        std::fs::write(&ledger, r#"{"points":[]}"#).unwrap();
         store(&dir).delete(&id).unwrap();
 
         assert!(store(&dir).list().is_empty());
         assert!(!events_path(dir.path(), &id).exists());
         assert!(!history::MessageLog::path(dir.path(), &id).exists());
+        assert!(!ledger.exists(), "its snapshots must be free to go");
         // And deleting again is not an error: it is already gone.
         store(&dir).delete(&id).unwrap();
     }
@@ -416,12 +475,12 @@ mod tests {
     #[test]
     fn duplicating_to_a_point_cuts_both_journals_at_once() {
         let dir = TempDir::new();
-        let id = write_session(&dir, "ses_a", "разбор", &["t1", "t2", "t3"]);
+        let id = write_session(&dir, "ses_a", "parsing", &["t1", "t2", "t3"]);
         let s = store(&dir);
 
         let copy = s.duplicate(&id, Some(&TurnId::from("t2"))).unwrap();
         assert_eq!(copy.forked_from.as_ref(), Some(&id));
-        assert_eq!(copy.messages, 2, "два хода, третий отрезан");
+        assert_eq!(copy.messages, 2, "two turns, third cut off");
         // The feed and the conversation must be the same length, or the copy
         // shows work its history does not remember doing.
         assert_eq!(s.history(&copy.id).len(), 4);
@@ -436,7 +495,7 @@ mod tests {
     #[test]
     fn duplicating_whole_copies_everything() {
         let dir = TempDir::new();
-        let id = write_session(&dir, "ses_a", "разбор", &["t1", "t2"]);
+        let id = write_session(&dir, "ses_a", "parsing", &["t1", "t2"]);
         let s = store(&dir);
 
         let copy = s.duplicate(&id, None).unwrap();
@@ -447,7 +506,7 @@ mod tests {
     #[test]
     fn search_finds_a_session_by_a_path_it_touched() {
         let dir = TempDir::new();
-        let id = write_session(&dir, "ses_a", "разбор", &["t1"]);
+        let id = write_session(&dir, "ses_a", "parsing", &["t1"]);
         let s = store(&dir);
         let mut meta = s.meta(&id).unwrap();
         meta.note_file("src/segments.ts");
@@ -461,13 +520,13 @@ mod tests {
     #[test]
     fn search_reaches_into_the_conversation() {
         let dir = TempDir::new();
-        write_session(&dir, "ses_a", "почему падает разбор дат", &["t1"]);
-        write_session(&dir, "ses_b", "совсем другое", &["t1"]);
+        write_session(&dir, "ses_a", "why date parsing fails", &["t1"]);
+        write_session(&dir, "ses_b", "completely different", &["t1"]);
 
-        let hits = store(&dir).search("ответ 0", 10);
-        assert_eq!(hits.len(), 2, "обе сессии так отвечали");
+        let hits = store(&dir).search("answer 0", 10);
+        assert_eq!(hits.len(), 2, "both sessions answered like this");
 
-        let one = store(&dir).search("падает", 10);
+        let one = store(&dir).search("fails", 10);
         assert_eq!(one.len(), 1);
         assert_eq!(one[0].session.id.as_str(), "ses_a");
     }
@@ -475,23 +534,23 @@ mod tests {
     #[test]
     fn an_empty_query_returns_nothing_rather_than_everything() {
         let dir = TempDir::new();
-        write_session(&dir, "ses_a", "разбор", &["t1"]);
+        write_session(&dir, "ses_a", "parsing", &["t1"]);
         assert!(store(&dir).search("   ", 10).is_empty());
     }
 
     #[test]
     fn exporting_produces_the_conversation() {
         let dir = TempDir::new();
-        let id = write_session(&dir, "ses_a", "почини разбор дат", &["t1"]);
+        let id = write_session(&dir, "ses_a", "fix date parsing", &["t1"]);
         let md = store(&dir).export_markdown(&id).unwrap();
-        assert!(md.starts_with("# почини разбор дат"));
-        assert!(md.contains("ответ 0"));
+        assert!(md.starts_with("# fix date parsing"));
+        assert!(md.contains("answer 0"));
     }
 
     #[test]
     fn a_project_without_sessions_is_an_empty_list_and_not_an_error() {
         let dir = TempDir::new();
         assert!(store(&dir).list().is_empty());
-        assert!(store(&dir).search("что угодно", 10).is_empty());
+        assert!(store(&dir).search("anything", 10).is_empty());
     }
 }

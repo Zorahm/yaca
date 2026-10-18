@@ -200,10 +200,10 @@ mod tests {
 
     #[test]
     fn two_far_apart_changes_are_two_hunks() {
-        let before: String = (1..=30).map(|i| format!("строка {i}\n")).collect();
+        let before: String = (1..=30).map(|i| format!("line {i}\n")).collect();
         let after = before
-            .replace("строка 2\n", "правка 2\n")
-            .replace("строка 25\n", "правка 25\n");
+            .replace("line 2\n", "edit 2\n")
+            .replace("line 25\n", "edit 25\n");
         let hunks = hunks(&before, &after);
         assert_eq!(hunks.len(), 2, "{hunks:?}");
         assert_eq!(hunks[0].old_start, 2);
@@ -213,7 +213,7 @@ mod tests {
     #[test]
     fn view_keeps_every_line_of_the_after_text() {
         let before = "a\nb\nc\nd\ne\nf\ng\nh\n";
-        let after = "a\nB\nc\nd\ne\nf\nG\nh\nнов\n";
+        let after = "a\nB\nc\nd\ne\nf\nG\nh\nnew\n";
         let v = view(before, after, Some(fact()));
         assert!(!v.truncated);
         assert_eq!(rebuild(&v), after);

@@ -4,11 +4,11 @@ import type { Span } from "./Span";
 
 export type DiffLine = { kind: LineKind, 
 /**
- * Номер строки до правки, считая от 1. Жёлоб слева (§6.3).
+ * Line number before edit, 1-based. Left gutter (§6.3).
  */
 oldLine: number | null, newLine: number | null, text: string, 
 /**
- * Что именно изменилось внутри строки — пословная подсветка (§6.3).
- * Диапазоны в символах, не в байтах: интерфейс режет строку по символам.
+ * What exactly changed inside the line — word-level highlighting (§6.3).
+ * Spans in characters, not in bytes: the interface slices strings by characters.
  */
 spans: Array<Span>, };

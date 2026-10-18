@@ -84,7 +84,7 @@ pub fn is_command_name(text: &str) -> bool {
 }
 
 pub fn run(root: &std::path::Path, cmd: Cmd) -> Result<()> {
-    let store = SessionStore::open(root);
+    let store = SessionStore::open(&yaca_core::store::chats_dir()?, root);
 
     match cmd {
         Cmd::Sessions => {

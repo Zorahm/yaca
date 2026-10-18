@@ -4,6 +4,8 @@ import type { CallId } from "./CallId";
 import type { CheckpointChange } from "./CheckpointChange";
 import type { CheckpointId } from "./CheckpointId";
 import type { CheckpointSummary } from "./CheckpointSummary";
+import type { ElicitationReply } from "./ElicitationReply";
+import type { ElicitationRequest } from "./ElicitationRequest";
 import type { FileDiff } from "./FileDiff";
 import type { FileFact } from "./FileFact";
 import type { FileView } from "./FileView";
@@ -60,7 +62,16 @@ parent: CallId | null, } | { "type": "toolCallProgress", callId: CallId, chunk: 
  * Поля в §15 нет; лента без него написала бы про остановленную
  * команду, что человек её отклонил, чего не было.
  */
-stopped: boolean, } | { "type": "permissionRequested", request: PermissionRequest, } | { "type": "permissionResolved", requestId: RequestId, } | { "type": "questionAsked", request: QuestionRequest, } | { "type": "questionResolved", requestId: RequestId, reply: QuestionReply | null, } | { "type": "todosUpdated", items: Array<TodoItem>, } | { "type": "titleSet", title: string, } | { "type": "textShown", path: string, 
+stopped: boolean, } | { "type": "permissionRequested", request: PermissionRequest, } | { "type": "permissionResolved", requestId: RequestId, } | { "type": "questionAsked", request: QuestionRequest, } | { "type": "questionResolved", requestId: RequestId, reply: QuestionReply | null, } | { "type": "elicitationRequested", request: ElicitationRequest, } | { "type": "elicitationResolved", requestId: RequestId, reply: ElicitationReply | null, } | { "type": "todosUpdated", items: Array<TodoItem>, } | { "type": "titleSet", title: string, } | { "type": "textShown", 
+/**
+ * The file, or for a command's output `command <id>`.
+ */
+path: string, 
+/**
+ * The command line, when what is shown is a background command's
+ * output rather than a file.
+ */
+command: string | null, 
 /**
  * The first line shown, 1-indexed.
  */
@@ -78,7 +89,7 @@ total: number, text: string, } | { "type": "planProposed", plan: string, } | { "
  * Сколько строк вытеснено из буфера. Панель говорит об этом прямо:
  * молча потерянный вывод неотличим от вывода, которого не было.
  */
-dropped: number, } | { "type": "processOutput", id: ProcessId, chunk: string, } | { "type": "checkpointCreated", checkpoint: CheckpointSummary, } | { "type": "checkpointsUpdated", checkpoints: Array<CheckpointSummary>, } | { "type": "checkpointPreviewed", id: CheckpointId, files: Array<CheckpointChange>, } | { "type": "checkpointRestored", id: CheckpointId, at: TsMillis, files: number, } | { "type": "contextCompacted", summary: string, freed: number, } | { "type": "summaryEdited", summary: string, } | { "type": "subagentUsage", callId: CallId, tokens: TokenCounts, } | { "type": "usageUpdated", usage: UsageSnapshot, } | { "type": "turnFinished", turnId: TurnId, stopReason: StopReason, 
+dropped: number, } | { "type": "processOutput", id: ProcessId, chunk: string, } | { "type": "checkpointCreated", checkpoint: CheckpointSummary, } | { "type": "checkpointsUpdated", checkpoints: Array<CheckpointSummary>, } | { "type": "checkpointPreviewed", id: CheckpointId, files: Array<CheckpointChange>, } | { "type": "checkpointRestored", id: CheckpointId, at: TsMillis, files: number, } | { "type": "contextCompacted", summary: string, freed: number, } | { "type": "summaryEdited", summary: string, } | { "type": "subagentUsage", callId: CallId, tokens: TokenCounts, } | { "type": "routeDecided", route: string | null, provider: string, model: string, matched: Array<string>, } | { "type": "usageUpdated", usage: UsageSnapshot, } | { "type": "turnFinished", turnId: TurnId, stopReason: StopReason, 
 /**
  * When the turn ended. With `TurnStarted::at` it is the turn's
  * duration, which the feed shows under the answer. Zero in a journal
@@ -88,4 +99,4 @@ at: TsMillis, } | { "type": "turnCancelled", turnId: TurnId,
 /**
  * As [`AgentEvent::TurnFinished::at`].
  */
-at: TsMillis, } | { "type": "error", code: string, message: string, retryable: boolean, } | { "type": "retryScheduled", attempt: number, of: number, delayMs: number, reason: string, } | { "type": "stateChanged", state: SessionState, };
+at: TsMillis, } | { "type": "error", code: string, message: string, retryable: boolean, } | { "type": "retryScheduled", attempt: number, of: number, delayMs: number, reason: string, } | { "type": "stateChanged", state: SessionState, } | { "type": "hookReported", plugin: string, event: string, text: string, blocked: boolean, };

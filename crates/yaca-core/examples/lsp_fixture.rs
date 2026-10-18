@@ -8,8 +8,14 @@
 //! other answer is canned, and says enough about the request to check that the
 //! client asked what it meant to.
 //!
+//! A rename is answered only at `Thing` in `struct Thing` (line 0, character
+//! 7), and renames it there and in `use Thing;` on the first line of `b.zz`
+//! beside the file. Renaming to `Moved` asks to move the file as well.
+//!
 //! Flags, for the ways a server goes wrong:
 //! * `--silent` — never publish diagnostics.
+//! * `--pull` — never publish either, but answer `textDocument/diagnostic`
+//!   (pull diagnostics) and say so in its capabilities.
 //! * `--crash-on-hover` — exit when asked for a hover, mid-session.
 //! * `--crash` — say why on standard error and exit before the handshake.
 
@@ -28,6 +34,9 @@ fn main() {
     let mut input = stdin.lock();
     // Set once the client has answered the question the server asked it.
     let mut configured = false;
+
+    // The text of every open document, for pull diagnostics.
+    let mut docs: std::collections::HashMap<String, String> = Default::default();
 
     // Messages that arrived while the server was waiting for an answer.
     let mut queued: std::collections::VecDeque<Value> = Default::default();
@@ -55,11 +64,15 @@ fn main() {
             }
             "textDocument/didOpen" => {
                 let doc = &params["textDocument"];
-                publish(&flag, doc["uri"].as_str().unwrap_or_default(), doc["text"].as_str().unwrap_or_default());
+                let uri = doc["uri"].as_str().unwrap_or_default();
+                let text = doc["text"].as_str().unwrap_or_default();
+                docs.insert(uri.to_string(), text.to_string());
+                publish(&flag, uri, text);
             }
             "textDocument/didChange" => {
                 let uri = params["textDocument"]["uri"].as_str().unwrap_or_default();
                 let text = params["contentChanges"][0]["text"].as_str().unwrap_or_default();
+                docs.insert(uri.to_string(), text.to_string());
                 publish(&flag, uri, text);
             }
             "exit" => return,
@@ -75,10 +88,21 @@ fn main() {
                     "end": { "line": line, "character": character + 1 } })
         };
         let result = match method.as_str() {
-            "initialize" => json!({
-                "capabilities": { "textDocumentSync": 1, "definitionProvider": true },
-                "serverInfo": { "name": "fixture-ls", "version": "1.0" },
-            }),
+            "initialize" => {
+                let mut capabilities = json!({ "textDocumentSync": 1, "definitionProvider": true });
+                if flag == "--pull" {
+                    capabilities["diagnosticProvider"] =
+                        json!({ "interFileDependencies": false, "workspaceDiagnostics": false });
+                }
+                json!({
+                    "capabilities": capabilities,
+                    "serverInfo": { "name": "fixture-ls", "version": "1.0" },
+                })
+            }
+            "textDocument/diagnostic" => {
+                let text = uri.as_str().and_then(|u| docs.get(u)).cloned().unwrap_or_default();
+                json!({ "kind": "full", "items": broken(&text) })
+            }
             // Always the same place; the test checks the request named the
             // right position by what hover says about it below.
             "textDocument/definition" => json!({ "uri": uri, "range": at(0, 3) }),
@@ -106,6 +130,34 @@ fn main() {
                 "location": { "uri": "file:///elsewhere/lib.rs", "range": at(9, 0) },
                 "containerName": "lib",
             }]),
+            "textDocument/prepareRename" => {
+                let position = &params["position"];
+                if position["line"] == 0 && position["character"] == 7 {
+                    json!({ "start": { "line": 0, "character": 7 }, "end": { "line": 0, "character": 12 } })
+                } else {
+                    Value::Null
+                }
+            }
+            "textDocument/rename" => {
+                let name = params["newName"].as_str().unwrap_or_default();
+                let here = uri.as_str().unwrap_or_default();
+                let sibling = here.replace("a.zz", "b.zz");
+                let span = |line: u64, from: u64, to: u64| {
+                    json!({ "start": { "line": line, "character": from },
+                            "end": { "line": line, "character": to } })
+                };
+                let mut changes = vec![
+                    json!({ "textDocument": { "uri": here, "version": null },
+                            "edits": [{ "range": span(0, 7, 12), "newText": name }] }),
+                    json!({ "textDocument": { "uri": sibling, "version": null },
+                            "edits": [{ "range": span(0, 4, 9), "newText": name }] }),
+                ];
+                if name == "Moved" {
+                    changes.push(json!({ "kind": "rename", "oldUri": here,
+                                         "newUri": here.replace("a.zz", "moved.zz") }));
+                }
+                json!({ "documentChanges": changes })
+            }
             "shutdown" => Value::Null,
             _ => Value::Null,
         };
@@ -114,10 +166,18 @@ fn main() {
 }
 
 fn publish(flag: &str, uri: &str, text: &str) {
-    if flag == "--silent" {
+    if flag == "--silent" || flag == "--pull" {
         return;
     }
-    let diagnostics: Vec<Value> = text
+    send(&json!({
+        "jsonrpc": "2.0", "method": "textDocument/publishDiagnostics",
+        "params": { "uri": uri, "diagnostics": broken(text) },
+    }));
+}
+
+/// An error on every line that says `BROKEN`.
+fn broken(text: &str) -> Vec<Value> {
+    text
         .lines()
         .enumerate()
         .filter(|(_, line)| line.contains("BROKEN"))
@@ -130,11 +190,7 @@ fn publish(flag: &str, uri: &str, text: &str) {
                 "message": "this line is BROKEN",
             })
         })
-        .collect();
-    send(&json!({
-        "jsonrpc": "2.0", "method": "textDocument/publishDiagnostics",
-        "params": { "uri": uri, "diagnostics": diagnostics },
-    }));
+        .collect()
 }
 
 fn read(input: &mut impl BufRead) -> Option<Value> {

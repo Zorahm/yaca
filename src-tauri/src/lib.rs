@@ -12,6 +12,7 @@ mod prefs;
 mod profile;
 mod project;
 mod providers;
+mod routing;
 mod settings;
 mod state;
 
@@ -21,6 +22,7 @@ use std::sync::Arc;
 use yaca_core::event::{AgentEvent, SessionState};
 use yaca_core::id::{SessionId, TurnId};
 use yaca_core::provider::registry::{self, Providers};
+use yaca_core::router::ROUTER_ID;
 use yaca_core::slash::{self, SlashCommand};
 use yaca_core::store::{SearchHit, SessionMeta, SessionStore};
 use yaca_core::{Command, Effort, Mode, SessionConfig, SessionHandle};
@@ -90,7 +92,7 @@ fn add_project(path: String) -> Result<Vec<String>, String> {
 }
 
 /// Убирает проект из списка. Папку не трогает: забыть проект — действие окна,
-/// а не правка диска, и журналы §9 остаются лежать в `.yaca`.
+/// а не правка диска, и журналы §9 остаются в папке чатов приложения.
 #[tauri::command]
 fn forget_project(path: String) -> Result<Vec<String>, String> {
     // Без `project_path`: забыть надо и тот проект, каталога которого больше
@@ -135,6 +137,26 @@ pub struct OpenedChat {
     pub lsp: Vec<yaca_core::LspServerSummary>,
 }
 
+/// A chat that kept running while the window was gone, as the reloaded window
+/// picks it up again.
+///
+/// `events` is what the chat's feed is the fold of: the journal as written, then
+/// the state that is never written down (mode and model, servers, background
+/// commands, the queue, the checkpoint list). Folded, it is the feed the window
+/// had before the reload, with a turn that is still running still running and a
+/// question that is still open still open.
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachedChat {
+    pub id: SessionId,
+    /// The project the window opened the chat in.
+    pub project: String,
+    /// The bridge this snapshot belongs to; frames of any other are not folded.
+    pub epoch: u32,
+    pub events: Vec<AgentEvent>,
+}
+
 /// С чем сессию начал бы сам проект (§10): основа для нижнего ряда §7.1 на
 /// домашнем экране.
 ///
@@ -149,6 +171,17 @@ pub struct OpenedChat {
 #[tauri::command]
 fn project_startup(path: String) -> Result<Startup, String> {
     let config = SessionConfig::open(&path).map_err(|e| e.to_string())?;
+    // The router is not in the provider list, it is made of it: a project that
+    // names it is settled against `routing.json`, or the home screen would
+    // show an error for a choice that is perfectly valid.
+    if config.provider == ROUTER_ID {
+        return Ok(Startup {
+            mode: config.mode,
+            provider: ROUTER_ID.to_string(),
+            model: routing::require()?.id,
+            effort: config.effort,
+        });
+    }
     let providers = Providers::load(&config_dir()?).map_err(|e| e.to_string())?;
     let (spec, model) = providers
         .resolve(&config.provider, &config.model)
@@ -192,7 +225,11 @@ async fn open_project(
     config.lsp_servers =
         yaca_core::lsp::config::load_global(&config_home).map_err(|e| e.to_string())?;
     config.lsp_autodetect = true;
+    config.user_skills = yaca_core::skills::user_dirs(&config_home);
+    config.user_agents = yaca_core::agents::user_dirs(&config_home);
+    config.plugins = yaca_core::plugin::PluginSources::standard(&config_home).load().enabled();
     config.mcp_approvals = Some(config_home);
+    config.journal = Some(yaca_core::store::chats_dir().map_err(|e| e.to_string())?);
     if let Some(id) = resume {
         config.resume_session(SessionId::from(id));
     }
@@ -203,22 +240,32 @@ async fn open_project(
         config.effort = startup.effort;
     }
 
-    let (spec, model) = providers
-        .resolve(&config.provider, &config.model)
-        .map_err(|e| e.to_string())?;
-    let spec = spec.clone();
+    // The small model the `Decision` tool asks, if there is one.
+    config.decision = yaca_core::router::attach::decision_setup(&config_dir()?, &providers);
 
-    // No key check here: a missing key is not a reason to refuse the chat.
-    // The request goes without it, and a provider that wants one answers with
-    // an error naming the key (§10).
+    let provider = if config.provider == ROUTER_ID {
+        // The same code the CLI runs: the session gets the router and a model
+        // list that prices each request by the model that answered.
+        yaca_core::router::attach::attach(&config_dir()?, &providers, &mut config)
+            .map_err(|e| e.to_string())?
+    } else {
+        let (spec, model) = providers
+            .resolve(&config.provider, &config.model)
+            .map_err(|e| e.to_string())?;
+        let spec = spec.clone();
 
-    config.provider = spec.id.clone();
-    config.model = model;
-    // Окно контекста и цены §7.1 считаются по моделям провайдера, а не по
-    // встроенному каталогу: у чужого провайдера они свои.
-    config.models = spec.models.clone();
+        // No key check here: a missing key is not a reason to refuse the chat.
+        // The request goes without it, and a provider that wants one answers with
+        // an error naming the key (§10).
 
-    let provider = yaca_core::provider::build(spec);
+        config.provider = spec.id.clone();
+        config.model = model;
+        // Окно контекста и цены §7.1 считаются по моделям провайдера, а не по
+        // встроенному каталогу: у чужого провайдера они свои.
+        config.models = spec.models.clone();
+
+        yaca_core::provider::build(spec)
+    };
     let handle = Arc::new(yaca_core::spawn(config, provider).map_err(|e| e.to_string())?);
 
     // Проект, в котором открыли чат, поднимается наверх списка: сайдбар
@@ -229,7 +276,7 @@ async fn open_project(
     settings.save(&dir).map_err(|e| e.to_string())?;
 
     let id = handle.id().clone();
-    state.open(handle.clone(), &app);
+    state.open(handle.clone(), path, &app);
     // Read after the bridge is listening, so a server that becomes ready in
     // between is in one of the two: this list or the next frame.
     Ok(OpenedChat {
@@ -254,25 +301,47 @@ async fn close_chat(state: State<'_, AppState>, session: String) -> Result<(), S
     Ok(())
 }
 
-/// Закрывает все чаты, о которых окно больше не помнит.
+/// Hands the chats that are still running back to a window that lost them.
 ///
-/// Вебвью перезагружается — в разработке на каждой правке фронтенда, — и
-/// сессии от прошлой жизни окна остаются в оболочке живыми: ленты у них уже
-/// нет, событий никто не ждёт, а агент продолжает работать и править файлы.
-/// Окно зовёт это на старте, до того как откроет первый чат: невидимый агент
-/// хуже прерванного.
+/// The webview reloads — Ctrl+R, a hot reload on every edit of the frontend —
+/// and the sessions do not: the turn goes on, the commands go on, a question
+/// waits for its answer. Stopping them because nobody could see them was the
+/// wrong trade: it threw away work to avoid showing it. The window calls this
+/// on start, before it opens anything, and gets each chat as a snapshot plus a
+/// bridge that carries everything after it (`AppState::rebind_all`).
 #[tauri::command]
-async fn close_all_chats(state: State<'_, AppState>) -> Result<(), String> {
-    for handle in state.close_all() {
-        let _ = handle.send(Command::Cancel).await;
+async fn attach_chats(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<AttachedChat>, String> {
+    let mut attached = Vec::new();
+    for chat in state.rebind_all(&app) {
+        // What the window was watching went with it. Left set, the core would go
+        // on sending the output of a row nobody has open.
+        let _ = chat.handle.send(Command::WatchProcess { id: None }).await;
+
+        // The journal is read from disk, and a long chat is a long file.
+        let handle = chat.handle.clone();
+        let replay = chat.replay;
+        let events = tokio::task::spawn_blocking(move || handle.replay(&replay))
+            .await
+            .map_err(|e| e.to_string())?;
+
+        attached.push(AttachedChat {
+            id: chat.handle.id().clone(),
+            project: chat.project,
+            epoch: chat.epoch,
+            events: bridge::coalesce(events),
+        });
     }
-    Ok(())
+    Ok(attached)
 }
 
 /// Хранилище сессий проекта (§9). Работает с проектом, а не с открытым чатом:
 /// журналы лежат и у проекта, в котором сейчас никто не разговаривает.
 fn store(project: &str) -> Result<SessionStore, String> {
-    Ok(SessionStore::open(project_path(project)?))
+    let chats = yaca_core::store::chats_dir().map_err(|e| e.to_string())?;
+    Ok(SessionStore::open(&chats, &project_path(project)?))
 }
 
 /// Чат, которому адресована команда.
@@ -313,11 +382,19 @@ fn rename_session(
     .map_err(|e| e.to_string())
 }
 
+/// An open chat is closed first: a deleted session that kept running would go
+/// on editing files with nobody watching it.
 #[tauri::command]
-fn delete_session(project: String, id: String) -> Result<(), String> {
-    store(&project)?
-        .delete(&SessionId::from(id))
-        .map_err(|e| e.to_string())
+async fn delete_session(
+    state: State<'_, AppState>,
+    project: String,
+    id: String,
+) -> Result<(), String> {
+    let id = SessionId::from(id);
+    if let Some(handle) = state.close(&id) {
+        let _ = handle.send(Command::Cancel).await;
+    }
+    store(&project)?.delete(&id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -357,7 +434,101 @@ fn session_feed(project: String, id: String) -> Result<Vec<AgentEvent>, String> 
 /// момент отправки, а не окно: что уехало модели, решает ядро.
 #[tauri::command]
 fn project_commands(project: String) -> Result<Vec<SlashCommand>, String> {
-    Ok(slash::load(&project_path(&project)?))
+    let mut commands = slash::load(&project_path(&project)?);
+    // After the project's: the core looks a typed name up in the same order.
+    let plugins = yaca_core::plugin::PluginSources::standard(&config_dir()?).load().enabled();
+    let taken: std::collections::HashSet<String> = commands.iter().map(|c| c.name.clone()).collect();
+    commands.extend(
+        yaca_core::plugin::commands(&plugins)
+            .into_iter()
+            .filter(|c| !taken.contains(&c.name)),
+    );
+    Ok(commands)
+}
+
+/// The skills a chat in this project sees, with what is wrong with those that
+/// did not load: for the slash menu and the settings window. Scanned on every
+/// call, like the commands, so a skill written a moment ago is there.
+#[tauri::command]
+fn project_skills(project: String) -> Result<yaca_core::skills::SkillReport, String> {
+    let config = config_dir()?;
+    let plugins = yaca_core::plugin::PluginSources::standard(&config).load().enabled();
+    Ok(yaca_core::skills::SkillRoots::new(&project_path(&project)?, yaca_core::skills::user_dirs(&config))
+        .with_plugins(&plugins)
+        .scan()
+        .report())
+}
+
+/// Every plugin found — Yaca's own and Claude Code's — with its switch and
+/// what did not load. Read on every call, like the skills.
+#[tauri::command]
+fn list_plugins() -> Result<yaca_core::plugin::PluginReport, String> {
+    Ok(yaca_core::plugin::PluginSources::standard(&config_dir()?).load().report())
+}
+
+/// Turns a plugin on or off for the chats opened after this; an open chat
+/// keeps the plugins it started with, as it keeps its MCP servers.
+#[tauri::command]
+fn set_plugin_enabled(id: String, enabled: bool) -> Result<yaca_core::plugin::PluginReport, String> {
+    let config = config_dir()?;
+    yaca_core::plugin::set_enabled(&config, &id, enabled).map_err(|e| e.to_string())?;
+    Ok(yaca_core::plugin::PluginSources::standard(&config).load().report())
+}
+
+/// Runs an installer operation off the event loop: it is git and the disk,
+/// and a clone takes as long as the network does.
+async fn installing<T: Send + 'static>(
+    work: impl FnOnce(&yaca_core::plugin::install::Installer) -> Result<T, yaca_core::error::CoreError> + Send + 'static,
+) -> Result<T, String> {
+    let config = config_dir()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        work(&yaca_core::plugin::install::Installer::standard(&config)).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn list_marketplaces() -> Result<Vec<yaca_core::plugin::install::MarketplaceSummary>, String> {
+    installing(|i| Ok(i.marketplaces())).await
+}
+
+#[tauri::command]
+async fn add_marketplace(source: String) -> Result<yaca_core::plugin::install::MarketplaceSummary, String> {
+    installing(move |i| i.add_marketplace(&source)).await
+}
+
+#[tauri::command]
+async fn remove_marketplace(name: String) -> Result<(), String> {
+    installing(move |i| i.remove_marketplace(&name)).await
+}
+
+#[tauri::command]
+async fn refresh_marketplace(name: String) -> Result<yaca_core::plugin::install::MarketplaceSummary, String> {
+    installing(move |i| i.refresh_marketplace(&name)).await
+}
+
+/// What a marketplace offers; fetches it the first time it is looked into.
+#[tauri::command]
+async fn marketplace_catalog(name: String) -> Result<Vec<yaca_core::plugin::install::CatalogEntry>, String> {
+    installing(move |i| i.catalog(&name)).await
+}
+
+/// `plugin@marketplace` from the catalog. Installed plugins are on, and reach
+/// the chats opened after this.
+#[tauri::command]
+async fn install_plugin(id: String) -> Result<yaca_core::plugin::PluginSummary, String> {
+    installing(move |i| i.install(&id)).await
+}
+
+#[tauri::command]
+async fn update_plugin(id: String) -> Result<yaca_core::plugin::install::UpdateOutcome, String> {
+    installing(move |i| i.update(&id)).await
+}
+
+#[tauri::command]
+async fn uninstall_plugin(id: String) -> Result<(), String> {
+    installing(move |i| i.uninstall(&id)).await
 }
 
 /// The shells there are to choose from on this machine (§10).
@@ -473,7 +644,7 @@ pub fn run() {
             project_startup,
             open_project,
             close_chat,
-            close_all_chats,
+            attach_chats,
             providers::providers,
             providers::save_provider,
             providers::delete_provider,
@@ -489,6 +660,17 @@ pub fn run() {
             export_session,
             session_feed,
             project_commands,
+            project_skills,
+            list_plugins,
+            set_plugin_enabled,
+            list_marketplaces,
+            add_marketplace,
+            remove_marketplace,
+            refresh_marketplace,
+            marketplace_catalog,
+            install_plugin,
+            update_plugin,
+            uninstall_plugin,
             attachment_look,
             installed_shells,
             image_full,
@@ -500,6 +682,10 @@ pub fn run() {
             providers::search_key_source,
             providers::models,
             providers::model_residency,
+            routing::routing_status,
+            routing::routing_text,
+            routing::save_routing,
+            routing::remove_routing,
             prefs::preferences,
             prefs::set_preferences,
             project::project_settings,

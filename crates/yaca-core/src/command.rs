@@ -23,7 +23,7 @@
 //! command that decides a hunk — the one way back is a checkpoint.
 //!
 //! Two more came with the queue and the mention search, both beyond §15's list:
-//! [`Command::CancelQueued`] (§7.4, the chip's `отменить`) and
+//! [`Command::CancelQueued`] (§7.4, the chip's "cancel") and
 //! [`Command::SearchFiles`] (§7.2, the `@` menu). Their answers are
 //! `QueueUpdated` and `FilesFound`, which are in the header of `event.rs`.
 //!
@@ -58,7 +58,7 @@ pub enum Command {
         attachments: Vec<String>,
     },
 
-    /// `Esc`. Unfinished tools get `отменено`.
+    /// `Esc`. Unfinished tools get "cancelled".
     Cancel,
 
     /// Mode switch in the bottom row of the composer (§7.1, §8).
@@ -76,11 +76,11 @@ pub enum Command {
     #[serde(rename_all = "camelCase")]
     PreviewCheckpoint { id: CheckpointId },
 
-    /// `Откатить сюда` (§5.8), once the human has confirmed the list.
+    /// "Rollback here" (§5.8), once the human has confirmed the list.
     #[serde(rename_all = "camelCase")]
     RestoreCheckpoint { id: CheckpointId },
 
-    /// «Сжать» (§5.11, §6.1.1). The core also does this on its own once the
+    /// "Compact" (§5.11, §6.1.1). The core also does this on its own once the
     /// context is nearly full; the button is for doing it sooner.
     Compact,
 
@@ -118,7 +118,7 @@ pub enum Command {
     #[serde(rename_all = "camelCase")]
     WatchProcess { id: Option<ProcessId> },
 
-    /// «Остановить» in the process panel (§6.5). Hits the whole tree that the
+    /// "Stop" in the process panel (§6.5). Hits the whole tree that the
     /// command has spawned.
     #[serde(rename_all = "camelCase")]
     StopProcess { id: ProcessId },
@@ -150,4 +150,26 @@ pub enum Command {
     /// the project until the declaration changes.
     #[serde(rename_all = "camelCase")]
     ApproveMcpServer { server: String },
+
+    /// The human's answer to an MCP server's form. An answer that does not
+    /// fit the form is refused with an `Error`, and the form stays open.
+    #[serde(rename_all = "camelCase")]
+    AnswerElicitation {
+        request_id: RequestId,
+        reply: crate::mcp::ElicitationReply,
+    },
+
+    /// Start the OAuth login of a remote MCP server that asked for one. The
+    /// page to open comes back in `McpUpdated` as the server's `loginUrl`.
+    #[serde(rename_all = "camelCase")]
+    LoginMcpServer { server: String },
+
+    /// Forget a remote MCP server's OAuth login.
+    #[serde(rename_all = "camelCase")]
+    LogoutMcpServer { server: String },
+
+    /// Stop a language server and start it again (the `/lsp` panel). Its
+    /// answer is `LspUpdated`. A name the session does not have is ignored.
+    #[serde(rename_all = "camelCase")]
+    RestartLspServer { server: String },
 }

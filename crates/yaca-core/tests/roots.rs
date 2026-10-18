@@ -139,13 +139,13 @@ async fn a_resumed_session_must_come_back_with_the_same_roots() {
     let provider = Arc::new(MockProvider::new(vec![]));
 
     let mut first = SessionConfig::new(project.path());
-    first.journal = true;
+    first.journal = Some(project.chats());
     first.additional_roots = vec![other.path().to_path_buf()];
     let id = yaca_core::spawn(first, provider.clone()).unwrap().id().clone();
 
     let resume = |roots: Vec<std::path::PathBuf>| {
         let mut cfg = SessionConfig::new(project.path());
-        cfg.journal = true;
+        cfg.journal = Some(project.chats());
         cfg.resume = Some(id.clone());
         cfg.additional_roots = roots;
         yaca_core::spawn(cfg, provider.clone())

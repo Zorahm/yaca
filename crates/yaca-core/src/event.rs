@@ -78,6 +78,13 @@
 //!   turn stopped first (`reply: None`). A replayed journal without it would
 //!   draw a question nobody can answer any more.
 //!
+//! Plugins add [`AgentEvent::HookReported`]: what a plugin hook said at a moment
+//! that has no row of its own — the session's start, a message from the human,
+//! the end of a turn. A hook around a call speaks in that call's row, as the
+//! project's hooks do; these three have nowhere else to stand, and a hook that
+//! keeps a message from the model, or sends a turn back to work, must not do it
+//! out of sight.
+//!
 //! The file panel (§6.4) adds one event beyond §15:
 //!
 //! * [`AgentEvent::FileViewLoaded`] — the full diff of one file with its
@@ -124,6 +131,14 @@
 //! down twice — here for the feed, and in the message log for the model — but
 //! the two carry different things, and the feed журнал is the one that has to
 //! be replayable on its own.
+//!
+//! The model router adds [`AgentEvent::RouteDecided`] beyond §15: which model
+//! answered a request, which decision matched it (`None` for the default), and
+//! the signals that were read. §15 has no event naming the model, and a router
+//! picks one per request, so the choice has to travel as an event of its own.
+//! It comes once per request, ahead of that request's text, and not for a
+//! subagent's requests, which have no feed. It is journaled and replayed: which
+//! model answered is what happened, not live status.
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -250,6 +265,21 @@ pub enum AgentEvent {
         reply: Option<QuestionReply>,
     },
 
+    /// An MCP server asks the human to fill in a form (elicitation). It stays
+    /// up until answered, declined, or the server stops waiting.
+    #[serde(rename_all = "camelCase")]
+    ElicitationRequested {
+        request: crate::mcp::ElicitationRequest,
+    },
+
+    /// The form is closed. `reply` is what the human did; `None` means the
+    /// server stopped waiting first.
+    #[serde(rename_all = "camelCase")]
+    ElicitationResolved {
+        request_id: RequestId,
+        reply: Option<crate::mcp::ElicitationReply>,
+    },
+
     /// Список задач обновляется на месте, новый блок не создаётся (§5.6).
     #[serde(rename_all = "camelCase")]
     TodosUpdated { items: Vec<TodoItem> },
@@ -264,7 +294,11 @@ pub enum AgentEvent {
     /// the path and the lines it came from above, the text below.
     #[serde(rename_all = "camelCase")]
     TextShown {
+        /// The file, or for a command's output `command <id>`.
         path: String,
+        /// The command line, when what is shown is a background command's
+        /// output rather than a file.
+        command: Option<String>,
         /// The first line shown, 1-indexed.
         first_line: u32,
         /// How many lines are shown.
@@ -400,6 +434,17 @@ pub enum AgentEvent {
     #[serde(rename_all = "camelCase")]
     SubagentUsage { call_id: CallId, tokens: TokenCounts },
 
+    /// Which model a routing provider chose for this request, and why (see the
+    /// module head). `route` is the matched decision, `None` for the default;
+    /// `matched` names the signals that were read to choose.
+    #[serde(rename_all = "camelCase")]
+    RouteDecided {
+        route: Option<String>,
+        provider: String,
+        model: String,
+        matched: Vec<String>,
+    },
+
     /// Заполнение кольца состояния, а в `usage.breakdown` — из чего занятое
     /// состоит: кольцо раскрывается в список по частям окна.
     #[serde(rename_all = "camelCase")]
@@ -447,6 +492,18 @@ pub enum AgentEvent {
     /// показывает актуальный режим (§7.1, §8).
     #[serde(rename_all = "camelCase")]
     StateChanged { state: SessionState },
+
+    /// A plugin hook spoke where there is no call row (see the module head).
+    /// `event` is Claude Code's name for the moment (`SessionStart`,
+    /// `UserPromptSubmit`, `Stop`); `blocked` says the hook stopped what was
+    /// about to happen, and `text` is its reason or its message.
+    #[serde(rename_all = "camelCase")]
+    HookReported {
+        plugin: String,
+        event: String,
+        text: String,
+        blocked: bool,
+    },
 }
 
 impl AgentEvent {
@@ -486,6 +543,8 @@ impl AgentEvent {
             AgentEvent::PermissionResolved { .. } => "permissionResolved",
             AgentEvent::QuestionAsked { .. } => "questionAsked",
             AgentEvent::QuestionResolved { .. } => "questionResolved",
+            AgentEvent::ElicitationRequested { .. } => "elicitationRequested",
+            AgentEvent::ElicitationResolved { .. } => "elicitationResolved",
             AgentEvent::TodosUpdated { .. } => "todosUpdated",
             AgentEvent::TitleSet { .. } => "titleSet",
             AgentEvent::TextShown { .. } => "textShown",
@@ -506,12 +565,14 @@ impl AgentEvent {
             AgentEvent::ContextCompacted { .. } => "contextCompacted",
             AgentEvent::SummaryEdited { .. } => "summaryEdited",
             AgentEvent::SubagentUsage { .. } => "subagentUsage",
+            AgentEvent::RouteDecided { .. } => "routeDecided",
             AgentEvent::UsageUpdated { .. } => "usageUpdated",
             AgentEvent::TurnFinished { .. } => "turnFinished",
             AgentEvent::TurnCancelled { .. } => "turnCancelled",
             AgentEvent::Error { .. } => "error",
             AgentEvent::RetryScheduled { .. } => "retryScheduled",
             AgentEvent::StateChanged { .. } => "stateChanged",
+            AgentEvent::HookReported { .. } => "hookReported",
         }
     }
 }
@@ -522,6 +583,13 @@ impl AgentEvent {
 pub struct EventSink {
     tx: tokio::sync::broadcast::Sender<AgentEvent>,
     journal: Option<Journal>,
+    /// Held while an event is written down and sent, so the two happen as one.
+    /// Every clone of the sink shares it, whatever it journals.
+    ///
+    /// That is what lets a late subscriber ([`EventSink::attach`]) stand at a
+    /// point in the stream: everything before it is in the journal, everything
+    /// after it comes down the channel, and nothing is in both or in neither.
+    gate: std::sync::Arc<std::sync::Mutex<()>>,
 }
 
 /// What a sink shows an event to before sending it on.
@@ -529,7 +597,11 @@ type Journal = std::sync::Arc<dyn Fn(&AgentEvent) + Send + Sync>;
 
 impl EventSink {
     pub fn new(tx: tokio::sync::broadcast::Sender<AgentEvent>) -> Self {
-        EventSink { tx, journal: None }
+        EventSink {
+            tx,
+            journal: None,
+            gate: Default::default(),
+        }
     }
 
     /// The same channel, with every event written down on the way out.
@@ -541,14 +613,35 @@ impl EventSink {
         EventSink {
             tx: self.tx.clone(),
             journal: Some(std::sync::Arc::new(journal)),
+            gate: self.gate.clone(),
         }
     }
 
     pub fn emit(&self, event: AgentEvent) {
+        self.emit_after(event, |_| {});
+    }
+
+    /// [`EventSink::emit`], with `before` shown the event first: the session's
+    /// own journal, for the sink that does not carry one.
+    pub fn emit_after(&self, event: AgentEvent, before: impl FnOnce(&AgentEvent)) {
+        // A panic elsewhere must not stop the stream: the guard protects
+        // nothing but the order of two steps.
+        let _held = self.gate.lock().unwrap_or_else(|e| e.into_inner());
+        before(&event);
         if let Some(journal) = &self.journal {
             journal(&event);
         }
         let _ = self.tx.send(event);
+    }
+
+    /// A subscriber standing at this very point in the stream. `at` runs while
+    /// no event is being written or sent, and returns where the journal ends
+    /// (what [`Recorder::journal_len`](crate::store::Recorder::journal_len)
+    /// says); the receiver gets every event after it.
+    pub fn attach<T>(&self, at: impl FnOnce() -> T) -> (tokio::sync::broadcast::Receiver<AgentEvent>, T) {
+        let _held = self.gate.lock().unwrap_or_else(|e| e.into_inner());
+        let mark = at();
+        (self.tx.subscribe(), mark)
     }
 }
 
@@ -650,3 +743,73 @@ pub struct SessionState {
     #[ts(optional)]
     pub isolation: Option<crate::isolation::Isolation>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    fn numbered(n: u64) -> AgentEvent {
+        AgentEvent::TurnStarted {
+            turn_id: crate::id::TurnId::from(n.to_string().as_str()),
+            at: TsMillis(n),
+        }
+    }
+
+    fn number(event: &AgentEvent) -> u64 {
+        match event {
+            AgentEvent::TurnStarted { at, .. } => at.0,
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// The property a reload depends on: a subscriber that stands in the stream
+    /// is handed the journal up to its place and the channel after it, so the
+    /// two together are the stream — every event once, in order.
+    ///
+    /// The journal here is slow after it has recorded, which is the gap an
+    /// attach would otherwise fall into: written down, not yet sent.
+    #[test]
+    fn a_subscriber_standing_in_the_stream_sees_each_event_exactly_once() {
+        const EVENTS: u64 = 300;
+
+        let (tx, _keep) = tokio::sync::broadcast::channel(1024);
+        let written: Arc<Mutex<Vec<u64>>> = Arc::default();
+        let log = written.clone();
+        let sink = EventSink::new(tx).journaled(move |event| {
+            log.lock().unwrap().push(number(event));
+            std::thread::sleep(Duration::from_micros(300));
+        });
+
+        let emitter = {
+            let sink = sink.clone();
+            std::thread::spawn(move || {
+                for n in 0..EVENTS {
+                    sink.emit(numbered(n));
+                }
+            })
+        };
+
+        let mut stands = Vec::new();
+        while !emitter.is_finished() {
+            let log = written.clone();
+            let (events, before) = sink.attach(|| log.lock().unwrap().len());
+            stands.push((events, before));
+            std::thread::sleep(Duration::from_micros(100));
+        }
+        emitter.join().unwrap();
+
+        assert!(stands.len() > 10, "too few attaches to mean anything");
+        let journal = written.lock().unwrap().clone();
+        for (mut events, before) in stands {
+            let mut seen: Vec<u64> = journal[..before].to_vec();
+            while let Ok(event) = events.try_recv() {
+                seen.push(number(&event));
+            }
+            let all: Vec<u64> = (0..EVENTS).collect();
+            assert_eq!(seen, all, "attached after {before} journaled events");
+        }
+    }
+}
+

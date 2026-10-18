@@ -42,7 +42,7 @@ pub(crate) fn locate(
 ) -> Result<(u32, u32), String> {
     let lines: Vec<&str> = text.lines().collect();
     if line == 0 || line > lines.len() {
-        return Err(format!("в файле {} строк, запрошена строка {line}", lines.len()));
+        return Err(format!("file has {} lines, line {line} was requested", lines.len()));
     }
     let content = lines[line - 1];
 
@@ -57,7 +57,7 @@ pub(crate) fn locate(
 fn stand_on(content: &str, symbol: &str, line: usize) -> Result<usize, String> {
     let hits: Vec<usize> = content.match_indices(symbol).map(|(byte, _)| byte).collect();
     if hits.is_empty() {
-        return Err(format!("в строке {line} нет «{symbol}»: {}", content.trim()));
+        return Err(format!("line {line} does not contain \"{symbol}\": {}", content.trim()));
     }
     // A whole word is what is meant when the text is a name: `id` in
     // `valid(id)`, not the end of `valid`.
@@ -78,8 +78,8 @@ fn stand_on(content: &str, symbol: &str, line: usize) -> Result<usize, String> {
             .map(|&at| (content[..at].chars().count() + 1).to_string())
             .collect();
         return Err(format!(
-            "«{symbol}» встречается в строке {line} несколько раз (колонки {}): \
-             возьми более длинный фрагмент или задай column",
+            "\"{symbol}\" occurs in line {line} multiple times (columns {}): \
+             use a longer fragment or specify column",
             columns.join(", ")
         ));
     }
@@ -179,7 +179,7 @@ pub(crate) fn render_places(
         out.push('\n');
     }
     if places.len() > cap {
-        let _ = writeln!(out, "[показаны первые {cap} из {}]", places.len());
+        let _ = writeln!(out, "[showing first {cap} of {}]", places.len());
     }
     out
 }
@@ -252,7 +252,7 @@ pub(crate) fn render_outline(answer: &Value, cap: usize) -> (String, usize) {
         walk(list, 0, &mut out, &mut shown, cap, &mut total);
     }
     if total > shown {
-        let _ = writeln!(out, "[показаны первые {shown} из {total}]");
+        let _ = writeln!(out, "[showing first {shown} of {total}]");
     }
     (out, total)
 }
@@ -289,7 +289,7 @@ pub(crate) fn render_found(
         out.push('\n');
     }
     if list.len() > cap {
-        let _ = writeln!(out, "[показаны первые {cap} из {}]", list.len());
+        let _ = writeln!(out, "[showing first {cap} of {}]", list.len());
     }
     (out, list.len())
 }
@@ -362,7 +362,7 @@ mod tests {
 
     use super::*;
 
-    const SRC: &str = "fn main() {\n    let id = valid(id);\n    ёж(x, x)\n}\n";
+    const SRC: &str = "fn main() {\n    let id = valid(id);\n    call(x, x)\n}\n";
 
     #[test]
     fn a_symbol_is_found_by_its_text_and_counted_from_zero() {
@@ -377,30 +377,30 @@ mod tests {
         // `id` is also inside `valid`'s neighbour text; the standalone ones are
         // `id` after `let` and `id` in the call: two, so it is ambiguous...
         let err = locate(SRC, 2, Some("id"), None).unwrap_err();
-        assert!(err.contains("несколько раз"), "{err}");
+        assert!(err.contains("multiple times"), "{err}");
         // ...but `valid(id` is one place.
         assert_eq!(locate(SRC, 2, Some("valid(id"), None), Ok((1, 13)));
     }
 
     #[test]
     fn the_column_counts_utf16_units_not_characters() {
-        // `😀` is two units, `ё` one: the text after them starts later in
+        // `😀` is two units, `é` one: the text after them starts later in
         // units than in characters.
-        let text = "😀ёx = 1\n";
+        let text = "😀éx = 1\n";
         assert_eq!(locate(text, 1, Some("x"), None), Ok((0, 3)));
     }
 
     #[test]
     fn a_line_outside_the_file_says_how_long_the_file_is() {
         let err = locate(SRC, 9, None, None).unwrap_err();
-        assert!(err.contains("4 строк"), "{err}");
+        assert!(err.contains("4 lines"), "{err}");
         assert!(locate(SRC, 0, None, None).is_err());
     }
 
     #[test]
     fn a_missing_symbol_shows_the_line_it_was_looked_for_in() {
         let err = locate(SRC, 3, Some("zzz"), None).unwrap_err();
-        assert!(err.contains("ёж(x, x)"), "{err}");
+        assert!(err.contains("call(x, x)"), "{err}");
     }
 
     #[test]
@@ -442,7 +442,7 @@ mod tests {
         let (text, total) = render_outline(&answer, 2);
         assert_eq!(total, 3);
         assert!(text.starts_with("struct Foo  :1\n  method bar  :3\n"), "{text}");
-        assert!(text.contains("показаны первые 2 из 3"));
+        assert!(text.contains("showing first 2 of 3"));
     }
 
     #[test]

@@ -89,13 +89,18 @@ impl Policy {
             (ActionClass::Edit, _) => Verdict::Allow,
 
             // Commands are asked about in every mode, Auto included: a command
-            // can do anything, and the matrix says so explicitly.
+            // can do anything, and the matrix says so explicitly. In Auto a
+            // reviewer model reads the call first (`permission::review`) and may
+            // answer for the human; this table stays the question's source.
             (ActionClass::Command, _) => Verdict::Ask,
 
             (ActionClass::Destructive, TrustMode::Auto) => Verdict::Allow,
             (ActionClass::Destructive, _) => Verdict::Ask,
 
-            (ActionClass::Reach, TrustMode::Auto) => Verdict::Allow,
+            // The network and writes through MCP are asked about in every mode
+            // too, and in Auto the reviewer answers for the human here as well:
+            // unlike a deletion, nothing in the core can undo what left the machine
+            // or changed in someone else's service, so a model reads it first.
             (ActionClass::Reach, _) => Verdict::Ask,
         }
     }
@@ -125,9 +130,10 @@ mod tests {
             (DeleteFile, [Ask, Allow, Ask]),
             (MoveFile, [Ask, Allow, Ask]),
             (RunCommand, [Ask, Ask, Ask]),
-            (FetchUrl, [Ask, Allow, Ask]),
-            (McpWrite, [Ask, Allow, Ask]),
-            // An edit is written at once, and «Ручной» is the only mode that asks
+            // Asked in Auto as well: there the reviewer model answers (§8).
+            (FetchUrl, [Ask, Ask, Ask]),
+            (McpWrite, [Ask, Ask, Ask]),
+            // An edit is written at once, and "Manual" is the only mode that asks
             // about it. This is the one confirmation itself (§16.37).
             (EditFile, [Ask, Allow, Allow]),
         ];

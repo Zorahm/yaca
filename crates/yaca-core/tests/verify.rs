@@ -57,7 +57,7 @@ fn result_of(provider: &MockProvider, id: &str) -> String {
     let sent = provider.seen.lock().unwrap().last().unwrap().clone();
     sent.messages
         .last()
-        .expect("запрос без сообщений")
+        .expect("request without messages")
         .content
         .iter()
         .find_map(|block| match block {
@@ -91,7 +91,7 @@ fn write_one_file(id: &str, path: &str) -> Vec<Turn> {
             "Write",
             json!({ "path": path, "content": "fn main() {}\n" }),
         )])),
-        Turn::Events(script_text("готово")),
+        Turn::Events(script_text("done")),
     ]
 }
 
@@ -103,12 +103,12 @@ async fn a_passing_check_is_reported_to_the_model_and_the_feed() {
     let handle = session(&dir, provider.clone(), Mode::Auto);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "создай файл").await;
+    ask(&handle, "create file").await;
     let seen = until_within(&mut rx, LIMIT, is_turn_over).await;
 
     let model = result_of(&provider, "w1");
     assert!(model.contains("[verify] `echo checked` passed."), "{model}");
-    assert!(feed_of(&seen, "w1").contains("без ошибок"), "{seen:?}");
+    assert!(feed_of(&seen, "w1").contains("passed"), "{seen:?}");
 }
 
 #[tokio::test]
@@ -119,7 +119,7 @@ async fn a_failing_check_hands_its_output_to_the_model() {
     let handle = session(&dir, provider.clone(), Mode::Auto);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "создай файл").await;
+    ask(&handle, "create file").await;
     let seen = until_within(&mut rx, LIMIT, is_turn_over).await;
 
     let model = result_of(&provider, "w1");
@@ -127,7 +127,7 @@ async fn a_failing_check_hands_its_output_to_the_model() {
     assert!(model.contains("error-here"), "{model}");
 
     let feed = feed_of(&seen, "w1");
-    assert!(feed.contains("завершилась кодом 1"), "{feed}");
+    assert!(feed.contains("finished with exit code 1"), "{feed}");
     assert!(feed.contains("error-here"), "{feed}");
 }
 
@@ -140,7 +140,7 @@ async fn a_check_that_overruns_is_stopped_and_reported_as_timed_out() {
     let mut rx = handle.subscribe();
 
     let started = std::time::Instant::now();
-    ask(&handle, "создай файл").await;
+    ask(&handle, "create file").await;
     let seen = until_within(&mut rx, LIMIT, is_turn_over).await;
 
     // The sleep is twenty seconds; the check gave up at one and took its
@@ -156,7 +156,7 @@ async fn a_check_that_overruns_is_stopped_and_reported_as_timed_out() {
     );
 
     let feed = feed_of(&seen, "w1");
-    assert!(feed.contains("не уложилась в 1 с"), "{feed}");
+    assert!(feed.contains("timed out after 1s"), "{feed}");
 }
 
 #[tokio::test]
@@ -168,12 +168,12 @@ async fn a_batch_of_changes_is_checked_once_and_the_outcome_goes_on_the_last_one
             ("w1", "Write", json!({ "path": "a.rs", "content": "a\n" })),
             ("w2", "Write", json!({ "path": "b.rs", "content": "b\n" })),
         ])),
-        Turn::Events(script_text("готово")),
+        Turn::Events(script_text("done")),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Auto);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "создай два файла").await;
+    ask(&handle, "create two files").await;
     until_within(&mut rx, LIMIT, is_turn_over).await;
 
     let runs = std::fs::read_to_string(dir.path().join("runs.txt")).unwrap();
@@ -191,12 +191,12 @@ async fn a_batch_that_changed_nothing_is_not_checked() {
     configure(&dir, json!({ "command": count_runs() }));
     let provider = Arc::new(MockProvider::new(vec![
         Turn::Events(calls(&[("r1", "Read", json!({ "path": "a.rs" }))])),
-        Turn::Events(script_text("прочитал")),
+        Turn::Events(script_text("read")),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Auto);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "посмотри файл").await;
+    ask(&handle, "view file").await;
     until_within(&mut rx, LIMIT, is_turn_over).await;
 
     assert!(
@@ -215,11 +215,11 @@ async fn without_the_setting_an_edit_is_not_checked() {
     let handle = session(&dir, provider.clone(), Mode::Auto);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "создай файл").await;
+    ask(&handle, "create file").await;
     let seen = until_within(&mut rx, LIMIT, is_turn_over).await;
 
     let model = result_of(&provider, "w1");
     assert!(!model.contains("[verify]"), "{model}");
-    assert!(!feed_of(&seen, "w1").contains("Проверка"), "{seen:?}");
+    assert!(!feed_of(&seen, "w1").contains("Check"), "{seen:?}");
     assert!(dir.path().join("a.rs").exists());
 }

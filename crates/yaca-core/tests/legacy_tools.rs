@@ -2,8 +2,8 @@
 //!
 //! Specifically:
 //! 1. Standing permission rules in `.yaca/settings.json` naming old tools (e.g. `delete_file`, `bash`).
-//! 2. Recorded session feed journals in `.yaca/sessions/<id>.jsonl` with old tool names.
-//! 3. Recorded session history journals in `.yaca/sessions/<id>.messages.jsonl` with old tool names.
+//! 2. Recorded session feed journals (`<id>.jsonl`) with old tool names.
+//! 3. Recorded session history journals (`<id>.messages.jsonl`) with old tool names.
 
 mod common;
 
@@ -14,7 +14,6 @@ use yaca_core::id::{CallId, RequestId, SessionId, TurnId};
 use yaca_core::message::ContentBlock;
 use yaca_core::permission::{PermissionKind, PermissionRequest, ScopeKey};
 use yaca_core::provider::mock::{script_text, MockProvider, Turn};
-use yaca_core::store::SessionStore;
 use yaca_core::{Mode, SessionConfig, Settings};
 
 use common::{ask, calls, is_turn_over, until, TempProject};
@@ -80,7 +79,7 @@ async fn session_honors_old_tool_name_standing_permission_rule() {
 
     let mut cfg = SessionConfig::new(dir.path());
     cfg.mode = Mode::Manual;
-    cfg.journal = false;
+    cfg.journal = None;
     let handle = yaca_core::spawn(cfg, provider).unwrap();
     let mut rx = handle.subscribe();
 
@@ -106,7 +105,7 @@ fn session_store_replays_events_with_canonical_tool_names() {
     let turn = TurnId::new();
 
     // Write a .jsonl with old tool names in ToolCallStarted and PermissionRequested
-    let jsonl_path = format!(".yaca/sessions/{id}.jsonl");
+    let jsonl_path = format!("{id}.jsonl");
     let event1 = AgentEvent::ToolCallStarted {
         turn_id: turn.clone(),
         call_id: CallId::from("c1"),
@@ -137,7 +136,7 @@ fn session_store_replays_events_with_canonical_tool_names() {
         },
     };
 
-    dir.write(
+    dir.write_journal(
         &jsonl_path,
         &format!(
             "{}\n{}\n",
@@ -146,7 +145,7 @@ fn session_store_replays_events_with_canonical_tool_names() {
         ),
     );
 
-    let store = SessionStore::open(dir.path());
+    let store = dir.store();
     let events = store.events(&id);
 
     assert_eq!(events.len(), 2);
@@ -178,7 +177,7 @@ fn session_store_replays_messages_with_canonical_tool_names() {
     let turn = TurnId::new();
 
     // Write a .messages.jsonl containing old tool names
-    let messages_path = format!(".yaca/sessions/{id}.messages.jsonl");
+    let messages_path = format!("{id}.messages.jsonl");
     let record = serde_json::json!({
         "kind": "message",
         "turn": turn,
@@ -195,9 +194,9 @@ fn session_store_replays_messages_with_canonical_tool_names() {
         }
     });
 
-    dir.write(&messages_path, &format!("{}\n", record));
+    dir.write_journal(&messages_path, &format!("{}\n", record));
 
-    let store = SessionStore::open(dir.path());
+    let store = dir.store();
     let history = store.history(&id);
 
     assert_eq!(history.len(), 1);

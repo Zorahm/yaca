@@ -18,6 +18,12 @@ export const BUILTIN_PROVIDER_ID = "anthropic";
 export const OPENAI_PROVIDER_ID = "openai";
 
 /**
+ * `registry::DECISION_ID`: where the router's small model lives. An address to
+ * be filled in with a local or a cloud server, not a service of its own.
+ */
+export const DECISION_PROVIDER_ID = "decision";
+
+/**
  * `registry::presets`: the providers Yaca ships with, in the core's order.
  *
  * The window never builds its list from this — the list comes from the core.
@@ -29,6 +35,8 @@ export const PRESETS: ReadonlyArray<{
   displayName: string;
   protocol: Protocol;
   baseUrl: string;
+  /** `registry::presets::Preset::keyless`: written down with `authorization` emptied. */
+  keyless?: boolean;
 }> = [
   {
     id: OPENAI_PROVIDER_ID,
@@ -65,6 +73,13 @@ export const PRESETS: ReadonlyArray<{
     displayName: "z.ai (coding plan)",
     protocol: "openai",
     baseUrl: "https://api.z.ai/api/coding/paas/v4",
+  },
+  {
+    id: DECISION_PROVIDER_ID,
+    displayName: "Decision",
+    protocol: "openai",
+    baseUrl: "http://localhost:11434",
+    keyless: true,
   },
 ];
 

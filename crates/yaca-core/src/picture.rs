@@ -57,15 +57,15 @@ pub struct Picture {
 
 #[derive(Debug, thiserror::Error)]
 pub enum PictureError {
-    #[error("не прочитать файл: {0}")]
+    #[error("failed to read file: {0}")]
     Io(#[from] std::io::Error),
-    #[error("файл больше {} МБ", MAX_FILE_BYTES / 1024 / 1024)]
+    #[error("file is larger than {} MB", MAX_FILE_BYTES / 1024 / 1024)]
     TooLarge,
-    #[error("это не изображение в формате PNG, JPEG, GIF, WebP или BMP")]
+    #[error("not an image in PNG, JPEG, GIF, WebP or BMP format")]
     NotAPicture,
-    #[error("изображение слишком велико: {0}×{1}")]
+    #[error("image is too large: {0}x{1}")]
     TooManyPixels(u32, u32),
-    #[error("изображение не разобрать: {0}")]
+    #[error("failed to decode image: {0}")]
     Broken(String),
 }
 

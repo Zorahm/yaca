@@ -21,6 +21,7 @@ mod cmdline;
 pub mod invariant;
 pub mod policy;
 pub mod readonly;
+pub mod review;
 pub mod unsaved;
 
 use std::path::{Path, PathBuf};
@@ -66,7 +67,8 @@ impl PermissionKind {
 pub enum ActionClass {
     /// Deletion, moving.
     Destructive,
-    /// Running commands. Asked in every mode, including Auto.
+    /// Running commands. Asked in every mode, including Auto, where a
+    /// reviewer model (`review`) may answer first.
     Command,
     /// Network, writing through MCP.
     Reach,
@@ -274,7 +276,7 @@ pub struct PermissionRequest {
     /// The feed names what will not come back.
     #[serde(default)]
     pub unsaved: Option<Unsaved>,
-    /// The MCP server the call goes to (§5.7: "изменить данные в Asana"). The
+    /// The MCP server the call goes to (§5.7: "modify data in Asana"). The
     /// feed names it in the question. `default` for the same reason as `files`.
     #[serde(default)]
     pub server: Option<String>,

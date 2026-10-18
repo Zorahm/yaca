@@ -28,7 +28,7 @@ fn recorded(
 ) -> SessionHandle {
     let mut config = SessionConfig::new(dir.path());
     config.mode = mode;
-    config.journal = true;
+    config.journal = Some(dir.chats());
     config.resume = resume;
     yaca_core::spawn(config, provider).unwrap()
 }
@@ -172,7 +172,7 @@ async fn a_session_recorded_before_prefixes_were_tracked_drops_its_thinking() {
         // A journal written by an older build: messages, no prefix records.
         // What it was sent under is unknown, and a 400 ends the session where
         // lost reasoning does not.
-        let log = MessageLog::open(dir.path(), &id).unwrap();
+        let log = MessageLog::open(&dir.journals(), &id).unwrap();
         log.append(&Record::Prompt {
             turn: turn_id.clone(),
             text: "old question".into(),

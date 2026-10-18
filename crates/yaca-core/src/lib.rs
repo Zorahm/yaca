@@ -15,13 +15,14 @@
 //! reaches disk and before every permitted command, and a rollback that names
 //! the files it will touch before it touches them.
 //!
-//! Storage is in too (§9): three append-only files per session under
-//! `.yaca/sessions`, a rebuildable index behind the panel, search over the
+//! Storage is in too (§9): three append-only files per session in the
+//! application's chats folder (`store::location`), a rebuildable index behind the panel, search over the
 //! conversation and over the paths a session changed, and a session that
 //! reopens with the history the model actually had. Alongside it,
 //! `.yaca/settings.json` (§10), provider keys in the system keychain, and
 //! history compaction with a summary the human can rewrite (§5.11).
 
+pub mod agents;
 pub mod change;
 pub mod checkpoint;
 pub mod command;
@@ -39,13 +40,16 @@ pub mod message;
 pub mod permission;
 pub mod pending;
 pub mod picture;
+pub mod plugin;
 pub mod process;
 pub mod project;
 pub mod provider;
 pub mod question;
+pub mod router;
 pub mod secrets;
 pub mod session;
 pub mod settings;
+pub mod skills;
 pub mod slash;
 pub mod store;
 pub mod tool;
@@ -73,7 +77,7 @@ pub use permission::{PermissionAnswer, PermissionKind, PermissionRequest, ScopeK
 pub use process::shell::ShellChoice;
 pub use process::{ProcessId, ProcessState, ProcessSummary};
 pub use provider::registry::{Protocol, ProviderSpec, Providers};
-pub use session::{spawn, SessionConfig, SessionHandle};
+pub use session::{spawn, Attach, Replay, SessionConfig, SessionHandle};
 pub use settings::Settings;
 pub use slash::SlashCommand;
 pub use store::{SearchHit, SessionMeta, SessionStore};

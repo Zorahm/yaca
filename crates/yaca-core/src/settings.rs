@@ -76,7 +76,7 @@ pub struct Settings {
     pub mcp_servers: BTreeMap<String, McpServerSettings>,
 }
 
-/// `"hooks": { "preToolUse": [...], "postToolUse": [...] }` in
+/// `"hooks": { "preToolUse": [...], "postToolUse": [...], "stop": [...] }` in
 /// `.yaca/settings.json`.
 ///
 /// Trust is the same as for `verify`: the human wrote the command in the file
@@ -93,6 +93,52 @@ pub struct HooksSettings {
     /// Run after a call has run. Its output is added to what the model reads as
     /// the result, and a failure is a note on the call, not a failure of it.
     pub post_tool_use: Vec<HookSettings>,
+    /// Run when the session opens. What they print is standing context for
+    /// the model, in the system prompt; a failure is a line in the feed.
+    pub session_start: Vec<EventHookSettings>,
+    /// Run before each message of the human's reaches the model. Exit code 0
+    /// lets it through, with what they print added to it; anything else keeps
+    /// it from the model, and the human sees why.
+    pub user_prompt_submit: Vec<EventHookSettings>,
+    /// Run when the model is done with a turn. Exit code 0 lets the turn end;
+    /// a non-zero exit sends the model back to work with the hook's output,
+    /// a few times at most. A hook that cannot run is only a note: the model
+    /// could do nothing about it.
+    pub stop: Vec<EventHookSettings>,
+    /// The same for a subagent about to hand in its report.
+    pub subagent_stop: Vec<EventHookSettings>,
+    /// Run before history is compacted. Informational: a failure is a note.
+    pub pre_compact: Vec<EventHookSettings>,
+    /// Run when the session closes. Informational.
+    pub session_end: Vec<EventHookSettings>,
+    /// Run when Yaca starts waiting for the human: a permission question, a
+    /// question from the agent, a form from an MCP server. Informational, and
+    /// not waited for: a notifier must not delay the question it announces.
+    pub notification: Vec<EventHookSettings>,
+}
+
+/// One hook of an event that is not about a tool call, so it has no `match`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct EventHookSettings {
+    /// The command line, run through the shell Bash uses, with
+    /// `YACA_HOOK_EVENT` and `YACA_PROJECT_ROOT` in its environment and a JSON
+    /// description of the event on its standard input.
+    pub command: String,
+    /// Seconds before the command is stopped. Absent means
+    /// [`HookSettings::DEFAULT_TIMEOUT_SECS`].
+    pub timeout_secs: Option<u64>,
+}
+
+impl EventHookSettings {
+    pub fn command(&self) -> &str {
+        self.command.trim()
+    }
+
+    pub fn timeout(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(self.timeout_secs.unwrap_or(HookSettings::DEFAULT_TIMEOUT_SECS))
+    }
 }
 
 /// One entry of a hook list. Both keys are required: an entry without a
@@ -159,24 +205,50 @@ impl HooksSettings {
                 if hook.matcher != "*" && !known_name {
                     let known = registry.names().collect::<Vec<_>>().join(", ");
                     return Err(format!(
-                        "{here}.match: «{}» — нет такого инструмента; допустимы * или одно из имён: {known}",
+                        "{here}.match: \"{}\" - no such tool; allowed: * or one of names: {known}",
                         hook.matcher
                     ));
                 }
                 if hook.command().is_empty() {
-                    return Err(format!("{here}.command пуст: задайте команду или уберите запись"));
+                    return Err(format!("{here}.command is empty: specify a command or remove the entry"));
                 }
-                if let Some(secs) = hook.timeout_secs {
-                    if !(1..=HookSettings::MAX_TIMEOUT_SECS).contains(&secs) {
-                        return Err(format!(
-                            "{here}.timeoutSecs должен быть от 1 до {} с, а не {secs}",
-                            HookSettings::MAX_TIMEOUT_SECS
-                        ));
-                    }
+                check_timeout(&here, hook.timeout_secs)?;
+            }
+        }
+        for (event, list) in self.events() {
+            for (at, hook) in list.iter().enumerate() {
+                let here = format!("hooks.{event}[{at}]");
+                if hook.command().is_empty() {
+                    return Err(format!("{here}.command is empty: specify a command or remove the entry"));
                 }
+                check_timeout(&here, hook.timeout_secs)?;
             }
         }
         Ok(())
+    }
+
+    /// The lists of the events that are not about a tool call, by the name
+    /// they have in the file.
+    pub fn events(&self) -> [(&'static str, &Vec<EventHookSettings>); 7] {
+        [
+            ("sessionStart", &self.session_start),
+            ("userPromptSubmit", &self.user_prompt_submit),
+            ("stop", &self.stop),
+            ("subagentStop", &self.subagent_stop),
+            ("preCompact", &self.pre_compact),
+            ("sessionEnd", &self.session_end),
+            ("notification", &self.notification),
+        ]
+    }
+}
+
+fn check_timeout(here: &str, secs: Option<u64>) -> Result<(), String> {
+    match secs {
+        Some(secs) if !(1..=HookSettings::MAX_TIMEOUT_SECS).contains(&secs) => Err(format!(
+            "{here}.timeoutSecs must be between 1 and {} s, got {secs}",
+            HookSettings::MAX_TIMEOUT_SECS
+        )),
+        _ => Ok(()),
     }
 }
 
@@ -229,12 +301,12 @@ impl VerifySettings {
     /// fail that edit, far from the line that caused it.
     fn validate(&self) -> Result<(), String> {
         if self.command().is_empty() {
-            return Err("verify.command пуст: задайте команду или уберите verify целиком".into());
+            return Err("verify.command is empty: specify a command or remove verify entirely".into());
         }
         if let Some(secs) = self.timeout_secs {
             if !(1..=Self::MAX_TIMEOUT_SECS).contains(&secs) {
                 return Err(format!(
-                    "verify.timeoutSecs должен быть от 1 до {} с, а не {secs}",
+                    "verify.timeoutSecs must be between 1 and {} s, got {secs}",
                     Self::MAX_TIMEOUT_SECS
                 ));
             }
@@ -242,7 +314,7 @@ impl VerifySettings {
         if let Some(cwd) = &self.cwd {
             if !is_project_relative(cwd) {
                 return Err(format!(
-                    "verify.cwd должен быть путём внутри проекта, а не «{cwd}»"
+                    "verify.cwd must be a path inside the project, got \"{cwd}\""
                 ));
             }
         }
@@ -309,14 +381,14 @@ impl Settings {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Settings::default()),
             Err(e) => {
                 return Err(CoreError::Config(format!(
-                    "не прочитать {}: {e}",
+                    "failed to read {}: {e}",
                     path.display()
                 )))
             }
         };
 
         let settings: Settings = serde_json::from_str(&text).map_err(|e| {
-            CoreError::Config(format!("{} разобран не до конца: {e}", path.display()))
+            CoreError::Config(format!("failed to parse {}: {e}", path.display()))
         })?;
         if let Some(verify) = &settings.verify {
             verify
@@ -339,11 +411,11 @@ impl Settings {
     pub fn save(&self, root: &Path) -> Result<(), CoreError> {
         let dir = crate::project::dir(root);
         std::fs::create_dir_all(&dir)
-            .map_err(|e| CoreError::Config(format!("не создать {}: {e}", dir.display())))?;
+            .map_err(|e| CoreError::Config(format!("failed to create {}: {e}", dir.display())))?;
         let text = serde_json::to_string_pretty(self)
-            .map_err(|e| CoreError::Config(format!("не собрать настройки: {e}")))?;
+            .map_err(|e| CoreError::Config(format!("failed to serialize settings: {e}")))?;
         std::fs::write(dir.join(FILE), text)
-            .map_err(|e| CoreError::Config(format!("не записать настройки: {e}")))
+            .map_err(|e| CoreError::Config(format!("failed to write settings: {e}")))
     }
 
     /// The step ceiling of one turn. Never below two: with one, a turn could
@@ -362,6 +434,13 @@ impl Settings {
         static NONE: HooksSettings = HooksSettings {
             pre_tool_use: Vec::new(),
             post_tool_use: Vec::new(),
+            session_start: Vec::new(),
+            user_prompt_submit: Vec::new(),
+            stop: Vec::new(),
+            subagent_stop: Vec::new(),
+            pre_compact: Vec::new(),
+            session_end: Vec::new(),
+            notification: Vec::new(),
         };
         self.hooks.as_ref().unwrap_or(&NONE)
     }
@@ -429,7 +508,7 @@ mod tests {
                         ScopeKey::CommandPrefix {
                             prefix: "git commit".into(),
                         },
-                        Some("коммит я делаю сам".into()),
+                        Some("I make commits myself".into()),
                     ),
                     Refusal::new(
                         ScopeKey::Directory {
@@ -621,7 +700,7 @@ mod tests {
                     command: "check".into(),
                     timeout_secs: Some(10),
                 }],
-                post_tool_use: Vec::new(),
+                ..HooksSettings::default()
             }),
             ..Settings::default()
         };
@@ -647,6 +726,22 @@ mod tests {
         };
         assert!(why.contains("hooks.preToolUse[0].match"), "{why}");
         assert!(why.contains("Bash") && why.contains("Skill"), "lists the real names: {why}");
+    }
+
+    #[test]
+    fn event_hooks_need_no_match_and_are_checked_too() {
+        let dir = TempDir::new();
+        dir.write(
+            ".yaca/settings.json",
+            r#"{ "hooks": { "stop": [{ "command": "cargo test -q" }], "notification": [{ "command": "notify-send yaca" }] } }"#,
+        );
+        let settings = Settings::load(dir.path()).unwrap();
+        assert_eq!(settings.hooks().stop[0].command(), "cargo test -q");
+        assert_eq!(settings.hooks().notification.len(), 1);
+
+        dir.write(".yaca/settings.json", r#"{ "hooks": { "preCompact": [{ "command": "  " }] } }"#);
+        let err = Settings::load(dir.path()).unwrap_err();
+        assert!(err.to_string().contains("hooks.preCompact[0].command"), "{err}");
     }
 
     #[test]

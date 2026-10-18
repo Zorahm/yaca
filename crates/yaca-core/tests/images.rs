@@ -94,7 +94,7 @@ fn session_on(dir: &TempProject, provider: Arc<MockProvider>, sees: bool) -> Ses
     let mut cfg = SessionConfig::new(dir.path());
     cfg.model = model.id.clone();
     cfg.models = vec![model];
-    cfg.journal = false;
+    cfg.journal = None;
     yaca_core::spawn(cfg, provider).unwrap()
 }
 

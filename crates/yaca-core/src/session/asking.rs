@@ -8,14 +8,15 @@ use tokio_util::sync::CancellationToken;
 
 use crate::event::AgentEvent;
 use crate::id::{CallId, RequestId};
+use crate::intent::TrustMode;
 use crate::permission::policy::Decision;
-use crate::permission::{PermissionAnswer, PermissionNeed, PermissionRequest};
+use crate::permission::{review, PermissionAnswer, PermissionNeed, PermissionRequest};
 use crate::tool::take_description;
 
 use super::accumulator::PendingCall;
 use super::calls::Caller;
 
-/// Position of the call within the batch, for the `2 из 3` counter (§5.7).
+/// Position of the call within the batch, for the `2 of 3` counter (§5.7).
 #[derive(Clone, Copy)]
 pub(super) struct Queue<'a> {
     pub(super) asked: u32,
@@ -55,6 +56,46 @@ impl Caller {
         }
     }
 
+    /// Whether Auto's reviewer may answer this question in place of the human.
+    ///
+    /// Only for a question the mode itself raised. An invariant, a deletion
+    /// that loses what no snapshot keeps, and a plugin hook's request for the
+    /// question are asked in every mode, and a model does not get to settle them.
+    pub(super) fn reviewable(&self, need: &PermissionNeed) -> bool {
+        let policy = self.shared.policy();
+        policy.trust == TrustMode::Auto
+            && !policy.bypass
+            && need.invariant.is_none()
+            && need.unsaved.is_none()
+    }
+
+    /// Asks the Decision model whether the call is safe, or the session's own
+    /// model when there is no Decision model. `false` means ask the human.
+    pub(super) async fn review_approves(
+        &self,
+        need: &PermissionNeed,
+        cancel: &CancellationToken,
+    ) -> bool {
+        let (provider, model, systemone) = match &self.shared.decision {
+            Some(setup) => (
+                setup.provider.clone(),
+                setup.model.clone(),
+                setup.systemone.clone(),
+            ),
+            None => (self.provider.clone(), self.model().id, None),
+        };
+        tokio::select! {
+            _ = cancel.cancelled() => false,
+            safe = review::review(
+                systemone.as_deref(),
+                provider.as_ref(),
+                &model,
+                need,
+                review::TIMEOUT,
+            ) => safe,
+        }
+    }
+
     /// Shows the §5.7 block and waits. There is no timeout, only turn cancellation.
     pub(super) async fn ask(
         &self,
@@ -67,6 +108,8 @@ impl Caller {
         let rx = self.shared.broker.open(id.clone());
 
         let position = queue.asked + 1;
+        self.shared
+            .notify("permission_prompt", format!("Yaca needs your permission: {}", need.target));
         self.emit(AgentEvent::PermissionRequested {
             request: PermissionRequest {
                 id: id.clone(),
@@ -120,8 +163,8 @@ impl Caller {
     }
 
     /// How many more calls in this batch will ask for permission. It is counted
-    /// again before each question: «разрешать всегда» along the way may
-    /// clear part of the queue, and the `2 из 3` counter has to account for it.
+    /// again before each question: "allow always" along the way may
+    /// clear part of the queue, and the `2 of 3` counter has to account for it.
     fn still_to_ask(&self, queue: &Queue<'_>) -> u32 {
         queue
             .rest
@@ -137,7 +180,10 @@ impl Caller {
                 let Some(need) = tool.permission(self.ws.as_ref(), &input) else {
                     return false;
                 };
-                matches!(self.gate(&need), Gate::Ask)
+                // In Auto the reviewer may answer instead of the human, and it
+                // has not been asked yet: counting these would promise
+                // questions that mostly never come.
+                matches!(self.gate(&need), Gate::Ask) && !self.reviewable(&need)
             })
             .count() as u32
     }

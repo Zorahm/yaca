@@ -26,6 +26,7 @@ fn shown(seen: &[AgentEvent]) -> Vec<(String, u32, u32, u32, String)> {
                 lines,
                 total,
                 text,
+                ..
             } => Some((path.clone(), *first_line, *lines, *total, text.clone())),
             _ => None,
         })
@@ -35,12 +36,12 @@ fn shown(seen: &[AgentEvent]) -> Vec<(String, u32, u32, u32, String)> {
 async fn run(dir: &TempProject, input: serde_json::Value) -> (Vec<AgentEvent>, Arc<MockProvider>) {
     let provider = Arc::new(MockProvider::new(vec![
         Turn::Events(calls(&[("s1", "SendText", input)])),
-        Turn::Events(script_text("готово")),
+        Turn::Events(script_text("done")),
     ]));
     let handle = session(dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "покажи файл").await;
+    ask(&handle, "show file").await;
     let seen = until(&mut rx, is_turn_over).await;
     (seen, provider)
 }
@@ -48,7 +49,7 @@ async fn run(dir: &TempProject, input: serde_json::Value) -> (Vec<AgentEvent>, A
 #[tokio::test]
 async fn a_file_reaches_the_human_and_not_the_model() {
     let dir = TempProject::new();
-    dir.write("notes.md", "# Заметки\n\nтолько для человека\n");
+    dir.write("notes.md", "# Notes\n\nfor human eyes only\n");
 
     let (seen, provider) = run(&dir, json!({ "path": "notes.md" })).await;
 
@@ -59,7 +60,7 @@ async fn a_file_reaches_the_human_and_not_the_model() {
             1,
             3,
             3,
-            "# Заметки\n\nтолько для человека".to_string()
+            "# Notes\n\nfor human eyes only".to_string()
         )]
     );
 
@@ -67,13 +68,13 @@ async fn a_file_reaches_the_human_and_not_the_model() {
     assert!(!is_error, "{result}");
     assert!(result.contains("notes.md"), "{result}");
     // The whole point: the text is not paid for a second time.
-    assert!(!result.contains("только для человека"), "{result}");
+    assert!(!result.contains("for human eyes only"), "{result}");
 }
 
 #[tokio::test]
 async fn the_call_has_no_row_of_its_own() {
     let dir = TempProject::new();
-    dir.write("notes.md", "строка\n");
+    dir.write("notes.md", "line\n");
 
     let (seen, _provider) = run(&dir, json!({ "path": "notes.md" })).await;
 
@@ -107,7 +108,7 @@ async fn a_range_shows_only_its_lines_and_says_where_they_are() {
 async fn a_file_that_cannot_be_shown_is_an_error_and_shows_nothing() {
     let dir = TempProject::new();
 
-    let (seen, provider) = run(&dir, json!({ "path": "нет-такого.md" })).await;
+    let (seen, provider) = run(&dir, json!({ "path": "no-such.md" })).await;
 
     assert!(shown(&seen).is_empty());
     let (result, is_error) = tool_result_of(&provider, "s1");

@@ -26,8 +26,11 @@ impl Tool for AskUser {
          the next step depends on a choice only the human can make (which approach, which \
          file, which of several readings of the request) and the choices are known. Give \
          2 to 6 options with short labels. Unless allow_other is false, the human may \
-         also type an answer of their own. The answer comes back as this call's result \
-         and the turn goes on from there. Do not use it to ask permission for an action: \
+         also type an answer of their own. Choose the kind of choice with multi_select: \
+         false (default) is radio, one option; if the human also types text, only the \
+         text comes back. true is checkboxes, any number of options; ticked options \
+         and typed text all come back together. The answer comes back as this call's \
+         result and the turn goes on from there. Do not use it to ask permission for an action: \
          actions that need permission are asked for by the system when you make them, \
          and do not use it for questions you can settle by reading the code."
     }
@@ -73,7 +76,11 @@ impl Tool for AskUser {
             "multi_select": {
                 "type": "boolean",
                 "default": false,
-                "description": "Whether the human may pick several options. Default false.",
+                "description": "false (default): radio, the human picks one option, and \
+                                text they type replaces the pick. true: checkboxes, \
+                                the human ticks any number of options, and text they \
+                                type is added to them. Use true when the options are \
+                                not mutually exclusive.",
             },
         })
     }
@@ -101,7 +108,7 @@ impl Tool for AskUser {
         let questions = ctx
             .questions
             .as_ref()
-            .ok_or_else(|| ToolError::failed("вопрос некому задать"))?;
+            .ok_or_else(|| ToolError::failed("no receiver for question"))?;
 
         let reply = questions.ask(question.clone(), &ctx.cancel).await?;
 
@@ -125,20 +132,20 @@ fn parse(input: &Value) -> Result<Question, ToolError> {
         .filter(|s| !s.is_empty())
         .ok_or_else(|| {
             ToolError::failed_with(
-                "вопрос не задан",
+                "question is required",
                 "AskUser needs a non-empty `question`. Make the call again with the question text.",
             )
         })?;
 
     let raw = input["options"].as_array().ok_or_else(|| {
         ToolError::failed_with(
-            "варианты не заданы",
+            "options are required",
             "AskUser needs `options`: an array of 2 to 6 objects with a `label`.",
         )
     })?;
     if !(MIN_OPTIONS..=MAX_OPTIONS).contains(&raw.len()) {
         return Err(ToolError::failed_with(
-            format!("вариантов {}, нужно от {MIN_OPTIONS} до {MAX_OPTIONS}", raw.len()),
+            format!("{count} options provided, expected between {MIN_OPTIONS} and {MAX_OPTIONS}", count = raw.len()),
             format!(
                 "AskUser takes between {MIN_OPTIONS} and {MAX_OPTIONS} options, and this \
                  call gave {}. Make the call again with options in that range: a choice \
@@ -158,7 +165,7 @@ fn parse(input: &Value) -> Result<Question, ToolError> {
                 .filter(|s| !s.is_empty())
                 .ok_or_else(|| {
                     ToolError::failed_with(
-                        "у варианта нет подписи",
+                        "option has no label",
                         "Every option of AskUser needs a non-empty `label`.",
                     )
                 })?;
@@ -185,14 +192,14 @@ fn parse(input: &Value) -> Result<Question, ToolError> {
 /// The feed's line for the expanded row, in the conversation's language.
 fn for_human(options: &[QuestionOption], reply: &QuestionReply) -> String {
     match reply {
-        QuestionReply::Dismissed => "Вопрос пропущен".to_string(),
+        QuestionReply::Dismissed => "Question skipped".to_string(),
         QuestionReply::Answered { selected, other } => {
             let picked = labels(options, selected);
             match (picked.is_empty(), other) {
-                (false, None) => format!("Ответ: {}", picked.join(", ")),
-                (false, Some(text)) => format!("Ответ: {} · своими словами: «{text}»", picked.join(", ")),
-                (true, Some(text)) => format!("Ответ своими словами: «{text}»"),
-                (true, None) => "Ответа нет".to_string(),
+                (false, None) => format!("Answer: {}", picked.join(", ")),
+                (false, Some(text)) => format!("Answer: {} · custom text: \"{text}\"", picked.join(", ")),
+                (true, Some(text)) => format!("Answer in custom text: \"{text}\""),
+                (true, None) => "No answer".to_string(),
             }
         }
     }
@@ -333,11 +340,11 @@ mod tests {
         let opts = parse(&call(options(2))).unwrap().options;
         let reply = QuestionReply::Answered {
             selected: Vec::new(),
-            other: Some("третий путь".into()),
+            other: Some("third way".into()),
         };
         assert_eq!(
             for_human(&opts, &reply),
-            "Ответ своими словами: «третий путь»"
+            "Answer in custom text: \"third way\""
         );
     }
 
