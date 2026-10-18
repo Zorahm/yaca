@@ -58,6 +58,7 @@ export const composer = {
   "composer.placeholder": "Yaca に質問するか、作業を依頼…",
   "composer.placeholder_home": "作業内容を書くか、質問を入力",
   "composer.send": "送信",
+  "composer.drop": "ファイルをドロップして添付",
   "composer.stop": "停止",
   "composer.attach": "ファイルを添付",
   "composer.detach": "削除",

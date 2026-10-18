@@ -6,11 +6,11 @@
  * считаются пути.
  */
 
-import { hasFileDialogs, onFilesDropped, stashImage } from "../core/client";
+import { hasFileDialogs, onFilesDragging, onFilesDropped, stashImage } from "../core/client";
 import type { ComposerActions } from "./Composer";
 import { relativeTo } from "./format";
 
-type ImageActions = Pick<ComposerActions, "stashImage" | "onDropped">;
+type ImageActions = Pick<ComposerActions, "stashImage" | "onDropped" | "onDragging">;
 
 /**
  * Один набор на корень. Композер подписывается на перетаскивание эффектом,
@@ -30,6 +30,7 @@ export function imageActions(root: string | null): ImageActions {
       // видит модель. Файл снаружи проекта остаётся абсолютным.
       onDropped: (listener) =>
         onFilesDropped((paths) => listener(paths.map((path) => relativeTo(root, path)))),
+      onDragging: onFilesDragging,
     };
     made.set(root, actions);
   }

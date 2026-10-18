@@ -58,6 +58,7 @@ export const composer = {
   "composer.placeholder": "询问 Yaca，或交给它任务…",
   "composer.placeholder_home": "描述任务或提出问题",
   "composer.send": "发送",
+  "composer.drop": "松开鼠标以附加文件",
   "composer.stop": "停止",
   "composer.attach": "附加文件",
   "composer.detach": "移除",

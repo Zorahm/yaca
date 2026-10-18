@@ -58,6 +58,7 @@ export const composer = {
   "composer.placeholder": "Yaca에게 묻거나 작업을 맡기세요…",
   "composer.placeholder_home": "작업을 설명하거나 질문하세요",
   "composer.send": "보내기",
+  "composer.drop": "파일을 놓아서 첨부",
   "composer.stop": "중지",
   "composer.attach": "파일 첨부",
   "composer.detach": "제거",

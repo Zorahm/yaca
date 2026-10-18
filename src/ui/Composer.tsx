@@ -24,6 +24,7 @@
 
 import { ArrowUp, Plus, Stop } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ClipboardEvent } from "react";
+import { createPortal } from "react-dom";
 
 import type { Effort, Mode, ModelInfo, UsageSnapshot } from "../core/client";
 import type { Feed } from "../core/feed";
@@ -84,6 +85,12 @@ export type ComposerActions = {
    * проекта. Возвращает отписку.
    */
   onDropped?: (listener: (paths: string[]) => void) => () => void;
+  /**
+   * Подписаться на «файлы сейчас над окном». Пока они там, окно закрывается
+   * пеленой с подсказкой: бросать можно в любое место, и человеку нужно видеть,
+   * что бросок будет принят.
+   */
+  onDragging?: (listener: (over: boolean) => void) => () => void;
   /**
    * Перечитать список команд проекта. Зовётся, когда строка становится
    * командой: файл, написанный минуту назад, должен быть в меню, а не только
@@ -170,6 +177,15 @@ export function Composer({
     if (onDropped === undefined || disabled) return;
     return onDropped(attach);
   }, [onDropped, disabled]);
+
+  // The veil is shown only where a drop will really attach: not while the
+  // composer is disabled, or the window would promise what it does not do.
+  const [dragging, setDragging] = useState(false);
+  const onDragging = actions.onDragging;
+  useEffect(() => {
+    if (onDragging === undefined || disabled) return setDragging(false);
+    return onDragging(setDragging);
+  }, [onDragging, disabled]);
 
   /** Картинки из буфера — во вложения; остальное вставляется как обычно. */
   function pasteImages(event: ClipboardEvent<HTMLTextAreaElement>) {
@@ -321,6 +337,13 @@ export function Composer({
 
   return (
     <div className="composer-wrap" onClick={() => setMenu(null)}>
+      {dragging &&
+        createPortal(
+          <div className="drop-veil" aria-hidden="true">
+            <div className="drop-card">{t("composer.drop")}</div>
+          </div>,
+          document.body,
+        )}
       <div className="composer" onClick={(e) => e.stopPropagation()}>
         {queued.map((message) => (
           <QueuedChip

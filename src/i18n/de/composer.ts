@@ -58,6 +58,7 @@ export const composer = {
   "composer.placeholder": "Yaca fragen oder eine Aufgabe geben…",
   "composer.placeholder_home": "Aufgabe beschreiben oder eine Frage stellen",
   "composer.send": "Senden",
+  "composer.drop": "Zum Anhängen Dateien hier ablegen",
   "composer.stop": "Stoppen",
   "composer.attach": "Dateien anhängen",
   "composer.detach": "Entfernen",

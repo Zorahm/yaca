@@ -310,6 +310,31 @@ export function stashImage(project: string, data: string): Promise<string> {
 }
 
 /**
+ * Тащит ли человек файлы над окном прямо сейчас: `true` с первого входа и
+ * пока они над окном, `false` — когда ушли или брошены. Нужно, чтобы окно
+ * успело сказать, куда они упадут, до того как их отпустят. Возвращает отписку.
+ */
+export function onFilesDragging(listener: (over: boolean) => void): () => void {
+  if (!inTauri) return () => {};
+  let off: (() => void) | null = null;
+  let gone = false;
+  void getCurrentWebview()
+    .onDragDropEvent((event) => {
+      const kind = event.payload.type;
+      if (kind === "enter" || kind === "over") listener(true);
+      else listener(false);
+    })
+    .then((unlisten) => {
+      if (gone) unlisten();
+      else off = unlisten;
+    });
+  return () => {
+    gone = true;
+    off?.();
+  };
+}
+
+/**
  * Файлы, брошенные в окно. Возвращает отписку.
  *
  * Оболочка перехватывает перетаскивание сама и отдаёт пути, а не содержимое:

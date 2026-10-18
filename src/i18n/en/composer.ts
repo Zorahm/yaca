@@ -58,6 +58,7 @@ export const composer = {
   "composer.placeholder": "Ask Yaca, or give it a job…",
   "composer.placeholder_home": "Describe the task or ask a question",
   "composer.send": "Send",
+  "composer.drop": "Drop files to attach them",
   "composer.stop": "Stop",
   "composer.attach": "Attach files",
   "composer.detach": "Remove",
