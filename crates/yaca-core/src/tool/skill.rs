@@ -1,26 +1,17 @@
-//! Skills: instructions the project keeps for one kind of task, and the `Skill`
-//! tool that hands one over.
+//! The `Skill` tool: hands the model a skill's instructions, or one of its files.
 //!
-//! A skill is `.yaca/skills/<name>/SKILL.md`: a header with `name` and
-//! `description`, then a body. The human writes it once, and the model pulls it
-//! in when a task calls for it, instead of the human pasting the same
-//! instructions into every conversation. Two halves follow from that:
+//! The skills themselves — where they are found, how their headers are read,
+//! what the model is handed — are `crate::skills`. This is only the model's
+//! way in.
 //!
-//! * The list — name and one line of description per skill — goes into the
-//!   system prompt when the session starts, as the memory index does. Read once
-//!   for the same reason: the prompt is the cached prefix of every request.
-//! * The tool returns the body. It reads the file at the moment of the call, so
-//!   a skill written during the session is usable at once; only the list waits
-//!   for the next session.
-//!
-//! The directory name is the skill's name, and it is the one place a name can
-//! come from. A `name` in the header that disagrees with the directory leaves
-//! the skill out rather than listing it under a name the tool does not answer
-//! to. Names are lowercase letters, digits and hyphens, so no name can express a
-//! path, and the workspace boundary is checked on top of that.
+//! The catalog is scanned again on every call rather than taken from the
+//! session's start. The list in the prompt waits for the next session, because
+//! the prompt is the cached prefix; the tool need not, so a skill written during
+//! the session works as soon as it is named.
 //!
 //! Read-only, so offered in Plan as well as Agent and asked nothing: a skill is
-//! text the human wrote, and reading it changes nothing.
+//! text, and reading it changes nothing. What the skill then tells the model to
+//! do goes through the permissions like everything else.
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -28,193 +19,27 @@ use serde_json::{json, Value};
 use super::{Narration, Tool, ToolCtx, ToolOutput};
 use crate::error::ToolError;
 use crate::intent::Intent;
-use crate::slash;
-use crate::workspace::Workspace;
+use crate::skills::activate::{self, MAX_RESOURCE_BYTES};
+use crate::skills::Catalog;
+use crate::tool::memory::store::head;
+use crate::workspace::roots::plain;
 
-use super::memory::store::head;
+pub struct Skill;
 
-/// Under the project's `.yaca/`, next to commands and memory.
-pub const DIR: &str = "skills";
-pub const FILE: &str = "SKILL.md";
-
-/// The list goes into every request, so it is capped. Enough for a few dozen
-/// one-line descriptions; past that the list says it was cut and the tool's
-/// error names the rest.
-pub const MAX_LIST_BYTES: usize = 4 * 1024;
-/// A description longer than this is cut in the list. The whole of it is still
-/// what the skill's own file says.
-const MAX_DESCRIPTION_CHARS: usize = 200;
-/// The most of a skill file that is read to find its header. A header longer
-/// than this is read as absent, which costs the description and nothing else.
-const MAX_HEADER_BYTES: usize = 8 * 1024;
-/// The most of a skill file the tool hands over: the file as a whole, header
-/// included, read up to here.
-const MAX_FILE_BYTES: usize = 64 * 1024;
-/// What the model reads of the body. A skill is a set of instructions, not a
-/// document; past this it is a document, and the model should read it in parts.
-const MAX_BODY_BYTES: usize = 32 * 1024;
-const MAX_NAME_CHARS: usize = 64;
-
-/// A skill as the list shows it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Entry {
-    pub name: String,
-    pub description: String,
-}
-
-impl Entry {
-    /// The line the list shows for this skill, description after a dash.
-    pub fn line(&self) -> String {
-        if self.description.is_empty() {
-            format!("- {}", self.name)
-        } else {
-            format!("- {} — {}", self.name, self.description)
-        }
-    }
-}
-
-/// What the system prompt carries: the skills that fit in the cap, in name
-/// order, and whether some were left out.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Listing {
-    pub entries: Vec<Entry>,
-    pub truncated: bool,
-}
-
-/// A name a skill may take: lowercase letters, digits and hyphens, and short
-/// enough to be read in a list. Nothing that can express `..`, a separator or
-/// an absolute path gets through.
-pub fn is_skill_name(name: &str) -> bool {
-    !name.is_empty()
-        && name.chars().count() <= MAX_NAME_CHARS
-        && name
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-}
-
-/// The project-relative path of a skill's file, in the form the workspace
-/// checks take.
-fn file_rel(name: &str) -> String {
-    format!("{}/{DIR}/{name}/{FILE}", crate::project::DIR)
-}
-
-/// Every usable skill of the project, in name order. Empty when there is no
-/// `.yaca/skills/` at all — a project that never used the feature gets the
-/// prompt it always had.
-pub fn scan(ws: &Workspace) -> Vec<Entry> {
-    let dir = format!("{}/{DIR}", crate::project::DIR);
-    // Through the boundary like everything else: a `skills` that is a link out
-    // of the project lists nothing.
-    let Ok(dir) = ws.resolve_existing(&dir) else {
-        return Vec::new();
-    };
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Vec::new();
-    };
-
-    let mut out: Vec<Entry> = entries
-        .flatten()
-        .filter_map(|entry| {
-            let name = entry.file_name().into_string().ok()?;
-            if !is_skill_name(&name) || !entry.file_type().ok()?.is_dir() {
-                return None;
-            }
-            let (text, _) = read(ws, &name, MAX_HEADER_BYTES)?;
-            let (declared, description) = header(&text);
-            if declared.as_deref().is_some_and(|d| d != name) {
-                return None;
-            }
-            Some(Entry { name, description })
-        })
+/// The names a failure tells the model about: those it may call.
+fn names_for_model(catalog: &Catalog) -> String {
+    let names: Vec<&str> = catalog
+        .skills()
+        .iter()
+        .filter(|s| s.model_invocable)
+        .map(|s| s.name.as_str())
         .collect();
-
-    out.sort_by(|a, b| a.name.cmp(&b.name));
-    out
-}
-
-/// The list for the prompt, or `None` when the project has no skills.
-pub fn listing(ws: &Workspace) -> Option<Listing> {
-    let mut entries = Vec::new();
-    let mut bytes = 0;
-    let mut truncated = false;
-    for entry in scan(ws) {
-        let line_len = entry.line().len() + 1;
-        if bytes + line_len > MAX_LIST_BYTES {
-            truncated = true;
-            break;
-        }
-        bytes += line_len;
-        entries.push(entry);
-    }
-    (!entries.is_empty()).then_some(Listing { entries, truncated })
-}
-
-/// The header's `name` (if any) and one-line `description`. The description is
-/// cut to a sensible length here, once, so the list and the prompt agree.
-fn header(text: &str) -> (Option<String>, String) {
-    let Some((block, _)) = slash::split_frontmatter(text) else {
-        return (None, String::new());
-    };
-    let declared = slash::header_value(block, "name").filter(|n| !n.is_empty());
-    let description = slash::header_value(block, "description")
-        .unwrap_or_default()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
-    let description = if description.chars().count() > MAX_DESCRIPTION_CHARS {
-        let cut: String = description
-            .chars()
-            .take(MAX_DESCRIPTION_CHARS - 1)
-            .collect();
-        format!("{}…", cut.trim_end())
-    } else {
-        description
-    };
-    (declared, description)
-}
-
-/// The text of a skill's file, up to `cap` bytes, and whether it was longer.
-/// `None` when the file is not there or is outside the project.
-fn read(ws: &Workspace, name: &str, cap: usize) -> Option<(String, bool)> {
-    let path = ws.resolve_existing(&file_rel(name)).ok()?;
-    head(&path, cap)
-}
-
-/// The body of a skill: what follows its header, trimmed.
-fn body_of(text: &str) -> &str {
-    match slash::split_frontmatter(text) {
-        Some((_, body)) => body.trim(),
-        None => text.trim(),
-    }
-}
-
-/// Cuts a body to the byte budget at a character boundary, saying so.
-fn capped(body: &str) -> (String, bool) {
-    if body.len() <= MAX_BODY_BYTES {
-        return (body.to_string(), false);
-    }
-    let mut cut = MAX_BODY_BYTES;
-    while !body.is_char_boundary(cut) {
-        cut -= 1;
-    }
-    let text = format!(
-        "{}\n\n[The skill is longer than {MAX_BODY_BYTES} bytes and is cut here. Its file has the rest.]",
-        body[..cut].trim_end()
-    );
-    (text, true)
-}
-
-/// The names of every skill, for a failure that has to say what exists.
-fn names_for_model(ws: &Workspace) -> String {
-    let names: Vec<String> = scan(ws).into_iter().map(|e| e.name).collect();
     if names.is_empty() {
-        "The project has no skills.".to_string()
+        "There are no skills.".to_string()
     } else {
         format!("Skills that exist: {}.", names.join(", "))
     }
 }
-
-pub struct Skill;
 
 #[async_trait]
 impl Tool for Skill {
@@ -223,18 +48,29 @@ impl Tool for Skill {
     }
 
     fn description(&self) -> &'static str {
-        "Read a skill: instructions the project keeps for one kind of task, listed by \
-         name in the project's skills list. When a task matches a listed skill, call this \
-         before you start the task and follow what it returns. Returns the skill's text. \
-         A name no skill has fails and says which names exist."
+        "Load a skill: instructions kept for one kind of task, listed by name in the skills \
+         catalog. When a task matches a listed skill, call this with its name before you start \
+         the task, and follow what it returns. The result gives the skill's directory and lists \
+         its other files; call again with `file` to read one of them when the instructions \
+         point to it. A name no skill has fails and says which names exist."
     }
 
     fn properties(&self) -> Value {
         json!({
             "name": {
                 "type": "string",
-                "pattern": "^[a-z0-9-]+$",
-                "description": "The skill's name, as the list gives it.",
+                "description": "The skill's name, as the catalog gives it.",
+            },
+            "args": {
+                "type": "string",
+                "description": "For a skill that runs in a subagent of its own: what it is \
+                                to work on, passed to it with the instructions.",
+            },
+            "file": {
+                "type": "string",
+                "description": "A file of the skill to read instead of its instructions, \
+                                relative to the skill's directory, e.g. `references/api.md`. \
+                                Leave it out to load the instructions.",
             },
         })
     }
@@ -250,7 +86,6 @@ impl Tool for Skill {
     }
 
     fn intents(&self) -> &'static [Intent] {
-        // Read-only, so it belongs to planning as much as to doing.
         &[Intent::Plan, Intent::Agent]
     }
 
@@ -259,47 +94,70 @@ impl Tool for Skill {
     }
 
     fn target(&self, input: &Value) -> Option<String> {
-        input["name"]
-            .as_str()
-            .filter(|name| is_skill_name(name))
-            .map(file_rel)
+        let name = input["name"].as_str()?;
+        Some(match input["file"].as_str() {
+            Some(file) => format!("{name}/{file}"),
+            None => name.to_string(),
+        })
     }
 
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let name = input["name"]
             .as_str()
-            .ok_or_else(|| ToolError::failed("не задан name"))?;
+            .ok_or_else(|| ToolError::failed("missing name"))?;
 
-        // Checked before any path is built from the name. A name that is not
-        // one of ours is refused as an invariant, the same as a memory note's.
-        if !is_skill_name(name) {
-            return Err(ToolError::rejected(format!(
-                "{name} — недопустимое имя навыка: строчные латинские буквы, цифры и дефис"
-            )));
-        }
-
-        let Some((text, cut)) = read(&ctx.ws, name, MAX_FILE_BYTES) else {
+        let catalog = ctx.skills.scan();
+        let Some(skill) = catalog.get(name).filter(|s| s.model_invocable) else {
             return Err(ToolError::failed_with(
-                format!("нет навыка {name}"),
+                format!("skill `{name}` does not exist"),
                 format!(
-                    "No skill named `{name}`. {} Call Skill with one of those names, or \
-                     carry on without a skill if none of them fits the task.",
-                    names_for_model(&ctx.ws)
+                    "No skill named `{name}`. {} Call Skill with one of those names, or carry \
+                     on without a skill if none of them fits the task.",
+                    names_for_model(&catalog)
                 ),
             ));
         };
 
-        let (body, capped_body) = capped(body_of(&text));
-        let body = if body.is_empty() {
-            "(The skill's file has no text after its header.)".to_string()
-        } else {
-            body
+        let Some(file) = input["file"].as_str() else {
+            let (text, cut) = activate::content(skill).map_err(ToolError::failed)?;
+            // `context: fork`: a subagent follows the skill and reports. A
+            // subagent's own call cannot start another, and loads it inline.
+            if let (true, Some(agents)) = (skill.fork, ctx.agents.as_ref()) {
+                let args = input["args"].as_str().unwrap_or_default().trim();
+                let task = if args.is_empty() {
+                    format!("{text}\n\nFollow the skill above.")
+                } else {
+                    format!("{text}\n\nFollow the skill above for: {args}")
+                };
+                let report = agents.run(task, skill.agent.clone(), None, &ctx.cancel).await?;
+                return Ok(ToolOutput::new(format!(
+                    "The skill `{name}` ran in a subagent of its own. Its report:\n{report}"
+                )));
+            }
+            return Ok(ToolOutput::new(text).truncated(cut));
         };
-        let mut out = ToolOutput::new(body);
-        if cut || capped_body {
-            out = out.truncated(true);
+
+        let path = activate::resource_path(skill, file).map_err(ToolError::rejected)?;
+        let (text, cut) = head(&path, MAX_RESOURCE_BYTES)
+            .ok_or_else(|| ToolError::failed(format!("failed to read {}", plain(&path))))?;
+        if text.contains('\0') {
+            return Err(ToolError::failed_with(
+                format!("{file} is a binary file"),
+                format!(
+                    "`{file}` is a binary file and cannot be shown as text. Its absolute path is {}.",
+                    plain(&path)
+                ),
+            ));
         }
-        Ok(out)
+        let text = if cut {
+            format!(
+                "{text}\n\n[Only the first {MAX_RESOURCE_BYTES} bytes are shown. The file is {}.]",
+                plain(&path)
+            )
+        } else {
+            text
+        };
+        Ok(ToolOutput::new(text).truncated(cut))
     }
 }
 
@@ -315,173 +173,108 @@ mod tests {
     }
 
     fn release() -> &'static str {
-        "---\nname: release\ndescription: Выпустить новую версию\n---\n\nТег, затем сборка.\n"
-    }
-
-    fn ws(dir: &TempDir) -> Workspace {
-        Workspace::open(dir.path()).unwrap()
-    }
-
-    #[test]
-    fn a_project_without_skills_has_no_listing() {
-        let dir = TempDir::new();
-        assert_eq!(listing(&ws(&dir)), None);
-    }
-
-    #[test]
-    fn the_listing_is_in_name_order_and_the_same_every_time() {
-        let dir = TempDir::new();
-        skill(&dir, "release", release());
-        skill(
-            &dir,
-            "audit",
-            "---\ndescription: Аудит зависимостей\n---\nтекст",
-        );
-        skill(&dir, "docs", "без заголовка");
-
-        let first = listing(&ws(&dir)).unwrap();
-        let names: Vec<_> = first.entries.iter().map(|e| e.name.as_str()).collect();
-        assert_eq!(names, vec!["audit", "docs", "release"]);
-        assert!(!first.truncated);
-        // The prompt is the cached prefix: the same files must give the same list.
-        assert_eq!(listing(&ws(&dir)).unwrap(), first);
-    }
-
-    #[test]
-    fn a_skill_without_a_header_is_listed_by_name_alone() {
-        let dir = TempDir::new();
-        skill(&dir, "docs", "просто текст");
-        let list = listing(&ws(&dir)).unwrap();
-        assert_eq!(list.entries[0].description, "");
-        assert_eq!(list.entries[0].line(), "- docs");
-    }
-
-    #[test]
-    fn a_header_name_that_disagrees_with_the_directory_leaves_the_skill_out() {
-        let dir = TempDir::new();
-        skill(
-            &dir,
-            "release",
-            "---\nname: relase\ndescription: опечатка\n---\nтекст",
-        );
-        assert_eq!(listing(&ws(&dir)), None);
-    }
-
-    #[test]
-    fn directories_that_are_not_skill_names_are_skipped() {
-        let dir = TempDir::new();
-        skill(&dir, "Upper", "текст");
-        skill(&dir, "with_underscore", "текст");
-        skill(&dir, "fine-one", "текст");
-        let names: Vec<_> = scan(&ws(&dir)).into_iter().map(|e| e.name).collect();
-        assert_eq!(names, vec!["fine-one"]);
-    }
-
-    #[test]
-    fn the_listing_is_capped_and_says_so() {
-        let dir = TempDir::new();
-        let long = "о".repeat(300);
-        for n in 0..60 {
-            skill(
-                &dir,
-                &format!("skill-{n:02}"),
-                &format!("---\ndescription: {long}\n---\nтекст"),
-            );
-        }
-        let list = listing(&ws(&dir)).unwrap();
-        assert!(list.truncated);
-        assert!(list.entries.len() < 60);
-        let bytes: usize = list.entries.iter().map(|e| e.line().len() + 1).sum();
-        assert!(bytes <= MAX_LIST_BYTES, "{bytes}");
-        // Name order means the cut falls at the end, and the first ones stay.
-        assert_eq!(list.entries[0].name, "skill-00");
-    }
-
-    #[test]
-    fn a_long_description_is_cut_in_the_list() {
-        let dir = TempDir::new();
-        let long = "а".repeat(500);
-        skill(&dir, "x", &format!("---\ndescription: {long}\n---\n"));
-        let desc = &listing(&ws(&dir)).unwrap().entries[0].description;
-        assert!(
-            desc.chars().count() <= MAX_DESCRIPTION_CHARS,
-            "{}",
-            desc.len()
-        );
-        assert!(desc.ends_with('…'));
+        "---\nname: release\ndescription: Cut a release\n---\n\nTag, then build.\n"
     }
 
     #[tokio::test]
-    async fn the_tool_returns_the_body_without_the_header() {
+    async fn the_tool_returns_the_body_wrapped_with_its_directory() {
         let dir = TempDir::new();
         skill(&dir, "release", release());
+        dir.write(".yaca/skills/release/scripts/tag.sh", "git tag");
         let (ctx, _ws) = ctx_for(&dir);
 
         let out = Skill.run(&ctx, json!({ "name": "release" })).await.unwrap();
-        assert_eq!(out.text, "Тег, затем сборка.");
+        assert!(out.text.starts_with("<skill_content name=\"release\">\nTag, then build."), "{}", out.text);
+        assert!(out.text.contains("Skill directory: "), "{}", out.text);
+        assert!(out.text.contains("<file>scripts/tag.sh</file>"), "{}", out.text);
+        assert!(!out.text.contains("<file>SKILL.md</file>"), "{}", out.text);
+        assert!(out.text.ends_with("</skill_content>"));
         assert!(!out.meta.truncated);
+    }
+
+    #[tokio::test]
+    async fn a_file_of_the_skill_is_read_by_its_relative_path() {
+        let dir = TempDir::new();
+        skill(&dir, "release", release());
+        dir.write(".yaca/skills/release/references/steps.md", "1. tag");
+        let (ctx, _ws) = ctx_for(&dir);
+
+        let out = Skill
+            .run(&ctx, json!({ "name": "release", "file": "references/steps.md" }))
+            .await
+            .unwrap();
+        assert_eq!(out.text, "1. tag");
+    }
+
+    #[tokio::test]
+    async fn a_file_outside_the_skill_is_refused() {
+        let dir = TempDir::new();
+        skill(&dir, "release", release());
+        dir.write(".yaca/secret.md", "secret");
+        let (ctx, _ws) = ctx_for(&dir);
+
+        for file in ["../../secret.md", "/etc/passwd", "C:\\Windows\\win.ini", ""] {
+            let err = Skill
+                .run(&ctx, json!({ "name": "release", "file": file }))
+                .await
+                .unwrap_err();
+            assert!(matches!(err, ToolError::Rejected(_)), "{file:?}: {err:?}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_file_that_links_out_of_the_skill_is_refused() {
+        let dir = TempDir::new();
+        let outside = TempDir::new();
+        outside.write("secret.md", "secret");
+        skill(&dir, "release", release());
+        std::os::unix::fs::symlink(
+            outside.path().join("secret.md"),
+            dir.path().join(".yaca/skills/release/leak.md"),
+        )
+        .unwrap();
+        let (ctx, _ws) = ctx_for(&dir);
+
+        let err = Skill
+            .run(&ctx, json!({ "name": "release", "file": "leak.md" }))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::Rejected(_)), "{err:?}");
     }
 
     #[tokio::test]
     async fn an_unknown_name_fails_and_names_the_skills_that_exist() {
         let dir = TempDir::new();
         skill(&dir, "release", release());
-        skill(&dir, "audit", "---\ndescription: аудит\n---\nтекст");
+        skill(&dir, "audit", "---\ndescription: audit\n---\ntext");
         let (ctx, _ws) = ctx_for(&dir);
 
-        let err = Skill
-            .run(&ctx, json!({ "name": "deploy" }))
-            .await
-            .unwrap_err();
+        let err = Skill.run(&ctx, json!({ "name": "deploy" })).await.unwrap_err();
         assert!(matches!(err, ToolError::Failed { .. }), "{err:?}");
-        let model = err.for_model();
-        assert!(model.contains("audit, release"), "{model}");
+        assert!(err.for_model().contains("audit, release"), "{}", err.for_model());
     }
 
     #[tokio::test]
-    async fn an_unknown_name_in_a_project_without_skills_says_there_are_none() {
+    async fn a_skill_kept_from_the_model_cannot_be_called_by_it() {
         let dir = TempDir::new();
+        skill(
+            &dir,
+            "deploy",
+            "---\ndescription: d\ndisable-model-invocation: true\n---\ntext",
+        );
         let (ctx, _ws) = ctx_for(&dir);
-        let err = Skill
-            .run(&ctx, json!({ "name": "deploy" }))
-            .await
-            .unwrap_err();
-        assert!(err.for_model().contains("no skills"), "{err}");
+
+        let err = Skill.run(&ctx, json!({ "name": "deploy" })).await.unwrap_err();
+        assert!(err.for_model().contains("no skills"), "{}", err.for_model());
     }
 
     #[tokio::test]
-    async fn a_name_that_is_not_a_skill_name_is_refused_before_any_path_is_built() {
+    async fn a_skill_written_during_the_session_is_found() {
         let dir = TempDir::new();
-        // A file one level above the skills directory, which `..` would reach.
-        dir.write(".yaca/secret.md", "тайна");
         let (ctx, _ws) = ctx_for(&dir);
-
-        for name in [
-            "../secret",
-            "../../etc/passwd",
-            "a/b",
-            "/etc/passwd",
-            "",
-            "Upper",
-            "a b",
-        ] {
-            let err = Skill.run(&ctx, json!({ "name": name })).await.unwrap_err();
-            assert!(matches!(err, ToolError::Rejected(_)), "{name:?}: {err:?}");
-        }
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn a_skill_that_links_out_of_the_project_is_not_read() {
-        let dir = TempDir::new();
-        let outside = TempDir::new();
-        outside.write("SKILL.md", "---\ndescription: снаружи\n---\nтекст снаружи");
-        std::fs::create_dir_all(dir.path().join(".yaca/skills")).unwrap();
-        std::os::unix::fs::symlink(outside.path(), dir.path().join(".yaca/skills/linked")).unwrap();
-        let (ctx, _ws) = ctx_for(&dir);
-
-        assert!(Skill.run(&ctx, json!({ "name": "linked" })).await.is_err());
-        assert!(scan(&ws(&dir)).is_empty());
+        skill(&dir, "release", release());
+        assert!(Skill.run(&ctx, json!({ "name": "release" })).await.is_ok());
     }
 
     #[tokio::test]
@@ -496,8 +289,8 @@ mod tests {
 
         let out = Skill.run(&ctx, json!({ "name": "big" })).await.unwrap();
         assert!(out.meta.truncated);
-        assert!(out.text.contains("cut here"), "{}", out.text.len());
-        assert!(out.text.len() <= MAX_BODY_BYTES + 200);
+        assert!(out.text.contains("cut here"));
+        assert!(out.text.len() <= activate::MAX_BODY_BYTES + 1024);
     }
 
     #[test]
@@ -505,16 +298,5 @@ mod tests {
         let registry = ToolRegistry::standard();
         assert!(registry.get("Skill", Intent::Plan).is_some());
         assert!(registry.get("Skill", Intent::Agent).is_some());
-    }
-
-    #[test]
-    fn the_skill_name_rule_is_lowercase_digits_and_hyphens() {
-        assert!(is_skill_name("release-2"));
-        assert!(is_skill_name("a"));
-        assert!(!is_skill_name(""));
-        assert!(!is_skill_name("Release"));
-        assert!(!is_skill_name("a_b"));
-        assert!(!is_skill_name("a.b"));
-        assert!(!is_skill_name(&"a".repeat(MAX_NAME_CHARS + 1)));
     }
 }
