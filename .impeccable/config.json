@@ -1,0 +1,35 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "site/style.css"
+        ],
+        "createdAt": "2026-10-17T16:26:44.288Z",
+        "reason": "PRODUCT.md: a running tool pulses; .t-icon.running is the demo's live-state mark, as in the app"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "site/index.html"
+        ],
+        "createdAt": "2026-10-17T16:26:44.695Z",
+        "reason": "Claude: static-scan false positive; live scans at 1280x800 and 390x844 report nothing, sections inset content with a 24px/16px gutter"
+      },
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "site/index.html"
+        ],
+        "createdAt": "2026-10-17T16:26:52.113Z",
+        "reason": "PRODUCT.md: a running tool pulses; .t-icon.running is the demo's live-state mark, as in the app"
+      }
+    ]
+  }
+}
