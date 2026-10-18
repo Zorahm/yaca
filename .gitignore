@@ -21,8 +21,7 @@ dist-ssr
 .edoc/
 
 # Editor directories and files
-.vscode/*
-!.vscode/extensions.json
+.vscode/
 .idea
 .DS_Store
 *.suo
@@ -34,3 +33,7 @@ dist-ssr
 # Local tooling (owner rules: .claude stays out; .superpowers is the run scratchpad)
 .claude/
 .superpowers/
+.impeccable/
+
+# Landing page kept on disk only, not in the repository
+/site/
