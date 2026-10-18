@@ -796,6 +796,12 @@ mod tests {
             std::thread::spawn(move || {
                 for n in 0..EVENTS {
                     sink.emit(numbered(n));
+                    // Linux mutexes are not fair: an emitter that takes the lock
+                    // again at once starves `attach` until the stream is over,
+                    // and the test would attach too few times to mean anything.
+                    // A real stream has gaps; this gives the test one, long enough for
+                    // the woken waiter to take the lock (a bare `yield_now` is not).
+                    std::thread::sleep(Duration::from_micros(50));
                 }
             })
         };
