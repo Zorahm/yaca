@@ -8,10 +8,17 @@
  */
 
 import type { Language } from "../core/client";
+import { de } from "./de";
 import { en } from "./en";
+import { es } from "./es";
+import { fr } from "./fr";
+import { ja } from "./ja";
+import { ko } from "./ko";
 import type { Section } from "./merge";
-import { enForm, ruForm, type PluralForm } from "./plural";
+import { enForm, ruForm, singleForm, zeroOneForm, type PluralForm } from "./plural";
+import { pt } from "./pt";
 import { ru } from "./ru";
+import { zh } from "./zh";
 
 /** A language with a dictionary: every choice of the setting except "as the system". */
 export type Locale = Exclude<Language, "system">;
@@ -30,6 +37,16 @@ export type LocaleInfo = {
 export const LOCALES: Record<Locale, LocaleInfo> = {
   ru: { name: "Русский", plural: ruForm, strings: ru },
   en: { name: "English", plural: enForm, strings: en },
+  // Simplified. A primary subtag is all `detect` looks at, so `zh-TW` lands
+  // here too: Simplified is closer to that reader than Russian is.
+  zh: { name: "简体中文", plural: singleForm, strings: zh },
+  es: { name: "Español", plural: enForm, strings: es },
+  ja: { name: "日本語", plural: singleForm, strings: ja },
+  ko: { name: "한국어", plural: singleForm, strings: ko },
+  de: { name: "Deutsch", plural: enForm, strings: de },
+  fr: { name: "Français", plural: zeroOneForm, strings: fr },
+  // Brazilian; `pt-PT` lands here for the same reason `zh-TW` lands on `zh`.
+  pt: { name: "Português (Brasil)", plural: zeroOneForm, strings: pt },
 };
 
 /** In the order the settings window lists them. */

@@ -40,13 +40,22 @@ pub enum Theme {
 ///
 /// Spelled the way the dictionaries are keyed, so the window can hand the
 /// value straight to `src/i18n` instead of translating between two spellings
-/// of the same three choices.
+/// of the same choices.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "lowercase")]
 pub enum Language {
     Ru,
     En,
+    /// Simplified Chinese.
+    Zh,
+    Es,
+    Ja,
+    Ko,
+    De,
+    Fr,
+    /// Brazilian Portuguese.
+    Pt,
     /// Ask the webview, which is what happened before this setting existed.
     #[default]
     System,

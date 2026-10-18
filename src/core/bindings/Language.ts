@@ -5,6 +5,6 @@
  *
  * Spelled the way the dictionaries are keyed, so the window can hand the
  * value straight to `src/i18n` instead of translating between two spellings
- * of the same three choices.
+ * of the same choices.
  */
-export type Language = "ru" | "en" | "system";
+export type Language = "ru" | "en" | "zh" | "es" | "ja" | "ko" | "de" | "fr" | "pt" | "system";

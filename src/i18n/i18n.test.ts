@@ -8,16 +8,21 @@
 
 import { describe, expect, it } from "vitest";
 
-import { en, sections as enSections } from "./en";
+import { sections as enSections } from "./en";
 import { LOCALES } from "./locales";
 import { duplicates } from "./merge";
 import { ru, sections as ruSections } from "./ru";
-import { ruForm, enForm } from "./plural";
+import { ruForm, enForm, singleForm, zeroOneForm } from "./plural";
 import { translate, translatePlural } from "./index";
+
+/** Каждый словарь, кроме русского: он источник, с ним и сверяют. */
+const translated = Object.entries(LOCALES).filter(([code]) => code !== "ru");
 
 describe("словари", () => {
   it("покрывают друг друга ключ в ключ", () => {
-    expect(Object.keys(en).sort()).toEqual(Object.keys(ru).sort());
+    for (const [code, info] of translated) {
+      expect(Object.keys(info.strings).sort(), code).toEqual(Object.keys(ru).sort());
+    }
   });
 
   it("не объявляют ключ в двух разделах", () => {
@@ -33,19 +38,33 @@ describe("словари", () => {
     }
   });
 
-  it("не оставляют кириллицу в английском", () => {
-    const russian = Object.entries(en)
-      .filter(([, value]) => /[А-Яа-яЁё]/.test(value))
-      .map(([key]) => key);
-    expect(russian).toEqual([]);
+  it("не оставляют кириллицу в переводах", () => {
+    for (const [code, info] of translated) {
+      const russian = Object.entries(info.strings)
+        .filter(([, value]) => /[А-Яа-яЁё]/.test(value))
+        .map(([key]) => key);
+      expect(russian, code).toEqual([]);
+    }
+  });
+
+  it("не оставляют пустых строк", () => {
+    // Пустой перевод проходит проверку типов и молча стирает надпись.
+    for (const [code, info] of translated) {
+      const empty = Object.entries(info.strings)
+        .filter(([key, value]) => value.trim() === "" && ru[key as keyof typeof ru].trim() !== "")
+        .map(([key]) => key);
+      expect(empty, code).toEqual([]);
+    }
   });
 
   it("держат одни и те же места подстановки", () => {
     const holes = (text: string) =>
       (text.match(/\{(\w+)\}/g) ?? []).sort().join(",");
 
-    for (const key of Object.keys(ru) as (keyof typeof ru)[]) {
-      expect(holes(en[key]), key).toBe(holes(ru[key]));
+    for (const [code, info] of translated) {
+      for (const key of Object.keys(ru) as (keyof typeof ru)[]) {
+        expect(holes(info.strings[key] ?? ""), `${code}: ${key}`).toBe(holes(ru[key]));
+      }
     }
   });
 
@@ -78,6 +97,27 @@ describe("склонение", () => {
     expect(enForm(1)).toBe("one");
     expect(enForm(2)).toBe("other");
     expect(enForm(0)).toBe("other");
+  });
+
+  it("французское и бразильское считают ноль единственным числом", () => {
+    expect(zeroOneForm(0)).toBe("one");
+    expect(zeroOneForm(1)).toBe("one");
+    expect(zeroOneForm(2)).toBe("other");
+  });
+
+  it("китайское, японское и корейское не склоняют", () => {
+    expect(singleForm()).toBe("other");
+  });
+
+  it("находит форму в каждом языке", () => {
+    // Вернувшийся ключ — это `row.files.other` на экране вместо числа файлов.
+    for (const [code] of Object.entries(LOCALES)) {
+      for (const n of [0, 1, 2, 5, 11, 21]) {
+        const text = translatePlural(code as keyof typeof LOCALES, "row.files", n);
+        expect(text, `${code}: ${n}`).toContain(String(n));
+        expect(text, `${code}: ${n}`).not.toContain("row.files");
+      }
+    }
   });
 
   it("подставляет число в выбранную форму", () => {
