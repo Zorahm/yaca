@@ -1,7 +1,7 @@
 {
   "name": "yaca",
   "private": true,
-  "version": "1.0.4-alpha",
+  "version": "1.0.0-beta",
   "author": "ZorahM",
   "type": "module",
   "scripts": {

@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/yaca-core", "crates/yaca-cli", "crates/yaca-evals", "src-tauri"]
 
 [workspace.package]
-version = "1.0.4-alpha"
+version = "1.0.0-beta"
 authors = ["ZorahM"]
 edition = "2021"
 license = "MIT"
