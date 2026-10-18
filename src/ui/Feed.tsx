@@ -28,7 +28,7 @@ import { VList, type VListHandle } from "virtua";
 import type { ElicitationReply, PermissionAnswer, QuestionReply } from "../core/client";
 import type { Feed as FeedModel } from "../core/feed";
 import { visible } from "../core/feed";
-import { closesReply, fold, isLiveWork, type FeedItem } from "../core/work";
+import { closesReply, fold, isLiveWork, replyText, type FeedItem } from "../core/work";
 import { AgentsPlate } from "./AgentsPlate";
 import { t } from "../i18n";
 import {
@@ -208,6 +208,7 @@ export function Feed({
               actions={actions}
               live={isLiveWork(blocks, index, busy)}
               copyable={block.kind === "agent" && closesReply(blocks, index, busy)}
+              replyText={block.kind === "agent" ? replyText(blocks, index) : ""}
             />
           </div>
         ))}
@@ -255,6 +256,7 @@ function Block({
   actions,
   live,
   copyable,
+  replyText,
 }: {
   block: FeedItem;
   feed: FeedModel;
@@ -263,13 +265,14 @@ function Block({
   live: boolean;
   /** Только для текста агента: им заканчивается ответ. */
   copyable: boolean;
+  replyText: string;
 }) {
   switch (block.kind) {
     case "human":
       return <HumanMessage text={block.text} attachments={block.attachments} />;
 
     case "agent":
-      return <AgentText text={block.text} copyable={copyable} />;
+      return <AgentText text={block.text} copyable={copyable} replyText={replyText} />;
 
     case "work":
       return (

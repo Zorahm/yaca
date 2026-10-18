@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import type { AgentEvent } from "./bindings/AgentEvent";
 import { emptyFeed, reduceAll, visible } from "./feed";
-import { closesReply, fold, isLiveWork, type FeedItem } from "./work";
+import { closesReply, fold, isLiveWork, replyText, type FeedItem } from "./work";
 
 function items(...events: AgentEvent[]): FeedItem[] {
   return fold(visible(reduceAll(emptyFeed, events)));
@@ -214,5 +214,43 @@ describe("closesReply", () => {
   it("holds for an earlier reply while the next turn runs", () => {
     const feed = items(wrote("b1", "Done."), said("more"), started("c1"));
     expect(closesReply(feed, 0, true)).toBe(true);
+  });
+});
+
+describe("replyText", () => {
+  it("gathers every piece of the model's reply, without the work between them", () => {
+    const feed = items(
+      said("do it"),
+      wrote("b1", "Looking."),
+      started("c1"),
+      wrote("b2", "Found it."),
+      started("c2"),
+      wrote("b3", "Done."),
+    );
+    const last = feed.length - 1;
+    expect(replyText(feed, last)).toBe("Looking.\n\nFound it.\n\nDone.");
+  });
+
+  it("stops at the human message that began the reply", () => {
+    const feed = items(wrote("b0", "Earlier answer."), said("next"), wrote("b1", "Now."));
+    expect(replyText(feed, feed.length - 1)).toBe("Now.");
+  });
+
+  it("leaves out a file the agent showed", () => {
+    const feed = items(
+      said("show"),
+      wrote("b1", "Here it is:"),
+      {
+        type: "textShown",
+        path: "a.md",
+        command: null,
+        firstLine: 1,
+        lines: 1,
+        total: 1,
+        text: "draft",
+      },
+      wrote("b2", "That is all."),
+    );
+    expect(replyText(feed, feed.length - 1)).toBe("Here it is:\n\nThat is all.");
   });
 });

@@ -191,3 +191,22 @@ export function closesReply(items: FeedItem[], index: number, busy: boolean): bo
   }
   return !busy;
 }
+
+/**
+ * Everything the model said in the reply that the text at `index` closes: its
+ * own words from the human's message up to here, in order, joined by a blank
+ * line. A reply is cut into pieces by the work between them, and the copy
+ * button sits under the last piece, so it has to gather the others.
+ *
+ * Only the model's text. Tool rows, reasoning, plans and files the agent
+ * showed (`shown`) are not what the model wrote to the human, and are left out.
+ */
+export function replyText(items: FeedItem[], index: number): string {
+  const parts: string[] = [];
+  for (let i = index; i >= 0; i -= 1) {
+    const item = items[i];
+    if (item.kind === "human") break;
+    if (item.kind === "agent" && item.text.trim() !== "") parts.push(item.text.trim());
+  }
+  return parts.reverse().join("\n\n");
+}

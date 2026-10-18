@@ -68,13 +68,23 @@ export function HumanMessage({ text, attachments }: { text: string; attachments:
 
 /**
  * §5.2. `copyable` is set on the text that closes a reply: what gets copied is
- * the answer as the model wrote it, markdown and all.
+ * the whole answer as the model wrote it, markdown and all, every piece of it
+ * and not only the last one.
  */
-export function AgentText({ text, copyable }: { text: string; copyable: boolean }) {
+export function AgentText({
+  text,
+  copyable,
+  replyText,
+}: {
+  text: string;
+  copyable: boolean;
+  /** What the copy button takes: the whole reply, not only this piece. */
+  replyText: string;
+}) {
   return (
     <>
       <Markdown text={text} />
-      {copyable && <MessageActs text={text} />}
+      {copyable && <MessageActs text={replyText} />}
     </>
   );
 }
