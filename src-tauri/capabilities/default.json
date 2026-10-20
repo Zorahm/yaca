@@ -15,5 +15,10 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "opener:default"
+  ],
+  "platforms": [
+    "linux",
+    "macOS",
+    "windows"
   ]
 }

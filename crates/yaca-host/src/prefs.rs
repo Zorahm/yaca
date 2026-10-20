@@ -20,9 +20,13 @@
 //! would have had nothing to recolour. An `accent` key left in a file by an
 //! earlier build is ignored on load and gone on the next save.
 
+use std::sync::{Arc, Mutex};
+
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use yaca_core::ShellChoice;
+
+use crate::Host;
 
 /// Which of the two themes, or the one the OS asks for (§2).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -126,45 +130,58 @@ impl Default for Preferences {
 /// changed them, everyone who draws them has to hear.
 pub const PREFS_CHANNEL: &str = "yaca://preferences";
 
-/// Preferences as they are now.
+/// Preferences as they are right now, shared by whoever needs to read them.
 ///
-/// Read from the shell's own state rather than the file: the file is written
-/// through [`set_preferences`], which refreshes that state in the same call,
-/// and a second reader of the disk would be a second answer to the same
-/// question.
-#[tauri::command]
-pub fn preferences(state: tauri::State<'_, crate::state::AppState>) -> Preferences {
-    state.prefs()
+/// A copy of what is on disk, kept because the toast watcher asks about
+/// notifications on every event and reading a file there would put the disk in
+/// the path of a permission request. The file stays the truth; this is
+/// refreshed by the same command that writes it.
+#[derive(Debug, Clone, Default)]
+pub struct PrefsHandle(Arc<Mutex<Preferences>>);
+
+impl PrefsHandle {
+    pub fn get(&self) -> Preferences {
+        // Nothing here can panic while holding the lock: it is a clone and a swap.
+        self.0.lock().unwrap().clone()
+    }
+
+    pub fn set(&self, prefs: Preferences) {
+        *self.0.lock().unwrap() = prefs;
+    }
 }
 
-/// Writes preferences and tells every window at once.
-///
-/// The broadcast is the point of the command, not a courtesy: §10 is a
-/// separate window, and a theme that changed only where it was chosen would be
-/// an interface lying about state (§0). `emit` reaches every webview,
-/// the settings window included, so both redraw from the same value.
-///
-/// The state is updated before the write. A failed write is reported, and what
-/// the human sees is what they picked — a window that snapped back to the old
-/// theme while the error message said "could not write" would be telling two
-/// stories at once.
-#[tauri::command]
-pub fn set_preferences(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, crate::state::AppState>,
-    prefs: Preferences,
-) -> Result<(), String> {
-    use tauri::Emitter;
+impl Host {
+    /// Preferences as they are now.
+    ///
+    /// Read from the host's own state rather than the file: the file is written
+    /// through [`Host::set_preferences`], which refreshes that state in the same
+    /// call, and a second reader of the disk would be a second answer to the
+    /// same question.
+    pub fn preferences(&self) -> Preferences {
+        self.state.prefs().get()
+    }
 
-    state.set_prefs(prefs.clone());
-    let _ = app.emit(PREFS_CHANNEL, prefs.clone());
+    /// Writes preferences and tells every window at once.
+    ///
+    /// The broadcast is the point of the command, not a courtesy: §10 is a
+    /// separate window, and a theme that changed only where it was chosen would be
+    /// an interface lying about state (§0). Every listener redraws from the same value.
+    ///
+    /// The state is updated before the write. A failed write is reported, and what
+    /// the human sees is what they picked — a window that snapped back to the old
+    /// theme while the error message said "could not write" would be telling two
+    /// stories at once.
+    pub fn set_preferences(&self, prefs: Preferences) -> Result<(), String> {
+        self.state.prefs().set(prefs.clone());
+        self.shell.emit_value(PREFS_CHANNEL, &prefs);
 
-    let dir = crate::config_dir()?;
-    let mut settings = crate::settings::AppSettings::load(&dir);
-    settings.set_prefs(prefs);
-    settings
-        .save(&dir)
-        .map_err(|e| format!("could not write settings: {e}"))
+        let dir = crate::config_dir()?;
+        let mut settings = crate::settings::AppSettings::load(&dir);
+        settings.set_prefs(prefs);
+        settings
+            .save(&dir)
+            .map_err(|e| format!("could not write settings: {e}"))
+    }
 }
 
 #[cfg(test)]

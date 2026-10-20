@@ -252,7 +252,7 @@ impl Drop for Busy<'_> {
 
 /// Where the browsers keep their cookies and storage.
 fn profile() -> Result<PathBuf, String> {
-    Ok(crate::config_dir()?.join("browser"))
+    Ok(yaca_core::provider::registry::config_dir().map_err(|e| e.to_string())?.join("browser"))
 }
 
 /// The browsers of the open chats.

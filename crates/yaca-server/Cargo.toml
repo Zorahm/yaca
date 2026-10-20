@@ -1,0 +1,36 @@
+[package]
+name = "yaca-server"
+description = "Yaca server: the host behind a WebSocket, for an interface on another machine"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "yaca-server"
+path = "src/main.rs"
+
+[lib]
+name = "yaca_server"
+path = "src/lib.rs"
+
+[dependencies]
+yaca-core.workspace = true
+yaca-host.workspace = true
+
+anyhow.workspace = true
+axum.workspace = true
+clap = { workspace = true, features = ["env"] }
+futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio = { workspace = true, features = ["signal"] }
+tokio-util.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio-tungstenite = "0.26"

@@ -519,17 +519,60 @@ Not supported in the router:
 - **A stable decision across compaction.** If history is compacted in the middle of a tool loop, the router decides again (and drops reasoning made by another model); the turn may continue on a different model.
 - **A running decision model.** It is not started or checked for you: a local model must already be served.
 
+## Server Mode
+
+Yaca can run its core on one machine and be used from another. `yaca-server` is the host without a window: it holds the chats, runs the tools and keeps the keys, and a Yaca window — on a desktop, or the Android app — is only a view onto it. On a desktop the window can still work locally; "Settings → Connection" switches it to a server and back.
+
+```bash
+scripts/install-server.sh root@your-server --domain yaca.example.com --email you@example.com
+```
+
+The script (Debian and Ubuntu) connects over SSH and sets up everything: a `yaca` user, `yaca-server` as a systemd service on `127.0.0.1:7878`, nginx in front of it with a Let's Encrypt certificate, and a token for your first device. It prints one line:
+
+```text
+yaca://connect?host=yaca.example.com&token=yct_…
+```
+
+Paste it into the address field of the app and both fields fill in. The domain must already point at the server. Without a domain use `--insecure` for plain HTTP, only inside a VPN or a trusted network. To skip building on a small server, build `yaca-server` yourself and pass `--binary path`.
+
+Devices are told apart by their tokens:
+
+```bash
+sudo -u yaca yaca-server token add tablet    # prints the token once
+sudo -u yaca yaca-server token list
+sudo -u yaca yaca-server token revoke tablet # the device is cut off at its next ping
+```
+
+How it behaves:
+
+- **Chats live on the server.** A dropped connection loses nothing: the window reconnects and takes the chats back from the journal, the way a reloaded desktop window does.
+- **One device at a time.** A device that connects takes over the streams; the one it replaced is told so on screen and can take them back.
+- **Projects are folders of the server.** Choosing a project opens a folder browser over the server's disk. Dragging files in is off against a server, and `＋` attaches pictures from the device, which are sent and kept in the project like a pasted one.
+- **Keys stay on the server.** With no system keychain there (a server has none) they are kept in `secrets.json` in the settings directory, readable by its owner only — the protection an SSH key has. The settings screen calls this "keychain".
+- **Tokens** are stored on the server as SHA-256 hashes (`server.json`), and on the device in the app's private storage.
+
+Not supported yet:
+
+- **A phone layout.** The Android app is the desktop interface in a smaller window; it is usable but not shaped for a touch screen.
+- **The browser column** against a server. It belongs to the desktop shell, and the server has no window to draw it in.
+- **Notifications** when the app is in the background: toasts are a desktop shell feature.
+- **Several devices at once**, and a `yaca-server` binary in the releases: build it with `cargo build --release -p yaca-server`.
+- The Android app has not been run on a device; only the shell's compilation for `aarch64-linux-android` and the server through a socket are tested.
+
 ## Architecture
 
 ```
-crates/yaca-core/   core: agent loop, tools, permissions, checkpoints, model router
-crates/yaca-cli/    headless CLI interface to the core
-crates/yaca-evals/  agent evaluation benchmarks
-src-tauri/          Tauri desktop wrapper
-src/                React and TypeScript UI
+crates/yaca-core/    core: agent loop, tools, permissions, checkpoints, model router
+crates/yaca-host/    the commands and the event bridge between the core and a shell
+crates/yaca-server/  the host behind a WebSocket, for a window on another machine
+crates/yaca-cli/     headless CLI interface to the core
+crates/yaca-evals/   agent evaluation benchmarks
+src-tauri/           Tauri shell: the desktop window, and the phone's bare webview
+src/                 React and TypeScript UI
+scripts/             installer art, and the server installer
 ```
 
-The core is completely decoupled from the GUI: it consumes commands and emits an event stream, and the frontend is purely a reactive projection of this stream.
+The core is completely decoupled from the GUI: it consumes commands and emits an event stream, and the frontend is purely a reactive projection of this stream. Between the two sits the host, which has no window in it either: the desktop shell calls it in-process and `yaca-server` calls it for a remote window, so both reach the same commands under the same names.
 
 ## Development
 

@@ -25,7 +25,6 @@ fn root(path: &str) -> Result<PathBuf, String> {
 /// A file that does not parse comes back as an error rather than as the
 /// defaults: the settings window must not show an empty rule list to a human
 /// whose rules are merely mistyped (§0).
-#[tauri::command]
 pub fn project_settings(project: String) -> Result<Settings, String> {
     Settings::load(&root(&project)?).map_err(|e| e.to_string())
 }
@@ -35,7 +34,6 @@ pub fn project_settings(project: String) -> Result<Settings, String> {
 /// Whole, not field by field: the window holds the settings it just read, and
 /// a patch API would have to answer what happens when two windows patch at
 /// once. One project, one settings window, one write.
-#[tauri::command]
 pub fn save_project_settings(project: String, settings: Settings) -> Result<(), String> {
     settings
         .save(&root(&project)?)
@@ -48,7 +46,6 @@ pub fn save_project_settings(project: String, settings: Settings) -> Result<(), 
 /// Asked of the core rather than written down in the window: the list is the
 /// core's, and a copy in the frontend would drift from it on the first
 /// addition.
-#[tauri::command]
 pub fn shadow_excluded_dirs() -> Vec<&'static str> {
     yaca_core::checkpoint::scan::excluded_dirs().to_vec()
 }
@@ -59,7 +56,6 @@ pub fn shadow_excluded_dirs() -> Vec<&'static str> {
 /// The path, never the text: the settings window says which file is in force
 /// and offers to open it, and pumping 64 KB of prompt through the bridge to
 /// show one line would be paying for a thing nobody reads here.
-#[tauri::command]
 pub fn project_instructions(project: String) -> Result<Option<String>, String> {
     let ws = yaca_core::Workspace::open(root(&project)?).map_err(|e| e.to_string())?;
     // The root file only: nested ones govern their own directories and are

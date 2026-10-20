@@ -12,7 +12,7 @@ use yaca_core::router::{
 };
 use yaca_core::usage::ModelInfo;
 
-use crate::config_dir;
+use crate::{config_dir, Host};
 use crate::providers::announce;
 
 /// What the model switcher and the settings section are told. `Broken` is a
@@ -62,7 +62,6 @@ pub fn require() -> Result<ModelInfo, String> {
     }
 }
 
-#[tauri::command]
 pub fn routing_status() -> Result<RoutingStatus, String> {
     let dir = config_dir()?;
     let providers = Providers::load(&dir).map_err(|e| e.to_string())?;
@@ -70,7 +69,6 @@ pub fn routing_status() -> Result<RoutingStatus, String> {
 }
 
 /// The file as it is on disk, for the editor. `None` when there is none.
-#[tauri::command]
 pub fn routing_text() -> Result<Option<String>, String> {
     let path = config_dir()?.join(file::FILE);
     match std::fs::read_to_string(&path) {
@@ -84,8 +82,7 @@ pub fn routing_text() -> Result<Option<String>, String> {
 /// points at a provider or model the list does not have, is refused with the
 /// words the file would be refused with, and nothing is written: a config that
 /// fails the start must not reach the disk from a button.
-#[tauri::command]
-pub fn save_routing(app: tauri::AppHandle, text: String) -> Result<RoutingStatus, String> {
+pub fn save_routing(host: &Host, text: String) -> Result<RoutingStatus, String> {
     let dir = config_dir()?;
     let providers = Providers::load(&dir).map_err(|e| e.to_string())?;
 
@@ -94,19 +91,18 @@ pub fn save_routing(app: tauri::AppHandle, text: String) -> Result<RoutingStatus
     file::save(&dir, &cfg).map_err(|e| e.to_string())?;
 
     // The switcher lists the router from this file: it has to hear about it.
-    announce(&app);
+    announce(host);
     Ok(attach::status(&dir, &providers).into())
 }
 
 /// Takes routing away: the file goes, and the router leaves the switcher.
-#[tauri::command]
-pub fn remove_routing(app: tauri::AppHandle) -> Result<(), String> {
+pub fn remove_routing(host: &Host) -> Result<(), String> {
     let path = config_dir()?.join(file::FILE);
     match std::fs::remove_file(&path) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(format!("could not delete {}: {e}", path.display())),
     }
-    announce(&app);
+    announce(host);
     Ok(())
 }

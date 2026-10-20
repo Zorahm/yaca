@@ -11,12 +11,12 @@
 //! Nothing is downloaded or installed. A new release is shown with its
 //! changelog and a link; the person decides what to do with it.
 
+use std::sync::Arc;
 use std::time::Duration;
 
-use tauri::{AppHandle, Emitter, Manager};
 use yaca_core::update::{self, UpdateCheck};
 
-use crate::state::AppState;
+use crate::Host;
 
 /// The channel a fresh answer arrives on. Both windows listen.
 pub const UPDATE_CHANNEL: &str = "yaca://update";
@@ -35,35 +35,33 @@ const FIRST_CHECK_AFTER: Duration = Duration::from_secs(20);
 const EVERY: Duration = Duration::from_secs(6 * 60 * 60);
 
 /// Asks GitHub, keeps the answer, tells every window.
-async fn ask(app: &AppHandle) -> Result<UpdateCheck, String> {
+async fn ask(host: &Host) -> Result<UpdateCheck, String> {
     let check = update::check(CURRENT).await.map_err(|e| e.to_string())?;
-    app.state::<AppState>().set_update(check.clone());
-    let _ = app.emit(UPDATE_CHANNEL, check.clone());
+    host.state.set_update(check.clone());
+    host.shell.emit_value(UPDATE_CHANNEL, &check);
     Ok(check)
 }
 
 /// The button. Always asks, whatever the automatic-check setting says; the
 /// error is a code for the window to put in words (`UpdateError`).
-#[tauri::command]
-pub async fn check_for_updates(app: AppHandle) -> Result<UpdateCheck, String> {
-    ask(&app).await
+pub async fn check_for_updates(host: &Host) -> Result<UpdateCheck, String> {
+    ask(host).await
 }
 
 /// What the last check found, or `None` before the first one finished.
-#[tauri::command]
-pub fn update_status(state: tauri::State<'_, AppState>) -> Option<UpdateCheck> {
-    state.update()
+pub fn update_status(host: &Host) -> Option<UpdateCheck> {
+    host.state.update()
 }
 
 /// The background check. The setting is read on every round, so turning it
 /// off takes effect without a restart, and turning it on does not wait for one.
 /// A failed round is silent: nobody asked, and the next round tries again.
-pub fn watch(app: AppHandle) {
-    tauri::async_runtime::spawn(async move {
+pub fn watch(host: Arc<Host>) {
+    tokio::spawn(async move {
         tokio::time::sleep(FIRST_CHECK_AFTER).await;
         loop {
-            if app.state::<AppState>().prefs().check_updates {
-                let _ = ask(&app).await;
+            if host.state.prefs().get().check_updates {
+                let _ = ask(&host).await;
                 tokio::time::sleep(EVERY).await;
             } else {
                 // Off: look again soon, so switching it on is noticed.

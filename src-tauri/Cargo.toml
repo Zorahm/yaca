@@ -24,16 +24,22 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-yaca-core.workspace = true
-
-serde.workspace = true
-serde_json.workspace = true
 # `unstable` is what lets a window hold a second webview — the browser
 # column's page; `devtools` keeps its DevTools in a release build.
 tauri = { version = "2", features = ["unstable", "devtools"] }
 # Choosing the project folder from the chip in §9.1. The webview has no dialog of its own.
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
+
+# Everything below is the desktop window. A phone's shell holds no host: the
+# interface there talks to a `yaca-server`, and none of this (the keychain, the
+# shell tools, toasts) has a place on an Android device.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+yaca-core.workspace = true
+yaca-host.workspace = true
+
+serde.workspace = true
+serde_json.workspace = true
 # Toasts §15 — `notify-rust` directly, not a plugin: see the comment in `notify.rs`.
 notify-rust = "4.18"
 tokio.workspace = true

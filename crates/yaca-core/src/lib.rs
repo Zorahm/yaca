@@ -59,6 +59,7 @@ pub mod workspace;
 
 mod hooks;
 mod uri;
+mod vault;
 mod verify;
 
 #[cfg(test)]

@@ -13,9 +13,12 @@ and `src/core/legacy.ts`. Everything else says Yaca.
 ```
 crates/yaca-core/    headless core: agent loop, tools, permissions, checkpoints,
                      model router, MCP, LSP, plugins, skills, hooks, store
+crates/yaca-host/    commands and event bridge between the core and a shell (no window in it)
+crates/yaca-server/  the host behind a WebSocket + token (`yaca-server`), for remote windows
 crates/yaca-cli/     CLI over the core (anything the core does must run from here)
 crates/yaca-evals/   agent evaluation benchmarks
-src-tauri/           Tauri shell: bridge, prefs, settings, providers, browser pane
+src-tauri/           Tauri shell: desktop window around the host, browser pane, toasts;
+                     on Android a bare webview with no host in it
 src/core/            frontend client, event reducer (feed.ts), generated bindings
 src/ui/              React components and CSS; tokens live in src/ui/tokens.css
 src/i18n/            dictionaries: ru (source of keys), en, de, es, fr, ja, ko, pt, zh
@@ -52,6 +55,12 @@ npx tauri build --bundles nsis           # Windows installer -> target/release/b
 - `yaca-core` knows nothing about windows, webviews or Tauri. In: `Command`.
   Out: `AgentEvent`. If something in the core cannot be exercised from
   `yaca-cli`, UI leaked into it.
+- `yaca-host` is just as windowless. A command exists once, there, and is
+  reached by name (`Host::call`) from the desktop shell and from `yaca-server`
+  alike; the frontend calls it through `src/core/transport.ts` and never asks
+  which. What only a window has (browser column, toasts) joins through the
+  hooks of `yaca_host::Shell`. Do not add a `#[tauri::command]` for something
+  the server would also need.
 - State lives in the core and is sent out whole (`ChangeSetUpdated`,
   `ProcessesUpdated`); the UI never accumulates a second copy of it.
 - The UI never lies about state: a running tool pulses, a finished one is

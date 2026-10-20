@@ -1,4 +1,4 @@
-//! Bridge between the core's event stream and the webview.
+//! Bridge between the core's event stream and whatever shows it (a webview, a socket).
 //!
 //! §12 requires applying text deltas in batches per frame, not per event.
 //! The reason is not rendering but IPC: every crossing into the webview costs money,
@@ -14,15 +14,17 @@
 //! frame of the old one can still be on its way to the window when the new one's snapshot
 //! arrives, and folding it would draw its events twice; the epoch is what tells them apart.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use yaca_core::event::AgentEvent;
 use yaca_core::id::SessionId;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio_util::sync::CancellationToken;
+
+use crate::Shell;
 
 /// Frame at 60 fps.
 const FRAME: Duration = Duration::from_millis(16);
@@ -40,7 +42,7 @@ pub struct EventFrame {
 }
 
 pub async fn pump(
-    app: AppHandle,
+    shell: Arc<dyn Shell>,
     mut events: Receiver<AgentEvent>,
     stop: CancellationToken,
     channel: &'static str,
@@ -58,7 +60,7 @@ pub async fn pump(
             _ = ticker.tick() => {
                 if !batch.is_empty() {
                     let events = coalesce(std::mem::take(&mut batch));
-                    let _ = app.emit(channel, EventFrame { session: session.clone(), epoch, events });
+                    shell.emit_value(channel, &EventFrame { session: session.clone(), epoch, events });
                 }
             }
 
@@ -74,7 +76,7 @@ pub async fn pump(
 
     if !batch.is_empty() {
         let events = coalesce(batch);
-        let _ = app.emit(channel, EventFrame { session, epoch, events });
+        shell.emit_value(channel, &EventFrame { session, epoch, events });
     }
 }
 

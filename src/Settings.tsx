@@ -29,6 +29,7 @@ import {
   Bell,
   Cube,
   FolderSimple,
+  HardDrives,
   Info,
   Palette,
   Plugs,
@@ -57,6 +58,7 @@ import { AppearanceSection } from "./ui/settings/AppearanceSection";
 import { McpSection, type McpServers } from "./ui/settings/McpSection";
 import { ModelsSection } from "./ui/settings/ModelsSection";
 import { NoticesSection } from "./ui/settings/NoticesSection";
+import { ConnectionSection } from "./ui/link/ConnectionSection";
 import { PluginsSection } from "./ui/settings/PluginsSection";
 import { ProjectSection } from "./ui/settings/ProjectSection";
 import { ProvidersSection } from "./ui/settings/ProvidersSection";
@@ -78,6 +80,7 @@ export type Section =
   | "plugins"
   | "appearance"
   | "notices"
+  | "connection"
   | "about"
   | "models"
   | "rules"
@@ -93,6 +96,7 @@ const APP_SECTIONS: Item[] = [
   { id: "plugins", name: "plug.title", icon: <PuzzlePiece size={15} /> },
   { id: "appearance", name: "look.title", icon: <Palette size={15} /> },
   { id: "notices", name: "notices.title", icon: <Bell size={15} /> },
+  { id: "connection", name: "link.settings_nav", icon: <HardDrives size={15} /> },
   { id: "about", name: "about.title", icon: <Info size={15} /> },
 ];
 
@@ -229,6 +233,7 @@ export default function Settings({
           {shown === "plugins" && <PluginsSection />}
           {shown === "appearance" && <AppearanceSection prefs={prefs} onPatch={patchPrefs} />}
           {shown === "notices" && <NoticesSection prefs={prefs} onPatch={patchPrefs} />}
+          {shown === "connection" && <ConnectionSection />}
           {shown === "about" && <AboutSection prefs={prefs} onPatch={patchPrefs} />}
 
           {isProjectSection(shown) && project !== null && (

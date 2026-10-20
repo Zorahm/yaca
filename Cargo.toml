@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/yaca-core", "crates/yaca-cli", "crates/yaca-evals", "src-tauri"]
+members = ["crates/yaca-core", "crates/yaca-host", "crates/yaca-server", "crates/yaca-cli", "crates/yaca-evals", "src-tauri"]
 
 [workspace.package]
 version = "1.0.0-beta"
@@ -11,8 +11,10 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 yaca-core = { path = "crates/yaca-core" }
+yaca-host = { path = "crates/yaca-host" }
 
 anyhow = "1"
+axum = { version = "0.8", default-features = false, features = ["http1", "ws", "tokio"] }
 async-trait = "0.1"
 base64 = "0.22"
 blake3 = "1"

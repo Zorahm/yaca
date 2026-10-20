@@ -13,6 +13,7 @@ import { merge } from "../merge";
 import { browser } from "./browser";
 import { composer } from "./composer";
 import { feed } from "./feed";
+import { link } from "./link";
 import { mcp } from "./mcp";
 import { panels } from "./panels";
 import { providers } from "./providers";
@@ -20,6 +21,6 @@ import { routing } from "./routing";
 import { settings } from "./settings";
 import { shell } from "./shell";
 
-export const sections = [shell, feed, composer, panels, settings, providers, mcp, routing, browser] as const;
+export const sections = [shell, feed, composer, panels, settings, providers, mcp, routing, browser, link] as const;
 
 export const ru = merge(sections);

@@ -9,7 +9,7 @@ use yaca_core::provider::registry::{ProviderSpec, Providers};
 use yaca_core::secrets::{self, KeySource};
 use yaca_core::usage::ModelInfo;
 
-use crate::config_dir;
+use crate::{config_dir, Host};
 
 /// Channel "the provider list has changed".
 ///
@@ -21,9 +21,8 @@ pub const PROVIDERS_CHANNEL: &str = "yaca://providers";
 /// Tells the windows that the list has changed. A failed broadcast does not fail the write:
 /// the disk already holds the truth, and a missed event is a stale list, not a
 /// lost setting.
-pub(crate) fn announce(app: &tauri::AppHandle) {
-    use tauri::Emitter;
-    let _ = app.emit(PROVIDERS_CHANNEL, ());
+pub(crate) fn announce(host: &Host) {
+    host.shell.emit_value(PROVIDERS_CHANNEL, &());
 }
 
 /// The list after a command that also asked a provider for its models.
@@ -56,7 +55,6 @@ async fn ask(dir: &Path, saved: Providers, id: &str) -> Asked {
 }
 
 /// Provider list (§10).
-#[tauri::command]
 pub fn providers() -> Result<Providers, String> {
     Providers::load(&config_dir()?).map_err(|e| e.to_string())
 }
@@ -66,8 +64,7 @@ pub fn providers() -> Result<Providers, String> {
 /// One saved without models is asked for them on the spot. That is the new
 /// provider: its key is stored before it is in the list, so the question
 /// `set_api_key` asks had nobody to go to yet.
-#[tauri::command]
-pub async fn save_provider(app: tauri::AppHandle, spec: ProviderSpec) -> Result<Asked, String> {
+pub async fn save_provider(host: &Host, spec: ProviderSpec) -> Result<Asked, String> {
     let dir = config_dir()?;
     let id = spec.id.clone();
     let unasked = spec.models.is_empty();
@@ -84,17 +81,16 @@ pub async fn save_provider(app: tauri::AppHandle, spec: ProviderSpec) -> Result<
             poll_error: None,
         }
     };
-    announce(&app);
+    announce(host);
     Ok(asked)
 }
 
-#[tauri::command]
-pub fn delete_provider(app: tauri::AppHandle, id: String) -> Result<Providers, String> {
+pub fn delete_provider(host: &Host, id: String) -> Result<Providers, String> {
     let dir = config_dir()?;
     let mut providers = Providers::load(&dir).map_err(|e| e.to_string())?;
     providers.remove(&id).map_err(|e| e.to_string())?;
     providers.save(&dir).map_err(|e| e.to_string())?;
-    announce(&app);
+    announce(host);
     Ok(providers)
 }
 
@@ -106,7 +102,6 @@ pub fn delete_provider(app: tauri::AppHandle, id: String) -> Result<Providers, S
 ///
 /// The list is returned, not saved: until the person presses "Save",
 /// nothing in the registry should change.
-#[tauri::command]
 pub async fn discover_models(spec: ProviderSpec) -> Result<Vec<ModelInfo>, String> {
     models::discover(&spec, models::stored_key(&spec).as_deref())
         .await
@@ -121,9 +116,8 @@ pub async fn discover_models(spec: ProviderSpec) -> Result<Vec<ModelInfo>, Strin
 /// ask it with, so it is asked here and not by whichever window sent the key.
 /// The name may also be no provider at all — the web search key goes through
 /// this command — and then there is nobody to ask.
-#[tauri::command]
 pub async fn set_api_key(
-    app: tauri::AppHandle,
+    host: &Host,
     provider: String,
     key: String,
 ) -> Result<Asked, String> {
@@ -138,11 +132,10 @@ pub async fn set_api_key(
         });
     }
     let asked = ask(&dir, providers, &provider).await;
-    announce(&app);
+    announce(host);
     Ok(asked)
 }
 
-#[tauri::command]
 pub fn forget_api_key(provider: String) -> Result<(), String> {
     secrets::forget_api_key(&provider).map_err(|e| e.to_string())
 }
@@ -154,7 +147,6 @@ pub fn forget_api_key(provider: String) -> Result<(), String> {
 ///
 /// A provider that needs no key at all answers `not_needed`: "no key"
 /// would be a warning about nothing for a local gateway.
-#[tauri::command]
 pub fn api_key_source(provider: String) -> Result<&'static str, String> {
     let providers = Providers::load(&config_dir()?).map_err(|e| e.to_string())?;
     let spec = providers
@@ -176,7 +168,6 @@ pub fn api_key_source(provider: String) -> Result<&'static str, String> {
 /// in the registry, so the shared command would answer "not in the list" about a key that
 /// is quietly sitting in the keychain. It is written and forgotten through the same
 /// `set_api_key` and `forget_api_key` — the storage is one for everyone.
-#[tauri::command]
 pub fn search_key_source() -> &'static str {
     match secrets::key_source(secrets::TAVILY_ITEM) {
         KeySource::Keychain => "keychain",
@@ -188,7 +179,6 @@ pub fn search_key_source() -> &'static str {
 /// Models of all providers (§7.1), and the router's model when `routing.json`
 /// is usable. A broken file adds nothing here — `routing_status` is where that
 /// is said, so the switcher can say why the model is not there.
-#[tauri::command]
 pub fn models() -> Result<Vec<ModelInfo>, String> {
     let providers = Providers::load(&config_dir()?).map_err(|e| e.to_string())?;
     let mut all = providers.all_models();
@@ -201,7 +191,6 @@ pub fn models() -> Result<Vec<ModelInfo>, String> {
 /// Asked when the model menu opens, never stored: `yaca_core::provider::models`
 /// has the reason. A provider whose server keeps quiet about it answers with
 /// an empty map, and the menu stops asking it for the rest of the run.
-#[tauri::command]
 pub async fn model_residency(provider: String) -> Result<HashMap<String, bool>, String> {
     let providers = Providers::load(&config_dir()?).map_err(|e| e.to_string())?;
     let spec = providers

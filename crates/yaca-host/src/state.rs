@@ -1,4 +1,4 @@
-//! What the shell holds: the chats that are open right now.
+//! What the host holds: the chats that are open right now.
 //!
 //! Several at once, in one project or in many. The core never held one at a
 //! time — `spawn` hands back an independent session with its own id, its own
@@ -18,7 +18,8 @@ use yaca_core::id::SessionId;
 use yaca_core::{Attach, Replay, SessionHandle};
 use tokio_util::sync::CancellationToken;
 
-use crate::prefs::Preferences;
+use crate::prefs::PrefsHandle;
+use crate::Shell;
 
 /// A live chat: the core session and the bridge pumping its events out.
 struct Chat {
@@ -52,7 +53,7 @@ pub struct AppState {
     /// notifications on every event and reading a file there would put the
     /// disk in the path of a permission request. The file stays the truth;
     /// this is refreshed by the same command that writes it.
-    prefs: Mutex<Preferences>,
+    prefs: PrefsHandle,
     /// The last answer of the update check, so a window opened later (the
     /// settings one) sees what the first window was told.
     update: Mutex<Option<yaca_core::update::UpdateCheck>>,
@@ -63,12 +64,8 @@ impl AppState {
         AppState::default()
     }
 
-    pub fn prefs(&self) -> Preferences {
-        self.prefs.lock().unwrap().clone()
-    }
-
-    pub fn set_prefs(&self, prefs: Preferences) {
-        *self.prefs.lock().unwrap() = prefs;
+    pub fn prefs(&self) -> &PrefsHandle {
+        &self.prefs
     }
 
     pub fn update(&self) -> Option<yaca_core::update::UpdateCheck> {
@@ -88,11 +85,11 @@ impl AppState {
     /// The same id twice means the same session was opened again; the previous
     /// bridge is cancelled as the entry is replaced, or the window would get
     /// every event of that chat twice.
-    pub fn open(&self, handle: Arc<SessionHandle>, project: String, app: &tauri::AppHandle) {
+    pub fn open(&self, handle: Arc<SessionHandle>, project: String, shell: &Arc<dyn Shell>) {
         let stop = CancellationToken::new();
         let id = handle.id().clone();
         tokio::spawn(crate::bridge::pump(
-            app.clone(),
+            shell.clone(),
             handle.subscribe(),
             stop.clone(),
             crate::EVENT_CHANNEL,
@@ -102,7 +99,7 @@ impl AppState {
         // The toast of §15 listens to the same stream separately: the bridge is about transport,
         // the watcher is about notifications, and folding them into one file would mean
         // mixing two responsibilities.
-        tokio::spawn(crate::notify::watch(app.clone(), handle.subscribe(), stop.clone()));
+        shell.watch_chat(handle.subscribe(), stop.clone(), self.prefs.clone());
 
         let chat = Chat {
             handle,
@@ -136,7 +133,7 @@ impl AppState {
     /// The old bridge is cancelled first and the epoch moves on, so a frame of
     /// the old one that is still on its way is told apart from the new ones and
     /// not folded twice.
-    pub fn rebind_all(&self, app: &tauri::AppHandle) -> Vec<Rebound> {
+    pub fn rebind_all(&self, shell: &Arc<dyn Shell>) -> Vec<Rebound> {
         let mut chats = self.chats.lock().unwrap();
         let mut in_order: Vec<(&SessionId, &mut Chat)> = chats.iter_mut().collect();
         in_order.sort_by_key(|(_, chat)| chat.seq);
@@ -150,7 +147,7 @@ impl AppState {
 
                 let Attach { events, replay } = chat.handle.attach();
                 tokio::spawn(crate::bridge::pump(
-                    app.clone(),
+                    shell.clone(),
                     events,
                     stop.clone(),
                     crate::EVENT_CHANNEL,
@@ -159,7 +156,7 @@ impl AppState {
                 ));
                 // Watching the toasts starts over with the bridge: the one that
                 // was cancelled took its own stop token with it.
-                tokio::spawn(crate::notify::watch(app.clone(), chat.handle.subscribe(), stop));
+                shell.watch_chat(chat.handle.subscribe(), stop, self.prefs.clone());
 
                 Rebound {
                     handle: chat.handle.clone(),

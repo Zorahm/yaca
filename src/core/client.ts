@@ -13,8 +13,11 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 
 import { demoFinish, demoLsp, demoMcp, demoModels, demoScript, demoState, inTauri } from "./demo";
 import { DEMO_FILE_PATH, demoFileView } from "./demoFile";
+import { isRemote } from "./link";
+import { askServerFolder, exportText, giveFile, pickImages } from "./pickers";
 import { demoSessions } from "./demoSessions";
 import { BUILTIN_PROVIDER_ID, PRESETS, isPreset, needsKey } from "./provider";
+import { call, listenChannel } from "./transport";
 
 import type { AgentEvent } from "./bindings/AgentEvent";
 import type { AttachedChat } from "./bindings/AttachedChat";
@@ -206,7 +209,7 @@ let demoNext = 1;
 let demoProjects: string[] = [demoState.projectRoot];
 
 export function projects(): Promise<string[]> {
-  return inTauri ? invoke<string[]>("projects") : Promise.resolve([...demoProjects]);
+  return inTauri ? call<string[]>("projects") : Promise.resolve([...demoProjects]);
 }
 
 /** Adds a project to the list without starting a chat (§9.1). Returns the whole list. */
@@ -215,7 +218,7 @@ export function addProject(path: string): Promise<string[]> {
     demoProjects = [path, ...demoProjects.filter((known) => known !== path)];
     return Promise.resolve([...demoProjects]);
   }
-  return invoke<string[]>("add_project", { path });
+  return call<string[]>("add_project", { path });
 }
 
 /** Removes a project from the list. Leaves the folder and the §9 journals alone. */
@@ -224,8 +227,15 @@ export function forgetProject(path: string): Promise<string[]> {
     demoProjects = demoProjects.filter((known) => known !== path);
     return Promise.resolve([...demoProjects]);
   }
-  return invoke<string[]>("forget_project", { path });
+  return call<string[]>("forget_project", { path });
 }
+
+/**
+ * Whether this window is a desktop shell with its own host. Drag-and-drop paths
+ * and the browser column belong to it: against a server, a path on this machine
+ * names nothing, and the server has no browser column to draw.
+ */
+export const localShell = (): boolean => inTauri && !isRemote();
 
 /**
  * Whether anything can open a file dialog: for choosing a folder, files or a save path.
@@ -239,6 +249,8 @@ export const hasFileDialogs = inTauri;
 /** Folder picker for the project chip (§9.1). `null` means the person changed their mind. */
 export function chooseFolder(title: string): Promise<string | null> {
   if (!hasFileDialogs) return Promise.resolve(null);
+  // Against a server the project is on the server's disk, not under this dialog.
+  if (isRemote()) return askServerFolder(title);
   return open({ directory: true, multiple: false, title }).then((picked) =>
     typeof picked === "string" ? picked : null,
   );
@@ -257,6 +269,9 @@ export function chooseSavePath(
   extension: string,
 ): Promise<string | null> {
   if (!hasFileDialogs) return Promise.resolve(null);
+  // There is no path on this disk to give the server; the name stands for the
+  // file that `exportTo` hands over instead.
+  if (isRemote()) return Promise.resolve(defaultName);
   return save({
     defaultPath: defaultName,
     title,
@@ -272,6 +287,11 @@ export function chooseSavePath(
  */
 export function chooseFiles(root: string, title: string): Promise<string[]> {
   if (!hasFileDialogs) return Promise.resolve([]);
+  // A server cannot read this device's files, so what can be attached is what
+  // can be sent: pictures, kept in the project like a pasted one (§7.2).
+  if (isRemote()) {
+    return pickImages().then((pictures) => Promise.all(pictures.map((data) => stashImage(root, data))));
+  }
   return open({ directory: false, multiple: true, defaultPath: root, title }).then(
     (picked) => (Array.isArray(picked) ? picked : picked === null ? [] : [picked]),
   );
@@ -289,7 +309,7 @@ export function attachmentLook(project: string, path: string): Promise<Attachmen
   if (!inTauri) {
     return Promise.resolve({ kind: /[\\/]$/.test(path) ? "folder" : "file", preview: null });
   }
-  return invoke<AttachmentLook>("attachment_look", { project, path });
+  return call<AttachmentLook>("attachment_look", { project, path });
 }
 
 /**
@@ -298,7 +318,7 @@ export function attachmentLook(project: string, path: string): Promise<Attachmen
  */
 export function imageFull(project: string, path: string): Promise<string> {
   if (!inTauri) return Promise.reject("in the stand there is no one to read the picture");
-  return invoke<string>("image_full", { project, path });
+  return call<string>("image_full", { project, path });
 }
 
 /**
@@ -308,7 +328,7 @@ export function imageFull(project: string, path: string): Promise<string> {
  */
 export function stashImage(project: string, data: string): Promise<string> {
   if (!inTauri) return Promise.reject("in the stand there is nowhere to save a pasted image");
-  return invoke<string>("stash_image", { project, data });
+  return call<string>("stash_image", { project, data });
 }
 
 /**
@@ -318,7 +338,7 @@ export function stashImage(project: string, data: string): Promise<string> {
  * unsubscribe.
  */
 export function onFilesDragging(listener: (over: boolean) => void): () => void {
-  if (!inTauri) return () => {};
+  if (!localShell()) return () => {};
   let off: (() => void) | null = null;
   let gone = false;
   void getCurrentWebview()
@@ -344,7 +364,7 @@ export function onFilesDragging(listener: (over: boolean) => void): () => void {
  * event never reaches the page, and the page has no reason to read the file anyway.
  */
 export function onFilesDropped(listener: (paths: string[]) => void): () => void {
-  if (!inTauri) return () => {};
+  if (!localShell()) return () => {};
   let off: (() => void) | null = null;
   let gone = false;
   void getCurrentWebview()
@@ -363,7 +383,7 @@ export function onFilesDropped(listener: (paths: string[]) => void): () => void 
 
 /** Name for the greeting (§9.1). Taken from the OS; if none is found, the greeting has no name. */
 export function userName(): Promise<string | null> {
-  return inTauri ? invoke<string | null>("user_name") : Promise.resolve(null);
+  return inTauri ? call<string | null>("user_name") : Promise.resolve(null);
 }
 
 /**
@@ -377,7 +397,7 @@ export function projectStartup(path: string): Promise<Startup> {
     const { mode, provider, model, effort } = demoState;
     return Promise.resolve({ mode, provider, model, effort });
   }
-  return invoke<Startup>("project_startup", { path });
+  return call<Startup>("project_startup", { path });
 }
 
 /**
@@ -404,7 +424,7 @@ export function openProject(
       lsp: structuredClone(demoLsp),
     });
   }
-  return invoke<OpenedChat>("open_project", { path, resume, startup });
+  return call<OpenedChat>("open_project", { path, resume, startup });
 }
 
 /**
@@ -417,7 +437,7 @@ export function closeChat(session: SessionId): Promise<void> {
     stopDemo(session);
     return Promise.resolve();
   }
-  return invoke<void>("close_chat", { session });
+  return call<void>("close_chat", { session });
 }
 
 /**
@@ -433,7 +453,7 @@ export function closeChat(session: SessionId): Promise<void> {
  */
 export function attachChats(): Promise<AttachedChat[]> {
   if (!inTauri) return Promise.resolve([]);
-  return invoke<AttachedChat[]>("attach_chats");
+  return call<AttachedChat[]>("attach_chats");
 }
 
 /**
@@ -447,28 +467,32 @@ export function attachChats(): Promise<AttachedChat[]> {
 export const sessions = {
   list: (project: string): Promise<SessionMeta[]> =>
     inTauri
-      ? invoke<SessionMeta[]>("list_sessions", { project })
+      ? call<SessionMeta[]>("list_sessions", { project })
       : Promise.resolve(demoSessions.list(project)),
   search: (project: string, query: string, limit?: number): Promise<SearchHit[]> =>
     inTauri
-      ? invoke<SearchHit[]>("search_sessions", { project, query, limit })
+      ? call<SearchHit[]>("search_sessions", { project, query, limit })
       : Promise.resolve(demoSessions.search(project, query)),
   rename: (project: string, id: SessionId, title: string): Promise<void> =>
     inTauri
-      ? invoke<void>("rename_session", { project, id, title })
+      ? call<void>("rename_session", { project, id, title })
       : Promise.resolve(demoSessions.rename(project, id, title)),
   remove: (project: string, id: SessionId): Promise<void> =>
     inTauri
-      ? invoke<void>("delete_session", { project, id })
+      ? call<void>("delete_session", { project, id })
       : Promise.resolve(demoSessions.remove(project, id)),
   duplicate: (project: string, id: SessionId, through?: string): Promise<SessionMeta> =>
     inTauri
-      ? invoke<SessionMeta>("duplicate_session", { project, id, through })
+      ? call<SessionMeta>("duplicate_session", { project, id, through })
       : Promise.resolve().then(() => demoSessions.duplicate(project, id)),
   /** The §9 export is written by the core to the path the window picked. */
   exportTo: (project: string, id: SessionId, path: string): Promise<void> =>
-    inTauri
-      ? invoke<void>("export_session", { project, id, path })
+    isRemote()
+      ? // The server's disk is not the one the person picked a place on: the
+        // text comes here and is given over as a file (`path` is only its name).
+        exportText(project, id).then((text) => giveFile(path, text))
+      : inTauri
+      ? call<void>("export_session", { project, id, path })
       : Promise.reject("in the stand there is no one to write the file"),
   /**
    * The §9 feed journal — the feed of a reopened session is redrawn from it.
@@ -480,7 +504,7 @@ export const sessions = {
    */
   feed: (project: string, id: SessionId): Promise<AgentEvent[]> =>
     inTauri
-      ? invoke<AgentEvent[]>("session_feed", { project, id })
+      ? call<AgentEvent[]>("session_feed", { project, id })
       : Promise.resolve(demoSessions.feed(project, id)),
 };
 
@@ -495,7 +519,7 @@ export const sessions = {
  */
 export function projectCommands(project: string): Promise<SlashCommand[]> {
   return inTauri
-    ? invoke<SlashCommand[]>("project_commands", { project })
+    ? call<SlashCommand[]>("project_commands", { project })
     : Promise.resolve([]);
 }
 
@@ -508,7 +532,7 @@ export function projectCommands(project: string): Promise<SlashCommand[]> {
  */
 export function projectSkills(project: string): Promise<SkillReport> {
   return inTauri
-    ? invoke<SkillReport>("project_skills", { project })
+    ? call<SkillReport>("project_skills", { project })
     : Promise.resolve({ skills: [], diagnostics: [] });
 }
 
@@ -518,52 +542,52 @@ export function projectSkills(project: string): Promise<SkillReport> {
  */
 export function listPlugins(): Promise<PluginReport> {
   return inTauri
-    ? invoke<PluginReport>("list_plugins")
+    ? call<PluginReport>("list_plugins")
     : Promise.resolve({ plugins: [], diagnostics: [] });
 }
 
 /** The marketplaces plugins are installed from. None in the stand. */
 export function listMarketplaces(): Promise<MarketplaceSummary[]> {
-  return inTauri ? invoke<MarketplaceSummary[]>("list_marketplaces") : Promise.resolve([]);
+  return inTauri ? call<MarketplaceSummary[]>("list_marketplaces") : Promise.resolve([]);
 }
 
 const NO_STAND = () => Promise.reject(new Error("no plugins in the stand"));
 
 /** Adds a marketplace by address and fetches it. */
 export function addMarketplace(source: string): Promise<MarketplaceSummary> {
-  return inTauri ? invoke<MarketplaceSummary>("add_marketplace", { source }) : NO_STAND();
+  return inTauri ? call<MarketplaceSummary>("add_marketplace", { source }) : NO_STAND();
 }
 
 export function removeMarketplace(name: string): Promise<void> {
-  return inTauri ? invoke<void>("remove_marketplace", { name }) : NO_STAND();
+  return inTauri ? call<void>("remove_marketplace", { name }) : NO_STAND();
 }
 
 export function refreshMarketplace(name: string): Promise<MarketplaceSummary> {
-  return inTauri ? invoke<MarketplaceSummary>("refresh_marketplace", { name }) : NO_STAND();
+  return inTauri ? call<MarketplaceSummary>("refresh_marketplace", { name }) : NO_STAND();
 }
 
 /** What a marketplace offers; the first look fetches it. */
 export function marketplaceCatalog(name: string): Promise<CatalogEntry[]> {
-  return inTauri ? invoke<CatalogEntry[]>("marketplace_catalog", { name }) : NO_STAND();
+  return inTauri ? call<CatalogEntry[]>("marketplace_catalog", { name }) : NO_STAND();
 }
 
 /** Installs `plugin@marketplace`; it is on afterwards. */
 export function installPlugin(id: string): Promise<PluginSummary> {
-  return inTauri ? invoke<PluginSummary>("install_plugin", { id }) : NO_STAND();
+  return inTauri ? call<PluginSummary>("install_plugin", { id }) : NO_STAND();
 }
 
 export function updatePlugin(id: string): Promise<UpdateOutcome> {
-  return inTauri ? invoke<UpdateOutcome>("update_plugin", { id }) : NO_STAND();
+  return inTauri ? call<UpdateOutcome>("update_plugin", { id }) : NO_STAND();
 }
 
 export function uninstallPlugin(id: string): Promise<void> {
-  return inTauri ? invoke<void>("uninstall_plugin", { id }) : NO_STAND();
+  return inTauri ? call<void>("uninstall_plugin", { id }) : NO_STAND();
 }
 
 /** Switches a plugin for the chats opened after this; returns the new list. */
 export function setPluginEnabled(id: string, enabled: boolean): Promise<PluginReport> {
   return inTauri
-    ? invoke<PluginReport>("set_plugin_enabled", { id, enabled })
+    ? call<PluginReport>("set_plugin_enabled", { id, enabled })
     : Promise.reject(new Error("no plugins in the stand"));
 }
 
@@ -610,7 +634,7 @@ export type Asked = { providers: Providers; pollError: string | null };
 
 export const providers = {
   list: (): Promise<Providers> =>
-    inTauri ? invoke<Providers>("providers") : Promise.resolve(demoProviders()),
+    inTauri ? call<Providers>("providers") : Promise.resolve(demoProviders()),
   /** The shell itself polls a saved provider that has no models straight away. */
   save: (spec: ProviderSpec): Promise<Asked> => {
     if (!inTauri) {
@@ -622,7 +646,7 @@ export const providers = {
       // "not polled", which is the truth.
       return Promise.resolve({ providers: demoProviders(), pollError: null });
     }
-    return invoke<Asked>("save_provider", { spec });
+    return call<Asked>("save_provider", { spec });
   },
   remove: (id: string): Promise<Providers> => {
     if (!inTauri) {
@@ -633,7 +657,7 @@ export const providers = {
       demoProvidersHandler?.();
       return Promise.resolve(demoProviders());
     }
-    return invoke<Providers>("delete_provider", { id });
+    return call<Providers>("delete_provider", { id });
   },
 };
 
@@ -652,7 +676,7 @@ export const providers = {
  */
 export function discoverModels(spec: ProviderSpec): Promise<ModelInfo[]> {
   if (!inTauri) return Promise.reject("in the stand there is no provider behind the registry");
-  return invoke<ModelInfo[]>("discover_models", { spec });
+  return call<ModelInfo[]>("discover_models", { spec });
 }
 
 export function sendCommand(session: SessionId, command: Command): Promise<void> {
@@ -661,18 +685,18 @@ export function sendCommand(session: SessionId, command: Command): Promise<void>
     answerInDemo(session, command);
     return Promise.resolve();
   }
-  return invoke<void>("send_command", { session, command });
+  return call<void>("send_command", { session, command });
 }
 
 export function sessionState(session: SessionId): Promise<SessionState | null> {
   if (!inTauri) return Promise.resolve(null);
-  return invoke<SessionState | null>("session_state", { session });
+  return call<SessionState | null>("session_state", { session });
 }
 
 /** A chat row in the §9 list: title, time, cost. */
 export function sessionMeta(session: SessionId): Promise<SessionMeta | null> {
   if (!inTauri) return Promise.resolve(demoSessions.meta(session));
-  return invoke<SessionMeta | null>("session_meta", { session });
+  return call<SessionMeta | null>("session_meta", { session });
 }
 
 /**
@@ -686,12 +710,12 @@ export function sessionMeta(session: SessionId): Promise<SessionMeta | null> {
  */
 export function setApiKey(key: string, provider: string): Promise<Asked> {
   if (!inTauri) return Promise.reject("in the stand there is no keychain");
-  return invoke<Asked>("set_api_key", { key, provider });
+  return call<Asked>("set_api_key", { key, provider });
 }
 
 export function forgetApiKey(provider: string): Promise<void> {
   if (!inTauri) return Promise.reject("in the stand there is no keychain");
-  return invoke<void>("forget_api_key", { provider });
+  return call<void>("forget_api_key", { provider });
 }
 
 /**
@@ -712,12 +736,12 @@ export function apiKeySource(provider: string): Promise<KeySource> {
       needsKey(spec.protocol, demoHeaderPairs(spec)) ? "none" : "not_needed",
     );
   }
-  return invoke<KeySource>("api_key_source", { provider });
+  return call<KeySource>("api_key_source", { provider });
 }
 
 export function models(): Promise<ModelInfo[]> {
   if (!inTauri) return Promise.resolve(demoModels);
-  return invoke<ModelInfo[]>("models");
+  return call<ModelInfo[]>("models");
 }
 
 /** The provider id the model router is listed under; it is not in `providers.json`. */
@@ -736,13 +760,13 @@ export type RoutingStatus =
 /** The stand has no `routing.json`: nothing is claimed, and nothing is offered. */
 export function routingStatus(): Promise<RoutingStatus> {
   if (!inTauri) return Promise.resolve({ state: "absent" });
-  return invoke<RoutingStatus>("routing_status");
+  return call<RoutingStatus>("routing_status");
 }
 
 /** The file as it is on disk, or `null` when there is none. */
 export function routingText(): Promise<string | null> {
   if (!inTauri) return Promise.resolve(null);
-  return invoke<string | null>("routing_text");
+  return call<string | null>("routing_text");
 }
 
 /**
@@ -751,12 +775,12 @@ export function routingText(): Promise<string | null> {
  */
 export function saveRouting(text: string): Promise<RoutingStatus> {
   if (!inTauri) return Promise.reject(new Error("routing.json is written by the app only"));
-  return invoke<RoutingStatus>("save_routing", { text });
+  return call<RoutingStatus>("save_routing", { text });
 }
 
 export function removeRouting(): Promise<void> {
   if (!inTauri) return Promise.resolve();
-  return invoke<void>("remove_routing");
+  return call<void>("remove_routing");
 }
 
 /**
@@ -766,7 +790,7 @@ export function removeRouting(): Promise<void> {
  */
 export function modelResidency(provider: string): Promise<Record<string, boolean>> {
   if (!inTauri) return Promise.resolve({});
-  return invoke<Record<string, boolean>>("model_residency", { provider });
+  return call<Record<string, boolean>>("model_residency", { provider });
 }
 
 /**
@@ -788,7 +812,7 @@ export function onEvents(handler: (frame: EventFrame) => void): Promise<Unlisten
       stopAllDemos();
     });
   }
-  return listen<EventFrame>(EVENT_CHANNEL, (e) => handler(e.payload));
+  return listenChannel<EventFrame>(EVENT_CHANNEL, handler);
 }
 
 /**
@@ -952,7 +976,7 @@ const UPDATE_CHANNEL = "yaca://update";
  * words for it, in the person's language.
  */
 export function checkForUpdates(): Promise<UpdateCheck> {
-  return inTauri ? invoke<UpdateCheck>("check_for_updates") : Promise.resolve(DEMO_UPDATE);
+  return inTauri ? call<UpdateCheck>("check_for_updates") : Promise.resolve(DEMO_UPDATE);
 }
 
 /** The stand has no shell, and the "found" release is a sample to look at. */
@@ -982,13 +1006,13 @@ const DEMO_UPDATE: UpdateCheck = {
 
 /** What the last check found; `null` until the first one has finished. */
 export function updateStatus(): Promise<UpdateCheck | null> {
-  return inTauri ? invoke<UpdateCheck | null>("update_status") : Promise.resolve(DEMO_UPDATE);
+  return inTauri ? call<UpdateCheck | null>("update_status") : Promise.resolve(DEMO_UPDATE);
 }
 
 /** Subscription to the check's answer: both the background check and the one started by the button. */
 export function onUpdate(handler: (check: UpdateCheck) => void): Promise<UnlistenFn> {
   if (!inTauri) return Promise.resolve(() => undefined);
-  return listen<UpdateCheck>(UPDATE_CHANNEL, (e) => handler(e.payload));
+  return listenChannel<UpdateCheck>(UPDATE_CHANNEL, handler);
 }
 
 // --- settings §10 ----------------------------------------------------------
@@ -1013,7 +1037,7 @@ export function onProviders(handler: () => void): Promise<UnlistenFn> {
       if (demoProvidersHandler === handler) demoProvidersHandler = null;
     });
   }
-  return listen<null>(PROVIDERS_CHANNEL, () => handler());
+  return listenChannel<null>(PROVIDERS_CHANNEL, () => handler());
 }
 
 let demoProvidersHandler: (() => void) | null = null;
@@ -1045,7 +1069,7 @@ export const DEFAULT_PREFS: Preferences = {
  * and nothing to choose.
  */
 export function installedShells(): Promise<ShellChoice[]> {
-  return inTauri ? invoke<ShellChoice[]>("installed_shells") : Promise.resolve([]);
+  return inTauri ? call<ShellChoice[]>("installed_shells") : Promise.resolve([]);
 }
 
 /** The stand has no shell, and the settings live in the page's memory. */
@@ -1053,7 +1077,7 @@ let demoPrefs: Preferences = { ...DEFAULT_PREFS };
 let demoPrefsHandler: ((prefs: Preferences) => void) | null = null;
 
 export function preferences(): Promise<Preferences> {
-  return inTauri ? invoke<Preferences>("preferences") : Promise.resolve({ ...demoPrefs });
+  return inTauri ? call<Preferences>("preferences") : Promise.resolve({ ...demoPrefs });
 }
 
 /** Writes the settings and broadcasts them to the windows — both of them (§0). */
@@ -1063,7 +1087,7 @@ export function setPreferences(prefs: Preferences): Promise<void> {
     demoPrefsHandler?.({ ...prefs });
     return Promise.resolve();
   }
-  return invoke<void>("set_preferences", { prefs });
+  return call<void>("set_preferences", { prefs });
 }
 
 /** Subscription to an edit of the settings made elsewhere: the second window changes the look of this one. */
@@ -1076,7 +1100,7 @@ export function onPreferences(
       if (demoPrefsHandler === handler) demoPrefsHandler = null;
     });
   }
-  return listen<Preferences>(PREFS_CHANNEL, (e) => handler(e.payload));
+  return listenChannel<Preferences>(PREFS_CHANNEL, handler);
 }
 
 /** Empty project settings — the form an unsaved file starts from. */
@@ -1100,7 +1124,7 @@ let demoSettings: Settings = emptySettings();
 /** Project settings (§10). A broken file arrives as a refusal, not as an empty result. */
 export function projectSettings(project: string): Promise<Settings> {
   if (!inTauri) return Promise.resolve(structuredClone(demoSettings));
-  return invoke<Settings>("project_settings", { project });
+  return call<Settings>("project_settings", { project });
 }
 
 /** Writes `.yaca/settings.json` whole. */
@@ -1109,7 +1133,7 @@ export function saveProjectSettings(project: string, settings: Settings): Promis
     demoSettings = structuredClone(settings);
     return Promise.resolve();
   }
-  return invoke<void>("save_project_settings", { project, settings });
+  return call<void>("save_project_settings", { project, settings });
 }
 
 /**
@@ -1120,13 +1144,13 @@ export function saveProjectSettings(project: string, settings: Settings): Promis
  */
 export function shadowExcludedDirs(): Promise<string[]> {
   if (!inTauri) return Promise.resolve([".yaca", ".git", "node_modules", "target"]);
-  return invoke<string[]>("shadow_excluded_dirs");
+  return call<string[]>("shadow_excluded_dirs");
 }
 
 /** Which instructions file is in force for the project (§10), or `null`. */
 export function projectInstructions(project: string): Promise<string | null> {
   if (!inTauri) return Promise.resolve("CLAUDE.md");
-  return invoke<string | null>("project_instructions", { project });
+  return call<string | null>("project_instructions", { project });
 }
 
 /** The web search key lies in the keychain under this name — see `secrets.rs`. */
@@ -1140,7 +1164,7 @@ export const SEARCH_KEY_ITEM = "tavily";
  */
 export function searchKeySource(): Promise<KeySource> {
   if (!inTauri) return Promise.resolve("none");
-  return invoke<KeySource>("search_key_source");
+  return call<KeySource>("search_key_source");
 }
 
 // --- MCP ---------------------------------------------------------------------
@@ -1157,7 +1181,7 @@ let demoOwnMcp: McpServers = {};
  */
 export function globalMcpServers(): Promise<McpServers> {
   if (!inTauri) return Promise.resolve(structuredClone(demoOwnMcp));
-  return invoke<McpServers>("global_mcp_servers");
+  return call<McpServers>("global_mcp_servers");
 }
 
 /** Writes the shared list whole. It does not reach an open chat: that one works
@@ -1167,13 +1191,13 @@ export function saveGlobalMcpServers(servers: McpServers): Promise<void> {
     demoOwnMcp = structuredClone(servers);
     return Promise.resolve();
   }
-  return invoke<void>("save_global_mcp_servers", { servers });
+  return call<void>("save_global_mcp_servers", { servers });
 }
 
 /** What the project's `.mcp.json` declares. For display only: the file is not ours. */
 export function projectMcpFile(project: string): Promise<McpServers> {
   if (!inTauri) return Promise.resolve({});
-  return invoke<McpServers>("project_mcp_file", { project });
+  return call<McpServers>("project_mcp_file", { project });
 }
 
 /**
@@ -1182,7 +1206,7 @@ export function projectMcpFile(project: string): Promise<McpServers> {
  */
 export function sessionMcp(session: SessionId): Promise<McpServerSummary[]> {
   if (!inTauri) return Promise.resolve(demoMcpNow.get(session) ?? structuredClone(demoMcp));
-  return invoke<McpServerSummary[]>("session_mcp", { session });
+  return call<McpServerSummary[]>("session_mcp", { session });
 }
 
 /** A refusal without a reason: `null`, not an empty string — that is how the core writes it. */
@@ -1206,24 +1230,24 @@ const NO_BROWSER = () => Promise.reject(new Error("no browser in the stand"));
  */
 export const browser = {
   supported: (): Promise<boolean> =>
-    inTauri ? invoke<boolean>("browser_supported") : Promise.resolve(false),
+    localShell() ? invoke<boolean>("browser_supported") : Promise.resolve(false),
   states: (): Promise<BrowserState[]> =>
-    inTauri ? invoke<BrowserState[]>("browser_states") : Promise.resolve([]),
+    localShell() ? invoke<BrowserState[]>("browser_states") : Promise.resolve([]),
   /** Shows `session`'s page at `rect` and hides every other; both `null` hide all. */
   place: (session: SessionId | null, rect: Rect | null): Promise<void> =>
-    inTauri ? invoke<void>("browser_place", { session, rect }) : Promise.resolve(),
+    localShell() ? invoke<void>("browser_place", { session, rect }) : Promise.resolve(),
   open: (session: SessionId, url: string): Promise<void> =>
-    inTauri ? invoke<void>("browser_open", { session, url }) : NO_BROWSER(),
+    localShell() ? invoke<void>("browser_open", { session, url }) : NO_BROWSER(),
   go: (session: SessionId, step: BrowserStep): Promise<void> =>
-    inTauri ? invoke<void>("browser_go", { session, step }) : NO_BROWSER(),
+    localShell() ? invoke<void>("browser_go", { session, step }) : NO_BROWSER(),
   external: (session: SessionId): Promise<void> =>
-    inTauri ? invoke<void>("browser_external", { session }) : NO_BROWSER(),
+    localShell() ? invoke<void>("browser_external", { session }) : NO_BROWSER(),
   devtools: (session: SessionId): Promise<void> =>
-    inTauri ? invoke<void>("browser_devtools", { session }) : NO_BROWSER(),
+    localShell() ? invoke<void>("browser_devtools", { session }) : NO_BROWSER(),
   resetViewport: (session: SessionId): Promise<void> =>
-    inTauri ? invoke<void>("browser_reset_viewport", { session }) : NO_BROWSER(),
+    localShell() ? invoke<void>("browser_reset_viewport", { session }) : NO_BROWSER(),
   onState: (handler: (state: BrowserState) => void): Promise<UnlistenFn> =>
-    inTauri
+    localShell()
       ? listen<BrowserState>(BROWSER_CHANNEL, (event) => handler(event.payload))
       : Promise.resolve(() => {}),
 };

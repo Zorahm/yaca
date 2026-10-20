@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Capability for the main window on a phone: the webview is a shell for a remote host, so only the opener and the file dialogs are needed",
+  "platforms": [
+    "android",
+    "iOS"
+  ],
+  "webviews": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "opener:default"
+  ]
+}

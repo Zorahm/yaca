@@ -16,6 +16,7 @@
 import type { Submenu as HelpSubmenu } from "@tauri-apps/api/menu";
 
 import { inTauri } from "./demo";
+import { isMobile } from "./link";
 import { ownTitleBar } from "./frame";
 
 export type HelpMenu = {
@@ -35,7 +36,8 @@ export type HelpMenu = {
 export async function setHelpMenu(help: HelpMenu): Promise<void> {
   // A window that draws its own title bar has Help in it (`ui/TitleBar`), and
   // a system menu bar under that would be the second strip the bar replaced.
-  if (!inTauri || ownTitleBar) return;
+  // A phone has no menu bar to put Help into.
+  if (!inTauri || ownTitleBar || isMobile) return;
   const { Menu, MenuItem, Submenu } = await import("@tauri-apps/api/menu");
 
   const items = await Promise.all(

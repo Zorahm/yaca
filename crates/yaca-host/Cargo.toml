@@ -1,0 +1,18 @@
+[package]
+name = "yaca-host"
+description = "Yaca host: the commands and the event stream between the core and whatever shows it"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+yaca-core.workspace = true
+
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+# The wire types go to the frontend like the core's, and must not drift from them.
+ts-rs.workspace = true

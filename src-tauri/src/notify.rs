@@ -14,6 +14,7 @@ use yaca_core::permission::PermissionRequest;
 use yaca_core::question::QuestionRequest;
 
 use tauri::{AppHandle, Manager};
+use yaca_host::PrefsHandle;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio_util::sync::CancellationToken;
@@ -51,7 +52,7 @@ fn question_toast_body(question: &str) -> String {
 /// through `WindowEvent::Focused` would accumulate a race between the
 /// window switch and a tool call, while asking the window itself at event
 /// time always answers with the current truth.
-pub async fn watch(app: AppHandle, mut events: Receiver<AgentEvent>, stop: CancellationToken) {
+pub async fn watch(app: AppHandle, mut events: Receiver<AgentEvent>, stop: CancellationToken, prefs: PrefsHandle) {
     loop {
         tokio::select! {
             _ = stop.cancelled() => break,
@@ -61,7 +62,7 @@ pub async fn watch(app: AppHandle, mut events: Receiver<AgentEvent>, stop: Cance
                     // Both asked at event time rather than tracked: the
                     // setting can be switched in the other window mid-turn,
                     // and a copy taken at subscribe time would be stale.
-                    let asked = unattended(enabled(&app), focused(&app), &event);
+                    let asked = unattended(prefs.get().notifications, focused(&app), &event);
                     if let Some(asked) = asked {
                         push(&app, &asked.body());
                     }
@@ -108,11 +109,6 @@ impl Asked<'_> {
             Asked::Question(request) => question_toast_body(&request.question),
         }
     }
-}
-
-/// Whether the human asked for toasts at all (§10).
-fn enabled(app: &AppHandle) -> bool {
-    app.state::<crate::state::AppState>().prefs().notifications
 }
 
 /// Whether the main window is focused. The window answers for itself; not
@@ -166,6 +162,8 @@ fn push(app: &AppHandle, body: &str) {
 /// Raises the window above the rest: unminimizes, shows and puts in focus.
 fn raise(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+        // Minimizing exists only on desktop; Android has no such window state.
+        #[cfg(desktop)]
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();

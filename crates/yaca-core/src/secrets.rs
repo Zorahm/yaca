@@ -11,6 +11,12 @@
 //! Which of the two answered is reported by [`key_source`], so the screen can
 //! say where the key came from instead of leaving it to be guessed.
 //!
+//! A machine with no keychain at all — a server — keeps keys in a private file
+//! instead ([`crate::vault`]): the platform store is tried first, and only when
+//! it refuses a write does the file take it. Either one is reported as
+//! [`KeySource::Keychain`], because for the person it is the same thing: a key
+//! they stored once and that never comes back to the screen.
+//!
 //! Reading can fail — a Linux session with no secret service, a locked
 //! keychain — and a failure is not an error here: it means there is no key in
 //! that place, and the fallback is next. Writing failures are errors, because
@@ -24,6 +30,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use crate::error::CoreError;
 use crate::legacy;
+use crate::vault;
 
 /// The name Yaca keeps its secrets under in the platform's store.
 pub const SERVICE: &str = "Yaca";
@@ -89,9 +96,25 @@ pub fn store_api_key(provider: &str, key: &str) -> Result<(), CoreError> {
         return Err(CoreError::Config("empty key cannot be saved".into()));
     }
     let _serial = serial();
-    entry(provider)?
-        .set_password(key)
-        .map_err(|e| CoreError::Config(format!("cannot save key in keychain: {e}")))
+    put(provider, key)
+}
+
+/// Writes to the platform store, or to the file when the platform has none.
+/// Called with [`serial`] held.
+///
+/// The copy in the other place is removed: the keychain is read first, so a
+/// stale file entry would come back the day the keychain is emptied.
+fn put(name: &str, value: &str) -> Result<(), CoreError> {
+    let in_keychain = entry(name)
+        .and_then(|entry| {
+            entry
+                .set_password(value)
+                .map_err(|e| CoreError::Config(format!("cannot save key in keychain: {e}")))
+        });
+    match in_keychain {
+        Ok(()) => vault::forget(name),
+        Err(_) => vault::set(name, value),
+    }
 }
 
 /// Removes the key. Missing is not a failure: the goal was that it be gone.
@@ -100,9 +123,13 @@ pub fn store_api_key(provider: &str, key: &str) -> Result<(), CoreError> {
 /// here does not come back from where the edoC build kept it.
 pub fn forget_api_key(provider: &str) -> Result<(), CoreError> {
     let _serial = serial();
-    match entry(provider)?.delete_credential() {
-        Ok(()) => Ok(()),
-        Err(keyring::Error::NoEntry) => Ok(()),
+    vault::forget(provider)?;
+    // A keychain that is not there holds nothing to delete.
+    let Ok(entry) = entry(provider) else {
+        return Ok(());
+    };
+    match entry.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) | Err(keyring::Error::PlatformFailure(_)) | Err(keyring::Error::NoStorageAccess(_)) => Ok(()),
         Err(e) => Err(CoreError::Config(format!(
             "cannot delete key from keychain: {e}"
         ))),
@@ -123,14 +150,9 @@ pub(crate) fn store_secret(account: &str, value: &str) -> Result<(), CoreError> 
     let parts = if parts.is_empty() { vec![String::new()] } else { parts };
     forget_secret(account);
     let _serial = serial();
-    let set = |name: &str, text: &str| {
-        keyring::Entry::new(SERVICE, name)
-            .and_then(|entry| entry.set_password(text))
-            .map_err(|e| CoreError::Config(format!("cannot save to keychain: {e}")))
-    };
-    set(account, &format!("{}|{}", parts.len(), parts[0]))?;
+    put(account, &format!("{}|{}", parts.len(), parts[0]))?;
     for (at, part) in parts.iter().enumerate().skip(1) {
-        set(&format!("{account}#{at}"), part)?;
+        put(&format!("{account}#{at}"), part)?;
     }
     Ok(())
 }
@@ -139,7 +161,12 @@ pub(crate) fn store_secret(account: &str, value: &str) -> Result<(), CoreError> 
 /// or a part of it is missing.
 pub(crate) fn read_secret(account: &str) -> Option<String> {
     let _serial = serial();
-    let get = |name: &str| keyring::Entry::new(SERVICE, name).ok()?.get_password().ok();
+    let get = |name: &str| {
+        keyring::Entry::new(SERVICE, name)
+            .ok()
+            .and_then(|entry| entry.get_password().ok())
+            .or_else(|| vault::get(name))
+    };
     let first = get(account)?;
     let (count, head) = first.split_once('|')?;
     let count: usize = count.parse().ok()?;
@@ -157,10 +184,12 @@ pub(crate) fn forget_secret(account: &str) {
         if let Ok(entry) = keyring::Entry::new(SERVICE, name) {
             let _ = entry.delete_credential();
         }
+        let _ = vault::forget(name);
     };
     let count = keyring::Entry::new(SERVICE, account)
         .ok()
         .and_then(|e| e.get_password().ok())
+        .or_else(|| vault::get(account))
         .and_then(|first| first.split_once('|').and_then(|(n, _)| n.parse::<usize>().ok()))
         .unwrap_or(1);
     delete(account);
@@ -193,7 +222,11 @@ fn entry(provider: &str) -> Result<keyring::Entry, CoreError> {
 /// are the same answer, and the caller has a fallback either way.
 fn from_keychain(provider: &str) -> Option<String> {
     let _serial = serial();
-    non_empty(entry(provider).ok()?.get_password().ok()?)
+    let stored = entry(provider)
+        .ok()
+        .and_then(|entry| entry.get_password().ok())
+        .or_else(|| vault::get(provider))?;
+    non_empty(stored)
 }
 
 fn from_env(provider: &str) -> Option<String> {
