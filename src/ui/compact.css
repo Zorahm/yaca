@@ -159,60 +159,128 @@
   box-shadow: none;
 }
 
-/* --- settings ----------------------------------------------------------- */
+/* --- settings: two screens, not two columns ------------------------------ */
 
 :root[data-compact] .settings {
-  display: flex;
   flex-direction: column;
 }
 
-:root[data-compact] .set-nav {
-  flex: none;
-  width: auto;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  padding: 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  border-right: 0;
-  border-bottom: 1px solid var(--line);
-}
-
-/* A row of tabs to swipe along: the two group captions have no room, and the
-   project chip keeps to what it needs. */
-:root[data-compact] .set-nav > * {
-  flex: none;
-}
-
-:root[data-compact] .set-group {
+/* The list of sections, then the section picked from it. */
+:root[data-compact] .settings[data-view="detail"] .set-nav,
+:root[data-compact] .settings[data-view="list"] .set-pane {
   display: none;
 }
 
-:root[data-compact] .set-nav-item {
+:root[data-compact] .set-nav {
+  flex: 1;
   width: auto;
-  height: 36px;
+  padding: 8px 12px 16px;
+  gap: 2px;
+  border-right: 0;
+  overflow-y: auto;
+}
+
+:root[data-compact] .set-nav-item {
+  height: 52px;
   padding: 0 12px;
-  white-space: nowrap;
+  font-size: 15px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+}
+
+:root[data-compact] .set-nav-item,
+:root[data-compact] .set-nav-item[aria-current="page"] {
+  background: transparent;
+  color: var(--ink);
+  font-weight: 400;
+}
+
+/* An item opens a screen: the arrow says so. */
+:root[data-compact] .set-nav-item::after {
+  content: "›";
+  margin-left: auto;
+  color: var(--line-strong);
+  font-size: 22px;
+  line-height: 1;
 }
 
 :root[data-compact] .set-close {
-  margin-bottom: 0;
-  /* The way out stays in reach while the tabs are swiped under it. */
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  background: var(--surface);
-}
-
-:root[data-compact] .select.set-project {
-  width: auto;
-  max-width: 180px;
+  min-height: 48px;
+  margin-bottom: 4px;
+  font-size: 15px;
 }
 
 :root[data-compact] .set-pane {
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The way back to the list: a bar of its own above the section, always there. */
+:root[data-compact] .set-back {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+}
+
+:root[data-compact] .set-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 14px 24px;
+}
+
+/* A row is its words and then its control, one under the other: side by side,
+   the words were squeezed into a column a few letters wide. */
+:root[data-compact] .set-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+:root[data-compact] .set-row-control {
+  max-width: none;
+  flex-wrap: wrap;
+}
+
+/* A switch is a yes or a no, and sits at the end of its row. */
+:root[data-compact] .set-row:has(.switch:only-child) {
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+:root[data-compact] .segments {
+  flex-wrap: wrap;
+}
+
+/* A provider keeps its name and address on one line and its buttons on the next. */
+:root[data-compact] .prov {
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  row-gap: 8px;
+}
+
+:root[data-compact] .prov-main {
+  flex: 1 1 60%;
+}
+
+:root[data-compact] .prov-actions {
+  flex: 1 1 100%;
+  justify-content: flex-end;
+}
+
+:root[data-compact] .select.set-project {
+  width: 100%;
+  max-width: none;
 }
 
 /* Fields stay readable and never zoom the page when focused. */

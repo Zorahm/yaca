@@ -52,6 +52,7 @@ import {
 import { t, type Key } from "./i18n";
 import { McpMark } from "./ui/brand";
 import { plainPath } from "./ui/format";
+import { isCompact, useWindowWidth } from "./ui/resize";
 import { usePreferences } from "./ui/prefs";
 import { AboutSection } from "./ui/settings/AboutSection";
 import { AppearanceSection } from "./ui/settings/AppearanceSection";
@@ -132,6 +133,17 @@ export default function Settings({
   const [projects, setProjects] = useState<string[]>([]);
   const [project, setProject] = useState<string | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
+  // On a phone the sections and the section are two screens, not two columns:
+  // the list first, and the one picked from it once it is.
+  const compact = isCompact(useWindowWidth());
+  const [detail, setDetail] = useState(false);
+  const pick = useCallback(
+    (next: Section) => {
+      setSection(next);
+      if (compact) setDetail(true);
+    },
+    [setSection, compact],
+  );
 
   useEffect(() => {
     // Newest first — the same order in which the main window picks the default
@@ -178,7 +190,7 @@ export default function Settings({
   const shown = project === null && isProjectSection(section) ? "providers" : section;
 
   return (
-    <div className="settings">
+    <div className="settings" data-view={compact ? (detail ? "detail" : "list") : undefined}>
       <nav className="set-nav" aria-label={t("set.nav")}>
         <button type="button" className="set-close" onClick={onClose}>
           <ArrowLeft size={15} aria-hidden="true" />
@@ -186,7 +198,7 @@ export default function Settings({
         </button>
         <div className="set-group">{t("set.group_app")}</div>
         {APP_SECTIONS.map((item) => (
-          <NavItem key={item.id} item={item} active={shown} onPick={setSection} />
+          <NavItem key={item.id} item={item} active={shown} onPick={pick} />
         ))}
 
         {project !== null && (
@@ -211,13 +223,19 @@ export default function Settings({
               onChange={setProject}
             />
             {PROJECT_SECTIONS.map((item) => (
-              <NavItem key={item.id} item={item} active={shown} onPick={setSection} />
+              <NavItem key={item.id} item={item} active={shown} onPick={pick} />
             ))}
           </>
         )}
       </nav>
 
       <main className="set-pane">
+        {compact && detail && (
+          <button type="button" className="set-back" onClick={() => setDetail(false)}>
+            <ArrowLeft size={18} aria-hidden="true" />
+            <span>{t("set.title")}</span>
+          </button>
+        )}
         <div className="set-scroll">
           {shown === "providers" && <ProvidersSection models={models} onChanged={refreshModels} />}
           {shown === "tools" && <ToolsSection prefs={prefs} onPatch={patchPrefs} />}
