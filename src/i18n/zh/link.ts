@@ -37,5 +37,6 @@ export const link = {
   "link.pick_cancel": "取消",
   "link.pick_empty": "这里没有子文件夹",
   "link.pick_hidden": "隐藏的文件夹",
+  "link.pick_broad": "这看起来是主目录或根目录，而不是项目。智能体会处理其中的所有内容，用于回退的快照也无法创建。",
   "link.pick_loading": "正在读取文件夹…",
 } satisfies Record<keyof typeof source, string>;

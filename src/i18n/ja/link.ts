@@ -37,5 +37,6 @@ export const link = {
   "link.pick_cancel": "キャンセル",
   "link.pick_empty": "サブフォルダーはありません",
   "link.pick_hidden": "隠しフォルダー",
+  "link.pick_broad": "プロジェクトではなく、ホームまたはルートのフォルダーのようです。エージェントは中のすべてを対象に作業し、巻き戻し用のスナップショットも取れません。",
   "link.pick_loading": "フォルダーを読み込み中…",
 } satisfies Record<keyof typeof source, string>;

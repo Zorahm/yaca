@@ -166,3 +166,13 @@
   align-items: center;
   gap: 8px;
 }
+
+.folder-warn {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--note-line);
+  border-radius: var(--radius-m);
+  background: var(--note-bg);
+  color: var(--warn);
+  font-size: 12.5px;
+}

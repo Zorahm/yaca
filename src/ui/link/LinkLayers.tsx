@@ -69,6 +69,9 @@ function LinkStrip() {
   );
 }
 
+/** A path without its trailing separator, so `/home/me/` and `/home/me` compare equal. */
+const trimmed = (path: string): string => (path.length > 1 ? path.replace(/[\\/]+$/, "") : path);
+
 type Asked = { title: string; resolve: (path: string | null) => void };
 
 /** The chooser of a folder on the server, opened by `chooseFolder`. */
@@ -106,6 +109,9 @@ function FolderChooser({ title, onDone }: { title: string; onDone: (path: string
       live = false;
     };
   }, [at, hidden]);
+
+  const broad =
+    listing !== null && (listing.parent === null || trimmed(listing.path) === trimmed(listing.home));
 
   const create = async () => {
     if (listing === null || naming === null) return;
@@ -172,6 +178,15 @@ function FolderChooser({ title, onDone }: { title: string; onDone: (path: string
         )}
 
         {error !== null && <p className="connect-error">{error}</p>}
+
+        {/* The picker opens on the home folder, and one tap on "Choose" there
+            makes the whole home the project: everything in it is the agent's
+            to read and edit, and it is far past what a snapshot can hold. */}
+        {broad && (
+          <p className="folder-warn" role="status">
+            {t("link.pick_broad")}
+          </p>
+        )}
 
         <ul className="folder-list">
           {listing?.dirs.map((dir) => (

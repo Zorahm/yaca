@@ -37,5 +37,6 @@ export const link = {
   "link.pick_cancel": "Cancelar",
   "link.pick_empty": "No hay carpetas aquí",
   "link.pick_hidden": "Carpetas ocultas",
+  "link.pick_broad": "Parece una carpeta personal o la raíz, no un proyecto. El agente trabajaría con todo lo que contiene y las instantáneas para deshacer no funcionarán.",
   "link.pick_loading": "Leyendo la carpeta…",
 } satisfies Record<keyof typeof source, string>;

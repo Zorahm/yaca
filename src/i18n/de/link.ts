@@ -37,5 +37,6 @@ export const link = {
   "link.pick_cancel": "Abbrechen",
   "link.pick_empty": "Keine Unterordner",
   "link.pick_hidden": "Versteckte Ordner",
+  "link.pick_broad": "Das sieht nach einem Home- oder Stammordner aus, nicht nach einem Projekt. Der Agent würde mit allem darin arbeiten, und Schnappschüsse zum Zurücksetzen funktionieren nicht.",
   "link.pick_loading": "Lese den Ordner …",
 } satisfies Record<keyof typeof source, string>;

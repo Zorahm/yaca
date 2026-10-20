@@ -37,5 +37,6 @@ export const link = {
   "link.pick_cancel": "Cancel",
   "link.pick_empty": "No folders in here",
   "link.pick_hidden": "Hidden folders",
+  "link.pick_broad": "This looks like a home or root folder, not a project. The agent would work on everything in it, and snapshots for rolling back will not work.",
   "link.pick_loading": "Reading the folder…",
 } satisfies Record<keyof typeof source, string>;

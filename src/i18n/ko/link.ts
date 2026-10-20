@@ -37,5 +37,6 @@ export const link = {
   "link.pick_cancel": "취소",
   "link.pick_empty": "하위 폴더가 없습니다",
   "link.pick_hidden": "숨김 폴더",
+  "link.pick_broad": "프로젝트가 아니라 홈 또는 루트 폴더로 보입니다. 에이전트가 그 안의 모든 것을 다루게 되며, 되돌리기용 스냅숏도 만들 수 없습니다.",
   "link.pick_loading": "폴더를 읽는 중…",
 } satisfies Record<keyof typeof source, string>;

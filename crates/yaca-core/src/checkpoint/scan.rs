@@ -175,8 +175,12 @@ impl Scanner {
                 continue;
             }
             if entries.len() >= MAX_TRACKED_FILES {
+                // Almost always a folder that is not a project: a home directory
+                // or a drive. Say which one, so the person can see it is the wrong one.
                 return Err(io::Error::other(format!(
-                    "project holds more than {MAX_TRACKED_FILES} tracked files"
+                    "{} holds more than {MAX_TRACKED_FILES} tracked files, too many to snapshot; \
+                     if this is not one project, open a smaller folder",
+                    self.root.display()
                 )));
             }
 

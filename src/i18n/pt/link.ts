@@ -37,5 +37,6 @@ export const link = {
   "link.pick_cancel": "Cancelar",
   "link.pick_empty": "Não há pastas aqui",
   "link.pick_hidden": "Pastas ocultas",
+  "link.pick_broad": "Parece uma pasta pessoal ou a raiz, não um projeto. O agente trabalharia com tudo o que há nela e os instantâneos para reverter não vão funcionar.",
   "link.pick_loading": "Lendo a pasta…",
 } satisfies Record<keyof typeof source, string>;

@@ -37,5 +37,6 @@ export const link = {
   "link.pick_cancel": "Annuler",
   "link.pick_empty": "Aucun sous-dossier",
   "link.pick_hidden": "Dossiers cachés",
+  "link.pick_broad": "Cela ressemble à un dossier personnel ou à la racine, pas à un projet. L'agent travaillerait sur tout son contenu et les instantanés de retour en arrière ne fonctionneront pas.",
   "link.pick_loading": "Lecture du dossier…",
 } satisfies Record<keyof typeof source, string>;
