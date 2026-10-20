@@ -120,6 +120,11 @@ export type ComposerSettings = {
   bypass: boolean;
 };
 
+/** Whether the main pointer is a finger. */
+function touchScreen(): boolean {
+  return typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+}
+
 export function Composer({
   settings,
   busy,
@@ -418,7 +423,10 @@ export function Composer({
 
               // While a permission request hangs, the digits belong to it (§5.7), and
               // the field stays live all the same.
-              if (e.key === "Enter" && !e.shiftKey) {
+              // On a touch screen ⏎ is a new line: the send button is right there,
+              // and a message of several lines is typed on a soft keyboard that
+              // has no ⇧⏎ to type it with.
+              if (e.key === "Enter" && !e.shiftKey && !touchScreen()) {
                 e.preventDefault();
                 send();
               }

@@ -238,3 +238,83 @@
 :root[data-compact][data-mobile] .link-strip {
   padding-top: calc(var(--safe-top) / 2);
 }
+
+/* --- the conversation --------------------------------------------------- */
+
+/* Margins of 24 px on each side leave a phone 364 px for the text; 14 px
+   gives the diff and the code blocks back a column's worth. */
+:root[data-compact] .feed-item {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+:root[data-compact] .composer-wrap {
+  padding: 8px 12px 10px;
+}
+
+:root[data-compact] .bars:not(:empty) {
+  padding: 6px 12px 0;
+}
+
+:root[data-compact] .bar {
+  min-height: 36px;
+  padding: 4px 10px;
+}
+
+/* There is no keyboard to press the keys on the chips of a button. */
+:root[data-compact] .keycap {
+  display: none;
+}
+
+/* The request waits for a thumb: the buttons are rows of their own, the
+   consent last and widest, nearest to where the thumb rests. */
+:root[data-compact] .ask-actions {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+:root[data-compact] .ask-group {
+  flex-direction: column;
+  margin-left: 0;
+}
+
+:root[data-compact] .ask-actions .btn,
+:root[data-compact] .ask-deny .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+:root[data-compact] .ask-group-allow {
+  flex-direction: column-reverse;
+}
+
+/* The row under the box: mode, model, effort. Text chips are 20 px tall on
+   a desktop; here they get a tappable height without changing how they look. */
+:root[data-compact] .composer-row {
+  gap: 2px;
+  padding: 0;
+}
+
+:root[data-compact] .chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 8px;
+}
+
+/* A menu opened from the row is a sheet at the foot of the screen: hung from
+   its chip it ran off the left edge, and a menu is picked with a thumb, which
+   rests at the bottom. */
+:root[data-compact] .menu {
+  position: fixed;
+  top: auto;
+  right: 8px;
+  bottom: calc(var(--safe-bottom, 0px) + 8px);
+  left: 8px;
+  z-index: 70;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  max-height: 60dvh;
+  overflow-y: auto;
+}
