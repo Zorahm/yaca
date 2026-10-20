@@ -53,6 +53,7 @@ export function Sidebar({
   bounds,
   onResize,
   collapsed = false,
+  drawer = false,
 }: {
   /** Projects the window knows about, freshest first. */
   projects: string[];
@@ -87,6 +88,8 @@ export function Sidebar({
    * sessions «disappeared» until each project was opened again.
    */
   collapsed?: boolean;
+  /** A drawer over the feed (a phone): no width of its own, and no handle to drag it by. */
+  drawer?: boolean;
 }) {
   const [typed, setTyped] = useState("");
   const [query, setQuery] = useState("");
@@ -116,18 +119,20 @@ export function Sidebar({
 
   return (
     <nav
-      className="side"
+      className={drawer ? "side side-drawer" : "side"}
       aria-label={t("top.sessions")}
-      style={collapsed ? { display: "none" } : { width }}
+      style={collapsed ? { display: "none" } : drawer ? undefined : { width }}
     >
-      <Splitter
-        edge="right"
-        width={width}
-        bounds={bounds}
-        initial={SIDE.initial}
-        label={t("side.resize")}
-        onResize={onResize}
-      />
+      {!drawer && (
+        <Splitter
+          edge="right"
+          width={width}
+          bounds={bounds}
+          initial={SIDE.initial}
+          label={t("side.resize")}
+          onResize={onResize}
+        />
+      )}
       <div className="side-head">
         {/* Where the window draws its own title bar the mark and the name
             are in it, a few pixels above; twice in one corner is once too

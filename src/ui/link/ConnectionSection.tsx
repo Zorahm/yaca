@@ -35,7 +35,7 @@ export function ConnectionSection() {
           name={remote ? t("link.settings_server", { name: saved?.label ?? "" }) : t("link.settings_this_pc")}
           hint={t("link.settings_reload_note")}
         >
-          <div className="btn-row">
+          <div className="link-row">
             {!remote && (
               <button type="button" className="btn btn-small" onClick={toServer}>
                 {t("link.settings_to_server")}

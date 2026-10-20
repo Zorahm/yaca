@@ -1,0 +1,240 @@
+/*
+ * The phone layout: a window narrower than 720 px (`COMPACT_BELOW`), set on
+ * <html> as `data-compact` by the window. One file, so that everything that is
+ * about a small screen is read in one place and the desktop rules stay as they
+ * are.
+ *
+ * The columns stop being columns. The sidebar is a drawer over the feed, a
+ * panel covers the whole screen, and the controls grow to what a thumb hits.
+ * `data-mobile` is only the app on a phone, whose system bars lie over the
+ * page: the safe areas are kept clear there, and nowhere else.
+ */
+
+:root[data-mobile] {
+  /* `env()` is zero in some WebViews, hence the floor under it. */
+  --safe-top: max(env(safe-area-inset-top, 0px), 30px);
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), 14px);
+}
+
+:root[data-mobile] body {
+  background: var(--bg);
+}
+
+:root[data-mobile] .window {
+  box-sizing: border-box;
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+}
+
+:root[data-mobile] .connect {
+  padding-top: calc(var(--safe-top) + 24px);
+  padding-bottom: calc(var(--safe-bottom) + 24px);
+}
+
+:root[data-compact] {
+  --h-top: 52px;
+  --h-button: 40px;
+  --h-small-button: 36px;
+  --h-row-button: 32px;
+  --h-row: 44px;
+}
+
+/* One column: the feed, or the home screen. */
+:root[data-compact] .shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+:root[data-compact] .shell > .app,
+:root[data-compact] .shell > .home {
+  grid-column: 1;
+}
+
+/* The feed's column is `auto` by default and swells to its widest child (a
+   code line, the composer's measure) instead of fitting the screen. */
+:root[data-compact] .app {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* --- the sidebar is a drawer ------------------------------------------ */
+
+:root[data-compact] .side-drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 60;
+  width: min(86vw, 340px);
+  box-shadow: var(--shadow-pop);
+}
+
+:root[data-compact] .side-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 59;
+  border: 0;
+  background: color-mix(in srgb, var(--ink) 40%, transparent);
+}
+
+/* --- top bar and home header -------------------------------------------- */
+
+:root[data-compact] .top {
+  gap: 2px;
+  padding: 0 6px;
+}
+
+:root[data-compact] .top-icon {
+  width: 40px;
+  height: 40px;
+}
+
+/* What a phone has no room for: the arrows through the conversation (the
+   feed scrolls by thumb) and the project chip. */
+:root[data-compact] .top-nav,
+:root[data-compact] .top-project-chip {
+  display: none;
+}
+
+:root[data-compact] .top-title {
+  min-width: 0;
+  flex: 1;
+}
+
+:root[data-compact] .top-gap {
+  display: none;
+}
+
+:root[data-compact] .home-top {
+  gap: 4px;
+  padding: 0 6px;
+}
+
+/* --- home -------------------------------------------------------------- */
+
+:root[data-compact] .home-body {
+  align-items: flex-start;
+  padding: 20px 16px 24px;
+}
+
+:root[data-compact] .home-greeting h1 {
+  font-size: 24px;
+}
+
+:root[data-compact] .home-lead {
+  font-size: 14px;
+}
+
+:root[data-compact] .home-pick {
+  flex-wrap: wrap;
+}
+
+:root[data-compact] .home-pick-text {
+  flex: 1 1 100%;
+}
+
+:root[data-compact] .home-pick .btn {
+  margin-left: 0;
+}
+
+/* --- panels cover the screen ------------------------------------------ */
+
+:root[data-compact] .panel-dock,
+:root[data-compact] .panel-dock-over {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  /* The width the column was given inline is a desktop number. */
+  width: 100% !important;
+  max-width: none;
+  padding: 0;
+  background: var(--bg);
+}
+
+:root[data-compact] .panel-dock > .splitter {
+  display: none;
+}
+
+:root[data-compact] .panel-dock .panel {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* --- settings ----------------------------------------------------------- */
+
+:root[data-compact] .settings {
+  display: flex;
+  flex-direction: column;
+}
+
+:root[data-compact] .set-nav {
+  flex: none;
+  width: auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-right: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+/* A row of tabs to swipe along: the two group captions have no room, and the
+   project chip keeps to what it needs. */
+:root[data-compact] .set-nav > * {
+  flex: none;
+}
+
+:root[data-compact] .set-group {
+  display: none;
+}
+
+:root[data-compact] .set-nav-item {
+  width: auto;
+  height: 36px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+:root[data-compact] .set-close {
+  margin-bottom: 0;
+  /* The way out stays in reach while the tabs are swiped under it. */
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+
+:root[data-compact] .select.set-project {
+  width: auto;
+  max-width: 180px;
+}
+
+:root[data-compact] .set-pane {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Fields stay readable and never zoom the page when focused. */
+:root[data-compact] input,
+:root[data-compact] textarea,
+:root[data-compact] select {
+  font-size: 16px;
+}
+
+/* --- connection and folders -------------------------------------------- */
+
+:root[data-compact] .folder-scrim {
+  padding: 0;
+  align-items: end;
+}
+
+:root[data-compact] .folder-card {
+  width: 100%;
+  max-height: 86dvh;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+:root[data-compact][data-mobile] .link-strip {
+  padding-top: calc(var(--safe-top) / 2);
+}

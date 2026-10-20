@@ -21,6 +21,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import type { SessionId } from "./core/bindings/SessionId";
+
 import {
   addProject as rememberProject,
   chooseFiles,
@@ -83,6 +85,7 @@ import {
   panelBounds,
   SIDE,
   sideBounds,
+  isCompact,
   useStoredWidth,
   useWindowWidth,
 } from "./ui/resize";
@@ -100,6 +103,7 @@ import "./ui/home.css";
 import "./ui/panel/panel.css";
 import "./ui/viewer/viewer.css";
 import "./ui/sidebar/sidebar.css";
+import "./ui/compact.css";
 
 export default function App({ prefs }: { prefs: Preferences }) {
   // Application settings live in the shell: the subscription sets attributes on
@@ -161,11 +165,17 @@ export default function App({ prefs }: { prefs: Preferences }) {
   const [filePanelPath, setFilePanelPath] = useState<string | null>(null);
   // The subagents the agents panel opens on: those of the plate last pressed.
   const [agentFocus, setAgentFocus] = useState<string[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // A phone starts with the drawer shut: it would cover the conversation.
+  const [sidebarOpen, setSidebarOpen] = useState(() => !isCompact(window.innerWidth));
 
   // Widths of the two columns a person drags. What is stored is what they
   // chose; what is drawn is that, fitted to the window as it is now.
   const windowWidth = useWindowWidth();
+  const compact = isCompact(windowWidth);
+  // `compact.css` reads it: one switch for every rule that is about a phone.
+  useEffect(() => {
+    document.documentElement.toggleAttribute("data-compact", compact);
+  }, [compact]);
   const [sideChosen, setSideWidth] = useStoredWidth("yaca.width.side");
   const [listChosen, setListWidth] = useStoredWidth("yaca.width.panel");
   const [fileChosen, setFileWidth] = useStoredWidth("yaca.width.file");
@@ -469,7 +479,23 @@ export default function App({ prefs }: { prefs: Preferences }) {
   // --- layout ---------------------------------------------------------------
 
   // The sidebar is the same on both screens: what differs is what stands on the right.
+  // Choosing something in the drawer is the end of the drawer's job.
+  const dismiss = <A extends unknown[]>(act: (...args: A) => void) =>
+    (...args: A) => {
+      act(...args);
+      if (compact) setSidebarOpen(false);
+    };
+
   const sidebar = (collapsed: boolean) => (
+    <>
+    {compact && !collapsed && (
+      <button
+        type="button"
+        className="side-scrim"
+        aria-label={t("side.toggle")}
+        onClick={() => setSidebarOpen(false)}
+      />
+    )}
     <Sidebar
       projects={projects}
       chats={chats.chats}
@@ -478,11 +504,11 @@ export default function App({ prefs }: { prefs: Preferences }) {
       // Re-reading the lists makes sense when they may have changed: a chat was
       // opened or closed, a turn ended, and a title changed.
       reload={chats.chats.map((chat) => `${chat.id}:${chat.title}`).join("|")}
-      onNewChat={newChat}
-      onOpenSession={(project, id) => void chats.resume(project, id).catch(failed)}
+      onNewChat={dismiss(newChat)}
+      onOpenSession={dismiss((project: string, id: SessionId) => void chats.resume(project, id).catch(failed))}
       onCloseChat={(id) => void chats.close(id).catch(failed)}
       onForgetProject={(project) => void forgetProject(project)}
-      onOpenSettings={() => setSettingsAt("providers")}
+      onOpenSettings={dismiss(() => setSettingsAt("providers"))}
       update={shownUpdate}
       onDismissUpdate={() => setDismissedUpdate(shownUpdate?.version ?? null)}
       onInstallUpdate={installUpdate}
@@ -491,7 +517,9 @@ export default function App({ prefs }: { prefs: Preferences }) {
       bounds={sideLimits}
       onResize={setSideWidth}
       collapsed={collapsed}
+      drawer={compact}
     />
+    </>
   );
 
   const settingsView = settingsAt !== null ? (
@@ -516,7 +544,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
         {/* On the home screen the sidebar does not hide: the header's button hides
             it, and there is no header here. There is nothing to hide here — apart
             from the sidebar, no navigation is left on the home screen. */}
-        {sidebar(false)}
+        {sidebar(compact ? !sidebarOpen : false)}
 
         <Home
           models={models}
@@ -529,6 +557,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
           }
           onPickProject={() => void addProject()}
           onOpenSettings={() => setSettingsAt("providers")}
+          onOpenSidebar={compact ? () => setSidebarOpen(true) : undefined}
         />
         {settingsView}
       </div>

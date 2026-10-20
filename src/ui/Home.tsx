@@ -31,6 +31,7 @@ import type { MenuCommand } from "./slash";
 import { Composer, type ComposerActions, type ComposerSettings } from "./Composer";
 import { plainPath, relativeTo } from "./format";
 import { imageActions } from "./images";
+import { PanelLeft } from "./yaca-icons";
 
 export function Home({
   models,
@@ -41,6 +42,7 @@ export function Home({
   onStart,
   onPickProject,
   onOpenSettings,
+  onOpenSidebar,
 }: {
   models: ModelInfo[];
   /** The project's slash commands §7.3 — the same composer, the same menu. */
@@ -60,6 +62,8 @@ export function Home({
   onPickProject: () => void;
   /** The "Set up a provider" button leads to the settings window §10. */
   onOpenSettings: () => void;
+  /** Where the sidebar is a drawer there is no column to see it in: this opens it. */
+  onOpenSidebar?: () => void;
 }) {
   const [name, setName] = useState<string | null>(null);
   const [startup, setStartup] = useState<Startup | null>(null);
@@ -144,7 +148,19 @@ export function Home({
 
   return (
     <div className="home">
-      <header className="home-top">{t("side.new")}</header>
+      <header className="home-top">
+        {onOpenSidebar !== undefined && (
+          <button
+            className="top-icon"
+            onClick={onOpenSidebar}
+            aria-label={t("side.toggle")}
+            title={t("side.toggle")}
+          >
+            <PanelLeft size={18} open={false} />
+          </button>
+        )}
+        {t("side.new")}
+      </header>
 
       <div className="home-body">
         <div className="home-wrap">

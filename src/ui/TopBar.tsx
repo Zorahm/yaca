@@ -73,7 +73,7 @@ export function TopBar({
       </button>
 
       <button
-        className="top-icon"
+        className="top-icon top-nav"
         onClick={onBack}
         disabled={!canGoBack}
         aria-label={t("top.back")}
@@ -82,7 +82,7 @@ export function TopBar({
         <ArrowLeft size={16} />
       </button>
       <button
-        className="top-icon"
+        className="top-icon top-nav"
         onClick={onForward}
         disabled={!canGoForward}
         aria-label={t("top.forward")}
@@ -116,7 +116,7 @@ export function TopBar({
         />
       )}
 
-      <span className="top-project" title={projectRoot}>
+      <span className="top-project top-project-chip" title={projectRoot}>
         {baseName(projectRoot)}
       </span>
 

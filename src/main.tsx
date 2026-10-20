@@ -3,12 +3,16 @@ import ReactDOM from "react-dom/client";
 
 import App from "./App";
 import { adoptStorage } from "./core/legacy";
+import { isMobile } from "./core/link";
 import { openLink } from "./ui/link/boot";
 import { LinkLayers } from "./ui/link/LinkLayers";
 import { bootPrefs } from "./ui/prefs";
 
 // Before the first read: the composer takes its draft on mount (§7.4).
 adoptStorage();
+
+// The system bars of a phone lie over the page; `compact.css` keeps clear of them.
+if (isMobile) document.documentElement.dataset.mobile = "";
 
 const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
 

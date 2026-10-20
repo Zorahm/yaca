@@ -124,7 +124,7 @@ function FolderChooser({ title, onDone }: { title: string; onDone: (path: string
         <h2 className="folder-title">{title}</h2>
         <div className="folder-path">{listing === null ? t("link.pick_loading") : plainPath(listing.path)}</div>
 
-        <div className="btn-row">
+        <div className="link-row">
           <button
             type="button"
             className="btn btn-small"
@@ -152,7 +152,7 @@ function FolderChooser({ title, onDone }: { title: string; onDone: (path: string
 
         {naming !== null && (
           <form
-            className="btn-row"
+            className="link-row"
             onSubmit={(e) => {
               e.preventDefault();
               void create();
@@ -186,7 +186,7 @@ function FolderChooser({ title, onDone }: { title: string; onDone: (path: string
           )}
         </ul>
 
-        <div className="btn-row folder-actions">
+        <div className="link-row folder-actions">
           <button type="button" className="btn" onClick={() => onDone(null)}>
             {t("link.pick_cancel")}
           </button>

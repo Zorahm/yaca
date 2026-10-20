@@ -553,7 +553,7 @@ How it behaves:
 
 Not supported yet:
 
-- **A phone layout.** The Android app is the desktop interface in a smaller window; it is usable but not shaped for a touch screen.
+- **A full phone redesign.** Below 720 px the window switches to a compact layout (`src/ui/compact.css`): the sidebar is a drawer, panels and settings take the whole screen, controls are touch-sized and the system bars are kept clear. The conversation itself — diffs, tool rows, permission cards — is the desktop's, narrowed, and has not been tuned further.
 - **The browser column** against a server. It belongs to the desktop shell, and the server has no window to draw it in.
 - **Notifications** when the app is in the background: toasts are a desktop shell feature.
 - **Several devices at once**, and a `yaca-server` binary in the releases: build it with `cargo build --release -p yaca-server`.

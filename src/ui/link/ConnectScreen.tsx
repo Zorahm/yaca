@@ -122,7 +122,7 @@ export function ConnectScreen({
           </p>
         )}
 
-        <div className="btn-row connect-actions">
+        <div className="link-row">
           <button
             type="submit"
             className="btn btn-accent"

@@ -54,9 +54,6 @@
   font-size: 13px;
 }
 
-.connect-actions {
-  flex-wrap: wrap;
-}
 
 .link-strip {
   position: fixed;
@@ -160,4 +157,12 @@
 
 .folder-actions {
   justify-content: flex-end;
+}
+
+/* A line of buttons. (`.btn-row` is a button's own size, not a container.) */
+.link-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }

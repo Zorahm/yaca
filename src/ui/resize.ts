@@ -14,6 +14,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+/**
+ * Below this the window is a phone, or a desktop window dragged that thin, and
+ * the columns stop being columns: the sidebar is a drawer that slides over the
+ * feed and a panel takes the whole screen. Beside each other they would leave
+ * the feed less than a line of code wide.
+ */
+export const COMPACT_BELOW = 720;
+
+export const isCompact = (windowWidth: number): boolean => windowWidth < COMPACT_BELOW;
+
 /** The narrowest the feed is ever left: a diff line still reads at this. */
 export const FEED_MIN = 480;
 
