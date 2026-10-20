@@ -172,9 +172,11 @@ export default function App({ prefs }: { prefs: Preferences }) {
   // chose; what is drawn is that, fitted to the window as it is now.
   const windowWidth = useWindowWidth();
   const compact = isCompact(windowWidth);
-  // `compact.css` reads it: one switch for every rule that is about a phone.
+  // `compact.css` reads it: one switch for every rule that is about a phone. Its
+  // own name: `data-compact` belongs to the preferences (the diff's density) and
+  // `applyPrefs` clears it on every change.
   useEffect(() => {
-    document.documentElement.toggleAttribute("data-compact", compact);
+    document.documentElement.toggleAttribute("data-phone", compact);
   }, [compact]);
   const [sideChosen, setSideWidth] = useStoredWidth("yaca.width.side");
   const [listChosen, setListWidth] = useStoredWidth("yaca.width.panel");

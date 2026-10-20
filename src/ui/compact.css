@@ -1,8 +1,9 @@
 /*
  * The phone layout: a window narrower than 720 px (`COMPACT_BELOW`), set on
- * <html> as `data-compact` by the window. One file, so that everything that is
- * about a small screen is read in one place and the desktop rules stay as they
- * are.
+ * <html> as `data-phone` by the window. (Not `data-compact`: that one is the
+ * preferences' own, for the diff's line height, and goes on and off with them.)
+ * One file, so that everything that is about a small screen is read in one
+ * place and the desktop rules stay as they are.
  *
  * The columns stop being columns. The sidebar is a drawer over the feed, a
  * panel covers the whole screen, and the controls grow to what a thumb hits.
@@ -31,7 +32,7 @@
   padding-bottom: calc(var(--safe-bottom) + 24px);
 }
 
-:root[data-compact] {
+:root[data-phone] {
   --h-top: 52px;
   --h-button: 40px;
   --h-small-button: 36px;
@@ -40,24 +41,24 @@
 }
 
 /* One column: the feed, or the home screen. */
-:root[data-compact] .shell {
+:root[data-phone] .shell {
   grid-template-columns: minmax(0, 1fr);
 }
 
-:root[data-compact] .shell > .app,
-:root[data-compact] .shell > .home {
+:root[data-phone] .shell > .app,
+:root[data-phone] .shell > .home {
   grid-column: 1;
 }
 
 /* The feed's column is `auto` by default and swells to its widest child (a
    code line, the composer's measure) instead of fitting the screen. */
-:root[data-compact] .app {
+:root[data-phone] .app {
   grid-template-columns: minmax(0, 1fr);
 }
 
 /* --- the sidebar is a drawer ------------------------------------------ */
 
-:root[data-compact] .side-drawer {
+:root[data-phone] .side-drawer {
   position: fixed;
   top: 0;
   bottom: 0;
@@ -67,7 +68,7 @@
   box-shadow: var(--shadow-pop);
 }
 
-:root[data-compact] .side-scrim {
+:root[data-phone] .side-scrim {
   position: fixed;
   inset: 0;
   z-index: 59;
@@ -77,68 +78,68 @@
 
 /* --- top bar and home header -------------------------------------------- */
 
-:root[data-compact] .top {
+:root[data-phone] .top {
   gap: 2px;
   padding: 0 6px;
 }
 
-:root[data-compact] .top-icon {
+:root[data-phone] .top-icon {
   width: 40px;
   height: 40px;
 }
 
 /* What a phone has no room for: the arrows through the conversation (the
    feed scrolls by thumb) and the project chip. */
-:root[data-compact] .top-nav,
-:root[data-compact] .top-project-chip {
+:root[data-phone] .top-nav,
+:root[data-phone] .top-project-chip {
   display: none;
 }
 
-:root[data-compact] .top-title {
+:root[data-phone] .top-title {
   min-width: 0;
   flex: 1;
 }
 
-:root[data-compact] .top-gap {
+:root[data-phone] .top-gap {
   display: none;
 }
 
-:root[data-compact] .home-top {
+:root[data-phone] .home-top {
   gap: 4px;
   padding: 0 6px;
 }
 
 /* --- home -------------------------------------------------------------- */
 
-:root[data-compact] .home-body {
+:root[data-phone] .home-body {
   align-items: flex-start;
   padding: 20px 16px 24px;
 }
 
-:root[data-compact] .home-greeting h1 {
+:root[data-phone] .home-greeting h1 {
   font-size: 24px;
 }
 
-:root[data-compact] .home-lead {
+:root[data-phone] .home-lead {
   font-size: 14px;
 }
 
-:root[data-compact] .home-pick {
+:root[data-phone] .home-pick {
   flex-wrap: wrap;
 }
 
-:root[data-compact] .home-pick-text {
+:root[data-phone] .home-pick-text {
   flex: 1 1 100%;
 }
 
-:root[data-compact] .home-pick .btn {
+:root[data-phone] .home-pick .btn {
   margin-left: 0;
 }
 
 /* --- panels cover the screen ------------------------------------------ */
 
-:root[data-compact] .panel-dock,
-:root[data-compact] .panel-dock-over {
+:root[data-phone] .panel-dock,
+:root[data-phone] .panel-dock-over {
   position: fixed;
   inset: 0;
   z-index: 40;
@@ -149,11 +150,11 @@
   background: var(--bg);
 }
 
-:root[data-compact] .panel-dock > .splitter {
+:root[data-phone] .panel-dock > .splitter {
   display: none;
 }
 
-:root[data-compact] .panel-dock .panel {
+:root[data-phone] .panel-dock .panel {
   border: 0;
   border-radius: 0;
   box-shadow: none;
@@ -161,17 +162,17 @@
 
 /* --- settings: two screens, not two columns ------------------------------ */
 
-:root[data-compact] .settings {
+:root[data-phone] .settings {
   flex-direction: column;
 }
 
 /* The list of sections, then the section picked from it. */
-:root[data-compact] .settings[data-view="detail"] .set-nav,
-:root[data-compact] .settings[data-view="list"] .set-pane {
+:root[data-phone] .settings[data-view="detail"] .set-nav,
+:root[data-phone] .settings[data-view="list"] .set-pane {
   display: none;
 }
 
-:root[data-compact] .set-nav {
+:root[data-phone] .set-nav {
   flex: 1;
   width: auto;
   padding: 8px 12px 16px;
@@ -180,7 +181,7 @@
   overflow-y: auto;
 }
 
-:root[data-compact] .set-nav-item {
+:root[data-phone] .set-nav-item {
   height: 52px;
   padding: 0 12px;
   font-size: 15px;
@@ -188,15 +189,15 @@
   border-radius: 0;
 }
 
-:root[data-compact] .set-nav-item,
-:root[data-compact] .set-nav-item[aria-current="page"] {
+:root[data-phone] .set-nav-item,
+:root[data-phone] .set-nav-item[aria-current="page"] {
   background: transparent;
   color: var(--ink);
   font-weight: 400;
 }
 
 /* An item opens a screen: the arrow says so. */
-:root[data-compact] .set-nav-item::after {
+:root[data-phone] .set-nav-item::after {
   content: "›";
   margin-left: auto;
   color: var(--line-strong);
@@ -204,13 +205,13 @@
   line-height: 1;
 }
 
-:root[data-compact] .set-close {
+:root[data-phone] .set-close {
   min-height: 48px;
   margin-bottom: 4px;
   font-size: 15px;
 }
 
-:root[data-compact] .set-pane {
+:root[data-phone] .set-pane {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -218,7 +219,7 @@
 }
 
 /* The way back to the list: a bar of its own above the section, always there. */
-:root[data-compact] .set-back {
+:root[data-phone] .set-back {
   flex: none;
   display: flex;
   align-items: center;
@@ -232,7 +233,7 @@
   text-align: left;
 }
 
-:root[data-compact] .set-scroll {
+:root[data-phone] .set-scroll {
   flex: 1;
   min-height: 0;
   padding: 16px 14px 24px;
@@ -240,70 +241,70 @@
 
 /* A row is its words and then its control, one under the other: side by side,
    the words were squeezed into a column a few letters wide. */
-:root[data-compact] .set-row {
+:root[data-phone] .set-row {
   flex-direction: column;
   align-items: stretch;
   gap: 10px;
 }
 
-:root[data-compact] .set-row-control {
+:root[data-phone] .set-row-control {
   max-width: none;
   flex-wrap: wrap;
 }
 
 /* A switch is a yes or a no, and sits at the end of its row. */
-:root[data-compact] .set-row:has(.switch:only-child) {
+:root[data-phone] .set-row:has(.switch:only-child) {
   flex-direction: row;
   align-items: center;
   gap: 16px;
 }
 
-:root[data-compact] .segments {
+:root[data-phone] .segments {
   flex-wrap: wrap;
 }
 
 /* A provider keeps its name and address on one line and its buttons on the next. */
-:root[data-compact] .prov {
+:root[data-phone] .prov {
   flex-wrap: wrap;
   padding: 10px 12px;
   row-gap: 8px;
 }
 
-:root[data-compact] .prov-main {
+:root[data-phone] .prov-main {
   flex: 1 1 60%;
 }
 
-:root[data-compact] .prov-actions {
+:root[data-phone] .prov-actions {
   flex: 1 1 100%;
   justify-content: flex-end;
 }
 
-:root[data-compact] .select.set-project {
+:root[data-phone] .select.set-project {
   width: 100%;
   max-width: none;
 }
 
 /* Fields stay readable and never zoom the page when focused. */
-:root[data-compact] input,
-:root[data-compact] textarea,
-:root[data-compact] select {
+:root[data-phone] input,
+:root[data-phone] textarea,
+:root[data-phone] select {
   font-size: 16px;
 }
 
 /* --- connection and folders -------------------------------------------- */
 
-:root[data-compact] .folder-scrim {
+:root[data-phone] .folder-scrim {
   padding: 0;
   align-items: end;
 }
 
-:root[data-compact] .folder-card {
+:root[data-phone] .folder-card {
   width: 100%;
   max-height: 86dvh;
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 }
 
-:root[data-compact][data-mobile] .link-strip {
+:root[data-phone][data-mobile] .link-strip {
   padding-top: calc(var(--safe-top) / 2);
 }
 
@@ -311,59 +312,59 @@
 
 /* Margins of 24 px on each side leave a phone 364 px for the text; 14 px
    gives the diff and the code blocks back a column's worth. */
-:root[data-compact] .feed-item {
+:root[data-phone] .feed-item {
   padding-left: 14px;
   padding-right: 14px;
 }
 
-:root[data-compact] .composer-wrap {
+:root[data-phone] .composer-wrap {
   padding: 8px 12px 10px;
 }
 
-:root[data-compact] .bars:not(:empty) {
+:root[data-phone] .bars:not(:empty) {
   padding: 6px 12px 0;
 }
 
-:root[data-compact] .bar {
+:root[data-phone] .bar {
   min-height: 36px;
   padding: 4px 10px;
 }
 
 /* There is no keyboard to press the keys on the chips of a button. */
-:root[data-compact] .keycap {
+:root[data-phone] .keycap {
   display: none;
 }
 
 /* The request waits for a thumb: the buttons are rows of their own, the
    consent last and widest, nearest to where the thumb rests. */
-:root[data-compact] .ask-actions {
+:root[data-phone] .ask-actions {
   flex-direction: column;
   align-items: stretch;
 }
 
-:root[data-compact] .ask-group {
+:root[data-phone] .ask-group {
   flex-direction: column;
   margin-left: 0;
 }
 
-:root[data-compact] .ask-actions .btn,
-:root[data-compact] .ask-deny .btn {
+:root[data-phone] .ask-actions .btn,
+:root[data-phone] .ask-deny .btn {
   width: 100%;
   justify-content: center;
 }
 
-:root[data-compact] .ask-group-allow {
+:root[data-phone] .ask-group-allow {
   flex-direction: column-reverse;
 }
 
 /* The row under the box: mode, model, effort. Text chips are 20 px tall on
    a desktop; here they get a tappable height without changing how they look. */
-:root[data-compact] .composer-row {
+:root[data-phone] .composer-row {
   gap: 2px;
   padding: 0;
 }
 
-:root[data-compact] .chip {
+:root[data-phone] .chip {
   display: inline-flex;
   align-items: center;
   min-height: 40px;
@@ -373,7 +374,7 @@
 /* A menu opened from the row is a sheet at the foot of the screen: hung from
    its chip it ran off the left edge, and a menu is picked with a thumb, which
    rests at the bottom. */
-:root[data-compact] .menu {
+:root[data-phone] .menu {
   position: fixed;
   top: auto;
   right: 8px;
