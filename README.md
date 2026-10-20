@@ -559,6 +559,19 @@ Not supported yet:
 - **Several devices at once**, and a `yaca-server` binary in the releases: build it with `cargo build --release -p yaca-server`.
 - The Android app has not been run on a device; only the shell's compilation for `aarch64-linux-android` and the server through a socket are tested.
 
+## Android App
+
+The app is the interface in a Tauri webview with no host inside: it talks to a `yaca-server` (see above). Build it on any Linux machine with the Android SDK and NDK, JDK 17 and the Rust Android targets:
+
+```bash
+npm ci
+npm run tauri android init            # once: makes src-tauri/gen/android
+scripts/android-icons.sh              # Yaca's icon instead of the stock one
+npm run tauri android build -- --apk --debug --target aarch64
+```
+
+The launcher icon is an adaptive icon: a background colour, the mark as foreground and a monochrome silhouette that Android 13 and later recolours to the user's theme. It is drawn from `public/Yaca` by `scripts/android_icon.py`, turned into resources by `tauri icon` from a manifest, and kept in `src-tauri/icons/android`. Run `scripts/android-icons.sh` again after every `android init`, which writes the stock icon over it.
+
 ## Architecture
 
 ```
