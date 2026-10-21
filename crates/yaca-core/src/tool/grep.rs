@@ -75,8 +75,9 @@ impl Tool for Grep {
             },
             "glob": {
                 "type": "string",
-                "description": "Restrict to a path pattern, e.g. `**/*.rs`, matched against \
-                                the path inside the root that holds the file.",
+                "description": "Restrict to a path pattern, e.g. `src/**/*.rs`, matched against \
+                                the path inside the root that holds the file. A pattern with \
+                                no `/`, like `*.rs`, matches file names at any depth.",
             },
             "mode": {
                 "type": "string",
@@ -170,7 +171,14 @@ impl Tool for Grep {
 
         let path_filter = match input["glob"].as_str() {
             Some(g) => Some(
-                globset::GlobBuilder::new(g)
+                // As in ripgrep, `*.rs` is a file name and not a path from the
+                // root: left alone it would match only files at the top level
+                // and a search over a whole tree would report nothing found.
+                globset::GlobBuilder::new(&if g.contains('/') {
+                    g.to_string()
+                } else {
+                    format!("**/{g}")
+                })
                     .literal_separator(true)
                     .build()
                     .map_err(|e| ToolError::failed(format!("bad glob `{g}`: {e}")))?

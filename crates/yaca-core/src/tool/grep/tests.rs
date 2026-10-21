@@ -68,6 +68,24 @@ async fn path_pattern_narrows_search() {
 }
 
 #[tokio::test]
+async fn a_glob_without_a_slash_matches_file_names_at_any_depth() {
+    let dir = TempDir::new();
+    dir.write("top.rs", "clipboard\n");
+    dir.write("crates/core/src/deep.rs", "clipboard\n");
+    dir.write("crates/core/src/deep.ts", "clipboard\n");
+    let (ctx, _ws) = ctx_for(&dir);
+
+    let out = Grep::new()
+        .run(&ctx, json!({ "pattern": "clipboard", "glob": "*.rs" }))
+        .await
+        .unwrap();
+
+    assert!(out.text.contains("top.rs"), "{}", out.text);
+    assert!(out.text.contains("crates/core/src/deep.rs"), "{}", out.text);
+    assert!(!out.text.contains("deep.ts"), "{}", out.text);
+}
+
+#[tokio::test]
 async fn files_mode_returns_only_paths() {
     let dir = TempDir::new();
     dir.write("a.rs", "needle\nneedle\n");

@@ -707,7 +707,9 @@ pub struct TodoItem {
 pub enum TodoStatus {
     /// `○` coloured `--ink-muted`.
     Pending,
-    /// `●` coloured `--vermilion-ink`, pulsing.
+    /// `●` coloured `--vermilion-ink`, pulsing. `in_progress` is what models
+    /// write from habit; the tool schema advertises `inProgress`.
+    #[serde(alias = "in_progress")]
     InProgress,
     /// `✓` coloured `--moss`, text `line-through`.
     Completed,

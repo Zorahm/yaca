@@ -213,8 +213,26 @@ fn apply(base: &str, edits: &[Edit], rel: &str) -> Result<(String, usize), ToolE
     let many = edits.len() > 1;
     let mut claims: Vec<Claim> = Vec::new();
 
+    let crlf = base.contains("\r\n");
+
     for (index, edit) in edits.iter().enumerate() {
-        let found: Vec<usize> = base.match_indices(&edit.old).map(|(at, _)| at).collect();
+        let mut old = edit.old.as_str();
+        let mut new = edit.new.as_str();
+        let mut found: Vec<usize> = base.match_indices(old).map(|(at, _)| at).collect();
+        // Read shows a CRLF file's lines without the `\r`, so a multi-line anchor
+        // arrives with bare `\n` and matches nothing. The same anchor in the
+        // file's own line endings is the text the model meant; what replaces it
+        // gets them too, so the file does not end up with mixed endings.
+        let (crlf_old, crlf_new);
+        if found.is_empty() && crlf {
+            crlf_old = with_crlf(old);
+            crlf_new = with_crlf(new);
+            found = base.match_indices(&crlf_old).map(|(at, _)| at).collect();
+            if !found.is_empty() {
+                old = &crlf_old;
+                new = &crlf_new;
+            }
+        }
         let which = which(many, index);
 
         match found.len() {
@@ -236,8 +254,8 @@ fn apply(base: &str, edits: &[Edit], rel: &str) -> Result<(String, usize), ToolE
 
         for at in found {
             claims.push(Claim {
-                at: at..at + edit.old.len(),
-                new: edit.new.clone(),
+                at: at..at + old.len(),
+                new: new.to_string(),
                 edit: index,
             });
         }
@@ -265,6 +283,11 @@ fn apply(base: &str, edits: &[Edit], rel: &str) -> Result<(String, usize), ToolE
         out.replace_range(claim.at.clone(), &claim.new);
     }
     Ok((out, claims.len()))
+}
+
+/// Every line break as `\r\n`, whichever it was.
+fn with_crlf(text: &str) -> String {
+    text.replace("\r\n", "\n").replace('\n', "\r\n")
 }
 
 /// `, edit 3` — only when there are several edits.
@@ -314,6 +337,32 @@ mod tests {
             std::fs::read_to_string(&path).unwrap(),
             "let x = 1;\nlet y = 42;\n",
             "edit moves to tree immediately"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_multi_line_anchor_finds_its_text_in_a_crlf_file() {
+        let dir = TempDir::new();
+        let path = dir.write("a.rs", "let x = 1;\r\nlet y = 2;\r\nlet z = 3;\r\n");
+        let (ctx, ws) = ctx_for(&dir);
+        ws.mark_read(&path);
+
+        EditFile
+            .run(
+                &ctx,
+                json!({
+                    "path": "a.rs",
+                    "old_string": "let x = 1;\nlet y = 2;",
+                    "new_string": "let x = 1;\nlet w = 0;\nlet y = 2;",
+                }),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "let x = 1;\r\nlet w = 0;\r\nlet y = 2;\r\nlet z = 3;\r\n",
+            "no bare \\n may end up in a CRLF file"
         );
     }
 
