@@ -124,6 +124,14 @@ pub(super) trait StreamDecoder: Send + 'static {
     fn finish(&mut self) -> Vec<ProviderEvent> {
         Vec::new()
     }
+
+    /// The bytes ran out before the message was complete: the connection was
+    /// cut (an idle timeout on a proxy, a reset), and what arrived is not an
+    /// answer. Closing it as a finished message would end the turn as if the
+    /// model had said everything it meant to.
+    fn cut_off(&self) -> bool {
+        false
+    }
 }
 
 /// Pumps SSE into a channel, parsing each payload.
@@ -159,6 +167,15 @@ pub(super) fn pump(resp: reqwest::Response, mut decode: impl StreamDecoder) -> P
                     }
                 }
             }
+        }
+
+        if decode.cut_off() {
+            let _ = tx
+                .send(Err(ProviderError::Network(
+                    "the stream ended before the model finished its answer".into(),
+                )))
+                .await;
+            return;
         }
 
         for ev in decode.finish() {

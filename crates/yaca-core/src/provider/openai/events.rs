@@ -39,6 +39,9 @@ enum Open {
 pub(super) struct Decoder {
     started: bool,
     finished: bool,
+    /// A `finish_reason` arrived, whatever it said. Without it and without
+    /// `[DONE]` the connection was cut mid-answer.
+    reason_seen: bool,
     /// The open text or reasoning block and its index.
     open: Option<(Open, u32)>,
     /// Index of a call in the chunk → index of our block. The shape numbers calls
@@ -95,6 +98,7 @@ impl StreamDecoder for Decoder {
             }
 
             if let Some(reason) = choice.finish_reason.as_deref() {
+                self.reason_seen = true;
                 self.stop = parse_stop_reason(reason);
             }
         }
@@ -102,8 +106,13 @@ impl StreamDecoder for Decoder {
         Ok(out)
     }
 
+    fn cut_off(&self) -> bool {
+        !self.finished && !self.reason_seen
+    }
+
     /// The bytes have run out. Some gateways simply close the connection without
-    /// sending `[DONE]` — the tail is appended in that case too.
+    /// sending `[DONE]` — the tail is appended in that case too, as long as the
+    /// stream said why it stopped (`cut_off`).
     fn finish(&mut self) -> Vec<ProviderEvent> {
         if self.finished {
             return Vec::new();
@@ -489,6 +498,24 @@ mod tests {
         decode(&mut d, r#"{"choices":[{"delta":{"content":"answer"}}]}"#);
         let tail = d.finish();
         assert_eq!(tail.last(), Some(&ProviderEvent::MessageStop));
+    }
+
+    #[test]
+    fn a_stream_with_no_reason_for_stopping_is_cut_off() {
+        let mut d = Decoder::default();
+        decode(&mut d, r#"{"choices":[{"delta":{"reasoning_content":"hm"}}]}"#);
+        assert!(d.cut_off());
+
+        decode(&mut d, r#"{"choices":[{"delta":{},"finish_reason":"eos"}]}"#);
+        assert!(!d.cut_off(), "an unknown reason is still a reason");
+    }
+
+    #[test]
+    fn a_stream_that_said_done_is_not_cut_off() {
+        let mut d = Decoder::default();
+        decode(&mut d, r#"{"choices":[{"delta":{"content":"a"}}]}"#);
+        decode(&mut d, "[DONE]");
+        assert!(!d.cut_off());
     }
 
     #[test]

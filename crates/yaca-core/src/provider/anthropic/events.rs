@@ -14,11 +14,21 @@ use crate::usage::TokenCounts;
 
 /// The Messages API closes the message itself: `message_stop` arrives in the stream,
 /// and there is nothing to append to the tail once the bytes have been cut off.
-pub(super) struct Decoder;
+/// A stream that ends without it was cut, and is reported as such.
+#[derive(Default)]
+pub(super) struct Decoder {
+    stopped: bool,
+}
 
 impl StreamDecoder for Decoder {
     fn payload(&mut self, payload: &str) -> Result<Vec<ProviderEvent>, ProviderError> {
-        decode_payload(payload)
+        let events = decode_payload(payload)?;
+        self.stopped |= events.contains(&ProviderEvent::MessageStop);
+        Ok(events)
+    }
+
+    fn cut_off(&self) -> bool {
+        !self.stopped
     }
 }
 
@@ -276,6 +286,17 @@ mod tests {
                 text: "answer".into()
             }]
         );
+    }
+
+    #[test]
+    fn a_stream_is_cut_off_until_message_stop_arrives() {
+        let mut d = Decoder::default();
+        assert!(d.cut_off(), "nothing has arrived yet");
+        d.payload(r#"{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hm"}}"#)
+            .unwrap();
+        assert!(d.cut_off(), "the connection dropped mid-thought");
+        d.payload(r#"{"type":"message_stop"}"#).unwrap();
+        assert!(!d.cut_off());
     }
 
     #[test]

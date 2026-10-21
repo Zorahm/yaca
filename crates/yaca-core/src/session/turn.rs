@@ -42,6 +42,8 @@ enum End {
     Failed(ProviderError),
     /// The ceiling on steps in the settings.
     OutOfSteps(u32),
+    /// The model answered with no text and no call: reasoning alone, or nothing.
+    Silent(StopReason),
 }
 
 pub(super) struct Worker {
@@ -193,6 +195,7 @@ impl Worker {
             }),
             End::Failed(err) => self.fail_turn(turn_id, err),
             End::OutOfSteps(max_steps) => self.stop_at_ceiling(turn_id, max_steps),
+            End::Silent(stop_reason) => self.stop_silent(turn_id, stop_reason),
         }
     }
 
@@ -306,6 +309,10 @@ impl Worker {
             let pricing = self.pricing_of(done.routed.as_ref());
             self.usage.record(done.usage, pricing);
 
+            let spoke = done
+                .blocks
+                .iter()
+                .any(|b| matches!(b, ContentBlock::Text { text } if !text.trim().is_empty()));
             if !done.blocks.is_empty() {
                 self.remember(turn_id, Message::assistant(done.blocks));
             }
@@ -328,6 +335,11 @@ impl Worker {
                 // Nothing left to do is not the end while subagents are still
                 // out: their reports are what the agent sent them for.
                 if !self.shared.background.pending() {
+                    // Reasoning with no answer after it ends the response, and
+                    // a turn that closed on it would look like a finished one.
+                    if !spoke {
+                        return End::Silent(done.stop_reason);
+                    }
                     if let Some(back) = self.stop_hooks(&mut stop_returns, cancel).await {
                         self.remember(turn_id, back);
                         continue;
@@ -699,6 +711,28 @@ impl Worker {
                  to give the model another turn, or change `maxSteps` in .yaca/settings.json."
             ),
             retryable: false,
+        });
+        self.emit(AgentEvent::TurnFinished {
+            turn_id,
+            stop_reason: StopReason::Failed,
+            at: TsMillis::now(),
+        });
+    }
+
+    /// The model ended its response without saying anything. Ended with the
+    /// error block rather than quietly, for the same reason as the ceiling.
+    fn stop_silent(&self, turn_id: TurnId, stop_reason: StopReason) {
+        let why = match stop_reason {
+            StopReason::MaxTokens => {
+                "used its whole output budget on reasoning and wrote no answer"
+            }
+            StopReason::Refusal => "refused and wrote nothing",
+            _ => "ended its turn after reasoning, with no answer and no tool call",
+        };
+        self.emit(AgentEvent::Error {
+            code: "empty_answer".to_string(),
+            message: format!("The model {why}. Say \"continue\" to ask again."),
+            retryable: true,
         });
         self.emit(AgentEvent::TurnFinished {
             turn_id,

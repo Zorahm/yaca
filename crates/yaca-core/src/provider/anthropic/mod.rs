@@ -60,6 +60,6 @@ impl Provider for AnthropicProvider {
             .map_err(|e| ProviderError::Network(e.to_string()))?;
 
         let resp = http::check_status(resp, &self.spec, self.key.as_deref()).await?;
-        Ok(http::pump(resp, events::Decoder))
+        Ok(http::pump(resp, events::Decoder::default()))
     }
 }
