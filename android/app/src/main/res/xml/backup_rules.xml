@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older: the paired hosts hold device credentials and must not leave the device. -->
+<full-backup-content>
+    <exclude domain="file" path="datastore/yaca_hosts.preferences_pb" />
+</full-backup-content>

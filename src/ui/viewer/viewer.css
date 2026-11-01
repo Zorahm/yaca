@@ -223,3 +223,19 @@
   max-height: 260px;
   object-fit: contain;
 }
+
+/* Nothing hovers on a touch screen: the cross that takes an image back off a
+   message stands on its tile, with a margin a finger can hit. */
+@media (hover: none) {
+  .tile-drop {
+    opacity: 1;
+  }
+}
+
+@media (pointer: coarse) {
+  .tile-drop::after {
+    content: "";
+    position: absolute;
+    inset: -8px;
+  }
+}

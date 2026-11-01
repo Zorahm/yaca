@@ -46,7 +46,7 @@ export const providers = {
 
   "prov.form_models": "Modelos",
   "prov.form_models_hint":
-    "La lista la da el propio proveedor: se le consulta en cuanto se guarda la clave, y «Consultar» vuelve a preguntar. Con lo que responda se trabaja; el precio va en dólares por millón de tokens, y cero significa «gratis o desconocido».",
+    "La lista la da el propio proveedor: se le consulta en cuanto se guarda la clave, y otra vez cuando cambian la dirección, el protocolo o las cabeceras; «Consultar» vuelve a preguntar. Hasta que llega la respuesta, se ve la lista anterior. Con lo que responda se trabaja; el precio va en dólares por millón de tokens, y cero significa «gratis o desconocido».",
   "prov.form_model_context": "Contexto, tokens",
   "prov.form_model_output": "Salida máx., tokens",
   "prov.form_model_effort": "admite esfuerzo",
@@ -61,6 +61,7 @@ export const providers = {
 
   "prov.saved_unasked":
     "«{name}» está guardado, pero no respondió con su lista de modelos: {error}",
+  "prov.ask_failed": "«{name}» no respondió con su lista de modelos: {error}",
   "prov.error_name": "Indica el nombre del proveedor",
   "prov.error_url": "Indica la URL base del proveedor",
   "prov.error_header_name": "La cabecera {n} no tiene nombre",

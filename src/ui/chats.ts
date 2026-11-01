@@ -179,8 +179,8 @@ export function useChats(onError: (error: unknown) => void): Chats {
           break;
         }
       }
-      // §3: the title is written down by the core when the turn ends, and the
-      // top bar and the list both read it from there.
+      // §3: the core writes the title down when the session is named and
+      // again when the turn ends; the top bar and the list both read it there.
       if (frame.events.some((event) => event.type === "turnFinished")) {
         void refreshTitle(frame.session);
       }

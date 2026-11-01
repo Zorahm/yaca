@@ -111,6 +111,30 @@
   /* The edge of the right panel when the window is too narrow to seat it
      beside the feed and it lies over the feed instead. */
   --shadow-panel: -12px 0 24px -20px rgb(27 32 36 / 0.35);
+  /* The drawer's edge over the feed: it casts to the right. */
+  --shadow-drawer: 12px 0 24px -14px rgb(27 32 36 / 0.3);
+  /* What the drawer leaves of the window behind it. */
+  --scrim: rgb(27 32 36 / 0.32);
+
+  /* --- touch ---------------------------------------------------------- */
+
+  /* A pressed control on a touch screen: a wash laid over whatever fill it
+     has, the way an Android state layer is, so one rule serves a white row,
+     a teal button and a bare icon alike. */
+  --press: rgb(27 32 36 / 0.09);
+
+  /* --- motion --------------------------------------------------------- */
+
+  /* Layers come and go: the drawer, a panel over the feed, a menu, the
+     settings. Material's emphasized curves — a layer arriving decelerates
+     into place, one leaving accelerates away and takes less time over it.
+     Nothing else moves but the state pulses. */
+  --ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-leave: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --dur-enter: 260ms;
+  --dur-leave: 180ms;
+  /* A menu is small and close to the finger: it is there almost at once. */
+  --dur-pop: 140ms;
 }
 
 /* Dark. Same names, other values: components do not know the edition. */
@@ -163,6 +187,10 @@
 
   --shadow-pop: 0 10px 28px -6px rgb(0 0 0 / 0.6), 0 1px 2px rgb(0 0 0 / 0.5);
   --shadow-panel: -12px 0 24px -14px rgb(0 0 0 / 0.7);
+  --shadow-drawer: 12px 0 24px -14px rgb(0 0 0 / 0.7);
+  --scrim: rgb(0 0 0 / 0.5);
+
+  --press: rgb(231 235 233 / 0.1);
 }
 
 /* Compact mode and line numbers are prototype props. */
@@ -186,6 +214,24 @@ body,
 #root {
   height: 100%;
   margin: 0;
+}
+
+html {
+  /* A tap is answered by the control's own pressed state (`--press`, below),
+     not by the browser's grey flash over its box. */
+  -webkit-tap-highlight-color: transparent;
+  /* The sizes set here are the sizes drawn: a phone's browser does not
+     inflate the text it judges too small for its screen. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* The window does not scroll; only its columns do. A swipe that runs off the
+   end of a column stops there instead of pulling the whole page down into a
+   reload or stretching it like a document. */
+html,
+body {
+  overscroll-behavior: none;
 }
 
 body {
@@ -213,6 +259,35 @@ button {
   border: none;
   padding: 0;
   cursor: pointer;
+}
+
+/* No double-tap zoom on a control: a tap is a press at once, not a press held
+   back while the browser waits to see whether a second one follows. */
+button,
+a,
+input,
+textarea,
+[role="button"],
+[role="menuitem"],
+[role="option"],
+[role="tab"] {
+  touch-action: manipulation;
+}
+
+/* Pressed, on a screen with no pointer to hover: the wash goes down with the
+   finger. Hover rules do not apply here at all (`vite.config.ts`), so this is
+   the only feedback a tap gets, and it has to be there before the finger
+   lifts. A background image lies over the control's own fill and under its
+   text, so the fill, the border and the radius stay the control's. */
+@media (hover: none) {
+  button:not(:disabled):active,
+  a:active,
+  [role="button"]:active,
+  [role="menuitem"]:not([data-disabled]):active,
+  [role="option"]:active,
+  [role="tab"]:active {
+    background-image: linear-gradient(var(--press), var(--press));
+  }
 }
 
 input,
@@ -291,6 +366,30 @@ textarea {
 
 .pulse {
   animation: yacaPulse 1.2s ease-in-out infinite;
+}
+
+/* A layer coming in: from just under where it settles, fading up; or, with
+   `--from` and `--from-opacity: 1`, sliding in whole from its own edge. The
+   layers run it only where motion is not reduced. */
+@keyframes yacaEnter {
+  from {
+    transform: var(--from, translateY(8px));
+    opacity: var(--from-opacity, 0);
+  }
+}
+
+/* A menu opening from the chip or the row it hangs from. */
+@keyframes yacaPop {
+  from {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+}
+
+@keyframes yacaFade {
+  from {
+    opacity: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

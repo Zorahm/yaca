@@ -19,6 +19,19 @@ export const FEED_MIN = 480;
 
 export const SIDE = { min: 200, max: 420, initial: 248 } as const;
 
+/**
+ * Below this the sidebar cannot stand beside the feed without pushing it under
+ * its floor, so it stops being a column and becomes a drawer over the feed, and
+ * the right-hand layers cover the window whole: a phone, or a window dragged
+ * that narrow. The CSS says the same with `@media (max-width: 679.98px)`; a
+ * media query cannot read a constant, so the figure is written there too.
+ */
+export const NARROW = SIDE.min + FEED_MIN;
+
+export function isNarrow(windowWidth: number): boolean {
+  return windowWidth < NARROW;
+}
+
 export const PANEL = { min: 320, initial: 380 } as const;
 
 /** A file is opened to be read, so its first width is a share of the window. */

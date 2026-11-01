@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pairing_title">Pair a computer</string>
+    <string name="pairing_heading">Connect a computer</string>
+    <string name="pairing_body">Scan the QR code that Yaca shows on your computer.</string>
+    <string name="pairing_camera_rationale">Yaca uses the camera only to read the pairing code. Nothing is saved.</string>
+    <string name="pairing_camera_denied">Camera access is off. Paste the pairing link instead.</string>
+    <string name="pairing_camera_unavailable">Yaca cannot use this phone’s camera. Paste the pairing link instead.</string>
+    <string name="pairing_camera_allow">Allow camera</string>
+    <string name="pairing_camera_note">The code is valid for five minutes.</string>
+    <string name="pairing_paste">Paste pairing link</string>
+    <string name="pairing_invalid_link">That is not a Yaca pairing link.</string>
+    <string name="pairing_network">Could not reach the computer. Check that both are on the same network.</string>
+    <string name="pairing_storage">Paired, but the phone could not save the connection. Pair again; the stale entry can be removed in Yaca on the computer.</string>
+    <string name="pairing_in_progress">Pairing with %1$s…</string>
+    <string name="pairing_confirm_title">Pair with %1$s?</string>
+    <string name="pairing_confirm_body">The phone will receive events from this computer until you forget it.</string>
+    <string name="pairing_confirm_action">Pair</string>
+
+    <string name="refusal_unauthorized">This phone is no longer allowed on that computer. Pair it again.</string>
+    <string name="refusal_pairing_failed">The pairing code is wrong, already used or expired. Make a new code in Yaca and scan it again.</string>
+    <string name="refusal_protocol_mismatch">The computer speaks protocol %1$d, this app speaks %2$d. Update one of them.</string>
+    <string name="refusal_too_many_attempts">Too many failed attempts from this network. Try again later.</string>
+    <string name="refusal_handshake_expected">The computer closed the connection before the handshake. Try again.</string>
+</resources>

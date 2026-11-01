@@ -62,6 +62,8 @@ export const composer = {
   "composer.stop": "停止",
   "composer.attach": "ファイルを添付",
   "composer.detach": "削除",
+  "composer.add": "追加",
+  "composer.add_back": "戻る",
   "attachment.gone": "{path} — ファイルがありません",
   "composer.queued": "待機中",
   "composer.queued_cancel": "取り消す",

@@ -62,6 +62,8 @@ export const composer = {
   "composer.stop": "Parar",
   "composer.attach": "Anexar arquivos",
   "composer.detach": "Remover",
+  "composer.add": "Adicionar",
+  "composer.add_back": "Voltar",
   "attachment.gone": "{path} — o arquivo não existe mais",
   "composer.queued": "na fila",
   "composer.queued_cancel": "cancelar",

@@ -73,3 +73,26 @@
   margin: 4px 6px;
   background: var(--line);
 }
+
+/* A row menu opens from where it was asked for, and fades on the way out
+   (Radix waits for the closing animation before it takes the menu away). */
+@media (prefers-reduced-motion: no-preference) {
+  .pop[data-state="open"] {
+    transform-origin: var(
+      --radix-dropdown-menu-content-transform-origin,
+      var(--radix-context-menu-content-transform-origin)
+    );
+    animation: yacaPop var(--dur-pop) var(--ease-enter);
+  }
+
+  .pop[data-state="closed"] {
+    animation: yacaFade var(--dur-pop) var(--ease-leave) reverse forwards;
+  }
+}
+
+/* A finger, not a pointer: rows tall enough to hit, as Android's menus are. */
+@media (pointer: coarse) {
+  .pop-item {
+    height: 40px;
+  }
+}

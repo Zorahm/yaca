@@ -25,6 +25,7 @@ import {
   addProject as rememberProject,
   chooseFiles,
   chooseFolder,
+  enabledPlugins,
   commands,
   forgetProject as dropProject,
   hasFileDialogs,
@@ -76,9 +77,11 @@ import { BrowserColumn } from "./ui/browser/BrowserColumn";
 import { useBrowserCover } from "./ui/browser/cover";
 import { useBrowserColumn } from "./ui/browser/useBrowserColumn";
 import { useShortcuts } from "./ui/keyboard";
+import { useBackClose } from "./ui/back";
 import {
   clamp,
   FILE_SHARE,
+  isNarrow,
   PANEL,
   panelBounds,
   SIDE,
@@ -110,11 +113,17 @@ export default function App({ prefs }: { prefs: Preferences }) {
   // also hid the conversation the person would return to a second later.
   // Which section it stands on, or `null` while it is closed.
   const [settingsAt, setSettingsAt] = useState<SettingsSection | null>(null);
+  // Opened as «Settings» from the sidebar, not on a section: a narrow window
+  // then shows the list of sections first.
+  const [settingsList, setSettingsList] = useState(false);
 
   // Both items of the Help menu lead to the same screen, on purpose: the row
   // there says that nothing is published to check against yet
   // (`AboutSection`).
-  const openAbout = useCallback(() => setSettingsAt("about"), []);
+  const openAbout = useCallback(() => {
+    setSettingsList(false);
+    setSettingsAt("about");
+  }, []);
   const update = useUpdate();
   // Closing the card hides that version until the application restarts, and
   // only that version: a newer release brings the card back.
@@ -171,21 +180,38 @@ export default function App({ prefs }: { prefs: Preferences }) {
   const [fileChosen, setFileWidth] = useStoredWidth("yaca.width.file");
   const sideLimits = sideBounds(windowWidth);
   const sideWidth = clamp(sideChosen ?? SIDE.initial, sideLimits);
+  // Too narrow for the column: the sidebar is a drawer over the feed, shut
+  // until asked for, and it takes no width from the window.
+  const narrow = isNarrow(windowWidth);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const shutDrawer = useCallback(() => setDrawerOpen(false), []);
+  const sideColumn = !narrow && sidebarOpen ? sideWidth : 0;
+  useEffect(() => {
+    if (!narrow) setDrawerOpen(false);
+  }, [narrow]);
 
   const failed = useCallback((e: unknown) => setError(String(e)), []);
   const chats = useChats(failed);
   const active = chats.active;
 
   const closePanel = useCallback(() => setPanel(null), []);
+  const closeSettings = useCallback(() => setSettingsAt(null), []);
   const browserColumn = useBrowserColumn({
     session: active?.id ?? null,
     windowWidth,
-    sideWidth: sidebarOpen ? sideWidth : 0,
+    sideWidth: sideColumn,
     panelOpen: panel !== null,
     closePanel,
   });
   // The settings lie over the whole window, the browser's page included.
   useBrowserCover(settingsAt !== null);
+
+  // On a phone each of these covers the window, and Back closes the one on
+  // top, the way it does in any Android app (`ui/back`).
+  useBackClose(narrow && drawerOpen, shutDrawer);
+  useBackClose(narrow && panel !== null, closePanel);
+  useBackClose(narrow && browserColumn.open, browserColumn.close);
+  useBackClose(narrow && settingsAt !== null, closeSettings);
 
   // A manual jump along the feed goes through its window: a block far from the
   // visible area is not marked up, and `getElementById` is dead on it. The jumps
@@ -412,6 +438,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
           return picked.map((path) => relativeTo(root, path));
         }
       : undefined,
+    // Plugins are folders on a machine: without the shell there are none to offer.
+    listPlugins: hasFileDialogs ? enabledPlugins : undefined,
     ...imageActions(active?.feed.state?.projectRoot ?? null),
     refreshCommands,
   };
@@ -469,6 +497,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
   // --- layout ---------------------------------------------------------------
 
   // The sidebar is the same on both screens: what differs is what stands on the right.
+  // In the drawer, picking where to go also shuts it: the drawer is a way to
+  // get somewhere, not a place to stay.
   const sidebar = (collapsed: boolean) => (
     <Sidebar
       projects={projects}
@@ -478,19 +508,33 @@ export default function App({ prefs }: { prefs: Preferences }) {
       // Re-reading the lists makes sense when they may have changed: a chat was
       // opened or closed, a turn ended, and a title changed.
       reload={chats.chats.map((chat) => `${chat.id}:${chat.title}`).join("|")}
-      onNewChat={newChat}
-      onOpenSession={(project, id) => void chats.resume(project, id).catch(failed)}
+      onNewChat={(project) => {
+        shutDrawer();
+        newChat(project);
+      }}
+      onOpenSession={(project, id) => {
+        shutDrawer();
+        void chats.resume(project, id).catch(failed);
+      }}
       onCloseChat={(id) => void chats.close(id).catch(failed)}
       onForgetProject={(project) => void forgetProject(project)}
-      onOpenSettings={() => setSettingsAt("providers")}
+      onOpenSettings={() => {
+        shutDrawer();
+        setSettingsList(true);
+        setSettingsAt("providers");
+      }}
       update={shownUpdate}
       onDismissUpdate={() => setDismissedUpdate(shownUpdate?.version ?? null)}
       onInstallUpdate={installUpdate}
-      onUpdateDetails={openAbout}
+      onUpdateDetails={() => {
+        shutDrawer();
+        openAbout();
+      }}
       width={sideWidth}
       bounds={sideLimits}
       onResize={setSideWidth}
       collapsed={collapsed}
+      drawer={narrow ? { open: drawerOpen, onShut: shutDrawer } : null}
     />
   );
 
@@ -500,7 +544,9 @@ export default function App({ prefs }: { prefs: Preferences }) {
         prefs={livePrefs}
         section={settingsAt}
         onSection={setSettingsAt}
-        onClose={() => setSettingsAt(null)}
+        onClose={closeSettings}
+        narrow={narrow}
+        startOnList={settingsList}
       />
     </div>
   ) : null;
@@ -515,7 +561,9 @@ export default function App({ prefs }: { prefs: Preferences }) {
       <div className="shell">
         {/* On the home screen the sidebar does not hide: the header's button hides
             it, and there is no header here. There is nothing to hide here — apart
-            from the sidebar, no navigation is left on the home screen. */}
+            from the sidebar, no navigation is left on the home screen. A narrow
+            window is the exception: there it is a drawer, and the home screen's
+            own header has the button that opens it. */}
         {sidebar(false)}
 
         <Home
@@ -528,7 +576,11 @@ export default function App({ prefs }: { prefs: Preferences }) {
             void chats.start(path, text, startup, attachments).catch(failed)
           }
           onPickProject={() => void addProject()}
-          onOpenSettings={() => setSettingsAt("providers")}
+          onOpenSettings={() => {
+            setSettingsList(false);
+            setSettingsAt("providers");
+          }}
+          onMenu={narrow ? () => setDrawerOpen(true) : undefined}
         />
         {settingsView}
       </div>
@@ -542,14 +594,15 @@ export default function App({ prefs }: { prefs: Preferences }) {
 
   // The panel takes what the sidebar and the feed's floor leave it. A file is
   // opened to be read and starts wide; the lists start as a narrow column.
-  const panelLimits = panelBounds(
-    windowWidth,
-    (sidebarOpen ? sideWidth : 0) + browserColumn.reserve,
-  );
+  const panelLimits = panelBounds(windowWidth, sideColumn + browserColumn.reserve);
   const panelInitial =
     panel === "file" ? Math.round(windowWidth * FILE_SHARE) : PANEL.initial;
   const panelChosen = (panel === "file" ? fileChosen : listChosen) ?? panelInitial;
-  const panelWidth = clamp(panelChosen, panelLimits ?? { min: PANEL.min, max: windowWidth });
+  // On a phone a panel is a screen of its own: a strip of feed left beside it
+  // is too thin to read and only gets tapped by mistake.
+  const panelWidth = narrow
+    ? windowWidth
+    : clamp(panelChosen, panelLimits ?? { min: PANEL.min, max: windowWidth });
 
   return frame(
     <Pictures root={project} gallery={gallery}>
@@ -569,10 +622,15 @@ export default function App({ prefs }: { prefs: Preferences }) {
               .rename(active.project, active.id, next)
               .then(() => chats.patch(active.id, { title: next }), failed);
           }}
-          sidebarOpen={sidebarOpen}
+          sidebarOpen={narrow ? drawerOpen : sidebarOpen}
+          narrow={narrow}
           panelOpen={panel !== null}
           runningProcesses={runningProcesses}
-          onToggleSidebar={() => setSidebarOpen((now) => !now)}
+          processCount={active.feed.processes.length}
+          onOpenProcesses={() => setPanel("processes")}
+          onToggleSidebar={() =>
+            narrow ? setDrawerOpen(true) : setSidebarOpen((now) => !now)
+          }
           onTogglePanel={togglePanel}
           browser={
             browserColumn.supported
@@ -615,6 +673,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
           queued={active.feed.queued}
           found={active.feed.found}
           actions={composerActions}
+          mcp={active.feed.mcp}
           // The draft belongs to the conversation, not the project: a project has
           // several chats, and what is half-written in one must not surface in another.
           draftKey={`yaca.draft.${active.id}`}

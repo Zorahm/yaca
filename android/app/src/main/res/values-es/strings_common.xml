@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Yaca</string>
+
+    <string name="action_back">Atrás</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_more">Más opciones</string>
+    <string name="action_refresh">Actualizar</string>
+
+    <string name="connection_idle">Sin conexión</string>
+    <string name="connection_connecting">Conectando, intento %1$d</string>
+    <string name="connection_online">En línea · Yaca %1$s</string>
+    <string name="connection_offline">Sin conexión, reintentando</string>
+    <string name="connection_refused">Rechazado por el ordenador</string>
+
+    <string name="waiting_for_you">Esperando tu respuesta</string>
+    <string name="chat_untitled">Chat nuevo</string>
+    <string name="error_not_connected">Todavía no hay conexión con el ordenador</string>
+</resources>

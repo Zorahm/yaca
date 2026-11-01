@@ -59,6 +59,8 @@ export const panels = {
   "file.unavailable": "Nothing to show: the file is gone, binary, or outside the project",
 
   "proc.empty": "No background commands",
+  "proc.active_count": "Running: {n}",
+  "proc.finished_count": "Finished: {n}",
   "proc.watch": "Show the output",
   "proc.state_running": "running",
   "proc.state_exited": "code {code}",

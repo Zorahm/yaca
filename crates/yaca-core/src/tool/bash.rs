@@ -48,12 +48,16 @@ impl Tool for Bash {
     }
 
     fn description(&self) -> &'static str {
-        "Run a command in the project. Its output reaches the human as it appears. \
+        "Run a shell command. The project is the default working directory, not a \
+         sandbox: installed programs such as Python may run from any existing directory. \
+         Its output reaches the human as it appears. \
          Anything that does not end by itself — a dev server, a watcher, a long \
          build you want to keep an eye on — belongs in the background rather than \
          behind a longer timeout. A command still running after the timeout is not \
          stopped: it moves to the background by itself, and when it ends you are \
-         given a file with its whole output. In plan mode only commands that change \
+         given a file with its whole output. Use background: true instead of shell \
+         jobs or detached launches so Yaca can track the command and its output. \
+         In plan mode only commands that change \
          nothing run (listing, reading, searching, read-only git)."
     }
 
@@ -65,8 +69,9 @@ impl Tool for Bash {
             },
             "cwd": {
                 "type": "string",
-                "description": "Directory to run in, relative to the project root. \
-                                Defaults to the root.",
+                "description": "Any existing working directory, absolute or relative \
+                                to the project root, including outside the project. \
+                                Defaults to the project root.",
             },
             "timeout_ms": {
                 "type": "integer",
@@ -223,18 +228,12 @@ fn search_dirs<'a>(ws: &'a Workspace, cwd: &'a Path) -> Vec<&'a Path> {
     dirs
 }
 
-/// Resolves `cwd` and keeps it inside a root: the primary one, or any additional
-/// one. A relative `cwd` is taken from the primary root. The command itself can
-/// walk out with `cd ..`; what the tool can enforce, it enforces (§8).
+/// A relative `cwd` starts at the project; an absolute one can name any directory.
 fn working_dir(ws: &Workspace, input: &Value) -> Result<PathBuf, ToolError> {
     let Some(raw) = input["cwd"].as_str().filter(|s| !s.trim().is_empty()) else {
         return Ok(ws.root().to_path_buf());
     };
-    let dir = ws.resolve_existing(raw)?;
-    if !dir.is_dir() {
-        return Err(ToolError::failed(format!("{raw} is not a directory")));
-    }
-    Ok(dir)
+    super::bash_cwd::resolve(ws, raw)
 }
 
 enum Ending {
@@ -639,15 +638,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_working_directory_stays_inside_the_project() {
+    async fn a_command_runs_in_a_directory_outside_the_project() {
+        let dir = TempDir::new();
+        dir.mkdir("project");
+        dir.mkdir("tools");
+        dir.write("tools/input.txt", "outside project");
+        let project = Workspace::open(dir.path().join("project")).unwrap();
+        let (ctx, _) = crate::tool::tests_support::ctx_on(project);
+
+        let out = Bash
+            .run(&ctx, json!({ "command": "cat input.txt", "cwd": "../tools" }))
+            .await
+            .unwrap();
+        assert!(out.text.contains("outside project"), "{}", out.text);
+    }
+
+    #[test]
+    fn the_default_working_directory_is_the_project() {
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
-
-        let err = Bash
-            .run(&ctx, json!({ "command": "echo hi", "cwd": "../.." }))
-            .await
-            .unwrap_err();
-        assert!(matches!(err, ToolError::Rejected(_)), "got {err:?}");
+        for input in [json!({}), json!({ "cwd": " " })] {
+            assert_eq!(working_dir(&ctx.ws, &input).unwrap(), ctx.ws.root());
+        }
     }
 
     #[test]

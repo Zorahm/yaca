@@ -160,8 +160,11 @@ never lies about state. Nothing decorates; everything on screen is a fact about
 the session.
 
 Density is a principle. The feed is 14px, mono output 12–12.5px, a diff line 22px
-(20px in compact mode). Motion is limited to state pulses: a running tool pulses,
-a live mark sends out a ring, and `prefers-reduced-motion` stops the pulse.
+(20px in compact mode). Motion is limited to state pulses and to layers coming
+and going: a running tool pulses, a live mark sends out a ring; the drawer, a
+panel over the feed, a menu and the settings enter in 140–260ms on Material's
+emphasized curves (`--ease-enter`, `--ease-leave`, `--dur-*`) and leave faster
+than they came. `prefers-reduced-motion` stops all of it.
 
 Two editions with identical token names: light (default) and dark. Components do
 not know which one is active. In code the theme values are `paper` (light),
@@ -237,12 +240,42 @@ gutter is 52px with line numbers, 14px without (`showLineNumbers` off).
 Slide-over panels (processes, file diff, checkpoints, providers, context, browser)
 sit beside the feed, and lie over it when the window is too narrow to seat them.
 The window is frameless on Windows with its own title bar.
+Closing the main window hides it in the system tray and keeps chats running.
+Left-clicking the tray icon or choosing "Open Yaca" restores it; the tray's
+right-click menu contains "Close" to exit the application. The title-bar close
+button is labelled "Hide to system tray" to make its effect explicit.
+
+Once a chat has background commands, the top bar shows a direct Processes button
+with the running count, or the finished count when none remain running. It stays
+visible after commands finish. Opening the process panel selects a running command
+or the latest finished one when no row was selected, so output is visible at once.
+
+**Narrow window** (below `NARROW` = 680px in `src/ui/resize.ts`, which the CSS
+repeats as `max-width: 679.98px`): a phone, or a window dragged that thin. The
+sidebar becomes a drawer from the left edge (at most 320px, 56px of window left
+showing under `--scrim`), opened by the menu button in the top bar or the home
+screen's header and shut by the scrim, a swipe left, Back, or by picking where
+to go. Panels and the browser take the screen whole and slide in from the right;
+settings become two screens, the list of sections and a section with an up
+arrow. The system Back closes the layer on top (`src/ui/back.ts`). Margins drop
+from 24px to 12–16px, the top bar's title to 14px, the home greeting to 24px.
+
+**Touch.** Hover rules apply only where a pointer hovers: the build wraps every
+`:hover` in `@media (hover: hover)` (`vite.config.ts`), so a tapped control does
+not stay lit. A press is answered by `--press`, a wash laid over the control's
+own fill, and the browser's tap flash is off. Under `pointer: coarse` rows grow
+to 40px and small controls keep their look but take taps from an invisible
+margin around them; what came out on hover (a message's actions, a code block's
+copy button, the open chat's `⋯`) stands in place. Other chats' menus open on a
+long press. Safe-area insets pad the top and the composer.
 
 ## Elevation & Depth
 
 Flat by default: depth is a hairline border plus the step from `bg` to `surface`.
-Two shadows only: `--shadow-pop` for menus and popovers, `--shadow-panel` for the
-edge of a panel lying over the feed. Both are tinted from `ink`, stronger in dark.
+Three shadows only: `--shadow-pop` for menus and popovers, `--shadow-panel` for
+the edge of a panel lying over the feed, `--shadow-drawer` for the drawer's edge.
+All are tinted from `ink`, stronger in dark; `--scrim` dims what the drawer
+covers.
 
 ## Shapes
 
@@ -284,7 +317,8 @@ a permission request. Scrollbars are 10px with an 8px-rounded thumb.
 
 ### Don't
 - Don't add a second accent hue or decorative gradients.
-- Don't animate anything except state pulses.
+- Don't animate anything except state pulses and layers coming and going.
+- Don't make a control depend on hover: on a touch screen it is never reached.
 - Don't use pure black or raw hex in components.
 - Don't rely on hue alone for meaning, except in the context bar with its legend.
 - Don't add a control that does nothing.

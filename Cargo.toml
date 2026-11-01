@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/yaca-core", "crates/yaca-cli", "crates/yaca-evals", "src-tauri"]
+members = ["crates/yaca-core", "crates/yaca-cli", "crates/yaca-evals", "crates/yaca-remote", "src-tauri"]
 
 [workspace.package]
 version = "1.0.0-beta"
@@ -11,6 +11,7 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 yaca-core = { path = "crates/yaca-core" }
+yaca-remote = { path = "crates/yaca-remote" }
 
 anyhow = "1"
 async-trait = "0.1"
@@ -19,8 +20,11 @@ blake3 = "1"
 clap = { version = "4", features = ["derive"] }
 encoding_rs = "0.8"
 futures-util = "0.3"
+getrandom = "0.3"
 globset = "0.4"
 htmd = "0.5"
+# The phone client's pairing page lists the addresses it can reach the host at.
+if-addrs = "0.13"
 ignore = "0.4"
 # Only the formats a model can be sent or a screenshot tool writes: the default
 # set pulls in a dozen decoders nothing here would ever meet.
@@ -30,6 +34,11 @@ libc = "0.2"
 # Text of a PDF for `Read`. Pure Rust: no poppler or other system library to
 # install next to the app.
 pdf-extract = "0.12"
+# The pairing code for the phone client, as SVG for the window and as text for `yaca serve`.
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+# The remote server's self-signed certificate. `ring`, like the rustls reqwest
+# already pulls in: aws-lc-rs needs cmake and nasm to build on Windows.
+rcgen = { version = "0.13", default-features = false, features = ["crypto", "pem", "ring"] }
 regex = "1"
 reqwest = { version = "0.12", default-features = false, features = [
     "json",
@@ -38,6 +47,7 @@ reqwest = { version = "0.12", default-features = false, features = [
     "http2",
     "charset",
 ] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 serde = { version = "1", features = ["derive", "rc"] }
 similar = { version = "2", features = ["inline"] }
 # PKCE (S256) for the OAuth login of remote MCP servers.
@@ -45,7 +55,9 @@ sha2 = "0.10"
 serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "fs", "time", "io-util", "process", "net"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
 tokio-stream = "0.1"
+tokio-tungstenite = "0.26"
 tokio-util = "0.7"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

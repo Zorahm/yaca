@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pairing_title">Associer un ordinateur</string>
+    <string name="pairing_heading">Connectez un ordinateur</string>
+    <string name="pairing_body">Scannez le code QR affiché par Yaca sur votre ordinateur.</string>
+    <string name="pairing_camera_rationale">Yaca utilise la caméra uniquement pour lire le code d’association. Rien n’est enregistré.</string>
+    <string name="pairing_camera_denied">L’accès à la caméra est désactivé. Collez plutôt le lien d’association.</string>
+    <string name="pairing_camera_unavailable">Yaca ne peut pas utiliser la caméra de ce téléphone. Collez plutôt le lien d’association.</string>
+    <string name="pairing_camera_allow">Autoriser la caméra</string>
+    <string name="pairing_camera_note">Le code est valable cinq minutes.</string>
+    <string name="pairing_paste">Coller le lien d’association</string>
+    <string name="pairing_invalid_link">Ce n’est pas un lien d’association Yaca.</string>
+    <string name="pairing_network">Impossible de joindre l’ordinateur. Vérifiez que les deux sont sur le même réseau.</string>
+    <string name="pairing_storage">Appairé, mais le téléphone n’a pas pu enregistrer la connexion. Appairez à nouveau ; l’entrée en trop peut être retirée dans Yaca sur l’ordinateur.</string>
+    <string name="pairing_in_progress">Association avec %1$s…</string>
+    <string name="pairing_confirm_title">Associer avec %1$s ?</string>
+    <string name="pairing_confirm_body">Le téléphone recevra les événements de cet ordinateur jusqu’à ce que vous l’oubliiez.</string>
+    <string name="pairing_confirm_action">Associer</string>
+
+    <string name="refusal_unauthorized">Ce téléphone n’est plus autorisé sur cet ordinateur. Associez-le de nouveau.</string>
+    <string name="refusal_pairing_failed">Le code d’association est incorrect, déjà utilisé ou expiré. Créez un nouveau code dans Yaca et scannez-le à nouveau.</string>
+    <string name="refusal_protocol_mismatch">L’ordinateur parle le protocole %1$d, cette application le %2$d. Mettez à jour l’un des deux.</string>
+    <string name="refusal_too_many_attempts">Trop de tentatives échouées depuis ce réseau. Réessayez plus tard.</string>
+    <string name="refusal_handshake_expected">L’ordinateur a fermé la connexion avant la poignée de main. Réessayez.</string>
+</resources>

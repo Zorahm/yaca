@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="hosts_title">Ordinateurs</string>
+    <string name="hosts_pair_action">Associer un ordinateur</string>
+    <string name="hosts_section_paired">Associés</string>
+    <string name="hosts_empty">Aucun ordinateur n’est encore associé. Associez-en un pour voir ses projets et ses chats.</string>
+    <string name="hosts_pair_another">Associer un autre ordinateur</string>
+    <string name="hosts_note">Le téléphone ne reçoit d’événements que des ordinateurs associés. L’association peut être révoquée sur l’ordinateur.</string>
+    <string name="hosts_pair_again">Réassocier</string>
+    <string name="hosts_forget">Oublier l’ordinateur</string>
+    <string name="hosts_forget_title">Oublier %1$s ?</string>
+    <string name="hosts_forget_body">Le téléphone supprime les identifiants de cet ordinateur. Pour l’utiliser à nouveau, associez-le de nouveau.</string>
+    <string name="hosts_forget_confirm">Oublier</string>
+
+    <string name="host_section_running">En cours</string>
+    <string name="host_section_projects">Projets</string>
+    <string name="host_new_chat">Nouveau chat</string>
+    <string name="host_pick_project">Choisissez un projet</string>
+    <string name="host_no_projects">Cet ordinateur n’a pas encore de projets</string>
+    <string name="host_projects_unavailable">Les projets ne sont pas disponibles pour le moment.</string>
+    <string name="host_no_chats">Ce projet n’a pas encore de chats</string>
+    <string name="host_chats_unavailable">Impossible de charger les chats du projet.</string>
+    <string name="host_working">En cours de travail</string>
+    <string name="host_expand">Afficher les chats</string>
+    <string name="host_collapse">Masquer les chats</string>
+    <string name="host_opening">Ouverture du chat…</string>
+    <plurals name="host_project_chats">
+        <item quantity="one">%d chat</item>
+        <item quantity="other">%d chats</item>
+    </plurals>
+</resources>

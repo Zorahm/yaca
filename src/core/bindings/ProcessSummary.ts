@@ -8,7 +8,7 @@ import type { TsMillis } from "./TsMillis";
  */
 export type ProcessSummary = { id: ProcessId, command: string, 
 /**
- * Working directory, relative to the project root.
+ * Working directory, relative to the project root or absolute outside it.
  */
 cwd: string, state: ProcessState, startedAt: TsMillis, 
 /**

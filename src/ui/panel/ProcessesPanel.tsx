@@ -38,6 +38,13 @@ export function ProcessesPanel({
   const selected = processes.find((p) => p.id === watched) ?? null;
   const running = processes.some((p) => p.state.type === "running");
 
+  // Opening the panel should show output without requiring a second click.
+  useEffect(() => {
+    if (selected !== null || processes.length === 0) return;
+    const next = processes.find((p) => p.state.type === "running") ?? processes[processes.length - 1];
+    onWatch(next.id);
+  }, [selected, processes, onWatch]);
+
   // Once a second while there are live ones: finished processes keep their time.
   const [, setTick] = useState(0);
   useEffect(() => {

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">설정</string>
+    <string name="settings_section_connection">연결</string>
+    <string name="settings_stay_connected">백그라운드에서도 연결 유지</string>
+    <string name="settings_stay_connected_desc">앱을 닫아도 컴퓨터와의 연결을 유지하고 고정 알림을 표시해 질문이 전달되게 합니다. 끄면 앱을 떠날 때 연결이 끊깁니다.</string>
+    <string name="settings_section_notifications">알림</string>
+    <string name="settings_turn_finished">턴이 끝나면 알림</string>
+    <string name="settings_turn_finished_desc">채팅이 완료되어 사용자를 기다릴 때 조용한 알림을 표시합니다.</string>
+    <string name="settings_system_notifications">알림 설정</string>
+    <string name="settings_system_notifications_desc">소리, 중요도, 차단 설정을 Android 설정에서 엽니다.</string>
+    <string name="settings_section_appearance">화면</string>
+    <string name="settings_wallpaper_colours">배경화면 색 사용</string>
+    <string name="settings_wallpaper_colours_desc">Material You: 색이 배경화면을 따릅니다.</string>
+    <string name="settings_section_about">정보</string>
+    <string name="settings_version">버전 %1$s</string>
+</resources>

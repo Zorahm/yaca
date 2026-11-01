@@ -16,10 +16,14 @@
  * One search field over every project, not one per group: «which conversation
  * was that in» is the question being asked, and it is asked before the project
  * is remembered.
+ *
+ * In a narrow window (`isNarrow`) there is no room for a column, and the same
+ * list becomes a drawer over the feed: shut until the top bar's button opens
+ * it, shut again by the scrim, a swipe, Back, or by picking where to go.
  */
 
 import { ArrowCircleUp, Gear, Plus, X } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { t } from "../../i18n";
 import { ownTitleBar } from "../../core/frame";
@@ -27,6 +31,7 @@ import { YacaMark } from "../Logo";
 import { SIDE, type Bounds } from "../resize";
 import { Splitter } from "../Splitter";
 import { ProjectGroup } from "./ProjectGroup";
+import { useSwipeShut } from "./useSwipeShut";
 import type { Chat } from "../chats";
 import type { ReleaseInfo, SessionId } from "../../core/client";
 
@@ -53,6 +58,7 @@ export function Sidebar({
   bounds,
   onResize,
   collapsed = false,
+  drawer = null,
 }: {
   /** Projects the window knows about, freshest first. */
   projects: string[];
@@ -87,8 +93,17 @@ export function Sidebar({
    * sessions «disappeared» until each project was opened again.
    */
   collapsed?: boolean;
+  /**
+   * A drawer over the feed instead of a column beside it; `null` in a window
+   * wide enough for the column. Mounted shut too, for the same reason a
+   * collapsed column is: it has to come back as it was left.
+   */
+  drawer?: { open: boolean; onShut: () => void } | null;
 }) {
   const [typed, setTyped] = useState("");
+  const self = useRef<HTMLElement>(null);
+  const scrim = useRef<HTMLDivElement>(null);
+  const swipe = useSwipeShut(self, scrim, () => drawer?.onShut());
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(current === null ? [] : [current]),
@@ -114,20 +129,31 @@ export function Sidebar({
     });
   }
 
-  return (
+  const column = (
     <nav
-      className="side"
+      ref={self}
+      className={drawer === null ? "side" : "side side-drawer"}
       aria-label={t("top.sessions")}
-      style={collapsed ? { display: "none" } : { width }}
+      style={drawer !== null ? undefined : collapsed ? { display: "none" } : { width }}
+      data-open={drawer?.open}
+      // Shut, it is off the screen, and neither a tab nor a screen reader
+      // should walk into it there.
+      inert={drawer !== null && !drawer.open}
+      onKeyDown={(event) => {
+        if (drawer !== null && event.key === "Escape") drawer.onShut();
+      }}
+      {...(drawer === null ? {} : swipe)}
     >
-      <Splitter
-        edge="right"
-        width={width}
-        bounds={bounds}
-        initial={SIDE.initial}
-        label={t("side.resize")}
-        onResize={onResize}
-      />
+      {drawer === null && (
+        <Splitter
+          edge="right"
+          width={width}
+          bounds={bounds}
+          initial={SIDE.initial}
+          label={t("side.resize")}
+          onResize={onResize}
+        />
+      )}
       <div className="side-head">
         {/* Where the window draws its own title bar the mark and the name
             are in it, a few pixels above; twice in one corner is once too
@@ -222,5 +248,21 @@ export function Sidebar({
         </button>
       </div>
     </nav>
+  );
+
+  if (drawer === null) return column;
+  return (
+    <>
+      {/* A tap outside the drawer shuts it; the keyboard has Esc for that,
+          so the scrim is no control of its own. */}
+      <div
+        ref={scrim}
+        className="side-scrim"
+        data-open={drawer.open}
+        aria-hidden="true"
+        onClick={drawer.onShut}
+      />
+      {column}
+    </>
   );
 }

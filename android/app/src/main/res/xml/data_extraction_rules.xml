@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 12 and newer. The paired hosts hold device credentials: they stay out of cloud
+    backups and out of device-to-device transfers, so a new phone pairs again instead of
+    copying a token that the computer may not expect there.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="datastore/yaca_hosts.preferences_pb" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="datastore/yaca_hosts.preferences_pb" />
+    </device-transfer>
+</data-extraction-rules>

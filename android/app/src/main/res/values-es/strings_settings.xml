@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_section_connection">Conexión</string>
+    <string name="settings_stay_connected">Mantener la conexión en segundo plano</string>
+    <string name="settings_stay_connected_desc">Mantiene tus ordenadores conectados con la app cerrada, con una notificación fija, para que sus preguntas te lleguen. Desactivado: la conexión se corta al salir de la app.</string>
+    <string name="settings_section_notifications">Notificaciones</string>
+    <string name="settings_turn_finished">Avisar cuando termine un turno</string>
+    <string name="settings_turn_finished_desc">Una notificación discreta cuando un chat termina y espera tu respuesta.</string>
+    <string name="settings_system_notifications">Ajustes de notificaciones</string>
+    <string name="settings_system_notifications_desc">Sonidos, importancia y bloqueo, en los ajustes del sistema.</string>
+    <string name="settings_section_appearance">Apariencia</string>
+    <string name="settings_wallpaper_colours">Usar colores del fondo de pantalla</string>
+    <string name="settings_wallpaper_colours_desc">Material You: los colores siguen a tu fondo de pantalla.</string>
+    <string name="settings_section_about">Acerca de</string>
+    <string name="settings_version">Versión %1$s</string>
+</resources>

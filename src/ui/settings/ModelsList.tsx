@@ -24,11 +24,14 @@ import { money, tokens } from "../format";
 export function ModelsList({
   models,
   busy,
+  answered,
   error,
   onAsk,
 }: {
   models: ModelInfo[];
   busy: boolean;
+  /** The last question asked from the form got its list: the list is the provider's word now. */
+  answered: boolean;
   /** The provider's refusal. An empty list after success is not an error. */
   error: string | null;
   onAsk: () => void;
@@ -43,6 +46,7 @@ export function ModelsList({
           {models.length === 0
             ? t("prov.models_none")
             : tp("prov.models_count", models.length)}
+          {answered && !busy && error === null && <> · {t("prov.answered")}</>}
         </span>
       </div>
 

@@ -19,6 +19,7 @@ import {
   bothFit,
   browserBounds,
   clamp,
+  isNarrow,
   PANEL,
   useStoredWidth,
   type Bounds,
@@ -78,8 +79,10 @@ export function useBrowserColumn({
 
   const bounds = browserBounds(windowWidth, sideWidth, panelOpen && both ? PANEL.min : 0);
   const initialWidth = Math.round(windowWidth * BROWSER_SHARE);
-  const width =
-    bounds === null
+  // On a phone the page takes the screen, as a panel does there.
+  const width = isNarrow(windowWidth)
+    ? windowWidth
+    : bounds === null
       ? Math.max(BROWSER.min, Math.min(chosen ?? initialWidth, windowWidth - sideWidth))
       : clamp(chosen ?? initialWidth, bounds);
 

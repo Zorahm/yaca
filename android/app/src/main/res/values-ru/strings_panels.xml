@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="diff_none">Сессия не меняла этот файл, поэтому дифа нет.</string>
+    <string name="diff_no_lines">В изменении нет строк для показа.</string>
+    <string name="diff_truncated">Ядро обрезало этот дифф.</string>
+    <string name="change_created">Создан</string>
+    <string name="change_modified">Изменён</string>
+    <string name="change_deleted">Удалён</string>
+    <string name="change_moved">Перемещён из %1$s</string>
+    <string name="panel_diff_counts">+%1$d −%2$d</string>
+
+    <string name="file_loading">Читаю файл…</string>
+    <string name="file_unavailable">Показать нечего: файла нет на диске, он двоичный или лежит вне проекта.</string>
+    <string name="panel_file_deleted">Файл удалён в этом чате, текста у него больше нет.</string>
+    <string name="file_empty">Файл пуст.</string>
+    <string name="file_truncated">Файл показан не целиком.</string>
+
+    <string name="ckpt_title">Контрольные точки</string>
+    <string name="ckpt_subtitle">перед каждой правкой агента</string>
+    <string name="ckpt_now">Сейчас</string>
+    <string name="ckpt_now_mark">Текущая</string>
+    <string name="ckpt_empty">Контрольных точек пока нет.</string>
+    <string name="ckpt_reason_message">перед сообщением</string>
+    <string name="ckpt_reason_command">перед %1$s</string>
+    <string name="ckpt_reason_rollback">перед откатом</string>
+    <string name="ckpt_restore">Восстановить</string>
+    <string name="ckpt_restore_title">Восстановить на %1$s?</string>
+    <string name="ckpt_restore_body">Файлы вернутся к этому состоянию. Изменения после этой точки пропадут. Отменить это нельзя.</string>
+    <string name="ckpt_restore_loading">Считаем, какие файлы изменятся…</string>
+    <string name="ckpt_restore_nothing">С этой точки ничего не изменилось.</string>
+    <string name="ckpt_will_restore">будет восстановлен</string>
+    <string name="ckpt_will_revert">откатится</string>
+    <string name="ckpt_will_delete">будет удалён</string>
+    <plurals name="ckpt_tracked">
+        <item quantity="one">%d файл</item>
+        <item quantity="few">%d файла</item>
+        <item quantity="many">%d файлов</item>
+        <item quantity="other">%d файла</item>
+    </plurals>
+
+    <string name="proc_title">Процессы</string>
+    <string name="proc_empty">Фоновых команд в этом чате нет.</string>
+    <string name="proc_section_running">Работают</string>
+    <string name="proc_section_finished">Завершились</string>
+    <string name="proc_state_running">работает</string>
+    <string name="proc_state_exited">код %1$d</string>
+    <string name="proc_state_exited_none">завершился без кода</string>
+    <string name="proc_state_stopped">остановлен</string>
+    <string name="proc_output">Вывод</string>
+    <string name="proc_no_output">Вывода пока нет</string>
+    <plurals name="proc_dropped">
+        <item quantity="one">вытеснена %d строка</item>
+        <item quantity="few">вытеснено %d строки</item>
+        <item quantity="many">вытеснено %d строк</item>
+        <item quantity="other">вытеснено %d строки</item>
+    </plurals>
+    <string name="proc_stop">Остановить</string>
+    <string name="proc_stop_title">Остановить %1$s?</string>
+    <string name="proc_stop_body">Процесс получит сигнал остановки и перестанет отвечать. Вывод сохранится в журнале чата. Запустить его снова можно будет вручную.</string>
+
+    <string name="mention_label">Файлы проекта</string>
+    <string name="mention_recent">Трогали в этом чате</string>
+    <string name="mention_searching">Ищем…</string>
+    <string name="mention_none">Ничего не найдено</string>
+    <string name="mention_none_touched">В этом чате файлов пока не трогали. Начните печатать, чтобы искать по проекту.</string>
+    <string name="mention_close">Закрыть меню</string>
+</resources>

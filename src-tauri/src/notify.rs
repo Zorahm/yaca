@@ -164,7 +164,7 @@ fn push(app: &AppHandle, body: &str) {
 }
 
 /// Raises the window above the rest: unminimizes, shows and puts in focus.
-fn raise(app: &AppHandle) {
+pub(crate) fn raise(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
         let _ = window.show();

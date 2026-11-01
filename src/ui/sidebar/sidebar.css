@@ -419,8 +419,121 @@
   padding-right: 0;
 }
 
+/* --- drawer ---------------------------------------------------------------- */
+
+/* A narrow window has no room for the column (`NARROW` in resize.ts), so the
+   same list lies over the feed from the left edge and leaves a strip of the
+   window showing, as a Material navigation drawer does. Shut, it waits off
+   the screen rather than unmounting: it comes back as it was left. */
+.side-drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
+  width: min(320px, calc(100% - 56px));
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  border-right: 0;
+  box-shadow: var(--shadow-drawer);
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition:
+    transform var(--dur-leave) var(--ease-leave),
+    visibility 0s linear var(--dur-leave);
+  /* A sideways drag is the drawer's own (`useSwipeShut`); an upright one is the
+     list's scroll. Set on the scroller too: the browser reads it only up to the
+     nearest scroll container above the finger. */
+  touch-action: pan-y;
+}
+
+.side-drawer .side-scroll {
+  touch-action: pan-y;
+}
+
+.side-drawer[data-open="true"] {
+  transform: none;
+  visibility: visible;
+  transition: transform var(--dur-enter) var(--ease-enter);
+}
+
+.side-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  background: var(--scrim);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--dur-leave) linear,
+    visibility 0s linear var(--dur-leave);
+}
+
+.side-scrim[data-open="true"] {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--dur-enter) linear;
+}
+
+/* --- touch ----------------------------------------------------------------- */
+
+/* A finger needs a row it can hit without aiming: 40 px, the same step for
+   every row of the column, so the list still reads as one rhythm. */
+@media (pointer: coarse) {
+  .side-row,
+  .side-search {
+    height: 40px;
+  }
+
+  .side-search {
+    font-size: 13px;
+  }
+
+  .sess-main {
+    min-height: 40px;
+  }
+
+  .side-project-act,
+  .sess-more {
+    width: 32px;
+    height: 32px;
+  }
+
+  .side-update-close {
+    top: 4px;
+    right: 4px;
+    padding: 6px;
+  }
+}
+
+/* Nothing hovers here, so the open chat's `⋯` stands in its row all the time;
+   every other row opens the same list on a long press (Radix's context menu
+   takes a held finger for a right click). */
+@media (hover: none) {
+  .sess-current .sess-more {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .sess-current .sess-live {
+    opacity: 0;
+  }
+
+  /* Over `.sess:has(.sess-live) .sess-main`: the mark has given way. */
+  .sess.sess-current .sess-main {
+    padding-right: 34px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sess-live-busy {
     animation: none;
+  }
+
+  .side-drawer,
+  .side-drawer[data-open="true"],
+  .side-scrim,
+  .side-scrim[data-open="true"] {
+    transition: none;
   }
 }

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pairing_title">Сопряжение</string>
+    <string name="pairing_heading">Подключите компьютер</string>
+    <string name="pairing_body">Отсканируйте QR-код, который показан в Yaca на вашем ПК.</string>
+    <string name="pairing_camera_rationale">Камера нужна только для чтения кода сопряжения. Ничего не сохраняется.</string>
+    <string name="pairing_camera_denied">Камера выключена. Вставьте ссылку сопряжения.</string>
+    <string name="pairing_camera_unavailable">Yaca не может использовать камеру этого телефона. Вставьте ссылку сопряжения.</string>
+    <string name="pairing_camera_allow">Разрешить камеру</string>
+    <string name="pairing_camera_note">Код действует пять минут.</string>
+    <string name="pairing_paste">Вставить ссылку сопряжения</string>
+    <string name="pairing_invalid_link">Это не ссылка сопряжения Yaca.</string>
+    <string name="pairing_network">Не удалось связаться с компьютером. Проверьте, что оба в одной сети.</string>
+    <string name="pairing_storage">Сопряжение прошло, но телефон не смог сохранить подключение. Выполните сопряжение ещё раз; лишнюю запись можно удалить в Yaca на компьютере.</string>
+    <string name="pairing_in_progress">Сопряжение с «%1$s»…</string>
+    <string name="pairing_confirm_title">Сопрячь с «%1$s»?</string>
+    <string name="pairing_confirm_body">Телефон будет получать события этого компьютера, пока вы его не забудете.</string>
+    <string name="pairing_confirm_action">Сопрячь</string>
+
+    <string name="refusal_unauthorized">Этому телефону больше не разрешено подключаться к компьютеру. Сопрягите его заново.</string>
+    <string name="refusal_pairing_failed">Код сопряжения неверен, уже использован или истёк. Создайте новый код в Yaca и отсканируйте его.</string>
+    <string name="refusal_protocol_mismatch">Компьютер работает по протоколу %1$d, приложение по %2$d. Обновите одно из них.</string>
+    <string name="refusal_too_many_attempts">Слишком много неудачных попыток из этой сети. Попробуйте позже.</string>
+    <string name="refusal_handshake_expected">Компьютер закрыл соединение до рукопожатия. Попробуйте ещё раз.</string>
+</resources>

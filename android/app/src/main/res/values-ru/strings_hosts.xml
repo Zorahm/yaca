@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="hosts_title">Компьютеры</string>
+    <string name="hosts_pair_action">Сопрячь компьютер</string>
+    <string name="hosts_section_paired">Сопряжённые</string>
+    <string name="hosts_empty">Ни один компьютер ещё не сопряжён. Сопрягите, чтобы видеть проекты и чаты.</string>
+    <string name="hosts_pair_another">Сопрячь другой компьютер</string>
+    <string name="hosts_note">Телефон получает события только от сопряжённых компьютеров. Сопряжение можно отозвать на компьютере.</string>
+    <string name="hosts_pair_again">Сопрячь снова</string>
+    <string name="hosts_forget">Забыть компьютер</string>
+    <string name="hosts_forget_title">Забыть «%1$s»?</string>
+    <string name="hosts_forget_body">Телефон удалит учётные данные этого компьютера. Чтобы пользоваться им снова, сопрягите его заново.</string>
+    <string name="hosts_forget_confirm">Забыть</string>
+
+    <string name="host_section_running">Работают сейчас</string>
+    <string name="host_section_projects">Проекты</string>
+    <string name="host_new_chat">Новый чат</string>
+    <string name="host_pick_project">Выберите проект</string>
+    <string name="host_no_projects">На этом компьютере пока нет проектов</string>
+    <string name="host_projects_unavailable">Проекты сейчас недоступны.</string>
+    <string name="host_no_chats">В этом проекте пока нет чатов</string>
+    <string name="host_chats_unavailable">Не удалось загрузить чаты проекта.</string>
+    <string name="host_working">Работает</string>
+    <string name="host_expand">Показать чаты</string>
+    <string name="host_collapse">Скрыть чаты</string>
+    <string name="host_opening">Открываем чат…</string>
+    <plurals name="host_project_chats">
+        <item quantity="one">%d чат</item>
+        <item quantity="few">%d чата</item>
+        <item quantity="many">%d чатов</item>
+        <item quantity="other">%d чата</item>
+    </plurals>
+</resources>

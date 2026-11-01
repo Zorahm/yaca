@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notify_channel_needs_you">Ждёт вас</string>
+    <string name="notify_channel_needs_you_desc">Запросы разрешений, вопросы и формы из чатов на компьютере, которые ждут вашего ответа.</string>
+    <string name="notify_channel_turn_finished">Ход завершён</string>
+    <string name="notify_channel_turn_finished_desc">Чат на компьютере завершил ход и ждёт вашего следующего сообщения.</string>
+    <string name="notify_channel_connection">Подключение</string>
+    <string name="notify_channel_connection_desc">Показывает, к каким компьютерам подключён телефон, пока приложение в фоне.</string>
+
+    <string name="notify_permission_title">Агент просит разрешения</string>
+    <string name="notify_question_title">Агент задал вопрос</string>
+    <string name="notify_elicitation_title">Серверу нужны данные</string>
+    <string name="notify_turn_finished_title">Готово: %1$s</string>
+    <!-- The chat title and the project, both as the host names them. -->
+    <string name="notify_chat_line">%1$s · %2$s</string>
+    <string name="notify_action_allow_once">Разрешить один раз</string>
+    <string name="notify_action_deny">Отклонить</string>
+    <string name="notify_action_open">Открыть</string>
+    <string name="notify_answer_failed">Не удалось отправить ответ. Откройте чат и ответьте в нём.</string>
+
+    <string name="notify_connection_connected">Подключено к %1$s</string>
+    <string name="notify_connection_connecting">Подключение…</string>
+    <string name="notify_connection_disconnect">Отключиться</string>
+
+    <string name="notify_prompt_title">Получать уведомления, когда агенту нужен ответ</string>
+    <string name="notify_prompt_body">Запросы разрешений и вопросы из чатов приходят при закрытом приложении только как уведомления. Так на них можно ответить, не открывая приложение.</string>
+    <string name="notify_prompt_allow">Разрешить</string>
+    <string name="notify_prompt_later">Не сейчас</string>
+</resources>

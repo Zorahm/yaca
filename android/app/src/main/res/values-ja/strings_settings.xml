@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">設定</string>
+    <string name="settings_section_connection">接続</string>
+    <string name="settings_stay_connected">バックグラウンドでも接続を維持</string>
+    <string name="settings_stay_connected_desc">アプリを閉じていてもコンピューターとの接続を維持し、常駐通知を表示して、質問が届くようにします。オフの場合、アプリを離れると接続は止まります。</string>
+    <string name="settings_section_notifications">通知</string>
+    <string name="settings_turn_finished">ターン完了時に通知</string>
+    <string name="settings_turn_finished_desc">チャットが完了し、あなたを待っているときに控えめな通知を表示します。</string>
+    <string name="settings_system_notifications">通知の設定</string>
+    <string name="settings_system_notifications_desc">サウンド、重要度、ブロックの設定を Android の設定で開きます。</string>
+    <string name="settings_section_appearance">外観</string>
+    <string name="settings_wallpaper_colours">壁紙の色を使う</string>
+    <string name="settings_wallpaper_colours_desc">Material You: 色は壁紙に合わせて変わります。</string>
+    <string name="settings_section_about">アプリについて</string>
+    <string name="settings_version">バージョン %1$s</string>
+</resources>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose draws everything; the window theme only has to have no action bar. -->
+    <style name="Theme.Yaca" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

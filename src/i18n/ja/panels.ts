@@ -59,6 +59,8 @@ export const panels = {
   "file.unavailable": "表示するものがありません: ファイルがない、バイナリである、またはプロジェクトの外にあります",
 
   "proc.empty": "バックグラウンドのコマンドはありません",
+  "proc.active_count": "実行中: {n}",
+  "proc.finished_count": "終了: {n}",
   "proc.watch": "出力を表示",
   "proc.state_running": "実行中",
   "proc.state_exited": "終了コード {code}",

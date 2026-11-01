@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+use tokio::sync::watch;
 use yaca_core::id::SessionId;
 use yaca_core::{Attach, Replay, SessionHandle};
 use tokio_util::sync::CancellationToken;
@@ -42,10 +43,13 @@ struct Chat {
     bridge: CancellationToken,
 }
 
-#[derive(Default)]
 pub struct AppState {
     chats: Mutex<HashMap<SessionId, Chat>>,
     opened: AtomicU64,
+    /// Counts every chat put in or taken out of `chats`. A watch and not a
+    /// broadcast: a receiver that falls behind sees the latest count and nothing
+    /// is queued up for it, and the list itself is always read from `chats`.
+    changed: watch::Sender<u64>,
     /// Preferences as they are right now (§10).
     ///
     /// A copy of what is on disk, kept because the toast watcher asks about
@@ -60,7 +64,31 @@ pub struct AppState {
 
 impl AppState {
     pub fn new() -> Self {
-        AppState::default()
+        AppState {
+            chats: Mutex::default(),
+            opened: AtomicU64::new(0),
+            changed: watch::channel(0).0,
+            prefs: Mutex::default(),
+            update: Mutex::default(),
+        }
+    }
+
+    /// Wakes whenever a chat is opened or closed, by the window or by the remote
+    /// host. The value is only a counter; the list is [`AppState::live`].
+    pub fn chats_changed(&self) -> watch::Receiver<u64> {
+        self.changed.subscribe()
+    }
+
+    /// The chats running right now, in the order they were opened, with the
+    /// project each was opened in as the window named it.
+    pub fn live(&self) -> Vec<(Arc<SessionHandle>, String)> {
+        let chats = self.chats.lock().unwrap();
+        let mut in_order: Vec<&Chat> = chats.values().collect();
+        in_order.sort_by_key(|chat| chat.seq);
+        in_order
+            .into_iter()
+            .map(|chat| (chat.handle.clone(), chat.project.clone()))
+            .collect()
     }
 
     pub fn prefs(&self) -> Preferences {
@@ -114,6 +142,7 @@ impl AppState {
         if let Some(old) = self.chats.lock().unwrap().insert(id, chat) {
             old.bridge.cancel();
         }
+        self.changed.send_modify(|count| *count += 1);
     }
 
     /// Takes the chat out of the table. The handle comes back so the caller
@@ -122,6 +151,7 @@ impl AppState {
     pub fn close(&self, id: &SessionId) -> Option<Arc<SessionHandle>> {
         let chat = self.chats.lock().unwrap().remove(id)?;
         chat.bridge.cancel();
+        self.changed.send_modify(|count| *count += 1);
         Some(chat.handle)
     }
 

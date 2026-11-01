@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notify_channel_needs_you">Te necesita</string>
+    <string name="notify_channel_needs_you_desc">Solicitudes de permiso, preguntas y formularios de un chat del ordenador que esperan tu respuesta.</string>
+    <string name="notify_channel_turn_finished">Turno terminado</string>
+    <string name="notify_channel_turn_finished_desc">Un chat del ordenador terminó su turno y espera tu siguiente mensaje.</string>
+    <string name="notify_channel_connection">Conexión</string>
+    <string name="notify_channel_connection_desc">Muestra a qué ordenadores está conectado el teléfono mientras la app está en segundo plano.</string>
+
+    <string name="notify_permission_title">El agente pide permiso</string>
+    <string name="notify_question_title">El agente te ha hecho una pregunta</string>
+    <string name="notify_elicitation_title">Un servidor necesita datos</string>
+    <string name="notify_turn_finished_title">Listo: %1$s</string>
+    <!-- The chat title and the project, both as the host names them. -->
+    <string name="notify_chat_line">%1$s · %2$s</string>
+    <string name="notify_action_allow_once">Permitir una vez</string>
+    <string name="notify_action_deny">Denegar</string>
+    <string name="notify_action_open">Abrir</string>
+    <string name="notify_answer_failed">No se pudo enviar tu respuesta. Abre el chat para responder.</string>
+
+    <string name="notify_connection_connected">Conectado a %1$s</string>
+    <string name="notify_connection_connecting">Conectando…</string>
+    <string name="notify_connection_disconnect">Desconectar</string>
+
+    <string name="notify_prompt_title">Recibe avisos cuando el agente te necesite</string>
+    <string name="notify_prompt_body">Las solicitudes de permiso y las preguntas de tus chats llegan, con la app cerrada, solo como notificaciones. Permítelas para responder sin abrir la app.</string>
+    <string name="notify_prompt_allow">Permitir</string>
+    <string name="notify_prompt_later">Ahora no</string>
+</resources>

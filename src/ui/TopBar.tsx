@@ -1,10 +1,10 @@
 /**
  * Top bar.
  *
- * Holds the navigation and the identification of the session, not the state of
- * the work: the state lives at the bottom, beside the composer, where people look
- * anyway. There is no mark in the header — the square with a reflected `C` lives
- * on the home screen and in the app icon.
+ * Holds navigation and the identification of the session. Commands get a direct
+ * link with a count: they can keep running after the agent finishes its turn.
+ * There is no mark in the header — the square with a reflected `C` lives on the
+ * home screen and in the app icon.
  *
  * At the edges are two buttons of one shape (`yaca-icons`): on the left, show or
  * hide the sidebar; on the right, the right panel. Each icon shows whether its
@@ -16,9 +16,12 @@
  * The globe left of the panel's button shows and hides the browser column,
  * in the order the two columns stand. Its teal dot means the model is using
  * a browser the human does not see right now.
+ *
+ * In a narrow window the left button opens the drawer the sidebar becomes
+ * there, and wears the menu icon a phone expects in that corner.
  */
 
-import { ArrowLeft, ArrowRight, Globe } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, Globe, List, Terminal } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import { t } from "../i18n";
@@ -34,8 +37,11 @@ export function TopBar({
   onForward,
   onRename,
   sidebarOpen,
+  narrow = false,
   panelOpen,
   runningProcesses,
+  processCount,
+  onOpenProcesses,
   onToggleSidebar,
   onTogglePanel,
   browser,
@@ -47,30 +53,48 @@ export function TopBar({
   onBack: () => void;
   onForward: () => void;
   onRename: (title: string) => void;
-  /** Whether the sidebar column on the left is shown. */
+  /** Whether the sidebar column on the left is shown, or the drawer open. */
   sidebarOpen: boolean;
+  /** The sidebar is a drawer, not a column (`isNarrow`). */
+  narrow?: boolean;
   /** Whether the right panel is open, on any tab. */
   panelOpen: boolean;
   /** The dot on the panel button — while there are live background commands. */
   runningProcesses: number;
+  processCount: number;
+  onOpenProcesses: () => void;
   onToggleSidebar: () => void;
   onTogglePanel: () => void;
   /** `null` where this build has no browser. */
   browser: { open: boolean; busy: boolean; onToggle: () => void } | null;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
+  const processStatus = runningProcesses > 0
+    ? t("proc.active_count", { n: runningProcesses })
+    : t("proc.finished_count", { n: processCount });
 
   return (
     <div className="top">
-      <button
-        className="top-icon"
-        aria-pressed={sidebarOpen}
-        onClick={onToggleSidebar}
-        aria-label={t("side.toggle")}
-        title={t("side.toggle")}
-      >
-        <PanelLeft size={18} open={sidebarOpen} />
-      </button>
+      {narrow ? (
+        <button
+          className="top-icon"
+          aria-expanded={sidebarOpen}
+          onClick={onToggleSidebar}
+          aria-label={t("side.toggle")}
+        >
+          <List size={20} />
+        </button>
+      ) : (
+        <button
+          className="top-icon"
+          aria-pressed={sidebarOpen}
+          onClick={onToggleSidebar}
+          aria-label={t("side.toggle")}
+          title={t("side.toggle")}
+        >
+          <PanelLeft size={18} open={sidebarOpen} />
+        </button>
+      )}
 
       <button
         className="top-icon"
@@ -121,6 +145,19 @@ export function TopBar({
       </span>
 
       <div className="top-gap" />
+
+      {processCount > 0 && (
+        <button
+          className="top-processes"
+          onClick={onOpenProcesses}
+          aria-label={`${t("top.processes")}, ${processStatus}`}
+        >
+          <Terminal size={16} />
+          <span className="top-process-label">{t("top.processes")}</span>
+          {runningProcesses > 0 && <span className="pulse" aria-hidden="true">●</span>}
+          <span>{processStatus}</span>
+        </button>
+      )}
 
       {browser !== null && (
         <div className="top-icon-wrap">

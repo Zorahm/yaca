@@ -12,7 +12,9 @@
  *
  * What is not here from §7.1: the dictation button. There is no speech
  * recognition, and a button that silently does nothing is an interface lying
- * about the state. `＋` is here: the shell's file dialog was found. `@` (§7.2) is
+ * about the state. `＋` is here: a menu (`./AttachMenu`) with the shell's file
+ * dialog and, where there are any, this chat's MCP servers and the enabled
+ * plugins, which are named in the message at the caret. `@` (§7.2) is
  * here: the project's file menu (`./MentionMenu`) opens when `@` starts a word;
  * the chosen file becomes a chip above the field, as one attached via `＋` does.
  * On the home screen there is no search, and the menu does not open there at all.
@@ -26,7 +28,14 @@ import { ArrowUp, Plus, Stop } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ClipboardEvent } from "react";
 import { createPortal } from "react-dom";
 
-import type { Effort, Mode, ModelInfo, UsageSnapshot } from "../core/client";
+import type {
+  Effort,
+  McpServerSummary,
+  Mode,
+  ModelInfo,
+  PluginSummary,
+  UsageSnapshot,
+} from "../core/client";
 import type { Feed } from "../core/feed";
 import type { QueuedMessage } from "../core/bindings/QueuedMessage";
 import { t } from "../i18n";
@@ -38,6 +47,8 @@ import { withoutMention, type Mention } from "./mention";
 import { QueuedChip } from "./QueuedChip";
 import { SlashMenu } from "./SlashMenu";
 import { Attachment } from "./Attachment";
+import { AttachMenu } from "./AttachMenu";
+import { insertAt, mentionText, type MentionKind } from "./attachMention";
 import { builtinFor, menuFor, type Builtin, type MenuCommand, type SlashItem } from "./slash";
 import { ContextWindow } from "./ContextWindow";
 import { ContextRing } from "./ContextRing";
@@ -75,6 +86,11 @@ export type ComposerActions = {
    * the root. No action — no button either.
    */
   pickFiles?: () => Promise<string[]>;
+  /**
+   * The plugins the `＋` menu offers to name in a message, asked each time the
+   * menu opens: one installed a minute ago must be there. No action — no row.
+   */
+  listPlugins?: () => Promise<PluginSummary[]>;
   /**
    * Save the picture pasted from the clipboard (base64) and return its path.
    * A pasted picture has no path, and an attachment is a path (§7.2). No action —
@@ -129,6 +145,7 @@ export function Composer({
   queued,
   found,
   actions,
+  mcp = null,
   disabled = false,
   draftKey,
 }: {
@@ -144,6 +161,11 @@ export function Composer({
   found: Feed["found"];
   actions: ComposerActions;
   /**
+   * This chat's MCP servers, as the core last listed them. `null` — none to offer:
+   * the home screen has no session, so no server has been started there.
+   */
+  mcp?: McpServerSummary[] | null;
+  /**
    * There is nowhere to send: on the home screen (§9.1), until a project is picked.
    * The field stays silent and does not accept text that has nowhere to go.
    */
@@ -152,7 +174,26 @@ export function Composer({
   draftKey: string;
 }) {
   const [text, setText] = useState(() => localStorage.getItem(draftKey) ?? "");
-  const [menu, setMenu] = useState<"mode" | "model" | "effort" | "context" | null>(null);
+  const [menu, setMenu] = useState<"attach" | "mode" | "model" | "effort" | "context" | null>(
+    null,
+  );
+
+  // The plugin list is read when the `＋` menu opens, not kept: the settings
+  // window may have switched one since.
+  const [plugins, setPlugins] = useState<PluginSummary[]>([]);
+  const listPlugins = actions.listPlugins;
+  useEffect(() => {
+    if (menu !== "attach" || listPlugins === undefined) return;
+    let current = true;
+    void listPlugins().then(
+      (list) => current && setPlugins(list),
+      // No list is no row; there is nothing to say about it here.
+      () => current && setPlugins([]),
+    );
+    return () => {
+      current = false;
+    };
+  }, [menu, listPlugins]);
 
   // A menu closes on a press anywhere outside it, not only on the composer's
   // own band: the feed, the sidebar and the empty ground count too. The chip
@@ -325,6 +366,33 @@ export function Composer({
     attach([path]);
   }
 
+  /** `＋` → "attach files": the shell's dialog, the chosen paths become chips. */
+  function attachFromDialog() {
+    setMenu(null);
+    void actions.pickFiles?.().then(
+      attach,
+      // A dialog that did not open attached nothing: there is nothing to
+      // show here, and raising a screen error for it would be too much.
+      () => {},
+    );
+  }
+
+  /** `＋` → a server or a plugin: named in the message where the caret is. */
+  function mention(kind: MentionKind, name: string) {
+    const node = field.current;
+    const next = insertAt(text, node?.selectionStart ?? text.length, mentionText(kind, name));
+    setText(next.text);
+    setCaret(next.caret);
+    pendingCaret.current = next.caret;
+    setMenu(null);
+    node?.focus();
+  }
+
+  const servers = mcp ?? [];
+  // A row of the menu exists only with something behind it; the button, with a row.
+  const canAttach =
+    actions.pickFiles !== undefined || actions.listPlugins !== undefined || servers.length > 0;
+
   function send() {
     if (disabled || !text.trim()) return;
     // §7.3: a built-in command does not go to the model as text. A project command
@@ -453,26 +521,28 @@ export function Composer({
           {/* §7.1: the `＋` attach button comes first, the mode chip after it. No
               action — no button either: a screen without a project root has nothing
               to attach. */}
-          {actions.pickFiles && (
-            <button
-              className="chip chip-icon"
-              aria-label={t("composer.attach")}
-              title={t("composer.attach")}
-              onClick={() => {
-                void actions.pickFiles?.().then(
-                  (picked) =>
-                    setAttached((now) => [
-                      ...now,
-                      ...picked.filter((path) => !now.includes(path)),
-                    ]),
-                  // A dialog that did not open attached nothing: there is nothing to
-                  // show here, and raising a screen error for it would be too much.
-                  () => {},
-                );
-              }}
-            >
-              <Plus size={14} weight="bold" />
-            </button>
+          {canAttach && (
+            <div className="menu-anchor">
+              <button
+                className="chip chip-icon"
+                aria-label={t("composer.add")}
+                title={t("composer.add")}
+                aria-haspopup="menu"
+                aria-expanded={menu === "attach"}
+                disabled={disabled}
+                onClick={() => setMenu(menu === "attach" ? null : "attach")}
+              >
+                <Plus size={14} weight="bold" />
+              </button>
+              {menu === "attach" && (
+                <AttachMenu
+                  onFiles={actions.pickFiles && attachFromDialog}
+                  servers={servers}
+                  plugins={plugins}
+                  onMention={mention}
+                />
+              )}
+            </div>
           )}
 
           <div className="menu-anchor">

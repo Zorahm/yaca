@@ -777,3 +777,38 @@
 .md-doc tbody tr + tr td {
   border-top: 1px solid var(--line);
 }
+
+/* --- narrow window ---------------------------------------------------------- */
+
+/* A panel over the feed slides in from the edge it lives at. */
+@media (prefers-reduced-motion: no-preference) {
+  .panel-dock-over {
+    --from: translateX(32px);
+    animation: yacaEnter var(--dur-enter) var(--ease-enter);
+  }
+}
+
+/* `NARROW` in resize.ts: the panel is a screen of its own (`panelWidth` in
+   App), edge to edge, with no card inset and no shadow to cast on a feed that
+   is no longer beside it. It comes in whole from the right, as a pushed screen
+   does on Android, and Back takes it away (`ui/back`). */
+@media (max-width: 679.98px) {
+  .panel-dock-over {
+    --from: translateX(100%);
+    --from-opacity: 1;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    background: var(--bg);
+  }
+
+  .panel-dock-over .panel {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .panel-tab {
+    height: 36px;
+  }
+}

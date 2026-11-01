@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_menu_processes">Процессы</string>
+    <string name="chat_menu_checkpoints">Контрольные точки</string>
+    <string name="chat_menu_compact">Сжать историю</string>
+    <string name="chat_menu_close">Закрыть чат</string>
+    <string name="chat_state_working">Работает</string>
+    <string name="chat_state_idle">Простаивает</string>
+    <string name="chat_state_waiting">Ждёт вас</string>
+    <string name="chat_subtitle">%1$s · %2$s</string>
+    <string name="chat_close_title">Закрыть этот чат?</string>
+    <string name="chat_close_body">Закрытие останавливает ход на компьютере для всех, кто видит этот чат.</string>
+    <string name="chat_close_confirm">Закрыть чат</string>
+    <string name="chat_compact_title">Сжать историю?</string>
+    <string name="chat_compact_body">Агент пересказывает разговор, чтобы освободить контекст. Пересказ заменит сообщения, с которыми он работает.</string>
+    <string name="chat_compact_confirm">Сжать</string>
+    <string name="chat_empty">Отправьте сообщение, чтобы начать работу.</string>
+    <string name="chat_list_separator">, </string>
+    <string name="chat_reasoning">Рассуждение</string>
+    <string name="chat_working">Работает…</string>
+    <string name="chat_working_for">Работает %1$s</string>
+    <string name="chat_work_with_failed">%1$s (%2$s)</string>
+
+    <string name="checkpoint_before_message">Перед вашим сообщением</string>
+    <string name="checkpoint_before_command">Перед %1$s</string>
+    <string name="checkpoint_after_restore">После восстановления</string>
+    <string name="checkpoint_line">Контрольная точка, %1$s: %2$s</string>
+    <string name="restored_line">Восстановлено: %1$s</string>
+    <string name="stopped_line">Остановлено</string>
+    <string name="turn_time">Работа заняла %1$s</string>
+
+    <string name="compacted_title">История сжата</string>
+    <string name="compacted_freed">Освобождено токенов: %1$s</string>
+    <string name="compacted_summary">Пересказ</string>
+    <string name="plan_title">План</string>
+    <string name="plan_progress">%1$d из %2$d</string>
+    <string name="plan_item_done">Готово</string>
+    <string name="plan_item_running">В работе</string>
+    <string name="plan_item_pending">Не начато</string>
+    <string name="plan_proposed">Предложенный план</string>
+
+    <string name="error_title">Ошибка</string>
+    <string name="error_retry_hint">Можно попробовать снова.</string>
+    <string name="retry_line">Повтор %1$d из %2$d через %3$s</string>
+    <string name="route_default">%1$s · %2$s</string>
+    <string name="route_named">%1$s: %2$s · %3$s</string>
+    <string name="hook_line">%1$s · %2$s</string>
+    <string name="hook_blocked">Заблокировано</string>
+    <string name="shown_command">Команда: %1$s</string>
+    <string name="shown_range">Строки %1$d–%2$d из %3$d</string>
+    <string name="duration_sec">%1$d с</string>
+    <string name="duration_min_sec">%1$d мин %2$d с</string>
+
+    <string name="queued_title">В очереди после этого хода</string>
+    <string name="queued_cancel_desc">Отменить сообщение в очереди</string>
+
+    <string name="row_status_running">Выполняется</string>
+    <string name="row_status_done">Готово</string>
+    <string name="row_status_failed">Ошибка</string>
+    <string name="row_status_rejected">Отклонено</string>
+    <string name="row_status_denied">Отказано</string>
+    <string name="row_status_stopped">Остановлено</string>
+    <string name="row_no_output">Нет вывода</string>
+    <string name="row_output_cut">Вывод обрезан</string>
+    <string name="row_pictures">Изображения</string>
+    <string name="row_open_diff">Открыть изменения</string>
+    <string name="row_open_file">Открыть файл</string>
+    <string name="row_added">+%1$d</string>
+    <string name="row_removed">−%1$d</string>
+    <string name="row_cancelled">Отменено</string>
+    <string name="row_failed">Ошибка</string>
+    <string name="row_edit_failed">Не удалось изменить %1$s</string>
+    <string name="row_denied">Отказано</string>
+    <string name="row_denied_because">Отказано: %1$s</string>
+    <string name="row_rejected">Отклонено: %1$s</string>
+    <string name="row_stopped">Остановлено</string>
+    <string name="file_reading">Читаю %1$s</string>
+    <string name="file_creating">Создаю %1$s</string>
+    <string name="file_changing">Меняю %1$s</string>
+    <string name="file_deleting">Удаляю %1$s</string>
+    <string name="file_read">Прочитан %1$s</string>
+    <string name="file_created">Создан %1$s</string>
+    <string name="file_modified">Изменён %1$s</string>
+    <string name="file_deleted">Удалён %1$s</string>
+    <string name="file_moved">%1$s перемещён в %2$s</string>
+    <string name="file_dir_deleted">Удалена папка %1$s</string>
+
+    <string name="agents_untitled">Субагент</string>
+    <string name="agents_tokens">Токенов: %1$s</string>
+    <string name="agents_no_report">Отчёта пока нет</string>
+
+    <string name="composer_placeholder">Сообщение агенту</string>
+    <string name="composer_placeholder_busy">Поставить следующее в очередь…</string>
+    <string name="composer_send">Отправить</string>
+    <string name="composer_queue">Поставить в очередь</string>
+    <string name="composer_stop">Остановить ход</string>
+    <string name="composer_mention">Упомянуть файл</string>
+    <string name="composer_remove">Убрать %1$s</string>
+    <string name="mode_plan">План</string>
+    <string name="mode_manual">Вручную</string>
+    <string name="mode_auto">Авто</string>
+    <string name="mode_edits">Правки</string>
+    <string name="effort_low">Низкое</string>
+    <string name="effort_medium">Среднее</string>
+    <string name="effort_high">Высокое</string>
+    <string name="effort_extra">Очень высокое</string>
+    <string name="effort_max">Максимальное</string>
+    <string name="model_none">На этом компьютере пока нет моделей.</string>
+    <string name="model_context">Контекст %1$s токенов</string>
+    <string name="context_used">Контекст: использовано %1$s из %2$s токенов</string>
+    <string name="context_unknown">Размер контекста неизвестен</string>
+
+    <string name="permission_kicker">Агент запрашивает доступ</string>
+    <string name="permission_position">%1$d из %2$d</string>
+    <string name="permission_why">Зачем: %1$s</string>
+    <string name="permission_server">Сервер инструментов: %1$s</string>
+    <string name="permission_unsaved">Откат не вернёт %1$d файлов и %2$d папок.</string>
+    <string name="permission_scope_once">Только в этот раз</string>
+    <string name="permission_scope_once_hint">Разрешает только этот запрос</string>
+    <string name="permission_allow">Разрешить</string>
+    <string name="permission_deny">Отклонить</string>
+    <string name="permission_block_review">Открыть</string>
+    <string name="scope_always">Всегда: %1$s</string>
+    <string name="scope_tool">Все вызовы %1$s</string>
+    <string name="scope_directory">Всё в %1$s</string>
+    <string name="scope_command_prefix">Команды, начинающиеся с %1$s</string>
+    <string name="scope_domain">Всё с %1$s</string>
+    <string name="scope_mcp_server">Все вызовы %1$s</string>
+    <string name="kind_run_command">Выполнить команду</string>
+    <string name="kind_delete_file">Удалить файл</string>
+    <string name="kind_delete_directory">Удалить папку</string>
+    <string name="kind_move_file">Переместить файл</string>
+    <string name="kind_edit_file">Изменить файл</string>
+    <string name="kind_fetch_url">Открыть веб-страницу</string>
+    <string name="kind_mcp_write">Изменить данные на сервере инструментов</string>
+    <string name="invariant_git_commit">Коммит в git. Спрашивается всегда, не запоминается.</string>
+    <string name="invariant_git_push">Отправка в удалённый репозиторий. Спрашивается всегда, не запоминается.</string>
+    <string name="invariant_git_unresolved">В git есть неразрешённые конфликты. Спрашивается всегда.</string>
+    <string name="invariant_git_config">Изменение настроек git. Спрашивается всегда.</string>
+
+    <string name="question_block_title">Вопрос от агента</string>
+    <string name="question_answer_action">Ответить</string>
+    <string name="question_answered">Ответ: %1$s</string>
+    <string name="question_skipped">Пропущено</string>
+    <string name="question_unanswered">Без ответа</string>
+    <string name="question_skip">Пропустить</string>
+    <string name="question_submit">Ответить</string>
+    <string name="question_other">Другое…</string>
+    <string name="question_other_hint">Опишите свой вариант</string>
+    <string name="question_pick_many">Выберите один или несколько</string>
+
+    <string name="elicit_title">Форма от %1$s</string>
+    <string name="elicit_block_title">Форма от %1$s</string>
+    <string name="elicit_review">Открыть</string>
+    <string name="elicit_sent">Отправлено</string>
+    <string name="elicit_declined">Отклонено</string>
+    <string name="elicit_cancelled">Отменено</string>
+    <string name="elicit_expired">Истекло</string>
+    <string name="elicit_decline">Отказаться</string>
+    <string name="elicit_cancel">Отмена</string>
+    <string name="elicit_submit">Отправить</string>
+    <string name="elicit_optional">Необязательно</string>
+    <string name="elicit_required_error">Поле обязательно</string>
+    <string name="elicit_bad_number">Введите число</string>
+    <string name="elicit_bad_integer">Введите целое число</string>
+
+    <plurals name="files_count">
+        <item quantity="one">%d файл</item>
+        <item quantity="few">%d файла</item>
+        <item quantity="many">%d файлов</item>
+        <item quantity="other">%d файла</item>
+    </plurals>
+    <plurals name="lines_more">
+        <item quantity="one">ещё %d строка</item>
+        <item quantity="few">ещё %d строки</item>
+        <item quantity="many">ещё %d строк</item>
+        <item quantity="other">ещё %d строки</item>
+    </plurals>
+    <plurals name="agents_title">
+        <item quantity="one">%d субагент</item>
+        <item quantity="few">%d субагента</item>
+        <item quantity="many">%d субагентов</item>
+        <item quantity="other">%d субагента</item>
+    </plurals>
+    <plurals name="agents_running">
+        <item quantity="one">%d выполняется</item>
+        <item quantity="few">%d выполняются</item>
+        <item quantity="many">%d выполняются</item>
+        <item quantity="other">%d выполняются</item>
+    </plurals>
+    <plurals name="work_read">
+        <item quantity="one">Прочитан %d файл</item>
+        <item quantity="few">Прочитано %d файла</item>
+        <item quantity="many">Прочитано %d файлов</item>
+        <item quantity="other">Прочитано %d файла</item>
+    </plurals>
+    <plurals name="work_created">
+        <item quantity="one">Создан %d файл</item>
+        <item quantity="few">Создано %d файла</item>
+        <item quantity="many">Создано %d файлов</item>
+        <item quantity="other">Создано %d файла</item>
+    </plurals>
+    <plurals name="work_modified">
+        <item quantity="one">Изменён %d файл</item>
+        <item quantity="few">Изменено %d файла</item>
+        <item quantity="many">Изменено %d файлов</item>
+        <item quantity="other">Изменено %d файла</item>
+    </plurals>
+    <plurals name="work_deleted">
+        <item quantity="one">Удалён %d файл</item>
+        <item quantity="few">Удалено %d файла</item>
+        <item quantity="many">Удалено %d файлов</item>
+        <item quantity="other">Удалено %d файла</item>
+    </plurals>
+    <plurals name="work_commands">
+        <item quantity="one">Выполнена %d команда</item>
+        <item quantity="few">Выполнено %d команды</item>
+        <item quantity="many">Выполнено %d команд</item>
+        <item quantity="other">Выполнено %d команды</item>
+    </plurals>
+    <plurals name="work_tools">
+        <item quantity="one">Вызван %d инструмент</item>
+        <item quantity="few">Вызвано %d инструмента</item>
+        <item quantity="many">Вызвано %d инструментов</item>
+        <item quantity="other">Вызвано %d инструмента</item>
+    </plurals>
+    <plurals name="work_failed">
+        <item quantity="one">%d с ошибкой</item>
+        <item quantity="few">%d с ошибкой</item>
+        <item quantity="many">%d с ошибкой</item>
+        <item quantity="other">%d с ошибкой</item>
+    </plurals>
+</resources>

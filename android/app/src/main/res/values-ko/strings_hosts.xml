@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="hosts_title">컴퓨터</string>
+    <string name="hosts_pair_action">컴퓨터 페어링</string>
+    <string name="hosts_section_paired">페어링됨</string>
+    <string name="hosts_empty">아직 페어링된 컴퓨터가 없습니다. 하나를 페어링하면 프로젝트와 채팅을 볼 수 있습니다.</string>
+    <string name="hosts_pair_another">다른 컴퓨터 페어링</string>
+    <string name="hosts_note">휴대폰은 페어링된 컴퓨터의 이벤트만 받습니다. 페어링은 컴퓨터에서 해제할 수 있습니다.</string>
+    <string name="hosts_pair_again">다시 페어링</string>
+    <string name="hosts_forget">컴퓨터 잊기</string>
+    <string name="hosts_forget_title">%1$s을(를) 잊을까요?</string>
+    <string name="hosts_forget_body">휴대폰에서 이 컴퓨터의 자격 증명이 삭제됩니다. 다시 사용하려면 페어링하세요.</string>
+    <string name="hosts_forget_confirm">잊기</string>
+
+    <string name="host_section_running">지금 실행 중</string>
+    <string name="host_section_projects">프로젝트</string>
+    <string name="host_new_chat">새 채팅</string>
+    <string name="host_pick_project">프로젝트 선택</string>
+    <string name="host_no_projects">이 컴퓨터에는 아직 프로젝트가 없습니다</string>
+    <string name="host_projects_unavailable">지금은 프로젝트를 볼 수 없습니다.</string>
+    <string name="host_no_chats">이 프로젝트에는 아직 채팅이 없습니다</string>
+    <string name="host_chats_unavailable">프로젝트의 채팅을 불러올 수 없습니다.</string>
+    <string name="host_working">작업 중</string>
+    <string name="host_expand">채팅 보기</string>
+    <string name="host_collapse">채팅 접기</string>
+    <string name="host_opening">채팅 여는 중…</string>
+    <plurals name="host_project_chats">
+        <item quantity="other">채팅 %d개</item>
+    </plurals>
+</resources>

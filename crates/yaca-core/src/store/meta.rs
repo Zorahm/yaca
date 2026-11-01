@@ -114,11 +114,13 @@ impl SessionMeta {
     }
 
     /// Records the first message as the title, unless a human has named it.
-    pub fn title_from_message(&mut self, text: &str) {
+    /// Says whether the title changed.
+    pub fn title_from_message(&mut self, text: &str) -> bool {
         if self.title_custom || !self.title.is_empty() {
-            return;
+            return false;
         }
         self.title = title_of(text);
+        true
     }
 
     /// §9: a name typed by hand. It sticks — neither the first message nor the
@@ -142,7 +144,10 @@ impl SessionMeta {
     }
 
     /// Takes from one event whatever the index keeps, and says whether the
-    /// event ended a turn — the moment the index is worth writing down.
+    /// index is worth writing down now: the event ended a turn, or it named
+    /// the session. The name cannot wait for the turn's end — the sidebar
+    /// reads it from the file while the turn runs, and a window closed
+    /// mid-turn would leave the session unnamed.
     ///
     /// Lives here rather than in the recorder because the index is rebuilt
     /// from the journals too (`super::rebuild`), and two folds over the same
@@ -167,6 +172,7 @@ impl SessionMeta {
             E::TitleSet { title } if self.title_open_to_model() => {
                 self.title = title_of(title);
                 self.title_by_model = true;
+                return true;
             }
             E::StateChanged { state } => {
                 self.provider = state.provider.clone();

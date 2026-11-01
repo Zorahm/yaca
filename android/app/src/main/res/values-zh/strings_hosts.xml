@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="hosts_title">电脑</string>
+    <string name="hosts_pair_action">配对电脑</string>
+    <string name="hosts_section_paired">已配对</string>
+    <string name="hosts_empty">还没有配对的电脑。配对一台后即可查看它的项目和对话。</string>
+    <string name="hosts_pair_another">配对另一台电脑</string>
+    <string name="hosts_note">手机只接收已配对电脑的事件。可以在电脑上撤销配对。</string>
+    <string name="hosts_pair_again">重新配对</string>
+    <string name="hosts_forget">忘记电脑</string>
+    <string name="hosts_forget_title">忘记 %1$s？</string>
+    <string name="hosts_forget_body">手机会删除这台电脑的凭据。要再次使用，请重新配对。</string>
+    <string name="hosts_forget_confirm">忘记</string>
+
+    <string name="host_section_running">正在运行</string>
+    <string name="host_section_projects">项目</string>
+    <string name="host_new_chat">新对话</string>
+    <string name="host_pick_project">选择项目</string>
+    <string name="host_no_projects">这台电脑上还没有项目</string>
+    <string name="host_projects_unavailable">目前无法显示项目。</string>
+    <string name="host_no_chats">这个项目还没有对话</string>
+    <string name="host_chats_unavailable">无法加载该项目的对话。</string>
+    <string name="host_working">工作中</string>
+    <string name="host_expand">显示对话</string>
+    <string name="host_collapse">隐藏对话</string>
+    <string name="host_opening">正在打开对话…</string>
+    <plurals name="host_project_chats">
+        <item quantity="other">%d 个对话</item>
+    </plurals>
+</resources>

@@ -17,6 +17,7 @@
  */
 
 import type { AgentEvent } from "./bindings/AgentEvent";
+import { missingOutcome } from "./turnOutcome";
 import type { CheckpointChange } from "./bindings/CheckpointChange";
 import type { CheckpointSummary } from "./bindings/CheckpointSummary";
 import type { FileDiff } from "./bindings/FileDiff";
@@ -221,7 +222,7 @@ export type Feed = {
    * The turn that is running, from the core's `turnStarted`. The live timer
    * counts from it; `null` between turns.
    */
-  turn: { startedAt: number } | null;
+  turn: { startedAt: number; blockStart: number } | null;
 };
 
 export const emptyFeed: Feed = {
@@ -449,7 +450,7 @@ function apply(feed: Feed, event: AgentEvent): void {
       return;
 
     case "checkpointCreated":
-      feed.blocks.push({
+      placePoint(feed, {
         kind: "checkpoint",
         key: key("ckpt"),
         checkpoint: event.checkpoint,
@@ -599,10 +600,14 @@ function apply(feed: Feed, event: AgentEvent): void {
     // event; the turn's time is drawn separately, by a live timer and a line under
     // the answer (`endTurn`).
     case "turnStarted":
-      feed.turn = { startedAt: event.at };
+      feed.turn = { startedAt: event.at, blockStart: feed.blocks.length };
       return;
 
     case "turnFinished":
+      if (feed.turn) {
+        const code = missingOutcome(feed.blocks.slice(feed.turn.blockStart), event.stopReason === "failed");
+        if (code) feed.blocks.push({ kind: "error", key: key("err"), code, message: "", retryable: true });
+      }
       endTurn(feed, event.at);
       return;
   }
@@ -623,6 +628,32 @@ function endTurn(feed: Feed, endedAt: number): void {
     startedAt: started,
     endedAt,
   });
+}
+
+/**
+ * §5.8: the divider of a point taken for a message stands above that message.
+ *
+ * The core sends the message's card first, so the feed is not empty while the
+ * snapshot is taken, and the point after it, perhaps with the notes of the
+ * prompt hooks in between. Journals from before that order carry the point
+ * first, and then the last card is an older message with a turn under it, so
+ * the divider simply goes at the end. A blocked hook ends its message without
+ * a point: the card above it is not this point's either.
+ */
+function placePoint(feed: Feed, block: Extract<FeedBlock, { kind: "checkpoint" }>): void {
+  if (block.checkpoint.reason.type === "message") {
+    let at = feed.blocks.length - 1;
+    while (at >= 0) {
+      const seen = feed.blocks[at];
+      if (seen.kind !== "hook" || seen.blocked) break;
+      at -= 1;
+    }
+    if (at >= 0 && feed.blocks[at].kind === "human") {
+      feed.blocks.splice(at, 0, block);
+      return;
+    }
+  }
+  feed.blocks.push(block);
 }
 
 function appendText(feed: Feed, blockId: string, text: string): void {

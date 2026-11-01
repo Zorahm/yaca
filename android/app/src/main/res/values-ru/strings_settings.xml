@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">Настройки</string>
+    <string name="settings_section_connection">Подключение</string>
+    <string name="settings_stay_connected">Оставаться на связи в фоне</string>
+    <string name="settings_stay_connected_desc">Держит компьютеры подключёнными, пока приложение закрыто, с постоянным уведомлением, чтобы их вопросы до вас доходили. Выключено: подключение прекращается, когда вы уходите из приложения.</string>
+    <string name="settings_section_notifications">Уведомления</string>
+    <string name="settings_turn_finished">Сообщать о завершении хода</string>
+    <string name="settings_turn_finished_desc">Тихое уведомление, когда чат завершил ход и ждёт вас.</string>
+    <string name="settings_system_notifications">Настройки уведомлений</string>
+    <string name="settings_system_notifications_desc">Звуки, важность и блокировка в системных настройках.</string>
+    <string name="settings_section_appearance">Оформление</string>
+    <string name="settings_wallpaper_colours">Цвета из обоев</string>
+    <string name="settings_wallpaper_colours_desc">Material You: цвета следуют за обоями.</string>
+    <string name="settings_section_about">О приложении</string>
+    <string name="settings_version">Версия %1$s</string>
+</resources>

@@ -46,7 +46,7 @@ export const providers = {
 
   "prov.form_models": "모델",
   "prov.form_models_hint":
-    "목록은 프로바이더 자체에서 옵니다. 키를 저장하면 바로 요청하며, '조회'를 누르면 다시 요청합니다. 응답한 목록을 그대로 사용합니다. 가격은 100만 토큰당 달러이며, 0은 무료 또는 알 수 없음을 뜻합니다.",
+    "목록은 프로바이더 자체에서 옵니다. 키를 저장하면 바로 요청하고, 주소·프로토콜·헤더가 바뀌면 다시 요청하며, '조회'를 누르면 한 번 더 요청합니다. 응답이 올 때까지는 이전 목록이 그대로 보입니다. 응답한 목록을 그대로 사용합니다. 가격은 100만 토큰당 달러이며, 0은 무료 또는 알 수 없음을 뜻합니다.",
   "prov.form_model_context": "컨텍스트, 토큰",
   "prov.form_model_output": "최대 출력, 토큰",
   "prov.form_model_effort": "추론 강도 지원",
@@ -61,6 +61,7 @@ export const providers = {
 
   "prov.saved_unasked":
     "“{name}” 저장됨, 하지만 모델 목록에 응답하지 않았습니다: {error}",
+  "prov.ask_failed": "“{name}”이(가) 모델 목록에 응답하지 않았습니다: {error}",
   "prov.error_name": "프로바이더 이름을 입력하세요",
   "prov.error_url": "기본 URL을 입력하세요",
   "prov.error_header_name": "헤더 {n}의 이름이 없습니다",

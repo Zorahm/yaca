@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::prefs::Preferences;
+use crate::startup::Startup;
 
 const FILE: &str = "settings.json";
 
@@ -36,6 +37,22 @@ pub struct AppSettings {
     last_project: Option<PathBuf>,
     /// Theme, density, language, notifications (§10).
     prefs: Preferences,
+    /// The last mode, model and effort picked on the home screen: what the
+    /// next new chat starts with, over the project's own settings (see
+    /// [`crate::startup`]).
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "lenient"
+    )]
+    last_startup: Option<Startup>,
+}
+
+/// A remembered choice a later build no longer reads — a mode renamed, an
+/// effort gone — is dropped on its own. Failing on it would drop the whole
+/// file, and the list of projects with it, for the sake of one convenience.
+fn lenient<'de, D: serde::Deserializer<'de>>(from: D) -> Result<Option<Startup>, D::Error> {
+    let value = serde_json::Value::deserialize(from)?;
+    Ok(serde_json::from_value(value).ok())
 }
 
 impl AppSettings {
@@ -84,6 +101,14 @@ impl AppSettings {
 
     pub fn set_prefs(&mut self, prefs: Preferences) {
         self.prefs = prefs;
+    }
+
+    pub fn last_startup(&self) -> Option<&Startup> {
+        self.last_startup.as_ref()
+    }
+
+    pub fn set_last_startup(&mut self, startup: Startup) {
+        self.last_startup = Some(startup);
     }
 
     /// Written through a temporary file: a half-written settings file is a
@@ -213,6 +238,38 @@ mod tests {
         // A file from before the field: the list survives, the look defaults.
         fs::write(dir.join(FILE), r#"{ "projects": [] }"#).unwrap();
         assert_eq!(AppSettings::load(&dir).prefs(), &Preferences::default());
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The home screen's last choice survives a restart, and one this build
+    /// cannot read is dropped without taking the project list with it.
+    #[test]
+    fn the_last_startup_survives_a_save_and_a_broken_one_is_dropped() {
+        use yaca_core::{Effort, Mode};
+
+        let dir = temp_dir();
+        let one = project(&dir, "one");
+        let startup = Startup {
+            mode: Mode::Auto,
+            provider: "mimo".into(),
+            model: "mimo-v2.6-flash".into(),
+            effort: Effort::Medium,
+        };
+        let mut settings = AppSettings::default();
+        settings.remember_project(one.clone());
+        settings.set_last_startup(startup.clone());
+        settings.save(&dir).unwrap();
+        assert_eq!(AppSettings::load(&dir).last_startup(), Some(&startup));
+
+        let json = serde_json::json!({
+            "projects": [one],
+            "lastStartup": { "mode": "someday", "provider": "x", "model": "y", "effort": "max" },
+        });
+        fs::write(dir.join(FILE), json.to_string()).unwrap();
+        let loaded = AppSettings::load(&dir);
+        assert_eq!(loaded.last_startup(), None);
+        assert_eq!(loaded.projects(), vec![one.as_path()]);
 
         fs::remove_dir_all(&dir).unwrap();
     }

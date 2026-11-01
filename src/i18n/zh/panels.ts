@@ -59,6 +59,8 @@ export const panels = {
   "file.unavailable": "无内容可显示：文件不在磁盘上、为二进制文件，或位于项目之外",
 
   "proc.empty": "没有后台命令",
+  "proc.active_count": "运行中: {n}",
+  "proc.finished_count": "已结束: {n}",
   "proc.watch": "查看输出",
   "proc.state_running": "运行中",
   "proc.state_exited": "退出码 {code}",

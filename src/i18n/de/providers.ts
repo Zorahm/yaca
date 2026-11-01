@@ -46,7 +46,7 @@ export const providers = {
 
   "prov.form_models": "Modelle",
   "prov.form_models_hint":
-    "Die Liste kommt vom Anbieter selbst: Er wird abgefragt, sobald ein Schlüssel gespeichert ist, und „Abfragen“ fragt erneut. Was er antwortet, damit wird gearbeitet; der Preis steht in Dollar pro Million Token, null bedeutet „kostenlos oder unbekannt“.",
+    "Die Liste kommt vom Anbieter selbst: Er wird abgefragt, sobald ein Schlüssel gespeichert ist, und erneut, wenn sich Adresse, Protokoll oder Header ändern; „Abfragen“ fragt noch einmal. Bis die Antwort da ist, bleibt die bisherige Liste stehen. Was er antwortet, damit wird gearbeitet; der Preis steht in Dollar pro Million Token, null bedeutet „kostenlos oder unbekannt“.",
   "prov.form_model_context": "Kontext, Token",
   "prov.form_model_output": "Max. Ausgabe, Token",
   "prov.form_model_effort": "unterstützt Aufwand",
@@ -61,6 +61,7 @@ export const providers = {
 
   "prov.saved_unasked":
     "„{name}“ ist gespeichert, hat aber keine Modellliste geliefert: {error}",
+  "prov.ask_failed": "„{name}“ hat keine Modellliste geliefert: {error}",
   "prov.error_name": "Name angeben",
   "prov.error_url": "Basis-URL angeben",
   "prov.error_header_name": "Header {n} hat keinen Namen",

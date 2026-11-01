@@ -1190,6 +1190,16 @@
   user-select: text;
 }
 
+.error-explanation {
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.error-detail summary {
+  cursor: pointer;
+}
+
 .error-actions {
   display: flex;
   gap: 8px;
@@ -1351,4 +1361,46 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* --- narrow window and touch ------------------------------------------------ */
+
+/* `NARROW` in resize.ts: the column keeps the 16 px margins of a phone screen
+   rather than a desktop's 24, which on a phone are a tenth of the width. */
+@media (max-width: 679.98px) {
+  .feed-item {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .feed-item[data-kind="human"] {
+    --pad-top: 22px;
+  }
+}
+
+/* Nothing hovers on a touch screen, so what comes out on hover stands there:
+   a message's actions under it and the copy button of a code block, which
+   takes the corner from the language label. */
+@media (hover: none) {
+  .msg-acts,
+  .block-act {
+    opacity: 1;
+  }
+
+  .code-wrap .code-lang {
+    opacity: 0;
+  }
+}
+
+@media (pointer: coarse) {
+  .msg-act {
+    width: 32px;
+    height: 32px;
+  }
+
+  .block-act::after {
+    content: "";
+    position: absolute;
+    inset: -8px;
+  }
 }

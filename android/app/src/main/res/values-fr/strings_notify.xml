@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notify_channel_needs_you">Attend votre réponse</string>
+    <string name="notify_channel_needs_you_desc">Demandes d’autorisation, questions et formulaires d’un chat sur votre ordinateur qui attendent votre réponse.</string>
+    <string name="notify_channel_turn_finished">Tour terminé</string>
+    <string name="notify_channel_turn_finished_desc">Un chat de votre ordinateur a terminé son tour et attend votre prochain message.</string>
+    <string name="notify_channel_connection">Connexion</string>
+    <string name="notify_channel_connection_desc">Indique à quels ordinateurs le téléphone est connecté pendant que l’application est en arrière-plan.</string>
+
+    <string name="notify_permission_title">L’agent demande une autorisation</string>
+    <string name="notify_question_title">L’agent a posé une question</string>
+    <string name="notify_elicitation_title">Un serveur a besoin de données</string>
+    <string name="notify_turn_finished_title">Terminé : %1$s</string>
+    <!-- The chat title and the project, both as the host names them. -->
+    <string name="notify_chat_line">%1$s · %2$s</string>
+    <string name="notify_action_allow_once">Autoriser une fois</string>
+    <string name="notify_action_deny">Refuser</string>
+    <string name="notify_action_open">Ouvrir</string>
+    <string name="notify_answer_failed">Votre réponse n’a pas pu être envoyée. Ouvrez le chat pour répondre.</string>
+
+    <string name="notify_connection_connected">Connecté à %1$s</string>
+    <string name="notify_connection_connecting">Connexion en cours…</string>
+    <string name="notify_connection_disconnect">Déconnecter</string>
+
+    <string name="notify_prompt_title">Être prévenu quand l’agent a besoin de vous</string>
+    <string name="notify_prompt_body">Les demandes d’autorisation et les questions de vos chats n’arrivent, application fermée, que sous forme de notifications. Autorisez-les pour répondre sans ouvrir l’application.</string>
+    <string name="notify_prompt_allow">Autoriser</string>
+    <string name="notify_prompt_later">Pas maintenant</string>
+</resources>

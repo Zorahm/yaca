@@ -153,7 +153,7 @@ impl Tool for BashRestart {
         }
         // Resolved before anything is killed: a directory that is gone should
         // leave the running command alone rather than end it and then fail.
-        let dir = ctx.ws.resolve_existing(&summary.cwd)?;
+        let dir = super::bash_cwd::resolve(&ctx.ws, &summary.cwd)?;
 
         if summary.state == ProcessState::Running && !stop(ctx, id).await {
             return Err(ToolError::failed(format!(

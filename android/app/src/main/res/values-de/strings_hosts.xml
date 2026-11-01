@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="hosts_title">Computer</string>
+    <string name="hosts_pair_action">Computer koppeln</string>
+    <string name="hosts_section_paired">Gekoppelt</string>
+    <string name="hosts_empty">Noch kein Computer ist gekoppelt. Koppele einen, um seine Projekte und Chats zu sehen.</string>
+    <string name="hosts_pair_another">Weiteren Computer koppeln</string>
+    <string name="hosts_note">Das Telefon empfängt Ereignisse nur von gekoppelten Computern. Die Kopplung lässt sich auf dem Computer widerrufen.</string>
+    <string name="hosts_pair_again">Erneut koppeln</string>
+    <string name="hosts_forget">Computer vergessen</string>
+    <string name="hosts_forget_title">%1$s vergessen?</string>
+    <string name="hosts_forget_body">Das Telefon löscht die Zugangsdaten dieses Computers. Zum erneuten Nutzen musst du ihn neu koppeln.</string>
+    <string name="hosts_forget_confirm">Vergessen</string>
+
+    <string name="host_section_running">Läuft gerade</string>
+    <string name="host_section_projects">Projekte</string>
+    <string name="host_new_chat">Neuer Chat</string>
+    <string name="host_pick_project">Projekt wählen</string>
+    <string name="host_no_projects">Auf diesem Computer gibt es noch keine Projekte</string>
+    <string name="host_projects_unavailable">Projekte sind gerade nicht verfügbar.</string>
+    <string name="host_no_chats">In diesem Projekt gibt es noch keine Chats</string>
+    <string name="host_chats_unavailable">Die Chats des Projekts konnten nicht geladen werden.</string>
+    <string name="host_working">Arbeitet</string>
+    <string name="host_expand">Chats anzeigen</string>
+    <string name="host_collapse">Chats ausblenden</string>
+    <string name="host_opening">Chat wird geöffnet…</string>
+    <plurals name="host_project_chats">
+        <item quantity="one">%d Chat</item>
+        <item quantity="other">%d Chats</item>
+    </plurals>
+</resources>

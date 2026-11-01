@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pairing_title">コンピューターをペアリング</string>
+    <string name="pairing_heading">コンピューターを接続</string>
+    <string name="pairing_body">コンピューターの Yaca に表示された QR コードを読み取ってください。</string>
+    <string name="pairing_camera_rationale">カメラはペアリングコードを読み取るためだけに使います。何も保存されません。</string>
+    <string name="pairing_camera_denied">カメラへのアクセスがオフです。代わりにペアリングリンクを貼り付けてください。</string>
+    <string name="pairing_camera_unavailable">このスマートフォンのカメラは Yaca で使えません。代わりにペアリングリンクを貼り付けてください。</string>
+    <string name="pairing_camera_allow">カメラを許可</string>
+    <string name="pairing_camera_note">コードの有効期限は 5 分です。</string>
+    <string name="pairing_paste">ペアリングリンクを貼り付け</string>
+    <string name="pairing_invalid_link">Yaca のペアリングリンクではありません。</string>
+    <string name="pairing_network">コンピューターに接続できません。両方が同じネットワークにあるか確認してください。</string>
+    <string name="pairing_storage">ペアリングはできましたが、スマートフォンに接続情報を保存できませんでした。もう一度ペアリングしてください。不要な登録はコンピューターの Yaca で削除できます。</string>
+    <string name="pairing_in_progress">%1$s とペアリング中…</string>
+    <string name="pairing_confirm_title">%1$s とペアリングしますか？</string>
+    <string name="pairing_confirm_body">忘れるまで、このコンピューターからのイベントを受け取ります。</string>
+    <string name="pairing_confirm_action">ペアリング</string>
+
+    <string name="refusal_unauthorized">このスマートフォンはそのコンピューターでもう許可されていません。ペアリングし直してください。</string>
+    <string name="refusal_pairing_failed">ペアリングコードが間違っているか、使用済みか、期限切れです。Yaca で新しいコードを作成し、もう一度読み取ってください。</string>
+    <string name="refusal_protocol_mismatch">コンピューターはプロトコル %1$d、このアプリは %2$d を使っています。どちらかを更新してください。</string>
+    <string name="refusal_too_many_attempts">このネットワークからの失敗が多すぎます。しばらくしてから再試行してください。</string>
+    <string name="refusal_handshake_expected">ハンドシェイクの前にコンピューターが接続を閉じました。もう一度試してください。</string>
+</resources>

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="diff_none">本会话未修改此文件，没有差异可显示。</string>
+    <string name="diff_no_lines">此次更改没有可显示的行。</string>
+    <string name="diff_truncated">内核截断了此差异。</string>
+    <string name="change_created">已创建</string>
+    <string name="change_modified">已修改</string>
+    <string name="change_deleted">已删除</string>
+    <string name="change_moved">从 %1$s 移动</string>
+    <string name="panel_diff_counts">+%1$d −%2$d</string>
+
+    <string name="file_loading">正在读取文件…</string>
+    <string name="file_unavailable">无内容可显示：文件不在磁盘上、为二进制文件，或位于项目之外。</string>
+    <string name="panel_file_deleted">此聊天中该文件已被删除，因此没有文本内容。</string>
+    <string name="file_empty">文件为空。</string>
+    <string name="file_truncated">文件未完整显示。</string>
+
+    <string name="ckpt_title">回滚点</string>
+    <string name="ckpt_subtitle">在智能体每次编辑之前创建</string>
+    <string name="ckpt_now">当前状态</string>
+    <string name="ckpt_now_mark">当前</string>
+    <string name="ckpt_empty">暂无回滚点。</string>
+    <string name="ckpt_reason_message">在消息之前</string>
+    <string name="ckpt_reason_command">在 %1$s 之前</string>
+    <string name="ckpt_reason_rollback">在回滚之前</string>
+    <string name="ckpt_restore">恢复</string>
+    <string name="ckpt_restore_title">恢复到 %1$s？</string>
+    <string name="ckpt_restore_body">文件将恢复到此状态。此时间点之后的更改将丢失。此操作无法撤销。</string>
+    <string name="ckpt_restore_loading">正在计算将改变的文件…</string>
+    <string name="ckpt_restore_nothing">从此时间点起没有任何更改。</string>
+    <string name="ckpt_will_restore">将被恢复</string>
+    <string name="ckpt_will_revert">将被回退</string>
+    <string name="ckpt_will_delete">将被删除</string>
+    <plurals name="ckpt_tracked">
+        <item quantity="other">%d 个文件</item>
+    </plurals>
+
+    <string name="proc_title">进程</string>
+    <string name="proc_empty">此聊天中没有后台命令。</string>
+    <string name="proc_section_running">运行中</string>
+    <string name="proc_section_finished">已结束</string>
+    <string name="proc_state_running">运行中</string>
+    <string name="proc_state_exited">退出码 %1$d</string>
+    <string name="proc_state_exited_none">无退出码结束</string>
+    <string name="proc_state_stopped">已停止</string>
+    <string name="proc_output">输出</string>
+    <string name="proc_no_output">暂无输出</string>
+    <plurals name="proc_dropped">
+        <item quantity="other">已从缓冲区挤出 %d 行</item>
+    </plurals>
+    <string name="proc_stop">停止</string>
+    <string name="proc_stop_title">停止 %1$s？</string>
+    <string name="proc_stop_body">进程将收到停止信号并停止响应。输出会保留在聊天日志中，可以手动重新运行。</string>
+
+    <string name="mention_label">项目文件</string>
+    <string name="mention_recent">此聊天中涉及的文件</string>
+    <string name="mention_searching">搜索中…</string>
+    <string name="mention_none">未找到</string>
+    <string name="mention_none_touched">此聊天中尚未涉及任何文件。输入以搜索项目。</string>
+    <string name="mention_close">关闭菜单</string>
+</resources>

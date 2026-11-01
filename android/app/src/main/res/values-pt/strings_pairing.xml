@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pairing_title">Parear um computador</string>
+    <string name="pairing_heading">Conecte um computador</string>
+    <string name="pairing_body">Escaneie o código QR que o Yaca mostra no seu computador.</string>
+    <string name="pairing_camera_rationale">O Yaca usa a câmera apenas para ler o código de pareamento. Nada é salvo.</string>
+    <string name="pairing_camera_denied">O acesso à câmera está desligado. Cole o link de pareamento.</string>
+    <string name="pairing_camera_unavailable">O Yaca não consegue usar a câmera deste telefone. Cole o link de pareamento.</string>
+    <string name="pairing_camera_allow">Permitir câmera</string>
+    <string name="pairing_camera_note">O código vale por cinco minutos.</string>
+    <string name="pairing_paste">Colar link de pareamento</string>
+    <string name="pairing_invalid_link">Este não é um link de pareamento do Yaca.</string>
+    <string name="pairing_network">Não foi possível alcançar o computador. Verifique se os dois estão na mesma rede.</string>
+    <string name="pairing_storage">Emparelhado, mas o telefone não conseguiu salvar a conexão. Emparelhe novamente; a entrada a mais pode ser removida no Yaca do computador.</string>
+    <string name="pairing_in_progress">Pareando com %1$s…</string>
+    <string name="pairing_confirm_title">Parear com %1$s?</string>
+    <string name="pairing_confirm_body">O telefone vai receber eventos deste computador até você esquecê-lo.</string>
+    <string name="pairing_confirm_action">Parear</string>
+
+    <string name="refusal_unauthorized">Este telefone não tem mais permissão nesse computador. Pareie-o novamente.</string>
+    <string name="refusal_pairing_failed">O código de pareamento está errado, já foi usado ou expirou. Crie um novo código no Yaca e escaneie de novo.</string>
+    <string name="refusal_protocol_mismatch">O computador usa o protocolo %1$d e este app usa o %2$d. Atualize um dos dois.</string>
+    <string name="refusal_too_many_attempts">Muitas tentativas falhas desta rede. Tente mais tarde.</string>
+    <string name="refusal_handshake_expected">O computador fechou a conexão antes do handshake. Tente novamente.</string>
+</resources>

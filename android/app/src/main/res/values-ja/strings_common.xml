@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Yaca</string>
+
+    <string name="action_back">戻る</string>
+    <string name="action_cancel">キャンセル</string>
+    <string name="action_more">その他のオプション</string>
+    <string name="action_refresh">更新</string>
+
+    <string name="connection_idle">未接続</string>
+    <string name="connection_connecting">接続中（%1$d 回目）</string>
+    <string name="connection_online">オンライン · Yaca %1$s</string>
+    <string name="connection_offline">オフライン、再試行中</string>
+    <string name="connection_refused">コンピューターに拒否されました</string>
+
+    <string name="waiting_for_you">確認待ち</string>
+    <string name="chat_untitled">新しいチャット</string>
+    <string name="error_not_connected">コンピューターとはまだ接続されていません</string>
+</resources>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pairing_title">Computer koppeln</string>
+    <string name="pairing_heading">Computer verbinden</string>
+    <string name="pairing_body">Scanne den QR-Code, den Yaca auf deinem Computer anzeigt.</string>
+    <string name="pairing_camera_rationale">Yaca nutzt die Kamera nur, um den Kopplungscode zu lesen. Es wird nichts gespeichert.</string>
+    <string name="pairing_camera_denied">Der Kamerazugriff ist aus. Füge stattdessen den Kopplungslink ein.</string>
+    <string name="pairing_camera_unavailable">Yaca kann die Kamera dieses Telefons nicht nutzen. Füge stattdessen den Kopplungslink ein.</string>
+    <string name="pairing_camera_allow">Kamera erlauben</string>
+    <string name="pairing_camera_note">Der Code ist fünf Minuten gültig.</string>
+    <string name="pairing_paste">Kopplungslink einfügen</string>
+    <string name="pairing_invalid_link">Das ist kein Yaca-Kopplungslink.</string>
+    <string name="pairing_network">Der Computer ist nicht erreichbar. Prüfe, ob beide im selben Netzwerk sind.</string>
+    <string name="pairing_storage">Gekoppelt, aber das Telefon konnte die Verbindung nicht speichern. Koppele erneut; den überzähligen Eintrag kannst du in Yaca auf dem Computer entfernen.</string>
+    <string name="pairing_in_progress">Kopplung mit %1$s…</string>
+    <string name="pairing_confirm_title">Mit %1$s koppeln?</string>
+    <string name="pairing_confirm_body">Das Telefon empfängt Ereignisse dieses Computers, bis du ihn vergisst.</string>
+    <string name="pairing_confirm_action">Koppeln</string>
+
+    <string name="refusal_unauthorized">Dieses Telefon darf auf dem Computer nicht mehr verbinden. Koppele es erneut.</string>
+    <string name="refusal_pairing_failed">Der Kopplungscode ist falsch, schon benutzt oder abgelaufen. Erstelle in Yaca einen neuen Code und scanne ihn erneut.</string>
+    <string name="refusal_protocol_mismatch">Der Computer spricht Protokoll %1$d, diese App %2$d. Aktualisiere eines von beiden.</string>
+    <string name="refusal_too_many_attempts">Zu viele fehlgeschlagene Versuche aus diesem Netzwerk. Versuche es später erneut.</string>
+    <string name="refusal_handshake_expected">Der Computer hat die Verbindung vor dem Handshake geschlossen. Versuche es erneut.</string>
+</resources>

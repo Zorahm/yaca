@@ -16,12 +16,15 @@
  * settings window exists — an interim step recorded in §16.
  */
 
+import { List } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 
 import {
   chooseFiles,
+  enabledPlugins,
   hasFileDialogs,
   projectStartup,
+  rememberStartup,
   userName,
   type ModelInfo,
   type Startup,
@@ -41,6 +44,7 @@ export function Home({
   onStart,
   onPickProject,
   onOpenSettings,
+  onMenu,
 }: {
   models: ModelInfo[];
   /** The project's slash commands §7.3 — the same composer, the same menu. */
@@ -60,6 +64,8 @@ export function Home({
   onPickProject: () => void;
   /** The "Set up a provider" button leads to the settings window §10. */
   onOpenSettings: () => void;
+  /** Opens the drawer the sidebar is in a narrow window; absent where it is a column. */
+  onMenu?: () => void;
 }) {
   const [name, setName] = useState<string | null>(null);
   const [startup, setStartup] = useState<Startup | null>(null);
@@ -75,8 +81,9 @@ export function Home({
   // not after a restart.
   const configured = models.length > 0;
 
-  // What the project itself would start with (§10) is the base the composer
-  // shows; the human overrides it below, before the first word. With no
+  // What the project itself would start with (§10), under the last pick made
+  // here, is the base the composer shows; the human overrides it below,
+  // before the first word. With no
   // provider configured the shell refuses, and the composer stays shut with
   // the reason above it.
   useEffect(() => {
@@ -108,8 +115,12 @@ export function Home({
     bypass: false,
   };
 
+  // A pick is remembered for the next new chat, in this project or another.
   function change(patch: Partial<Startup>) {
-    setStartup((now) => (now === null ? now : { ...now, ...patch }));
+    if (startup === null) return;
+    const next = { ...startup, ...patch };
+    setStartup(next);
+    rememberStartup(next).catch((e: unknown) => console.error("could not remember the pick", e));
   }
 
   const actions: ComposerActions = {
@@ -133,6 +144,9 @@ export function Home({
           return picked.map((path) => relativeTo(project, path));
         }
       : undefined,
+    // Plugins do not need a session: what a new chat will load is already known.
+    // MCP servers do, and there is no row for them on this screen.
+    listPlugins: hasFileDialogs ? enabledPlugins : undefined,
     ...imageActions(project),
     // §7.3: `/compact` and `/clear` are about the conversation in progress, and
     // there is none here yet. Project commands work: the core expands them, and the
@@ -144,7 +158,14 @@ export function Home({
 
   return (
     <div className="home">
-      <header className="home-top">{t("side.new")}</header>
+      <header className="home-top">
+        {onMenu && (
+          <button className="top-icon" onClick={onMenu} aria-label={t("side.toggle")}>
+            <List size={20} />
+          </button>
+        )}
+        {t("side.new")}
+      </header>
 
       <div className="home-body">
         <div className="home-wrap">

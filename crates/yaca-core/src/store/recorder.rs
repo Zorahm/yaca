@@ -91,13 +91,18 @@ impl Recorder {
         }
     }
 
-    /// What the human typed. The title comes from the first one (§3).
+    /// What the human typed. The title comes from the first one (§3), and is
+    /// written down at once: a first turn that never ends — the window closed
+    /// mid-turn — would otherwise leave the session in the list unnamed.
     pub fn prompt(&self, turn: &TurnId, text: &str) {
         self.messages.append(&Record::Prompt {
             turn: turn.clone(),
             text: text.to_string(),
         });
-        self.meta.lock().unwrap().title_from_message(text);
+        let named = self.meta.lock().unwrap().title_from_message(text);
+        if named {
+            self.flush();
+        }
     }
 
     /// §9: a name typed by hand, for the session while it runs. Written down at
@@ -252,6 +257,25 @@ mod tests {
         assert_eq!(saved.cost_usd, 0.31);
         assert_eq!(saved.tokens.input, 100);
         assert_eq!(saved.updated_at, TsMillis(1_700_000_000_000));
+    }
+
+    /// A window closed mid-turn sends no `TurnFinished`: the names the
+    /// session got before that must already be on disk.
+    #[test]
+    fn a_title_is_on_disk_before_the_turn_ends() {
+        let dir = TempDir::new();
+        let r = recorder(&dir);
+        let id = r.meta().id;
+
+        r.prompt(&TurnId::from("t1"), "fix date parsing\nhere is trace");
+        assert_eq!(SessionMeta::load(dir.path(), &id).unwrap().title, "fix date parsing");
+
+        r.event(&AgentEvent::TitleSet {
+            title: "Log date parsing".into(),
+        });
+        let saved = SessionMeta::load(dir.path(), &id).unwrap();
+        assert_eq!(saved.title, "Log date parsing");
+        assert!(saved.title_by_model);
     }
 
     #[test]

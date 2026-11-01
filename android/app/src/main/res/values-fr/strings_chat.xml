@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_menu_processes">Processus</string>
+    <string name="chat_menu_checkpoints">Points de contrôle</string>
+    <string name="chat_menu_compact">Compacter l’historique</string>
+    <string name="chat_menu_close">Fermer le chat</string>
+    <string name="chat_state_working">En cours</string>
+    <string name="chat_state_idle">Inactif</string>
+    <string name="chat_state_waiting">En attente de vous</string>
+    <string name="chat_subtitle">%1$s · %2$s</string>
+    <string name="chat_close_title">Fermer ce chat ?</string>
+    <string name="chat_close_body">La fermeture arrête le tour sur l’ordinateur pour tous ceux qui voient ce chat.</string>
+    <string name="chat_close_confirm">Fermer le chat</string>
+    <string name="chat_compact_title">Compacter l’historique ?</string>
+    <string name="chat_compact_body">L’agent résume la conversation pour libérer du contexte. Le résumé remplace les messages sur lesquels il travaille.</string>
+    <string name="chat_compact_confirm">Compacter</string>
+    <string name="chat_empty">Envoyez un message pour commencer le travail.</string>
+    <string name="chat_list_separator">, </string>
+    <string name="chat_reasoning">Raisonnement</string>
+    <string name="chat_working">En cours…</string>
+    <string name="chat_working_for">En cours depuis %1$s</string>
+    <string name="chat_work_with_failed">%1$s (%2$s)</string>
+
+    <string name="checkpoint_before_message">Avant votre message</string>
+    <string name="checkpoint_before_command">Avant %1$s</string>
+    <string name="checkpoint_after_restore">Après une restauration</string>
+    <string name="checkpoint_line">Point de contrôle, %1$s : %2$s</string>
+    <string name="restored_line">Restauré : %1$s</string>
+    <string name="stopped_line">Arrêté</string>
+    <string name="turn_time">Travail de %1$s</string>
+
+    <string name="compacted_title">Historique compacté</string>
+    <string name="compacted_freed">%1$s jetons libérés</string>
+    <string name="compacted_summary">Résumé</string>
+    <string name="plan_title">Plan</string>
+    <string name="plan_progress">%1$d sur %2$d</string>
+    <string name="plan_item_done">Terminé</string>
+    <string name="plan_item_running">En cours</string>
+    <string name="plan_item_pending">Pas commencé</string>
+    <string name="plan_proposed">Plan proposé</string>
+
+    <string name="error_title">Erreur</string>
+    <string name="error_retry_hint">Vous pouvez réessayer.</string>
+    <string name="retry_line">Nouvelle tentative %1$d sur %2$d dans %3$s</string>
+    <string name="route_default">%1$s · %2$s</string>
+    <string name="route_named">%1$s : %2$s · %3$s</string>
+    <string name="hook_line">%1$s · %2$s</string>
+    <string name="hook_blocked">Bloqué</string>
+    <string name="shown_command">Commande : %1$s</string>
+    <string name="shown_range">Lignes %1$d à %2$d sur %3$d</string>
+    <string name="duration_sec">%1$d s</string>
+    <string name="duration_min_sec">%1$d min %2$d s</string>
+
+    <string name="queued_title">En file après ce tour</string>
+    <string name="queued_cancel_desc">Annuler le message en file d’attente</string>
+
+    <string name="row_status_running">En cours</string>
+    <string name="row_status_done">Terminé</string>
+    <string name="row_status_failed">Échec</string>
+    <string name="row_status_rejected">Refusé</string>
+    <string name="row_status_denied">Refusé</string>
+    <string name="row_status_stopped">Arrêté</string>
+    <string name="row_no_output">Aucune sortie</string>
+    <string name="row_output_cut">La sortie a été coupée</string>
+    <string name="row_pictures">Images</string>
+    <string name="row_open_diff">Ouvrir les modifications</string>
+    <string name="row_open_file">Ouvrir le fichier</string>
+    <string name="row_added">+%1$d</string>
+    <string name="row_removed">−%1$d</string>
+    <string name="row_cancelled">Annulé</string>
+    <string name="row_failed">Échec</string>
+    <string name="row_edit_failed">Impossible de modifier %1$s</string>
+    <string name="row_denied">Refusé</string>
+    <string name="row_denied_because">Refusé : %1$s</string>
+    <string name="row_rejected">Refusé : %1$s</string>
+    <string name="row_stopped">Arrêté</string>
+    <string name="file_reading">Lecture de %1$s</string>
+    <string name="file_creating">Création de %1$s</string>
+    <string name="file_changing">Modification de %1$s</string>
+    <string name="file_deleting">Suppression de %1$s</string>
+    <string name="file_read">%1$s lu</string>
+    <string name="file_created">%1$s créé</string>
+    <string name="file_modified">%1$s modifié</string>
+    <string name="file_deleted">%1$s supprimé</string>
+    <string name="file_moved">%1$s déplacé vers %2$s</string>
+    <string name="file_dir_deleted">Dossier %1$s supprimé</string>
+
+    <string name="agents_untitled">Sous-agent</string>
+    <string name="agents_tokens">%1$s jetons</string>
+    <string name="agents_no_report">Pas encore de rapport</string>
+
+    <string name="composer_placeholder">Message à l’agent</string>
+    <string name="composer_placeholder_busy">Mettre un message en file d’attente…</string>
+    <string name="composer_send">Envoyer</string>
+    <string name="composer_queue">Mettre en file d’attente</string>
+    <string name="composer_stop">Arrêter le tour</string>
+    <string name="composer_mention">Mentionner un fichier</string>
+    <string name="composer_remove">Retirer %1$s</string>
+    <string name="mode_plan">Plan</string>
+    <string name="mode_manual">Manuel</string>
+    <string name="mode_auto">Auto</string>
+    <string name="mode_edits">Modifications</string>
+    <string name="effort_low">Faible</string>
+    <string name="effort_medium">Moyen</string>
+    <string name="effort_high">Élevé</string>
+    <string name="effort_extra">Très élevé</string>
+    <string name="effort_max">Maximum</string>
+    <string name="model_none">Aucun modèle n’est encore disponible sur cet ordinateur.</string>
+    <string name="model_context">Contexte %1$s jetons</string>
+    <string name="context_used">Contexte : %1$s sur %2$s jetons utilisés</string>
+    <string name="context_unknown">Taille du contexte inconnue</string>
+
+    <string name="permission_kicker">L’agent demande l’accès</string>
+    <string name="permission_position">%1$d sur %2$d</string>
+    <string name="permission_why">Pourquoi : %1$s</string>
+    <string name="permission_server">Serveur d’outils : %1$s</string>
+    <string name="permission_unsaved">L’annulation ne restaurera pas %1$d fichiers et %2$d dossiers.</string>
+    <string name="permission_scope_once">Cette fois seulement</string>
+    <string name="permission_scope_once_hint">N’autorise que cette demande</string>
+    <string name="permission_allow">Autoriser</string>
+    <string name="permission_deny">Refuser</string>
+    <string name="permission_block_review">Examiner</string>
+    <string name="scope_always">Toujours : %1$s</string>
+    <string name="scope_tool">Tous les appels à %1$s</string>
+    <string name="scope_directory">Tout dans %1$s</string>
+    <string name="scope_command_prefix">Commandes commençant par %1$s</string>
+    <string name="scope_domain">Tout depuis %1$s</string>
+    <string name="scope_mcp_server">Tous les appels à %1$s</string>
+    <string name="kind_run_command">Exécuter une commande</string>
+    <string name="kind_delete_file">Supprimer un fichier</string>
+    <string name="kind_delete_directory">Supprimer un dossier</string>
+    <string name="kind_move_file">Déplacer un fichier</string>
+    <string name="kind_edit_file">Modifier un fichier</string>
+    <string name="kind_fetch_url">Ouvrir une page web</string>
+    <string name="kind_mcp_write">Modifier des données sur un serveur d’outils</string>
+    <string name="invariant_git_commit">Commit dans git. Toujours demandé, jamais retenu.</string>
+    <string name="invariant_git_push">Pousser vers un dépôt distant. Toujours demandé, jamais retenu.</string>
+    <string name="invariant_git_unresolved">git a des conflits non résolus. Toujours demandé.</string>
+    <string name="invariant_git_config">Modifier les réglages de git. Toujours demandé.</string>
+
+    <string name="question_block_title">Question de l’agent</string>
+    <string name="question_answer_action">Répondre</string>
+    <string name="question_answered">Répondue : %1$s</string>
+    <string name="question_skipped">Passée</string>
+    <string name="question_unanswered">Sans réponse</string>
+    <string name="question_skip">Passer</string>
+    <string name="question_submit">Répondre</string>
+    <string name="question_other">Autre…</string>
+    <string name="question_other_hint">Décrivez votre propre réponse</string>
+    <string name="question_pick_many">Choisissez une ou plusieurs options</string>
+
+    <string name="elicit_title">Formulaire de %1$s</string>
+    <string name="elicit_block_title">Formulaire de %1$s</string>
+    <string name="elicit_review">Examiner</string>
+    <string name="elicit_sent">Envoyé</string>
+    <string name="elicit_declined">Refusé</string>
+    <string name="elicit_cancelled">Annulé</string>
+    <string name="elicit_expired">Expiré</string>
+    <string name="elicit_decline">Refuser</string>
+    <string name="elicit_cancel">Annuler</string>
+    <string name="elicit_submit">Envoyer</string>
+    <string name="elicit_optional">Facultatif</string>
+    <string name="elicit_required_error">Ce champ est obligatoire</string>
+    <string name="elicit_bad_number">Saisissez un nombre</string>
+    <string name="elicit_bad_integer">Saisissez un nombre entier</string>
+
+    <plurals name="files_count">
+        <item quantity="one">%d fichier</item>
+        <item quantity="other">%d fichiers</item>
+    </plurals>
+    <plurals name="lines_more">
+        <item quantity="one">%d ligne de plus</item>
+        <item quantity="other">%d lignes de plus</item>
+    </plurals>
+    <plurals name="agents_title">
+        <item quantity="one">%d sous-agent</item>
+        <item quantity="other">%d sous-agents</item>
+    </plurals>
+    <plurals name="agents_running">
+        <item quantity="one">%d en cours</item>
+        <item quantity="other">%d en cours</item>
+    </plurals>
+    <plurals name="work_read">
+        <item quantity="one">%d fichier lu</item>
+        <item quantity="other">%d fichiers lus</item>
+    </plurals>
+    <plurals name="work_created">
+        <item quantity="one">%d fichier créé</item>
+        <item quantity="other">%d fichiers créés</item>
+    </plurals>
+    <plurals name="work_modified">
+        <item quantity="one">%d fichier modifié</item>
+        <item quantity="other">%d fichiers modifiés</item>
+    </plurals>
+    <plurals name="work_deleted">
+        <item quantity="one">%d fichier supprimé</item>
+        <item quantity="other">%d fichiers supprimés</item>
+    </plurals>
+    <plurals name="work_commands">
+        <item quantity="one">%d commande exécutée</item>
+        <item quantity="other">%d commandes exécutées</item>
+    </plurals>
+    <plurals name="work_tools">
+        <item quantity="one">%d outil appelé</item>
+        <item quantity="other">%d outils appelés</item>
+    </plurals>
+    <plurals name="work_failed">
+        <item quantity="one">%d échec</item>
+        <item quantity="other">%d échecs</item>
+    </plurals>
+</resources>

@@ -88,6 +88,22 @@ pub async fn save_provider(app: tauri::AppHandle, spec: ProviderSpec) -> Result<
     Ok(asked)
 }
 
+/// Asks a provider in the list for its models and writes the answer down: the
+/// "Ask" button on a row that has none yet. The list goes back either way, and
+/// a refusal is said beside it rather than failing the command — the provider
+/// is still there, only unasked.
+#[tauri::command]
+pub async fn ask_provider(app: tauri::AppHandle, id: String) -> Result<Asked, String> {
+    let dir = config_dir()?;
+    let providers = Providers::load(&dir).map_err(|e| e.to_string())?;
+    if providers.get(&id).is_none() {
+        return Err(format!("provider \"{id}\" is not in the list"));
+    }
+    let asked = ask(&dir, providers, &id).await;
+    announce(&app);
+    Ok(asked)
+}
+
 #[tauri::command]
 pub fn delete_provider(app: tauri::AppHandle, id: String) -> Result<Providers, String> {
     let dir = config_dir()?;

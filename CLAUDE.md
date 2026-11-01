@@ -15,10 +15,13 @@ crates/yaca-core/    headless core: agent loop, tools, permissions, checkpoints,
                      model router, MCP, LSP, plugins, skills, hooks, store
 crates/yaca-cli/     CLI over the core (anything the core does must run from here)
 crates/yaca-evals/   agent evaluation benchmarks
+crates/yaca-remote/  the phone client's server (TLS + WebSocket), hosted by the shell and `yaca serve`
 src-tauri/           Tauri shell: bridge, prefs, settings, providers, browser pane
 src/core/            frontend client, event reducer (feed.ts), generated bindings
 src/ui/              React components and CSS; tokens live in src/ui/tokens.css
 src/i18n/            dictionaries: ru (source of keys), en, de, es, fr, ja, ko, pt, zh
+android/core/        Android client core, plain Kotlin/JVM: wire types, feed reducer, connection
+android/app/         Android app (Compose, Material 3); strings in res/values*/strings_*.xml
 DESIGN.md PRODUCT.md visual system and product intent (kept in sync with the code)
 TODO.md              open questions that wait for a human decision
 ```
@@ -33,6 +36,7 @@ cargo test --workspace --no-fail-fast    # also regenerates src/core/bindings/
 cargo clippy --workspace --all-targets   # must be warning-free
 npm run tauri dev                        # dev window (starts vite via beforeDevCommand + core + Tauri)
 npx tauri build --bundles nsis           # Windows installer -> target/release/bundle/nsis/
+cd android && ./gradlew -p core test     # Android core, no SDK needed (GRADLE_USER_HOME on D: here)
 ```
 
 - `src/core/bindings/*.ts` is generated from Rust by `ts-rs` during `cargo test`.
@@ -98,7 +102,8 @@ npx tauri build --bundles nsis           # Windows installer -> target/release/b
 
 Read `DESIGN.md` before touching UI. Short version: "graphite and teal" in
 `src/ui/tokens.css`; use tokens, never raw colours; one accent (teal) for what is
-yours or needs you; motion only as state pulses; density is a principle. The
+yours or needs you; motion only as state pulses and short layer transitions;
+density is a principle; hover is never the only way to a control. The
 theme values in code are `paper` (light, default), `night` (dark) and `system`;
 these are legacy names, do not rename them without a data migration.
 

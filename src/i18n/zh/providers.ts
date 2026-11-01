@@ -46,7 +46,7 @@ export const providers = {
 
   "prov.form_models": "模型",
   "prov.form_models_hint":
-    "列表由提供商自身提供：保存密钥后会立即查询，点击“查询”则再次查询。提供商返回什么，就与之通信；价格以每百万 tokens 的美元数计，0 表示免费或未知。",
+    "列表由提供商自身提供：保存密钥后会立即查询，地址、协议或请求头改变时会再次查询；点击“查询”则再查一次。新的回答到达之前，仍显示原来的列表。提供商返回什么，就与之通信；价格以每百万 tokens 的美元数计，0 表示免费或未知。",
   "prov.form_model_context": "上下文，tokens",
   "prov.form_model_output": "最大输出，tokens",
   "prov.form_model_effort": "支持强度调节",
@@ -61,6 +61,7 @@ export const providers = {
 
   "prov.saved_unasked":
     "“{name}”已保存，但未返回模型列表：{error}",
+  "prov.ask_failed": "“{name}”未返回模型列表：{error}",
   "prov.error_name": "请填写名称",
   "prov.error_url": "请填写基础 URL",
   "prov.error_header_name": "第 {n} 个请求头没有名称",

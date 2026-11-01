@@ -57,7 +57,7 @@ impl Provider for AnthropicProvider {
             .json(&body::build_body(&req))
             .send()
             .await
-            .map_err(|e| ProviderError::Network(e.to_string()))?;
+            .map_err(http::network_error)?;
 
         let resp = http::check_status(resp, &self.spec, self.key.as_deref()).await?;
         Ok(http::pump(resp, events::Decoder::default()))

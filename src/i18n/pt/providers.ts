@@ -46,7 +46,7 @@ export const providers = {
 
   "prov.form_models": "Modelos",
   "prov.form_models_hint":
-    "A lista vem do próprio provedor: ele é consultado assim que a chave é salva, e “Consultar” pergunta de novo. Com o que ele responder é que Yaca conversa; o preço é em dólares por milhão de tokens, e zero significa “gratuito ou desconhecido”.",
+    "A lista vem do próprio provedor: ele é consultado assim que a chave é salva, e de novo quando o endereço, o protocolo ou os cabeçalhos mudam; “Consultar” pergunta mais uma vez. Até a resposta chegar, a lista anterior continua visível. Com o que ele responder é que Yaca conversa; o preço é em dólares por milhão de tokens, e zero significa “gratuito ou desconhecido”.",
   "prov.form_model_context": "Contexto, tokens",
   "prov.form_model_output": "Saída máx., tokens",
   "prov.form_model_effort": "suporta esforço",
@@ -61,6 +61,7 @@ export const providers = {
 
   "prov.saved_unasked":
     "“{name}” foi salvo, mas não respondeu com a lista de modelos: {error}",
+  "prov.ask_failed": "“{name}” não respondeu com a lista de modelos: {error}",
   "prov.error_name": "Informe o nome do provedor",
   "prov.error_url": "Informe a URL base do provedor",
   "prov.error_header_name": "O cabeçalho {n} não tem nome",

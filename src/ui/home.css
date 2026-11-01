@@ -10,6 +10,7 @@
 .home-top {
   display: flex;
   align-items: center;
+  gap: 6px;
   padding: 0 18px;
   border-bottom: 1px solid var(--line);
   color: var(--muted);
@@ -109,4 +110,31 @@
   color: var(--err);
   font: 400 12.5px var(--mono);
   user-select: text;
+}
+
+/* --- narrow window --------------------------------------------------------- */
+
+/* `NARROW` in resize.ts. The greeting a step down: at 30 px it took two
+   lines of a phone and pushed the composer under the keyboard. */
+@media (max-width: 679.98px) {
+  .home-top {
+    padding: 0 6px;
+  }
+
+  .home-body {
+    align-items: flex-start;
+    padding: 28px 16px max(16px, env(safe-area-inset-bottom));
+  }
+
+  .home-wrap {
+    gap: 18px;
+  }
+
+  .home-greeting h1 {
+    font-size: 24px;
+  }
+
+  .home-lead {
+    font-size: 14px;
+  }
 }

@@ -471,8 +471,9 @@ impl Worker {
         Some(ContentBlock::Text { text })
     }
 
-    /// Something the human said: the point to come back to, the card in the
-    /// feed, the line in the journal, and the message the model reads.
+    /// Something the human said, once its card is in the feed
+    /// ([`Worker::hear_checked`]): the point to come back to, the line in the
+    /// journal, and the message the model reads.
     ///
     /// The same whether it opens a turn or joins a running one (§7.4): each
     /// message gets its own point, and `Esc Esc` means "back to before the
@@ -480,18 +481,9 @@ impl Worker {
     pub(super) async fn hear(&self, turn_id: &TurnId, text: String, attachments: Vec<String>) -> Message {
         // §13, `Esc Esc`: "roll back to the previous message". The point has
         // to exist before the turn touches anything, and §5.1 hangs its
-        // "roll back to before this message" on the same one.
+        // "roll back to before this message" on the same one. It follows the
+        // card in the stream; the feed draws it above the card all the same.
         checkpoints::create(&self.shared, CheckpointReason::Message).await;
-
-        // §5.1, ahead of §15's `TurnStarted` when the message opens a turn:
-        // the card the human sees comes from the stream like everything else,
-        // so a session replayed from its journal shows the question and not
-        // only the answer.
-        self.emit(AgentEvent::UserMessage {
-            turn_id: turn_id.clone(),
-            text: text.clone(),
-            attachments: attachments.clone(),
-        });
 
         // §9: what the human typed, before attachments are folded in. The
         // title comes from here, and so does the text §9 searches.
@@ -727,7 +719,7 @@ impl Worker {
                 "used its whole output budget on reasoning and wrote no answer"
             }
             StopReason::Refusal => "refused and wrote nothing",
-            _ => "ended its turn after reasoning, with no answer and no tool call",
+            _ => "ended its turn with no answer and no tool call",
         };
         self.emit(AgentEvent::Error {
             code: "empty_answer".to_string(),

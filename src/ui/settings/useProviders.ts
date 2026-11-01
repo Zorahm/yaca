@@ -8,7 +8,8 @@
  * an empty list would claim "no providers" while the truth is that the file
  * did not parse (§0).
  *
- * A save also asks a provider that has no models yet (`save_provider`). Its
+ * A save also asks a provider that has no models yet (`save_provider`), and so
+ * does a row's own "Ask" (`ask_provider`). Its
  * refusal is not the save failing — the provider is in the file — so the save
  * reports success and the refusal is shown above the list, where the row it
  * is about says "not asked yet".
@@ -79,5 +80,21 @@ export function useProviders() {
   }, []);
   const remove = useCallback((id: string) => run(() => api.remove(id)), [run]);
 
-  return { providers: data, error, save, remove };
+  // The row's own "Ask": the provider is polled where it is listed, and its
+  // refusal is said above the list, like a refusal after a save.
+  const ask = useCallback(async (spec: ProviderSpec): Promise<void> => {
+    try {
+      const asked = await api.ask(spec.id);
+      setData(asked.providers);
+      setError(
+        asked.pollError === null
+          ? null
+          : t("prov.ask_failed", { name: spec.displayName, error: asked.pollError }),
+      );
+    } catch (e) {
+      setError(String(e));
+    }
+  }, []);
+
+  return { providers: data, error, save, remove, ask };
 }

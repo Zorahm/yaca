@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="hosts_title">コンピューター</string>
+    <string name="hosts_pair_action">コンピューターをペアリング</string>
+    <string name="hosts_section_paired">ペアリング済み</string>
+    <string name="hosts_empty">ペアリング済みのコンピューターはまだありません。ペアリングすると、プロジェクトとチャットが表示されます。</string>
+    <string name="hosts_pair_another">別のコンピューターをペアリング</string>
+    <string name="hosts_note">スマートフォンはペアリング済みのコンピューターからのイベントだけを受け取ります。ペアリングはコンピューター側で取り消せます。</string>
+    <string name="hosts_pair_again">もう一度ペアリング</string>
+    <string name="hosts_forget">コンピューターを忘れる</string>
+    <string name="hosts_forget_title">%1$s を忘れますか？</string>
+    <string name="hosts_forget_body">スマートフォンからこのコンピューターの認証情報が削除されます。再び使うには、ペアリングし直してください。</string>
+    <string name="hosts_forget_confirm">忘れる</string>
+
+    <string name="host_section_running">実行中</string>
+    <string name="host_section_projects">プロジェクト</string>
+    <string name="host_new_chat">新しいチャット</string>
+    <string name="host_pick_project">プロジェクトを選択</string>
+    <string name="host_no_projects">このコンピューターにはまだプロジェクトがありません</string>
+    <string name="host_projects_unavailable">現在プロジェクトを表示できません。</string>
+    <string name="host_no_chats">このプロジェクトにはまだチャットがありません</string>
+    <string name="host_chats_unavailable">プロジェクトのチャットを読み込めませんでした。</string>
+    <string name="host_working">作業中</string>
+    <string name="host_expand">チャットを表示</string>
+    <string name="host_collapse">チャットを隠す</string>
+    <string name="host_opening">チャットを開いています…</string>
+    <plurals name="host_project_chats">
+        <item quantity="other">%d 件のチャット</item>
+    </plurals>
+</resources>

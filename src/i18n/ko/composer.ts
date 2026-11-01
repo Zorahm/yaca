@@ -62,6 +62,8 @@ export const composer = {
   "composer.stop": "중지",
   "composer.attach": "파일 첨부",
   "composer.detach": "제거",
+  "composer.add": "추가",
+  "composer.add_back": "뒤로",
   "attachment.gone": "{path} — 파일이 더 이상 없습니다",
   "composer.queued": "대기 중",
   "composer.queued_cancel": "취소",

@@ -293,8 +293,8 @@ impl Worker {
         }
     }
 
-    /// `UserPromptSubmit`, then [`Worker::hear`]. `None` when a hook kept the
-    /// message from the model; the human has been told why.
+    /// The card, `UserPromptSubmit`, then [`Worker::hear`]. `None` when a hook
+    /// kept the message from the model; the human has been told why.
     pub(super) async fn hear_checked(
         &self,
         turn_id: &TurnId,
@@ -302,6 +302,20 @@ impl Worker {
         attachments: Vec<String>,
         cancel: &CancellationToken,
     ) -> Option<Message> {
+        // §5.1, ahead of the hooks, the snapshot and §15's `TurnStarted`: the
+        // card is the human's message taken, and the session is already busy
+        // with it. Hooks run processes and the first snapshot of a big tree
+        // takes seconds, and a feed that stays empty that long under a live
+        // stop button looks like the message was lost. It also comes from the
+        // stream like everything else, so a session replayed from its journal
+        // shows the question and not only the answer — and a message a hook
+        // refuses still has its card for the reason to stand under.
+        self.emit(AgentEvent::UserMessage {
+            turn_id: turn_id.clone(),
+            text: text.clone(),
+            attachments: attachments.clone(),
+        });
+
         let mut context = Vec::new();
         let project = self
             .shared
@@ -317,11 +331,6 @@ impl Worker {
                 continue;
             }
             // Fails closed: a check that could not run keeps the message too.
-            self.emit(AgentEvent::UserMessage {
-                turn_id: turn_id.clone(),
-                text,
-                attachments,
-            });
             let why = said.failure_for_human().unwrap_or_default();
             self.shared.report(PROJECT, HookEvent::UserPromptSubmit, why, true);
             return None;
@@ -336,13 +345,6 @@ impl Worker {
                     self.shared.report(&plugin, HookEvent::UserPromptSubmit, notice, false);
                 }
                 if let Some(reason) = verdict.block {
-                    // The card the human sent still appears, so the line about
-                    // why it went nowhere has something to stand under.
-                    self.emit(AgentEvent::UserMessage {
-                        turn_id: turn_id.clone(),
-                        text,
-                        attachments,
-                    });
                     self.shared.report(&plugin, HookEvent::UserPromptSubmit, reason, true);
                     return None;
                 }

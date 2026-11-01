@@ -641,8 +641,39 @@ describe("queue and file search (§7.4, §7.2)", () => {
 describe("turn time", () => {
   const begin: AgentEvent = { type: "turnStarted", turnId: "t1", at: 1_000 };
 
+  it("reports a silent completion from an older journal before its time line", () => {
+    const done = run(begin, { type: "turnFinished", turnId: "t1", stopReason: "endTurn", at: 5_000 });
+    expect(done.blocks.map((b) => b.kind)).toEqual(["error", "turnTime"]);
+    expect(done.blocks[0]).toMatchObject({ code: "response_missing", retryable: true });
+  });
+
+  it("reports failure even after partial text, without inventing its cause", () => {
+    const done = run(begin, wrote("b1", "partial"), {
+      type: "turnFinished", turnId: "t1", stopReason: "failed", at: 5_000,
+    });
+    expect(done.blocks[1]).toMatchObject({ kind: "error", code: "turn_failed", message: "" });
+  });
+
+  it("preserves the core error without a second fallback error", () => {
+    const done = run(begin, { type: "error", code: "network", message: "connection reset", retryable: true }, {
+      type: "turnFinished", turnId: "t1", stopReason: "failed", at: 5_000,
+    });
+    expect(done.blocks.filter((b) => b.kind === "error")).toMatchObject([
+      { code: "network", message: "connection reset" },
+    ]);
+  });
+
+  it("does not let an earlier answer or error hide a later silent turn", () => {
+    const done = run(begin, wrote("b1", "answer"), {
+      type: "turnFinished", turnId: "t1", stopReason: "endTurn", at: 5_000,
+    }, { ...begin, turnId: "t2", at: 6_000 }, wrote("b2", "  \n"), {
+      type: "turnFinished", turnId: "t2", stopReason: "endTurn", at: 7_000,
+    });
+    expect(done.blocks.filter((b) => b.kind === "error")).toMatchObject([{ code: "response_missing" }]);
+  });
+
   it("a running turn carries its start time, a finished one clears it", () => {
-    expect(run(begin).turn).toEqual({ startedAt: 1_000 });
+    expect(run(begin).turn).toEqual({ startedAt: 1_000, blockStart: 0 });
     const done = run(begin, { type: "turnFinished", turnId: "t1", stopReason: "endTurn", at: 5_000 });
     expect(done.turn).toBeNull();
   });
@@ -706,6 +737,43 @@ describe("plugin hooks in the feed", () => {
     expect(feed.blocks.map((b) => b.kind)).toEqual(["human", "hook"]);
     const hook = feed.blocks[1];
     expect(hook.kind === "hook" && hook.blocked && hook.text).toBe("not today");
+  });
+});
+
+describe("the point taken for a message", () => {
+  const point = (reason: "message" | "rollback" = "message"): AgentEvent => ({
+    type: "checkpointCreated",
+    checkpoint: { id: `ckpt_${reason}`, at: 1, reason: { type: reason }, tracked: 3 },
+  });
+  const note = (blocked: boolean): AgentEvent => ({
+    type: "hookReported",
+    plugin: "tools",
+    event: "UserPromptSubmit",
+    text: "noted",
+    blocked,
+  });
+  const kinds = (feed: Feed) => feed.blocks.map((b) => b.kind);
+
+  it("stands above the card it follows in the stream", () => {
+    expect(kinds(run(said("one"), point()))).toEqual(["checkpoint", "human"]);
+  });
+
+  it("stands above the card past the notes of the prompt hooks", () => {
+    expect(kinds(run(said("one"), note(false), point()))).toEqual(["checkpoint", "human", "hook"]);
+  });
+
+  it("stays where it is in a journal written point first", () => {
+    const feed = run(point(), said("one"), wrote("b1", "done"), point(), said("two"));
+    expect(kinds(feed)).toEqual(["checkpoint", "human", "agent", "checkpoint", "human"]);
+  });
+
+  it("does not climb over a message a hook refused", () => {
+    const feed = run(said("deploy"), note(true), point(), said("two"));
+    expect(kinds(feed)).toEqual(["human", "hook", "checkpoint", "human"]);
+  });
+
+  it("leaves points of other reasons where they come", () => {
+    expect(kinds(run(said("one"), point("rollback")))).toEqual(["human", "checkpoint"]);
   });
 });
 

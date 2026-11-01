@@ -61,7 +61,7 @@ pub enum ProcessState {
 pub struct ProcessSummary {
     pub id: ProcessId,
     pub command: String,
-    /// Working directory, relative to the project root.
+    /// Working directory, relative to the project root or absolute outside it.
     pub cwd: String,
     pub state: ProcessState,
     pub started_at: TsMillis,
@@ -619,7 +619,7 @@ pub fn display_cwd(root: &Path, cwd: &Path) -> String {
     match cwd.strip_prefix(root) {
         Ok(rel) if rel.as_os_str().is_empty() => ".".to_string(),
         Ok(rel) => rel.to_string_lossy().replace('\\', "/"),
-        Err(_) => cwd.to_string_lossy().replace('\\', "/"),
+        Err(_) => crate::workspace::roots::plain(cwd),
     }
 }
 

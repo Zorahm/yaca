@@ -81,12 +81,14 @@ async fn text_response_yields_exact_expected_stream() {
         names(&events),
         vec![
             "stateChanged", // the ring started spinning
+            // §5.1: the stream draws the human's message card, not the
+            // interface, and it draws it first — the snapshot below can take
+            // seconds.
+            "userMessage",
             // §5.8: the point is taken before the turn touches anything —
             // that is what `Esc Esc` returns to (§13).
             "checkpointCreated",
             "checkpointsUpdated",
-            // §5.1: the stream draws the human's message card, not the interface.
-            "userMessage",
             "turnStarted",
             "textDelta",
             "usageUpdated",
@@ -129,10 +131,9 @@ async fn tool_call_completes_roundtrip_and_caption_does_not_go_to_model() {
         names(&events),
         vec![
             "stateChanged",
+            "userMessage",
             "checkpointCreated",
             "checkpointsUpdated",
-            // §5.1: the stream draws the human's message card, not the interface.
-            "userMessage",
             "turnStarted",
             "usageUpdated",
             "toolCallStarted",
@@ -272,10 +273,9 @@ async fn provider_error_clears_ring_rather_than_hanging() {
         names(&events),
         vec![
             "stateChanged",
+            "userMessage",
             "checkpointCreated",
             "checkpointsUpdated",
-            // §5.1: the stream draws the human's message card, not the interface.
-            "userMessage",
             "turnStarted",
             "error",
             "turnFinished",
@@ -325,10 +325,9 @@ async fn rate_limit_retries_and_shows_attempt_count() {
         names(&events),
         vec![
             "stateChanged",
+            "userMessage",
             "checkpointCreated",
             "checkpointsUpdated",
-            // §5.1: the stream draws the human's message card, not the interface.
-            "userMessage",
             "turnStarted",
             "retryScheduled",
             "textDelta",

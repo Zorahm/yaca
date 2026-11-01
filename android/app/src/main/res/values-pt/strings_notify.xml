@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notify_channel_needs_you">Precisa de você</string>
+    <string name="notify_channel_needs_you_desc">Pedidos de permissão, perguntas e formulários de um chat no seu computador que aguardam sua resposta.</string>
+    <string name="notify_channel_turn_finished">Turno concluído</string>
+    <string name="notify_channel_turn_finished_desc">Um chat no seu computador concluiu o turno e aguarda sua próxima mensagem.</string>
+    <string name="notify_channel_connection">Conexão</string>
+    <string name="notify_channel_connection_desc">Mostra a quais computadores o telefone está conectado enquanto o app está em segundo plano.</string>
+
+    <string name="notify_permission_title">O agente pede permissão</string>
+    <string name="notify_question_title">O agente fez uma pergunta</string>
+    <string name="notify_elicitation_title">Um servidor precisa de dados</string>
+    <string name="notify_turn_finished_title">Concluído: %1$s</string>
+    <!-- The chat title and the project, both as the host names them. -->
+    <string name="notify_chat_line">%1$s · %2$s</string>
+    <string name="notify_action_allow_once">Permitir uma vez</string>
+    <string name="notify_action_deny">Negar</string>
+    <string name="notify_action_open">Abrir</string>
+    <string name="notify_answer_failed">Não foi possível enviar sua resposta. Abra o chat para responder.</string>
+
+    <string name="notify_connection_connected">Conectado a %1$s</string>
+    <string name="notify_connection_connecting">Conectando…</string>
+    <string name="notify_connection_disconnect">Desconectar</string>
+
+    <string name="notify_prompt_title">Seja avisado quando o agente precisar de você</string>
+    <string name="notify_prompt_body">Pedidos de permissão e perguntas dos seus chats chegam, com o app fechado, apenas como notificações. Permita-as para responder sem abrir o app.</string>
+    <string name="notify_prompt_allow">Permitir</string>
+    <string name="notify_prompt_later">Agora não</string>
+</resources>

@@ -73,6 +73,21 @@ const SSE_OK: &str = concat!(
 );
 
 #[tokio::test]
+async fn a_truncated_http_body_preserves_the_transport_cause() {
+    let response = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: 1000\r\nConnection: close\r\n\r\n: ping\n\n";
+    let (base, _seen) = serve(response).await;
+    let provider = AnthropicProvider::new(spec(base), None);
+    let mut stream = provider.stream(request()).await.unwrap();
+    let err = tokio::time::timeout(Duration::from_secs(5), stream.next())
+        .await.unwrap().unwrap().unwrap_err();
+    assert!(err.is_retryable());
+    let ProviderError::Network(message) = err else { panic!("expected network error") };
+    assert!(message.contains("body"), "{message}");
+    assert!(message.contains(": "), "transport cause was lost: {message}");
+    assert!(!message.contains("http://"), "{message}");
+}
+
+#[tokio::test]
 async fn stream_passes_through_a_real_socket() {
     let (base, seen) = serve(SSE_OK).await;
     let provider = Arc::new(AnthropicProvider::new(spec(base), Some("sk-test".into())));

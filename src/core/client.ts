@@ -381,6 +381,16 @@ export function projectStartup(path: string): Promise<Startup> {
 }
 
 /**
+ * Remembers the home screen's pick for the next new chat in any project; the
+ * shell lays it over the project's settings in `projectStartup`. The stand has
+ * nowhere to keep it beyond the page.
+ */
+export function rememberStartup(startup: Startup): Promise<void> {
+  if (!inTauri) return Promise.resolve();
+  return invoke<void>("remember_startup", { startup });
+}
+
+/**
  * `resume` continues a recorded session (§9) instead of starting a new one.
  *
  * `startup` is what the home screen composer chose before the first word.
@@ -522,6 +532,11 @@ export function listPlugins(): Promise<PluginReport> {
     : Promise.resolve({ plugins: [], diagnostics: [] });
 }
 
+/** What a new chat loads: the plugins that are switched on. */
+export function enabledPlugins(): Promise<PluginSummary[]> {
+  return listPlugins().then((report) => report.plugins.filter((plugin) => plugin.enabled));
+}
+
 /** The marketplaces plugins are installed from. None in the stand. */
 export function listMarketplaces(): Promise<MarketplaceSummary[]> {
   return inTauri ? invoke<MarketplaceSummary[]>("list_marketplaces") : Promise.resolve([]);
@@ -635,6 +650,11 @@ export const providers = {
     }
     return invoke<Providers>("delete_provider", { id });
   },
+  /** Polls a saved provider and writes its answer down. The stand has no polling. */
+  ask: (id: string): Promise<Asked> =>
+    inTauri
+      ? invoke<Asked>("ask_provider", { id })
+      : Promise.resolve({ providers: demoProviders(), pollError: null }),
 };
 
 /** The command is addressed to a chat: there are several, and a nameless one would not know which. */

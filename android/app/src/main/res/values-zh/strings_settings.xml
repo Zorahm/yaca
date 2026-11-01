@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">设置</string>
+    <string name="settings_section_connection">连接</string>
+    <string name="settings_stay_connected">后台保持连接</string>
+    <string name="settings_stay_connected_desc">应用关闭时保持与电脑的连接，并显示一条常驻通知，让它们的问题能送达你。关闭后，离开应用时连接即断开。</string>
+    <string name="settings_section_notifications">通知</string>
+    <string name="settings_turn_finished">回合结束时通知</string>
+    <string name="settings_turn_finished_desc">聊天完成并等待你时，发出一条静默通知。</string>
+    <string name="settings_system_notifications">通知设置</string>
+    <string name="settings_system_notifications_desc">在 Android 系统设置中调整声音、重要性和屏蔽。</string>
+    <string name="settings_section_appearance">外观</string>
+    <string name="settings_wallpaper_colours">使用壁纸颜色</string>
+    <string name="settings_wallpaper_colours_desc">Material You：颜色随壁纸变化。</string>
+    <string name="settings_section_about">关于</string>
+    <string name="settings_version">版本 %1$s</string>
+</resources>

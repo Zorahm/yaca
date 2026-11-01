@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="hosts_title">Computadores</string>
+    <string name="hosts_pair_action">Parear um computador</string>
+    <string name="hosts_section_paired">Pareados</string>
+    <string name="hosts_empty">Nenhum computador está pareado ainda. Pareie um para ver os projetos e chats dele.</string>
+    <string name="hosts_pair_another">Parear outro computador</string>
+    <string name="hosts_note">O telefone recebe eventos apenas de computadores pareados. O pareamento pode ser revogado no computador.</string>
+    <string name="hosts_pair_again">Parear novamente</string>
+    <string name="hosts_forget">Esquecer computador</string>
+    <string name="hosts_forget_title">Esquecer %1$s?</string>
+    <string name="hosts_forget_body">O telefone apaga as credenciais deste computador. Para usá-lo de novo, pareie-o outra vez.</string>
+    <string name="hosts_forget_confirm">Esquecer</string>
+
+    <string name="host_section_running">Em execução agora</string>
+    <string name="host_section_projects">Projetos</string>
+    <string name="host_new_chat">Novo chat</string>
+    <string name="host_pick_project">Escolha um projeto</string>
+    <string name="host_no_projects">Este computador ainda não tem projetos</string>
+    <string name="host_projects_unavailable">Os projetos não estão disponíveis agora.</string>
+    <string name="host_no_chats">Este projeto ainda não tem chats</string>
+    <string name="host_chats_unavailable">Não foi possível carregar os chats do projeto.</string>
+    <string name="host_working">Trabalhando</string>
+    <string name="host_expand">Mostrar chats</string>
+    <string name="host_collapse">Ocultar chats</string>
+    <string name="host_opening">Abrindo chat…</string>
+    <plurals name="host_project_chats">
+        <item quantity="one">%d chat</item>
+        <item quantity="other">%d chats</item>
+    </plurals>
+</resources>

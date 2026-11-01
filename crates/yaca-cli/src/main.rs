@@ -7,23 +7,21 @@
 
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use yaca_core::event::AgentEvent;
-use yaca_core::mcp::McpStatus;
 use yaca_core::id::SessionId;
+use yaca_core::mcp::McpStatus;
 use yaca_core::process::ProcessState;
-use yaca_core::provider;
-use yaca_core::provider::registry::{self, Providers};
-use yaca_core::provider::Provider;
-use yaca_core::router::{self, ROUTER_ID};
-use yaca_core::secrets;
-use yaca_core::{Command, Effort, Mode, PermissionAnswer, SessionConfig};
+use yaca_core::{Command, Effort, Mode, PermissionAnswer};
+
+use session_config::{session_config, Choice};
 
 mod mcp;
 mod plugins;
+mod serve;
+mod session_config;
 mod sessions;
 mod skills;
 
@@ -63,6 +61,10 @@ enum Cmd {
         #[arg(long, value_name = "ID")]
         disable: Option<String>,
     },
+
+    /// Serve this machine's projects to a phone, with no window open, until
+    /// Ctrl+C. The phone pairs with the QR code the command prints.
+    Serve(serve::Options),
 }
 
 #[derive(Parser, Debug)]
@@ -158,6 +160,7 @@ async fn main() -> Result<()> {
         }
         Some(Cmd::Skills) => return skills::run(&args.project),
         Some(Cmd::Plugins { action, enable, disable }) => return plugins::run(action, enable, disable),
+        Some(Cmd::Serve(options)) => return serve::run(&args.project, options).await,
         None => {}
     }
     let prompt = args
@@ -173,48 +176,23 @@ async fn main() -> Result<()> {
         );
     }
 
-    // The same `providers.json` the window reads: a gateway configured there
-    // must answer from the CLI too, or the core cannot be run without the
-    // interface.
-    let config_dir = registry::config_dir()?;
-    let providers = Providers::load(&config_dir)?;
-    let mut config = SessionConfig::open(&args.project)?;
-    // The human's own MCP servers, from the same directory and for the same
-    // reason as the providers: a server set up in the window must be there
-    // from the CLI too.
-    config.mcp_servers = yaca_core::mcp::config::load_global(&config_dir)?;
-    config.lsp_servers = yaca_core::lsp::config::load_global(&config_dir)?;
-    config.lsp_autodetect = true;
-    config.user_skills = yaca_core::skills::user_dirs(&config_dir);
-    config.user_agents = yaca_core::agents::user_dirs(&config_dir);
-    config.plugins = yaca_core::plugin::PluginSources::standard(&config_dir).load().enabled();
-    // The window's chats folder, so that a session recorded here is listed
-    // there, and one held there can be resumed here.
-    if args.journal || args.resume.is_some() {
-        config.journal = Some(yaca_core::store::chats_dir()?);
-    }
-    config.mcp_approvals = Some(config_dir.clone());
-    if let Some(id) = args.resume {
-        config.resume_session(SessionId::from(id));
-    }
-    config.isolate = args.isolate;
-    config.additional_roots = args.add_dir;
-    // Flags over the project's settings and the resumed session, the pair
-    // replaced together — the same rule the window applies, from the same place.
-    config.choose_model(
-        args.provider.unwrap_or_default(),
-        args.model.unwrap_or_default(),
-    );
-    // The small model the `Decision` tool asks, when the Decision provider or
-    // the router has one: the same rule the window applies, from the same place.
-    config.decision = router::attach::decision_setup(&config_dir, &providers);
-    let provider = if config.provider == ROUTER_ID {
-        router::attach::attach(&config_dir, &providers, &mut config)?
-    } else {
-        resolve_provider(&providers, &mut config)?
-    };
-    config.mode = parse_mode(&args.mode)?;
-    config.effort = parse_effort(&args.effort)?;
+    // Flags over the project's settings and the resumed session. The one-shot
+    // run always takes its mode and effort from the flags (the defaults included),
+    // which is why both are given here rather than left to the project.
+    let journal = args.journal || args.resume.is_some();
+    let (config, provider) = session_config(
+        &args.project,
+        Choice {
+            provider: args.provider.unwrap_or_default(),
+            model: args.model.unwrap_or_default(),
+            mode: Some(parse_mode(&args.mode)?),
+            effort: Some(parse_effort(&args.effort)?),
+            resume: args.resume.map(SessionId::from),
+            journal,
+            isolate: args.isolate,
+            additional_roots: args.add_dir,
+        },
+    )?;
 
     let handle = yaca_core::spawn(config, provider)?;
     let mut events = handle.subscribe();
@@ -321,34 +299,6 @@ fn checkpoint_reason(reason: &yaca_core::CheckpointReason) -> String {
         R::Command { command } => format!("before {command}"),
         R::Rollback => "before the rollback".into(),
     }
-}
-
-/// Chooses the provider from `providers.json` and sets the provider, model and
-/// model list on `config` to match. The key is read here, because only the
-/// provider knows whether it needs one.
-fn resolve_provider(
-    providers: &Providers,
-    config: &mut SessionConfig,
-) -> Result<Arc<dyn Provider>> {
-    let (spec, model) = providers.resolve(&config.provider, &config.model)?;
-    let spec = spec.clone();
-
-    // Keychain first, environment second (§10). No key is not an error: the
-    // request goes without it, and a server that wants one refuses with a
-    // message naming the key. The source is reported on stderr, where it
-    // cannot be mistaken for part of the `--jsonl` stream.
-    let key = spec
-        .needs_key()
-        .then(|| secrets::api_key(&spec.id))
-        .and_then(|(key, source)| {
-            tracing::debug!(?source, provider = %spec.id, "provider key");
-            key
-        });
-
-    config.provider = spec.id.clone();
-    config.model = model;
-    config.models = spec.models.clone();
-    Ok(provider::build_with_key(spec, key))
 }
 
 /// The human-readable form. Deliberately rough: this is not the feed, just a

@@ -1,0 +1,40 @@
+{"type":"sendMessage","text":"Make greet() say hello to the world.","attachments":[]}
+{"type":"sendMessage","text":"Check this file too.","attachments":["src/greet.rs"]}
+{"type":"cancel"}
+{"type":"previewCheckpoint","id":"ckpt-1"}
+{"type":"restoreCheckpoint","id":"ckpt-1"}
+{"type":"compact"}
+{"type":"editSummary","text":"The greeting now says hello, world."}
+{"type":"setBypass","on":true}
+{"type":"setBypass","on":false}
+{"type":"watchProcess","id":3}
+{"type":"watchProcess","id":null}
+{"type":"stopProcess","id":3}
+{"type":"readFileView","path":"src/greet.rs"}
+{"type":"cancelQueued","id":"qmsg-1"}
+{"type":"searchFiles","query":"gre"}
+{"type":"setModel","model":"model-0"}
+{"type":"reconnectMcpServer","server":"filesystem"}
+{"type":"approveMcpServer","server":"notes"}
+{"type":"loginMcpServer","server":"asana"}
+{"type":"logoutMcpServer","server":"asana"}
+{"type":"restartLspServer","server":"rust-analyzer"}
+{"type":"setMode","mode":"plan"}
+{"type":"setMode","mode":"manual"}
+{"type":"setMode","mode":"auto"}
+{"type":"setMode","mode":"edits"}
+{"type":"setEffort","effort":"low"}
+{"type":"setEffort","effort":"medium"}
+{"type":"setEffort","effort":"high"}
+{"type":"setEffort","effort":"extra"}
+{"type":"setEffort","effort":"max"}
+{"type":"answerPermission","requestId":"req-1","answer":{"type":"allow"}}
+{"type":"answerPermission","requestId":"req-1","answer":{"type":"allowAlways","scope":{"type":"directory","path":"src"}}}
+{"type":"answerPermission","requestId":"req-1","answer":{"type":"deny","reason":"use the existing helper"}}
+{"type":"answerPermission","requestId":"req-1","answer":{"type":"denyAlways","scope":{"type":"commandPrefix","prefix":"rm"},"reason":null}}
+{"type":"answerQuestion","requestId":"req-2","answer":{"type":"answered","selected":[0,2],"other":null}}
+{"type":"answerQuestion","requestId":"req-2","answer":{"type":"answered","selected":[],"other":"neither, reuse the cache"}}
+{"type":"answerQuestion","requestId":"req-2","answer":{"type":"dismissed"}}
+{"type":"answerElicitation","requestId":"req-3","reply":{"type":"accept","values":{"count":3,"title":"Release notes"}}}
+{"type":"answerElicitation","requestId":"req-3","reply":{"type":"decline"}}
+{"type":"answerElicitation","requestId":"req-3","reply":{"type":"cancel"}}

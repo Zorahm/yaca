@@ -61,6 +61,8 @@ export const panels = {
 
   // --- processes panel -------------------------------------------------
   "proc.empty": "Фоновых команд нет",
+  "proc.active_count": "Работают: {n}",
+  "proc.finished_count": "Завершены: {n}",
   "proc.watch": "Показать вывод",
   "proc.state_running": "работает",
   "proc.state_exited": "код {code}",

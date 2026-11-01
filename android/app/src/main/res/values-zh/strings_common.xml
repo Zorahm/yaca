@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Yaca</string>
+
+    <string name="action_back">返回</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_more">更多选项</string>
+    <string name="action_refresh">刷新</string>
+
+    <string name="connection_idle">未连接</string>
+    <string name="connection_connecting">正在连接，第 %1$d 次尝试</string>
+    <string name="connection_online">在线 · Yaca %1$s</string>
+    <string name="connection_offline">离线，正在重试</string>
+    <string name="connection_refused">电脑拒绝了连接</string>
+
+    <string name="waiting_for_you">等待你处理</string>
+    <string name="chat_untitled">新对话</string>
+    <string name="error_not_connected">尚未连接到电脑</string>
+</resources>

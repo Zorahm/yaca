@@ -120,6 +120,17 @@ Useful flags:
 
 Project sessions: `yaca sessions`, `yaca search "query"`, `yaca export <id>`. Project MCP servers: `yaca mcp`, `yaca mcp --approve <name>`, `yaca mcp --login <name>` (OAuth in the browser), `yaca mcp --logout <name>`. Skills and file diagnostics: `yaca skills`. Plugins and their toggles: `yaca plugins`, `yaca plugins --enable <id>`, `yaca plugins --disable <id>`; for installation, see [Installing Plugins](#installing-plugins).
 
+**`yaca serve`** lets a phone reach this machine's projects with no window open: `yaca serve [PROJECT...] [--port <PORT>] [--bind <ADDR>] [--pair]`. Each `PROJECT` is a folder the phone may open chats in; without any, the folder given with `-p` is served. The port defaults to the one in the remote settings (47820), and `--bind` to `0.0.0.0`, so the phone on the same network can reach it. It runs until Ctrl+C. A pairing code is shown as a QR code at start when no phone is paired yet, or always with `--pair`; the phone app pairs by scanning it, and the code works once and expires after five minutes. While it runs, the terminal takes these commands: `pair` (a fresh code), `devices` (the paired phones), `revoke <id>` (unpair one), `help`, and `quit`. Chats it starts are recorded in the same chats folder as the window's. Running the command is the consent to listen, so the `enabled` switch in the remote settings is not read by it.
+
+## Shell commands
+
+Shell commands use the project as their default working directory. `Bash` can
+select any existing `cwd`, absolute or relative to the project, including outside
+it. Installed interpreters and tools can be invoked by name or by their full path.
+Use `background: true` for commands that should keep running while the agent
+continues: the top bar shows their count and opens the process panel with status
+and output. The button remains available after commands finish.
+
 ## Skills
 
 A skill is a directory containing a `SKILL.md` file in the [Agent Skills](https://agentskills.io/specification) format: a YAML frontmatter with `name` and `description`, followed by instructions. It can also include `scripts/`, `references/`, and any other files.
@@ -518,6 +529,30 @@ Not supported in the router:
 - **Switching to or from the router in an open chat.** A chat's provider is fixed when it opens, so the router is picked for a new chat, and an open router chat keeps it.
 - **A stable decision across compaction.** If history is compacted in the middle of a tool loop, the router decides again (and drops reasoning made by another model); the turn may continue on a different model.
 - **A running decision model.** It is not started or checked for you: a local model must already be served.
+
+## Phone client
+
+An Android phone can be a remote client of the desktop app. The desktop hosts a small server (`crates/yaca-remote`, hosted by the shell in `src-tauri/src/remote`): the phone lists projects and chats, opens or attaches to a chat, sends commands and answers permission requests. It sees the same live chats the window has open, so a turn started at the desk can be approved from the phone. The agent still runs on the desktop.
+
+- **Off by default.** The server listens only when it is enabled. The connection is TLS with a certificate the phone pins from the pairing code; each paired phone then holds its own token, and the desktop keeps only its hash.
+- **Turning it on.** There is no switch in the window yet. The commands exist: `remote_status`, `set_remote(enabled, port)`, `remote_pairing` (a `yaca://pair` URI and its QR code) and `revoke_device(id)`. The setting is in `remote/settings.json` in the Yaca configuration directory (`enabled` and `port`), and the server starts with the application when it is enabled there. The default port is 47820.
+- **Pairing by QR.** `remote_pairing` issues a one-time code valid for five minutes; issuing a new one replaces the old.
+- **Gap: the window does not listen to `chats-changed` yet.** A chat the phone opens does not appear in the window's sidebar, and resuming that chat from the sidebar opens a second session on its journal. The window's own guard only knows the chats it opened.
+- **Gap: no settings screen.** Neither the server's switch, its port, the QR code nor the list of devices with revoke is in the window; they are reachable only through the commands above.
+
+### The Android app
+
+The client is in `android/`: Kotlin, Jetpack Compose, Material 3 (Material You, with Yaca's teal and graphite as the fallback below Android 12). Two Gradle builds: `android/core` is plain Kotlin/JVM (the wire types, the feed reducer ported from `src/core/feed.ts`, the connection client) and builds without the Android SDK; `android/app` is the application.
+
+```bash
+cd android && ./gradlew -p core test       # the core, no SDK needed
+cd android && ./gradlew :app:assembleDebug  # the app, needs the Android SDK (compileSdk 36)
+```
+
+The wire is checked from both sides: `cargo test -p yaca-remote --test fixtures` writes an example of every message and event variant to `android/core/src/test/resources/fixtures/`, and the core's tests decode and re-encode every line.
+
+- **Gap: the app has never been compiled.** The Android SDK was not installed when it was written; the core was built and tested, the app only read. Expect a first round of compile fixes.
+- **Gap: no whole-file tab in the diff panel**, and a file the host cannot read shows as unavailable without the reason (the core does not send it).
 
 ## Architecture
 

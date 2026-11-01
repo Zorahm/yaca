@@ -1141,3 +1141,78 @@
   font-size: 15px;
   font-weight: 600;
 }
+
+/* --- narrow window ----------------------------------------------------------- */
+
+/* Two screens instead of two columns (`Settings`, `narrow`): the list of
+   sections takes the window, and a picked section takes it in turn, with a
+   bar over it whose arrow goes up to the list. */
+.settings-list .set-nav {
+  width: 100%;
+  padding: calc(12px + env(safe-area-inset-top)) 12px calc(16px + env(safe-area-inset-bottom));
+  border-right: 0;
+}
+
+.settings-list .set-pane,
+.settings-section .set-nav {
+  display: none;
+}
+
+/* A list to pick from, not a column beside the section it marks: no row is
+   the current one, and every row reads as plainly as the next. */
+.settings-list .set-nav-item,
+.settings-list .set-nav-item[aria-current="page"] {
+  height: 44px;
+  background: none;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.set-up {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: var(--h-top);
+  margin-top: env(safe-area-inset-top);
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line);
+  font: 600 15px var(--display);
+  color: var(--ink);
+}
+
+.settings-section .set-scroll {
+  padding: 18px 16px calc(24px + env(safe-area-inset-bottom));
+}
+
+/* A row's label over its control rather than beside it: side by side, a
+   phone leaves each of them half a line. */
+.settings-section .set-row {
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .settings-overlay {
+    animation: yacaEnter var(--dur-enter) var(--ease-enter);
+  }
+
+  /* Narrow, the screens inside slide; the layer itself only fades, or the two
+     movements add up to a diagonal. */
+  .settings-overlay:has(> .settings-list, > .settings-section) {
+    animation-name: yacaFade;
+  }
+
+  /* A section arrives from the side it is deeper on, as Android's own
+     settings do; the list it came from slides back the same way. */
+  .settings-section .set-pane {
+    --from: translateX(24px);
+    animation: yacaEnter var(--dur-enter) var(--ease-enter);
+  }
+
+  .settings-list .set-nav {
+    --from: translateX(-24px);
+    animation: yacaEnter var(--dur-enter) var(--ease-enter);
+  }
+}

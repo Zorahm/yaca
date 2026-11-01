@@ -13,11 +13,18 @@ path = "src/main.rs"
 
 [dependencies]
 yaca-core.workspace = true
+yaca-remote.workspace = true
 
 anyhow.workspace = true
+async-trait.workspace = true
 clap.workspace = true
 serde_json.workspace = true
-tokio.workspace = true
+# `signal` is for Ctrl+C in `yaca serve`, which runs until it is pressed.
+tokio = { workspace = true, features = ["signal"] }
 tokio-util.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[dev-dependencies]
+# Folders for the project-matching tests, removed when each test ends.
+tempfile = "3"

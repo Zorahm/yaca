@@ -6,6 +6,7 @@
 //! a dropped connection.
 
 use futures_util::StreamExt;
+use std::error::Error;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -13,6 +14,26 @@ use super::registry::ProviderSpec;
 use super::sse::SseDecoder;
 use super::{ProviderEvent, ProviderStream};
 use crate::error::ProviderError;
+
+/// Reqwest's Display omits the transport cause; omit the URL before expanding
+/// the chain because provider URLs can carry credentials or query tokens.
+pub(super) fn network_error(error: reqwest::Error) -> ProviderError {
+    ProviderError::Network(error_chain(&error.without_url()))
+}
+
+fn error_chain(error: &(dyn Error + 'static)) -> String {
+    let mut message = error.to_string();
+    let mut source = error.source();
+    while let Some(cause) = source {
+        let detail = cause.to_string();
+        if !detail.is_empty() && !message.ends_with(&detail) {
+            message.push_str(": ");
+            message.push_str(&detail);
+        }
+        source = cause.source();
+    }
+    message
+}
 
 /// Provider headers in reqwest's form.
 ///
@@ -57,7 +78,7 @@ pub(super) async fn check_status(
     // an empty error block that gives the human nothing to decide on.
     let text = match resp.text().await {
         Ok(t) => t,
-        Err(e) => format!("the response body could not be read: {e}"),
+        Err(e) => format!("the response body could not be read: {}", network_error(e)),
     };
     Err(ProviderError::Http {
         status: status.as_u16(),
@@ -148,7 +169,7 @@ pub(super) fn pump(resp: reqwest::Response, mut decode: impl StreamDecoder) -> P
             let chunk = match chunk {
                 Ok(c) => c,
                 Err(e) => {
-                    let _ = tx.send(Err(ProviderError::Network(e.to_string()))).await;
+                    let _ = tx.send(Err(network_error(e))).await;
                     return;
                 }
             };

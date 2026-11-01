@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="diff_none">세션에서 이 파일을 변경하지 않아 보여줄 diff가 없습니다.</string>
+    <string name="diff_no_lines">이 변경에는 표시할 줄이 없습니다.</string>
+    <string name="diff_truncated">코어에서 이 diff를 잘랐습니다.</string>
+    <string name="change_created">생성됨</string>
+    <string name="change_modified">변경됨</string>
+    <string name="change_deleted">삭제됨</string>
+    <string name="change_moved">%1$s에서 이동됨</string>
+    <string name="panel_diff_counts">+%1$d −%2$d</string>
+
+    <string name="file_loading">파일 읽는 중…</string>
+    <string name="file_unavailable">표시할 내용이 없습니다: 파일이 없거나, 이진 파일이거나, 프로젝트 밖에 있습니다.</string>
+    <string name="panel_file_deleted">이 채팅에서 파일이 삭제되어 더 이상 내용이 없습니다.</string>
+    <string name="file_empty">파일이 비어 있습니다.</string>
+    <string name="file_truncated">파일이 끝까지 표시되지 않았습니다.</string>
+
+    <string name="ckpt_title">되돌리기 지점</string>
+    <string name="ckpt_subtitle">에이전트가 편집하기 전마다 만듦</string>
+    <string name="ckpt_now">현재 상태</string>
+    <string name="ckpt_now_mark">현재</string>
+    <string name="ckpt_empty">아직 되돌리기 지점이 없습니다.</string>
+    <string name="ckpt_reason_message">메시지 전</string>
+    <string name="ckpt_reason_command">%1$s 전</string>
+    <string name="ckpt_reason_rollback">되돌리기 전</string>
+    <string name="ckpt_restore">복원</string>
+    <string name="ckpt_restore_title">%1$s 시점으로 복원할까요?</string>
+    <string name="ckpt_restore_body">파일이 이 상태로 돌아갑니다. 이 시점 이후의 변경은 사라집니다. 되돌릴 수 없습니다.</string>
+    <string name="ckpt_restore_loading">변경될 파일을 확인하는 중…</string>
+    <string name="ckpt_restore_nothing">이 시점 이후로 변경된 내용이 없습니다.</string>
+    <string name="ckpt_will_restore">복원 예정</string>
+    <string name="ckpt_will_revert">되돌려질 예정</string>
+    <string name="ckpt_will_delete">삭제 예정</string>
+    <plurals name="ckpt_tracked">
+        <item quantity="other">파일 %d개</item>
+    </plurals>
+
+    <string name="proc_title">프로세스</string>
+    <string name="proc_empty">이 채팅에는 백그라운드 명령이 없습니다.</string>
+    <string name="proc_section_running">실행 중</string>
+    <string name="proc_section_finished">끝남</string>
+    <string name="proc_state_running">실행 중</string>
+    <string name="proc_state_exited">코드 %1$d</string>
+    <string name="proc_state_exited_none">코드 없이 끝남</string>
+    <string name="proc_state_stopped">중지됨</string>
+    <string name="proc_output">출력</string>
+    <string name="proc_no_output">아직 출력이 없습니다</string>
+    <plurals name="proc_dropped">
+        <item quantity="other">버퍼에서 %d줄이 밀려났습니다</item>
+    </plurals>
+    <string name="proc_stop">중지</string>
+    <string name="proc_stop_title">%1$s을(를) 중지할까요?</string>
+    <string name="proc_stop_body">프로세스가 중지 신호를 받고 응답을 멈춥니다. 출력은 채팅 기록에 남고, 명령은 직접 다시 실행할 수 있습니다.</string>
+
+    <string name="mention_label">프로젝트 파일</string>
+    <string name="mention_recent">이 채팅에서 건드린 파일</string>
+    <string name="mention_searching">검색 중…</string>
+    <string name="mention_none">찾을 수 없음</string>
+    <string name="mention_none_touched">이 채팅에서 아직 건드린 파일이 없습니다. 입력하여 프로젝트를 검색하세요.</string>
+    <string name="mention_close">메뉴 닫기</string>
+</resources>

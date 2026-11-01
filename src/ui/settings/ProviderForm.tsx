@@ -194,6 +194,7 @@ export function ProviderForm({
           <ModelsList
             models={draft.models}
             busy={form.modelsBusy || form.keyBusy}
+            answered={form.modelsAnswered}
             error={form.modelsError}
             onAsk={form.askForModels}
           />

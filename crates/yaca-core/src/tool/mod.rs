@@ -12,6 +12,7 @@
 pub mod ask_user;
 pub mod bash;
 mod bash_background;
+mod bash_cwd;
 pub mod bash_control;
 pub mod bash_output;
 pub mod decision;

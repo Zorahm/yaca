@@ -194,12 +194,17 @@ pub fn build_with_memory(
 
     s.push_str("<environment>\n");
     s.push_str(&format!(
-        "Project root: {}. Write paths relative to it.\n",
+        "Project root: {}. Use it as the default base for relative paths.\n",
         shown(project_root)
     ));
     // No bash tool in plan, so the fact would be noise in the cached prefix.
     if agent {
         s.push_str(shell_fact(shell));
+        s.push_str(
+            "The project is a starting directory, not a shell sandbox. Bash can run \
+             installed programs such as Python and use any existing directory as cwd, \
+             including absolute paths outside the project.\n",
+        );
     }
     s.push_str("</environment>\n\n");
 
@@ -449,6 +454,13 @@ mod tests {
         assert!(plain(Intent::Agent).contains(shell));
         // No bash tool in plan, so the fact would be noise in the cached prefix.
         assert!(!plain(Intent::Plan).contains(shell));
+    }
+
+    #[test]
+    fn the_project_is_not_described_as_a_shell_boundary() {
+        let p = plain(Intent::Agent);
+        assert!(p.contains("not a shell sandbox"));
+        assert!(p.contains("outside the project"));
     }
 
     #[test]

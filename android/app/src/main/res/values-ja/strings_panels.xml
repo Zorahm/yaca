@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="diff_none">セッションではこのファイルは変更されていないため、差分はありません。</string>
+    <string name="diff_no_lines">この変更には表示する行がありません。</string>
+    <string name="diff_truncated">差分はコアによって途中で打ち切られました。</string>
+    <string name="change_created">作成</string>
+    <string name="change_modified">変更</string>
+    <string name="change_deleted">削除</string>
+    <string name="change_moved">移動元: %1$s</string>
+    <string name="panel_diff_counts">+%1$d −%2$d</string>
+
+    <string name="file_loading">ファイルを読み込み中…</string>
+    <string name="file_unavailable">表示するものがありません: ファイルがない、バイナリである、またはプロジェクトの外にあります。</string>
+    <string name="panel_file_deleted">このチャットでファイルが削除されたため、テキストはありません。</string>
+    <string name="file_empty">ファイルは空です。</string>
+    <string name="file_truncated">ファイルは末尾まで表示されていません。</string>
+
+    <string name="ckpt_title">ロールバックポイント</string>
+    <string name="ckpt_subtitle">エージェントによる各編集の前に作成</string>
+    <string name="ckpt_now">現在の状態</string>
+    <string name="ckpt_now_mark">現在</string>
+    <string name="ckpt_empty">ロールバックポイントはまだありません。</string>
+    <string name="ckpt_reason_message">メッセージの前</string>
+    <string name="ckpt_reason_command">%1$s の前</string>
+    <string name="ckpt_reason_rollback">ロールバックの前</string>
+    <string name="ckpt_restore">復元</string>
+    <string name="ckpt_restore_title">%1$s の状態に復元しますか？</string>
+    <string name="ckpt_restore_body">ファイルはこの状態に戻ります。この時点以降の変更は失われます。この操作は元に戻せません。</string>
+    <string name="ckpt_restore_loading">変更されるファイルを調べています…</string>
+    <string name="ckpt_restore_nothing">この時点以降、変更はありません。</string>
+    <string name="ckpt_will_restore">復元されます</string>
+    <string name="ckpt_will_revert">元に戻されます</string>
+    <string name="ckpt_will_delete">削除されます</string>
+    <plurals name="ckpt_tracked">
+        <item quantity="other">%d 個のファイル</item>
+    </plurals>
+
+    <string name="proc_title">プロセス</string>
+    <string name="proc_empty">このチャットにバックグラウンドのコマンドはありません。</string>
+    <string name="proc_section_running">実行中</string>
+    <string name="proc_section_finished">終了</string>
+    <string name="proc_state_running">実行中</string>
+    <string name="proc_state_exited">終了コード %1$d</string>
+    <string name="proc_state_exited_none">終了コードなし</string>
+    <string name="proc_state_stopped">停止</string>
+    <string name="proc_output">出力</string>
+    <string name="proc_no_output">まだ出力はありません</string>
+    <plurals name="proc_dropped">
+        <item quantity="other">%d 行がバッファから押し出されました</item>
+    </plurals>
+    <string name="proc_stop">停止</string>
+    <string name="proc_stop_title">%1$s を停止しますか？</string>
+    <string name="proc_stop_body">プロセスは停止シグナルを受け取り、応答しなくなります。出力はチャットのログに残ります。コマンドは手動で再実行できます。</string>
+
+    <string name="mention_label">プロジェクトのファイル</string>
+    <string name="mention_recent">このチャットで触れたファイル</string>
+    <string name="mention_searching">検索中…</string>
+    <string name="mention_none">見つかりません</string>
+    <string name="mention_none_touched">このチャットでまだファイルに触れていません。入力してプロジェクト内を検索します。</string>
+    <string name="mention_close">メニューを閉じる</string>
+</resources>

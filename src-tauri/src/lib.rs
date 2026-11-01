@@ -2,20 +2,24 @@
 //! between the event stream and the webview.
 //!
 //! The only substantive thing here is merging deltas per frame (§12).
-//! It lives in the bridge, not in the core: it is the transport's concern, and the CLI must
-//! receive the raw stream.
+//! It lives in `yaca_remote::frame`, shared by the bridge and the remote server, not in the
+//! core: it is the transport's concern, and the CLI must receive the raw stream.
 
 mod bridge;
 mod browser;
+mod chats;
 mod mcp;
 mod notify;
 mod prefs;
 mod profile;
 mod project;
 mod providers;
+mod remote;
 mod routing;
 mod settings;
+mod startup;
 mod state;
+mod tray;
 mod update;
 
 use std::path::PathBuf;
@@ -23,14 +27,14 @@ use std::sync::Arc;
 
 use yaca_core::event::{AgentEvent, SessionState};
 use yaca_core::id::{SessionId, TurnId};
-use yaca_core::provider::registry::{self, Providers};
-use yaca_core::router::ROUTER_ID;
+use yaca_core::provider::registry;
 use yaca_core::slash::{self, SlashCommand};
 use yaca_core::store::{SearchHit, SessionMeta, SessionStore};
-use yaca_core::{Command, Effort, Mode, SessionConfig, SessionHandle};
+use yaca_core::{Command, SessionHandle};
 use tauri::{Manager, State};
 
 use settings::AppSettings;
+use startup::Startup;
 use state::AppState;
 
 /// Channel that event batches travel through. One name for everything: the interface is
@@ -107,22 +111,6 @@ fn forget_project(path: String) -> Result<Vec<String>, String> {
     Ok(listed(&settings))
 }
 
-/// What a session starts with when it does not exist yet.
-///
-/// `setMode` and its neighbours are session commands, but the home screen
-/// composer (§9.1) picks all of this before there is a session. A type of its
-/// own, not three arguments: they always travel together and always mean one
-/// thing — "the person chose before the first word".
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS)]
-#[ts(export)]
-#[serde(rename_all = "camelCase")]
-pub struct Startup {
-    pub mode: Mode,
-    pub provider: String,
-    pub model: String,
-    pub effort: Effort,
-}
-
 /// An open chat: its identifier and its state at the moment it was opened.
 ///
 /// The identifier comes back at once, because the window addresses everything
@@ -162,44 +150,6 @@ pub struct AttachedChat {
     pub events: Vec<AgentEvent>,
 }
 
-/// What the project itself would start a session with (§10): the base for the
-/// bottom row of §7.1 on the home screen.
-///
-/// Without this the composer would show the built-in defaults and silently
-/// overwrite `.yaca/settings.json` with them — §10 requires the reverse order:
-/// the project's settings are the base, and what is chosen in the window is
-/// laid over them.
-///
-/// The pair is settled against the provider list here, not only at the first
-/// message: a project that names nothing starts on the first provider that
-/// answered, and the composer should show that model rather than an empty
-/// chip. None answered — the error says so, and the home screen does not send.
-#[tauri::command]
-fn project_startup(path: String) -> Result<Startup, String> {
-    let config = SessionConfig::open(&path).map_err(|e| e.to_string())?;
-    // The router is not in the provider list, it is made of it: a project that
-    // names it is settled against `routing.json`, or the home screen would
-    // show an error for a choice that is perfectly valid.
-    if config.provider == ROUTER_ID {
-        return Ok(Startup {
-            mode: config.mode,
-            provider: ROUTER_ID.to_string(),
-            model: routing::require()?.id,
-            effort: config.effort,
-        });
-    }
-    let providers = Providers::load(&config_dir()?).map_err(|e| e.to_string())?;
-    let (spec, model) = providers
-        .resolve(&config.provider, &config.model)
-        .map_err(|e| e.to_string())?;
-    Ok(Startup {
-        mode: config.mode,
-        provider: spec.id.clone(),
-        model,
-        effort: config.effort,
-    })
-}
-
 /// Opens a chat in the project: a new one or a recorded one (§9).
 ///
 /// The chat becomes one more live chat rather than replacing the previous one:
@@ -208,119 +158,29 @@ fn project_startup(path: String) -> Result<Startup, String> {
 #[tauri::command]
 async fn open_project(
     app: tauri::AppHandle,
-    state: State<'_, AppState>,
     path: String,
     resume: Option<String>,
     startup: Option<Startup>,
 ) -> Result<OpenedChat, String> {
-    let root = project_path(&path)?;
-    let providers = Providers::load(&config_dir()?).map_err(|e| e.to_string())?;
-
-    // The project's settings are the base; what is chosen in the window goes on top of them (§10).
-    let mut config = SessionConfig::open(root.as_path()).map_err(|e| e.to_string())?;
-    // This one is an application-level setting and is not in the project's
-    // file: it reaches the core as a config field, like the mode and the effort.
-    config.respect_robots = state.prefs().respect_robots;
-    config.shell = state.prefs().shell;
-    // The human's own MCP servers and their approvals of a project's: both
-    // live in the configuration directory, like the providers.
-    let config_home = config_dir()?;
-    config.mcp_servers =
-        yaca_core::mcp::config::load_global(&config_home).map_err(|e| e.to_string())?;
-    // The human's own language servers, from the same directory.
-    config.lsp_servers =
-        yaca_core::lsp::config::load_global(&config_home).map_err(|e| e.to_string())?;
-    config.lsp_autodetect = true;
-    config.user_skills = yaca_core::skills::user_dirs(&config_home);
-    config.user_agents = yaca_core::agents::user_dirs(&config_home);
-    config.plugins = yaca_core::plugin::PluginSources::standard(&config_home).load().enabled();
-    config.mcp_approvals = Some(config_home);
-    config.journal = Some(yaca_core::store::chats_dir().map_err(|e| e.to_string())?);
-    if let Some(id) = resume {
-        config.resume_session(SessionId::from(id));
-    }
-
-    if let Some(startup) = startup {
-        config.mode = startup.mode;
-        config.choose_model(startup.provider, startup.model);
-        config.effort = startup.effort;
-    }
-
-    // The small model the `Decision` tool asks, if there is one.
-    config.decision = yaca_core::router::attach::decision_setup(&config_dir()?, &providers);
-
-    // The chat's browser, offered to its session as an MCP server of the
-    // window's own. The page itself is made on first use.
-    let browser = app.state::<browser::Browsers>().prepare(&app);
-    if let Some((_, server)) = &browser {
-        config.app_servers.push(server.clone());
-    }
-
-    let provider = if config.provider == ROUTER_ID {
-        // The same code the CLI runs: the session gets the router and a model
-        // list that prices each request by the model that answered.
-        yaca_core::router::attach::attach(&config_dir()?, &providers, &mut config)
-            .map_err(|e| e.to_string())?
-    } else {
-        let (spec, model) = providers
-            .resolve(&config.provider, &config.model)
-            .map_err(|e| e.to_string())?;
-        let spec = spec.clone();
-
-        // No key check here: a missing key is not a reason to refuse the chat.
-        // The request goes without it, and a provider that wants one answers with
-        // an error naming the key (§10).
-
-        config.provider = spec.id.clone();
-        config.model = model;
-        // The context window and the prices of §7.1 are counted from the
-        // provider's own models, not from the built-in catalogue: a foreign
-        // provider has its own.
-        config.models = spec.models.clone();
-
-        yaca_core::provider::build(spec)
-    };
-    let handle = Arc::new(yaca_core::spawn(config, provider).map_err(|e| e.to_string())?);
-
-    // The project the chat was opened in moves to the top of the list: the
-    // sidebar is read from the top down, and today's work is at the top.
-    let dir = config_dir()?;
-    let mut settings = AppSettings::load(&dir);
-    settings.remember_project(root);
-    settings.save(&dir).map_err(|e| e.to_string())?;
-
-    let id = handle.id().clone();
-    if let Some((browser, _)) = browser {
-        app.state::<browser::Browsers>().bind(id.clone(), browser);
-    }
-    state.open(handle.clone(), path, &app);
+    let handle = chats::open_chat(&app, path, resume, startup).await?;
     // Read after the bridge is listening, so a server that becomes ready in
     // between is in one of the two: this list or the next frame.
     Ok(OpenedChat {
-        id,
+        id: handle.id().clone(),
         state: handle.state(),
         mcp: handle.mcp(),
         lsp: handle.lsp(),
     })
 }
 
-/// Closes a chat: the turn stops, the session is released, and background
-/// commands die with it (§6.5). The §9 journal stays — closing is not deleting,
-/// and a closed chat opens again with its history.
+/// Closes a chat (§9, §6.5); see [`chats::close`].
 #[tauri::command]
 async fn close_chat(
     state: State<'_, AppState>,
     browsers: State<'_, browser::Browsers>,
     session: String,
 ) -> Result<(), String> {
-    let id = SessionId::from(session);
-    browsers.forget(&id);
-    let Some(handle) = state.close(&id) else {
-        return Ok(());
-    };
-    // Cancel before the handle is released: otherwise the started turn would
-    // finish its work and only then notice that nobody is waiting for it.
-    let _ = handle.send(Command::Cancel).await;
+    chats::close(&state, &browsers, &SessionId::from(session)).await;
     Ok(())
 }
 
@@ -354,7 +214,7 @@ async fn attach_chats(
             id: chat.handle.id().clone(),
             project: chat.project,
             epoch: chat.epoch,
-            events: bridge::coalesce(events),
+            events: yaca_remote::frame::coalesce(events),
         });
     }
     Ok(attached)
@@ -671,8 +531,21 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // Geometry only. Decorations and visibility come from the config of
+        // the platform the app runs on, and a saved value from another build
+        // must not take the frame off or keep the window hidden.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::POSITION
+                        | tauri_plugin_window_state::StateFlags::MAXIMIZED,
+                )
+                .build(),
+        )
         .manage(AppState::new())
         .manage(browser::Browsers::default())
+        .manage(remote::RemoteState::default())
         // Preferences before the first window draws anything: the shell holds
         // them (§10) and the toast watcher asks about them on every event.
         .setup(|app| {
@@ -680,20 +553,26 @@ pub fn run() {
                 app.state::<AppState>()
                     .set_prefs(AppSettings::load(&dir).prefs().clone());
             }
+            tray::setup(app.handle())?;
             update::watch(app.handle().clone());
+            chats::watch(app.handle().clone());
+            remote::start_saved(app.handle().clone());
             Ok(())
         })
+        .on_window_event(tray::on_window_event)
         .invoke_handler(only_the_window(tauri::generate_handler![
             projects,
             add_project,
             forget_project,
-            project_startup,
+            startup::project_startup,
+            startup::remember_startup,
             open_project,
             close_chat,
             attach_chats,
             providers::providers,
             providers::save_provider,
             providers::delete_provider,
+            providers::ask_provider,
             user_name,
             send_command,
             session_state,
@@ -734,6 +613,7 @@ pub fn run() {
             routing::remove_routing,
             prefs::preferences,
             prefs::set_preferences,
+            tray::set_tray_labels,
             update::check_for_updates,
             update::update_status,
             project::project_settings,
@@ -752,6 +632,10 @@ pub fn run() {
             browser::browser_external,
             browser::browser_devtools,
             browser::browser_reset_viewport,
+            remote::remote_status,
+            remote::set_remote,
+            remote::remote_pairing,
+            remote::revoke_device,
         ]))
         .run(context)
         .expect("could not start the application");

@@ -46,7 +46,7 @@ export const providers = {
 
   "prov.form_models": "Models",
   "prov.form_models_hint":
-    "The list comes from the provider itself: it is asked as soon as a key is saved, and Ask asks again. Whatever it answers is what Yaca talks to; the price is dollars per million tokens, and zero means free or unknown.",
+    "The list comes from the provider itself: it is asked as soon as a key is saved, and again whenever the address, protocol or headers change; Ask asks once more. Until the answer arrives, the previous list stays. Whatever it answers is what Yaca talks to; the price is dollars per million tokens, and zero means free or unknown.",
   "prov.form_model_context": "Context, tokens",
   "prov.form_model_output": "Max output, tokens",
   "prov.form_model_effort": "supports effort",
@@ -61,6 +61,7 @@ export const providers = {
 
   "prov.saved_unasked":
     "“{name}” is saved, but did not answer with its models: {error}",
+  "prov.ask_failed": "“{name}” did not answer with its models: {error}",
   "prov.error_name": "Give the provider a name",
   "prov.error_url": "Give the provider a base URL",
   "prov.error_header_name": "Header {n} has no name",

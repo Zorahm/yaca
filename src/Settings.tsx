@@ -22,6 +22,11 @@
  * one thing while the disk held another. The exception is the provider's
  * description: it is a document, and an unfinished address must not reach the
  * disk.
+ *
+ * In a narrow window the two columns are two screens, as Android's own
+ * settings are: the list of sections, and a section over it. The arrow over a
+ * section goes up to the list; the system Back goes back to where the person
+ * was, which is the list only if they came from it.
  */
 
 import {
@@ -64,6 +69,7 @@ import { Select } from "./ui/settings/Row";
 import { RulesSection } from "./ui/settings/RulesSection";
 import { ToolsSection } from "./ui/settings/ToolsSection";
 import { useProjectSettings } from "./ui/settings/useProjectSettings";
+import { useBackClose } from "./ui/back";
 
 import "./ui/fonts";
 import "./ui/tokens.css";
@@ -115,6 +121,8 @@ export default function Settings({
   section,
   onSection,
   onClose,
+  narrow = false,
+  startOnList = false,
 }: {
   prefs: Preferences;
   /** Held by the window, not here: the Help menu opens the layer on a section
@@ -122,9 +130,20 @@ export default function Settings({
   section: Section;
   onSection: (section: Section) => void;
   onClose: () => void;
+  /** One screen at a time: the list, or a section (`isNarrow`). */
+  narrow?: boolean;
+  /** Opened as «Settings» rather than on a section: a narrow window shows the list first. */
+  startOnList?: boolean;
 }) {
   const prefs = usePreferences(initial);
-  const setSection = onSection;
+  // Narrow only: the list, a section picked from it, or a section the layer
+  // was opened on.
+  const [view, setView] = useState<"list" | "picked" | "given">(startOnList ? "list" : "given");
+  useBackClose(narrow && view === "picked", () => setView("list"));
+  const setSection = (next: Section) => {
+    onSection(next);
+    setView("picked");
+  };
   const [projects, setProjects] = useState<string[]>([]);
   const [project, setProject] = useState<string | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -174,7 +193,15 @@ export default function Settings({
   const shown = project === null && isProjectSection(section) ? "providers" : section;
 
   return (
-    <div className="settings">
+    <div
+      className={
+        !narrow
+          ? "settings"
+          : view === "list"
+            ? "settings settings-list"
+            : "settings settings-section"
+      }
+    >
       <nav className="set-nav" aria-label={t("set.nav")}>
         <button type="button" className="set-close" onClick={onClose}>
           <ArrowLeft size={15} aria-hidden="true" />
@@ -214,6 +241,19 @@ export default function Settings({
       </nav>
 
       <main className="set-pane">
+        {narrow && (
+          <header className="set-up">
+            <button
+              type="button"
+              className="top-icon"
+              onClick={() => setView("list")}
+              aria-label={t("set.title")}
+            >
+              <ArrowLeft size={18} aria-hidden="true" />
+            </button>
+            {t("set.title")}
+          </header>
+        )}
         <div className="set-scroll">
           {shown === "providers" && <ProvidersSection models={models} onChanged={refreshModels} />}
           {shown === "tools" && <ToolsSection prefs={prefs} onPatch={patchPrefs} />}

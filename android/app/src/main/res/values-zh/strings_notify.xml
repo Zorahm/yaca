@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notify_channel_needs_you">需要你处理</string>
+    <string name="notify_channel_needs_you_desc">电脑上聊天中等待你回应的权限请求、问题和表单。</string>
+    <string name="notify_channel_turn_finished">回合完成</string>
+    <string name="notify_channel_turn_finished_desc">电脑上的聊天已完成回合，正等待你的下一条消息。</string>
+    <string name="notify_channel_connection">连接</string>
+    <string name="notify_channel_connection_desc">应用在后台时，显示手机已连接的电脑。</string>
+
+    <string name="notify_permission_title">智能体请求权限</string>
+    <string name="notify_question_title">智能体提了一个问题</string>
+    <string name="notify_elicitation_title">服务器需要输入</string>
+    <string name="notify_turn_finished_title">已完成：%1$s</string>
+    <!-- The chat title and the project, both as the host names them. -->
+    <string name="notify_chat_line">%1$s · %2$s</string>
+    <string name="notify_action_allow_once">仅允许这一次</string>
+    <string name="notify_action_deny">拒绝</string>
+    <string name="notify_action_open">打开</string>
+    <string name="notify_answer_failed">无法发送你的回应，请打开聊天进行回应。</string>
+
+    <string name="notify_connection_connected">已连接到 %1$s</string>
+    <string name="notify_connection_connecting">正在连接…</string>
+    <string name="notify_connection_disconnect">断开</string>
+
+    <string name="notify_prompt_title">智能体需要你时收到通知</string>
+    <string name="notify_prompt_body">应用关闭时，聊天中的权限请求和问题只会以通知形式送达。允许通知后，无需打开应用即可回应。</string>
+    <string name="notify_prompt_allow">允许</string>
+    <string name="notify_prompt_later">暂不</string>
+</resources>

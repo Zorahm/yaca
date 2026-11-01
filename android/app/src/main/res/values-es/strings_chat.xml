@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_menu_processes">Procesos</string>
+    <string name="chat_menu_checkpoints">Puntos de control</string>
+    <string name="chat_menu_compact">Compactar historial</string>
+    <string name="chat_menu_close">Cerrar chat</string>
+    <string name="chat_state_working">Trabajando</string>
+    <string name="chat_state_idle">Inactivo</string>
+    <string name="chat_state_waiting">Esperando tu respuesta</string>
+    <string name="chat_subtitle">%1$s · %2$s</string>
+    <string name="chat_close_title">¿Cerrar este chat?</string>
+    <string name="chat_close_body">Al cerrarlo se detiene el turno en el ordenador para todos los que pueden ver este chat.</string>
+    <string name="chat_close_confirm">Cerrar chat</string>
+    <string name="chat_compact_title">¿Compactar el historial?</string>
+    <string name="chat_compact_body">El agente resume la conversación para liberar contexto. El resumen reemplaza los mensajes con los que trabaja.</string>
+    <string name="chat_compact_confirm">Compactar</string>
+    <string name="chat_empty">Envía un mensaje para empezar a trabajar.</string>
+    <string name="chat_list_separator">, </string>
+    <string name="chat_reasoning">Razonamiento</string>
+    <string name="chat_working">Trabajando…</string>
+    <string name="chat_working_for">Trabajando desde hace %1$s</string>
+    <string name="chat_work_with_failed">%1$s (%2$s)</string>
+
+    <string name="checkpoint_before_message">Antes de tu mensaje</string>
+    <string name="checkpoint_before_command">Antes de %1$s</string>
+    <string name="checkpoint_after_restore">Después de una restauración</string>
+    <string name="checkpoint_line">Punto de control, %1$s: %2$s</string>
+    <string name="restored_line">Restaurado: %1$s</string>
+    <string name="stopped_line">Detenido</string>
+    <string name="turn_time">Trabajó durante %1$s</string>
+
+    <string name="compacted_title">Historial compactado</string>
+    <string name="compacted_freed">Liberados %1$s tokens</string>
+    <string name="compacted_summary">Resumen</string>
+    <string name="plan_title">Plan</string>
+    <string name="plan_progress">%1$d de %2$d</string>
+    <string name="plan_item_done">Hecho</string>
+    <string name="plan_item_running">En curso</string>
+    <string name="plan_item_pending">Sin empezar</string>
+    <string name="plan_proposed">Plan propuesto</string>
+
+    <string name="error_title">Error</string>
+    <string name="error_retry_hint">Puedes volver a intentarlo.</string>
+    <string name="retry_line">Reintento %1$d de %2$d en %3$s</string>
+    <string name="route_default">%1$s · %2$s</string>
+    <string name="route_named">%1$s: %2$s · %3$s</string>
+    <string name="hook_line">%1$s · %2$s</string>
+    <string name="hook_blocked">Bloqueado</string>
+    <string name="shown_command">Comando: %1$s</string>
+    <string name="shown_range">Líneas %1$d–%2$d de %3$d</string>
+    <string name="duration_sec">%1$d s</string>
+    <string name="duration_min_sec">%1$d min %2$d s</string>
+
+    <string name="queued_title">En cola tras este turno</string>
+    <string name="queued_cancel_desc">Cancelar el mensaje en cola</string>
+
+    <string name="row_status_running">En ejecución</string>
+    <string name="row_status_done">Hecho</string>
+    <string name="row_status_failed">Fallido</string>
+    <string name="row_status_rejected">Rechazado</string>
+    <string name="row_status_denied">Denegado</string>
+    <string name="row_status_stopped">Detenido</string>
+    <string name="row_no_output">Sin salida</string>
+    <string name="row_output_cut">La salida se cortó</string>
+    <string name="row_pictures">Imágenes</string>
+    <string name="row_open_diff">Abrir los cambios</string>
+    <string name="row_open_file">Abrir el archivo</string>
+    <string name="row_added">+%1$d</string>
+    <string name="row_removed">−%1$d</string>
+    <string name="row_cancelled">Cancelado</string>
+    <string name="row_failed">Fallido</string>
+    <string name="row_edit_failed">No se pudo modificar %1$s</string>
+    <string name="row_denied">Denegado</string>
+    <string name="row_denied_because">Denegado: %1$s</string>
+    <string name="row_rejected">Rechazado: %1$s</string>
+    <string name="row_stopped">Detenido</string>
+    <string name="file_reading">Leyendo %1$s</string>
+    <string name="file_creating">Creando %1$s</string>
+    <string name="file_changing">Cambiando %1$s</string>
+    <string name="file_deleting">Eliminando %1$s</string>
+    <string name="file_read">Leído %1$s</string>
+    <string name="file_created">Creado %1$s</string>
+    <string name="file_modified">Modificado %1$s</string>
+    <string name="file_deleted">Eliminado %1$s</string>
+    <string name="file_moved">%1$s movido a %2$s</string>
+    <string name="file_dir_deleted">Carpeta %1$s eliminada</string>
+
+    <string name="agents_untitled">Subagente</string>
+    <string name="agents_tokens">%1$s tokens</string>
+    <string name="agents_no_report">Aún no hay informe</string>
+
+    <string name="composer_placeholder">Mensaje al agente</string>
+    <string name="composer_placeholder_busy">Pon en cola un mensaje…</string>
+    <string name="composer_send">Enviar</string>
+    <string name="composer_queue">Poner en cola</string>
+    <string name="composer_stop">Detener el turno</string>
+    <string name="composer_mention">Mencionar un archivo</string>
+    <string name="composer_remove">Quitar %1$s</string>
+    <string name="mode_plan">Plan</string>
+    <string name="mode_manual">Manual</string>
+    <string name="mode_auto">Automático</string>
+    <string name="mode_edits">Ediciones</string>
+    <string name="effort_low">Baja</string>
+    <string name="effort_medium">Media</string>
+    <string name="effort_high">Alta</string>
+    <string name="effort_extra">Muy alta</string>
+    <string name="effort_max">Máxima</string>
+    <string name="model_none">Aún no hay modelos disponibles en este ordenador.</string>
+    <string name="model_context">Contexto %1$s tokens</string>
+    <string name="context_used">Contexto: %1$s de %2$s tokens usados</string>
+    <string name="context_unknown">Tamaño del contexto desconocido</string>
+
+    <string name="permission_kicker">El agente pide acceso</string>
+    <string name="permission_position">%1$d de %2$d</string>
+    <string name="permission_why">Por qué: %1$s</string>
+    <string name="permission_server">Servidor de herramientas: %1$s</string>
+    <string name="permission_unsaved">Deshacer no recuperará %1$d archivos y %2$d carpetas.</string>
+    <string name="permission_scope_once">Solo esta vez</string>
+    <string name="permission_scope_once_hint">Permite solo esta solicitud</string>
+    <string name="permission_allow">Permitir</string>
+    <string name="permission_deny">Denegar</string>
+    <string name="permission_block_review">Revisar</string>
+    <string name="scope_always">Siempre: %1$s</string>
+    <string name="scope_tool">Todas las llamadas a %1$s</string>
+    <string name="scope_directory">Todo en %1$s</string>
+    <string name="scope_command_prefix">Comandos que empiezan por %1$s</string>
+    <string name="scope_domain">Todo de %1$s</string>
+    <string name="scope_mcp_server">Todas las llamadas a %1$s</string>
+    <string name="kind_run_command">Ejecutar un comando</string>
+    <string name="kind_delete_file">Eliminar un archivo</string>
+    <string name="kind_delete_directory">Eliminar una carpeta</string>
+    <string name="kind_move_file">Mover un archivo</string>
+    <string name="kind_edit_file">Editar un archivo</string>
+    <string name="kind_fetch_url">Abrir una página web</string>
+    <string name="kind_mcp_write">Cambiar datos en un servidor de herramientas</string>
+    <string name="invariant_git_commit">Commit en git. Siempre se pregunta y nunca se recuerda.</string>
+    <string name="invariant_git_push">Subir a un remoto. Siempre se pregunta y nunca se recuerda.</string>
+    <string name="invariant_git_unresolved">Git tiene conflictos sin resolver. Siempre se pregunta.</string>
+    <string name="invariant_git_config">Cambiar la configuración de git. Siempre se pregunta.</string>
+
+    <string name="question_block_title">Pregunta del agente</string>
+    <string name="question_answer_action">Responder</string>
+    <string name="question_answered">Respondida: %1$s</string>
+    <string name="question_skipped">Omitida</string>
+    <string name="question_unanswered">Sin respuesta</string>
+    <string name="question_skip">Omitir</string>
+    <string name="question_submit">Responder</string>
+    <string name="question_other">Otra…</string>
+    <string name="question_other_hint">Describe tu propia respuesta</string>
+    <string name="question_pick_many">Elige una o más opciones</string>
+
+    <string name="elicit_title">Formulario de %1$s</string>
+    <string name="elicit_block_title">Formulario de %1$s</string>
+    <string name="elicit_review">Revisar</string>
+    <string name="elicit_sent">Enviado</string>
+    <string name="elicit_declined">Rechazado</string>
+    <string name="elicit_cancelled">Cancelado</string>
+    <string name="elicit_expired">Caducado</string>
+    <string name="elicit_decline">Rechazar</string>
+    <string name="elicit_cancel">Cancelar</string>
+    <string name="elicit_submit">Enviar</string>
+    <string name="elicit_optional">Opcional</string>
+    <string name="elicit_required_error">Este campo es obligatorio</string>
+    <string name="elicit_bad_number">Introduce un número</string>
+    <string name="elicit_bad_integer">Introduce un número entero</string>
+
+    <plurals name="files_count">
+        <item quantity="one">%d archivo</item>
+        <item quantity="other">%d archivos</item>
+    </plurals>
+    <plurals name="lines_more">
+        <item quantity="one">%d línea más</item>
+        <item quantity="other">%d líneas más</item>
+    </plurals>
+    <plurals name="agents_title">
+        <item quantity="one">%d subagente</item>
+        <item quantity="other">%d subagentes</item>
+    </plurals>
+    <plurals name="agents_running">
+        <item quantity="one">%d en curso</item>
+        <item quantity="other">%d en curso</item>
+    </plurals>
+    <plurals name="work_read">
+        <item quantity="one">Leído %d archivo</item>
+        <item quantity="other">Leídos %d archivos</item>
+    </plurals>
+    <plurals name="work_created">
+        <item quantity="one">Creado %d archivo</item>
+        <item quantity="other">Creados %d archivos</item>
+    </plurals>
+    <plurals name="work_modified">
+        <item quantity="one">Modificado %d archivo</item>
+        <item quantity="other">Modificados %d archivos</item>
+    </plurals>
+    <plurals name="work_deleted">
+        <item quantity="one">Eliminado %d archivo</item>
+        <item quantity="other">Eliminados %d archivos</item>
+    </plurals>
+    <plurals name="work_commands">
+        <item quantity="one">Ejecutado %d comando</item>
+        <item quantity="other">Ejecutados %d comandos</item>
+    </plurals>
+    <plurals name="work_tools">
+        <item quantity="one">Llamada a %d herramienta</item>
+        <item quantity="other">Llamadas a %d herramientas</item>
+    </plurals>
+    <plurals name="work_failed">
+        <item quantity="one">%d fallido</item>
+        <item quantity="other">%d fallidos</item>
+    </plurals>
+</resources>

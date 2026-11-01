@@ -21,17 +21,8 @@ import { useEffect, useRef } from "react";
 
 import type { McpServerSummary, McpSource, McpStatus } from "../../core/client";
 import { t, tp, type Key } from "../../i18n";
+import { MCP_STATUS } from "../mcpStatus";
 import { Panel } from "./Panel";
-
-const STATUS: Record<McpStatus, Key> = {
-  connecting: "mcp.status_connecting",
-  ready: "mcp.status_ready",
-  failed: "mcp.status_failed",
-  disabled: "mcp.status_disabled",
-  needsApproval: "mcp.status_needs_approval",
-  needsLogin: "mcp.status_needs_login",
-  loggingIn: "mcp.status_logging_in",
-};
 
 const SOURCE: Record<McpSource, Key> = {
   global: "mcp.source_global",
@@ -199,7 +190,7 @@ function Status({ status }: { status: McpStatus }) {
           <Circle size={7} weight="fill" />
         </span>
       )}{" "}
-      {t(STATUS[status])}
+      {t(MCP_STATUS[status])}
     </span>
   );
 }

@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_menu_processes">进程</string>
+    <string name="chat_menu_checkpoints">检查点</string>
+    <string name="chat_menu_compact">压缩历史</string>
+    <string name="chat_menu_close">关闭聊天</string>
+    <string name="chat_state_working">工作中</string>
+    <string name="chat_state_idle">空闲</string>
+    <string name="chat_state_waiting">等待你处理</string>
+    <string name="chat_subtitle">%1$s · %2$s</string>
+    <string name="chat_close_title">关闭此聊天？</string>
+    <string name="chat_close_body">关闭后，所有能看到此聊天的人都会在电脑上停止本轮运行。</string>
+    <string name="chat_close_confirm">关闭聊天</string>
+    <string name="chat_compact_title">压缩历史？</string>
+    <string name="chat_compact_body">智能体会将对话总结以释放上下文。总结将取代它正在使用的消息。</string>
+    <string name="chat_compact_confirm">压缩</string>
+    <string name="chat_empty">发送一条消息开始工作。</string>
+    <string name="chat_list_separator">，</string>
+    <string name="chat_reasoning">推理</string>
+    <string name="chat_working">工作中…</string>
+    <string name="chat_working_for">已工作 %1$s</string>
+    <string name="chat_work_with_failed">%1$s（%2$s）</string>
+
+    <string name="checkpoint_before_message">你的消息之前</string>
+    <string name="checkpoint_before_command">%1$s 之前</string>
+    <string name="checkpoint_after_restore">恢复之后</string>
+    <string name="checkpoint_line">检查点，%1$s：%2$s</string>
+    <string name="restored_line">已恢复 %1$s</string>
+    <string name="stopped_line">已停止</string>
+    <string name="turn_time">工作了 %1$s</string>
+
+    <string name="compacted_title">历史已压缩</string>
+    <string name="compacted_freed">释放了 %1$s 个词元</string>
+    <string name="compacted_summary">摘要</string>
+    <string name="plan_title">计划</string>
+    <string name="plan_progress">已完成 %1$d / %2$d</string>
+    <string name="plan_item_done">已完成</string>
+    <string name="plan_item_running">进行中</string>
+    <string name="plan_item_pending">未开始</string>
+    <string name="plan_proposed">建议的计划</string>
+
+    <string name="error_title">错误</string>
+    <string name="error_retry_hint">可以再试一次。</string>
+    <string name="retry_line">%3$s 后重试，第 %1$d 次，共 %2$d 次</string>
+    <string name="route_default">%1$s · %2$s</string>
+    <string name="route_named">%1$s: %2$s · %3$s</string>
+    <string name="hook_line">%1$s · %2$s</string>
+    <string name="hook_blocked">已阻止</string>
+    <string name="shown_command">命令：%1$s</string>
+    <string name="shown_range">第 %1$d–%2$d 行，共 %3$d 行</string>
+    <string name="duration_sec">%1$d 秒</string>
+    <string name="duration_min_sec">%1$d 分 %2$d 秒</string>
+
+    <string name="queued_title">本轮结束后发送</string>
+    <string name="queued_cancel_desc">取消排队的消息</string>
+
+    <string name="row_status_running">运行中</string>
+    <string name="row_status_done">已完成</string>
+    <string name="row_status_failed">失败</string>
+    <string name="row_status_rejected">已拒绝</string>
+    <string name="row_status_denied">已拒绝</string>
+    <string name="row_status_stopped">已停止</string>
+    <string name="row_no_output">无输出</string>
+    <string name="row_output_cut">输出已被截断</string>
+    <string name="row_pictures">图片</string>
+    <string name="row_open_diff">打开差异</string>
+    <string name="row_open_file">打开文件</string>
+    <string name="row_added">+%1$d</string>
+    <string name="row_removed">−%1$d</string>
+    <string name="row_cancelled">已取消</string>
+    <string name="row_failed">失败</string>
+    <string name="row_edit_failed">无法修改 %1$s</string>
+    <string name="row_denied">已拒绝</string>
+    <string name="row_denied_because">已拒绝：%1$s</string>
+    <string name="row_rejected">已拒绝：%1$s</string>
+    <string name="row_stopped">已停止</string>
+    <string name="file_reading">正在读取 %1$s</string>
+    <string name="file_creating">正在创建 %1$s</string>
+    <string name="file_changing">正在修改 %1$s</string>
+    <string name="file_deleting">正在删除 %1$s</string>
+    <string name="file_read">已读取 %1$s</string>
+    <string name="file_created">已创建 %1$s</string>
+    <string name="file_modified">已修改 %1$s</string>
+    <string name="file_deleted">已删除 %1$s</string>
+    <string name="file_moved">已将 %1$s 移至 %2$s</string>
+    <string name="file_dir_deleted">已删除文件夹 %1$s</string>
+
+    <string name="agents_untitled">子智能体</string>
+    <string name="agents_tokens">%1$s 个词元</string>
+    <string name="agents_no_report">暂无报告</string>
+
+    <string name="composer_placeholder">给智能体发消息</string>
+    <string name="composer_placeholder_busy">排队发送后续消息…</string>
+    <string name="composer_send">发送</string>
+    <string name="composer_queue">排队发送</string>
+    <string name="composer_stop">停止本轮</string>
+    <string name="composer_mention">提及文件</string>
+    <string name="composer_remove">移除 %1$s</string>
+    <string name="mode_plan">计划</string>
+    <string name="mode_manual">手动</string>
+    <string name="mode_auto">自动</string>
+    <string name="mode_edits">编辑</string>
+    <string name="effort_low">低</string>
+    <string name="effort_medium">中</string>
+    <string name="effort_high">高</string>
+    <string name="effort_extra">超高</string>
+    <string name="effort_max">最高</string>
+    <string name="model_none">这台电脑上还没有可用的模型。</string>
+    <string name="model_context">上下文 %1$s 个词元</string>
+    <string name="context_used">上下文：已用 %1$s / %2$s 个词元</string>
+    <string name="context_unknown">上下文大小未知</string>
+
+    <string name="permission_kicker">智能体请求访问权限</string>
+    <string name="permission_position">第 %1$d 项，共 %2$d 项</string>
+    <string name="permission_why">原因：%1$s</string>
+    <string name="permission_server">工具服务器：%1$s</string>
+    <string name="permission_unsaved">撤销无法恢复 %1$d 个文件和 %2$d 个文件夹。</string>
+    <string name="permission_scope_once">仅此一次</string>
+    <string name="permission_scope_once_hint">仅允许这一次请求</string>
+    <string name="permission_allow">允许</string>
+    <string name="permission_deny">拒绝</string>
+    <string name="permission_block_review">查看</string>
+    <string name="scope_always">始终：%1$s</string>
+    <string name="scope_tool">所有 %1$s 调用</string>
+    <string name="scope_directory">%1$s 中的所有内容</string>
+    <string name="scope_command_prefix">以 %1$s 开头的命令</string>
+    <string name="scope_domain">来自 %1$s 的所有内容</string>
+    <string name="scope_mcp_server">所有对 %1$s 的调用</string>
+    <string name="kind_run_command">运行命令</string>
+    <string name="kind_delete_file">删除文件</string>
+    <string name="kind_delete_directory">删除文件夹</string>
+    <string name="kind_move_file">移动文件</string>
+    <string name="kind_edit_file">编辑文件</string>
+    <string name="kind_fetch_url">打开网页</string>
+    <string name="kind_mcp_write">修改工具服务器上的数据</string>
+    <string name="invariant_git_commit">提交到 git。每次都会询问，且不会记住。</string>
+    <string name="invariant_git_push">推送到远程。每次都会询问，且不会记住。</string>
+    <string name="invariant_git_unresolved">git 存在未解决的冲突。每次都会询问。</string>
+    <string name="invariant_git_config">修改 git 配置。每次都会询问。</string>
+
+    <string name="question_block_title">来自智能体的问题</string>
+    <string name="question_answer_action">回答</string>
+    <string name="question_answered">已回答：%1$s</string>
+    <string name="question_skipped">已跳过</string>
+    <string name="question_unanswered">未回答</string>
+    <string name="question_skip">跳过</string>
+    <string name="question_submit">回答</string>
+    <string name="question_other">其他…</string>
+    <string name="question_other_hint">描述你自己的答案</string>
+    <string name="question_pick_many">选择一个或多个</string>
+
+    <string name="elicit_title">来自 %1$s 的表单</string>
+    <string name="elicit_block_title">来自 %1$s 的表单</string>
+    <string name="elicit_review">查看</string>
+    <string name="elicit_sent">已发送</string>
+    <string name="elicit_declined">已拒绝</string>
+    <string name="elicit_cancelled">已取消</string>
+    <string name="elicit_expired">已过期</string>
+    <string name="elicit_decline">拒绝</string>
+    <string name="elicit_cancel">取消</string>
+    <string name="elicit_submit">提交</string>
+    <string name="elicit_optional">可选</string>
+    <string name="elicit_required_error">此字段为必填项</string>
+    <string name="elicit_bad_number">请输入数字</string>
+    <string name="elicit_bad_integer">请输入整数</string>
+
+    <plurals name="files_count">
+        <item quantity="other">%d 个文件</item>
+    </plurals>
+    <plurals name="lines_more">
+        <item quantity="other">还有 %d 行</item>
+    </plurals>
+    <plurals name="agents_title">
+        <item quantity="other">%d 个子智能体</item>
+    </plurals>
+    <plurals name="agents_running">
+        <item quantity="other">%d 个运行中</item>
+    </plurals>
+    <plurals name="work_read">
+        <item quantity="other">读取了 %d 个文件</item>
+    </plurals>
+    <plurals name="work_created">
+        <item quantity="other">创建了 %d 个文件</item>
+    </plurals>
+    <plurals name="work_modified">
+        <item quantity="other">修改了 %d 个文件</item>
+    </plurals>
+    <plurals name="work_deleted">
+        <item quantity="other">删除了 %d 个文件</item>
+    </plurals>
+    <plurals name="work_commands">
+        <item quantity="other">执行了 %d 条命令</item>
+    </plurals>
+    <plurals name="work_tools">
+        <item quantity="other">调用了 %d 个工具</item>
+    </plurals>
+    <plurals name="work_failed">
+        <item quantity="other">%d 个失败</item>
+    </plurals>
+</resources>

@@ -18,6 +18,7 @@ import { Markdown } from "./Markdown";
 import { Attachment } from "./Attachment";
 import { CodeBlock } from "./CodeBlock";
 import { useCopy } from "./useCopy";
+import { errorMessage } from "./errorMessage";
 
 /**
  * The row of actions under a message, which today is one: copy its text.
@@ -317,10 +318,16 @@ export function ErrorBlock({
   retryable: boolean;
   onRetry: () => void;
 }) {
+  const explanation = errorMessage(code);
   return (
-    <div className="error">
-      <div className="error-title">{code}</div>
-      <div className="error-detail">{message}</div>
+    <div className="error" role="alert">
+      <div className="error-title">{t("err.title")}</div>
+      <div className="error-explanation">{explanation ?? (message || t("err.failed_help"))}</div>
+      <details className="error-detail">
+        <summary>{t("err.details")}</summary>
+        <div>{code}</div>
+        {message && <div>{message}</div>}
+      </details>
       {retryable && (
         <div className="error-actions">
           <button className="btn btn-small" onClick={onRetry}>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">Paramètres</string>
+    <string name="settings_section_connection">Connexion</string>
+    <string name="settings_stay_connected">Rester connecté en arrière-plan</string>
+    <string name="settings_stay_connected_desc">Garde vos ordinateurs connectés application fermée, avec une notification permanente, pour que leurs questions vous parviennent. Désactivé : la connexion s’arrête quand vous quittez l’application.</string>
+    <string name="settings_section_notifications">Notifications</string>
+    <string name="settings_turn_finished">Prévenir à la fin d’un tour</string>
+    <string name="settings_turn_finished_desc">Une notification discrète quand un chat a terminé et attend de vous.</string>
+    <string name="settings_system_notifications">Paramètres de notification</string>
+    <string name="settings_system_notifications_desc">Sons, importance et blocage, dans les réglages système d’Android.</string>
+    <string name="settings_section_appearance">Apparence</string>
+    <string name="settings_wallpaper_colours">Couleurs du fond d’écran</string>
+    <string name="settings_wallpaper_colours_desc">Material You : les couleurs suivent votre fond d’écran.</string>
+    <string name="settings_section_about">À propos</string>
+    <string name="settings_version">Version %1$s</string>
+</resources>

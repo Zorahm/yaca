@@ -59,6 +59,8 @@ export const panels = {
   "file.unavailable": "표시할 내용이 없습니다: 파일이 디스크에 없거나, 이진 파일이거나, 프로젝트 밖에 있습니다",
 
   "proc.empty": "백그라운드 명령이 없습니다",
+  "proc.active_count": "실행 중: {n}",
+  "proc.finished_count": "종료됨: {n}",
   "proc.watch": "출력 보기",
   "proc.state_running": "실행 중",
   "proc.state_exited": "코드 {code}",

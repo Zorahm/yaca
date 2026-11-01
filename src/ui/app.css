@@ -39,6 +39,10 @@
   /* The band and composer rows are `auto`, so a band appearing does not
      jerk the height of the feed. */
   grid-template-rows: var(--h-top) 1fr auto auto;
+  /* One column, never wider than the window: an `auto` track grew to the
+     top bar's whole unwrapped title and pushed every row past the right
+     edge of a phone. */
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
 }
@@ -106,6 +110,30 @@
 .top-gap {
   flex: 1;
   min-width: 12px;
+}
+
+.top-processes {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.top-processes:hover {
+  background: var(--sunk);
+}
+
+@media (max-width: 900px) {
+  .top-process-label {
+    display: none;
+  }
 }
 
 .top-dot {
@@ -862,6 +890,146 @@
   height: 1px;
   margin: 5px 6px;
   background: var(--line);
+}
+
+/* The `＋` menu: first in the composer row, so it opens from its left edge like
+   the mode menu. Rows are one line, with an icon; a server that is not up is
+   listed but dimmed, and does not answer a press. */
+.menu-attach {
+  right: auto;
+  left: 0;
+  min-width: 240px;
+  max-width: 320px;
+}
+
+.menu-attach .menu-item {
+  align-items: center;
+}
+
+.menu-attach .menu-text {
+  min-width: 0;
+}
+
+.menu-attach .menu-item:disabled {
+  color: var(--muted);
+  background: none;
+  cursor: default;
+}
+
+.menu-back {
+  color: var(--muted);
+}
+
+.menu-attach-list {
+  max-height: 260px;
+  padding: 0;
+}
+
+.menu-clip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A menu opens from its chip rather than appearing whole: a short scale up
+   from the composer it hangs over. */
+@media (prefers-reduced-motion: no-preference) {
+  .menu {
+    transform-origin: bottom center;
+    animation: yacaPop var(--dur-pop) var(--ease-enter);
+  }
+}
+
+/* --- narrow window ------------------------------------------------------ */
+
+/* `NARROW` in resize.ts: a phone, or a window dragged that thin. The 24 px
+   margins of a desktop column are a tenth of a phone's width; 12–16 px is
+   what Android's own screens keep. */
+@media (max-width: 679.98px) {
+  .top {
+    gap: 2px;
+    padding: 0 6px;
+  }
+
+  /* A step down: at 15 px the title took the bar from the buttons. */
+  .top-title {
+    margin-left: 2px;
+    font-size: 14px;
+  }
+
+  /* The drawer names the project above the chat; on a phone the chip only
+     takes the title's room. */
+  .top-project {
+    display: none;
+  }
+
+  .bars:not(:empty) {
+    padding: 8px 12px 0;
+  }
+
+  .composer-wrap {
+    padding: 8px 12px max(12px, env(safe-area-inset-bottom));
+  }
+
+  .composer {
+    padding-left: 14px;
+  }
+
+  /* Never wider than the screen, whichever edge the chip hangs it from. The
+     mode menu keeps the width that holds each note on one line while the
+     screen has it. */
+  .menu,
+  .menu-attach {
+    min-width: min(260px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+  }
+
+  .menu-notes {
+    min-width: min(340px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+  }
+}
+
+/* --- touch -------------------------------------------------------------- */
+
+/* A finger covers about 40 px. Controls drawn smaller keep their look and get
+   an invisible margin that takes the tap: the row stays as dense as it was,
+   and a tap a little off the glyph still lands. */
+@media (pointer: coarse) {
+  .top-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .send {
+    width: 36px;
+    height: 36px;
+  }
+
+  .chip,
+  .bar-close,
+  .queued-cancel,
+  .segment,
+  .btn-small,
+  .btn-row {
+    position: relative;
+  }
+
+  .chip::after,
+  .bar-close::after,
+  .queued-cancel::after,
+  .segment::after,
+  .btn-small::after,
+  .btn-row::after {
+    content: "";
+    position: absolute;
+    inset: -8px -3px;
+  }
+
+  .menu-item {
+    min-height: 40px;
+    align-items: center;
+  }
 }
 
 /* --- splash before a project is opened ---------------------------------- */

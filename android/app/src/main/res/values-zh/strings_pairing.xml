@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pairing_title">配对电脑</string>
+    <string name="pairing_heading">连接电脑</string>
+    <string name="pairing_body">扫描电脑上 Yaca 显示的二维码。</string>
+    <string name="pairing_camera_rationale">Yaca 仅使用相机读取配对码，不保存任何内容。</string>
+    <string name="pairing_camera_denied">相机访问已关闭。请改为粘贴配对链接。</string>
+    <string name="pairing_camera_unavailable">Yaca 无法使用这部手机的相机。请改为粘贴配对链接。</string>
+    <string name="pairing_camera_allow">允许使用相机</string>
+    <string name="pairing_camera_note">配对码有效期为五分钟。</string>
+    <string name="pairing_paste">粘贴配对链接</string>
+    <string name="pairing_invalid_link">这不是 Yaca 的配对链接。</string>
+    <string name="pairing_network">无法连接到电脑。请确认两者位于同一网络。</string>
+    <string name="pairing_storage">已配对，但手机未能保存连接。请重新配对；多余的条目可在电脑上的 Yaca 中删除。</string>
+    <string name="pairing_in_progress">正在与 %1$s 配对…</string>
+    <string name="pairing_confirm_title">与 %1$s 配对？</string>
+    <string name="pairing_confirm_body">在你忘记这台电脑之前，手机会接收它的事件。</string>
+    <string name="pairing_confirm_action">配对</string>
+
+    <string name="refusal_unauthorized">这部手机已不再被该电脑允许。请重新配对。</string>
+    <string name="refusal_pairing_failed">配对码错误、已使用或已过期。请在 Yaca 中生成新的配对码并重新扫描。</string>
+    <string name="refusal_protocol_mismatch">电脑使用协议 %1$d，本应用使用 %2$d。请更新其中一方。</string>
+    <string name="refusal_too_many_attempts">该网络的失败尝试次数过多。请稍后再试。</string>
+    <string name="refusal_handshake_expected">电脑在握手前关闭了连接。请重试。</string>
+</resources>

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="diff_none">A sessão não alterou este arquivo, então não há diff.</string>
+    <string name="diff_no_lines">A mudança não tem linhas para mostrar.</string>
+    <string name="diff_truncated">O núcleo cortou este diff.</string>
+    <string name="change_created">Criado</string>
+    <string name="change_modified">Alterado</string>
+    <string name="change_deleted">Excluído</string>
+    <string name="change_moved">Movido de %1$s</string>
+    <string name="panel_diff_counts">+%1$d −%2$d</string>
+
+    <string name="file_loading">Lendo o arquivo…</string>
+    <string name="file_unavailable">Nada para mostrar: o arquivo não existe, é binário ou está fora do projeto.</string>
+    <string name="panel_file_deleted">O arquivo foi excluído neste chat, então não tem mais texto.</string>
+    <string name="file_empty">O arquivo está vazio.</string>
+    <string name="file_truncated">O arquivo não é mostrado até o fim.</string>
+
+    <string name="ckpt_title">Checkpoints</string>
+    <string name="ckpt_subtitle">tirados antes de cada edição do agente</string>
+    <string name="ckpt_now">Estado atual</string>
+    <string name="ckpt_now_mark">Agora</string>
+    <string name="ckpt_empty">Nenhum checkpoint ainda.</string>
+    <string name="ckpt_reason_message">antes da mensagem</string>
+    <string name="ckpt_reason_command">antes de %1$s</string>
+    <string name="ckpt_reason_rollback">antes da restauração</string>
+    <string name="ckpt_restore">Restaurar</string>
+    <string name="ckpt_restore_title">Restaurar para %1$s?</string>
+    <string name="ckpt_restore_body">Os arquivos voltam a este estado. As mudanças feitas depois deste ponto serão perdidas. Isso não pode ser desfeito.</string>
+    <string name="ckpt_restore_loading">Calculando quais arquivos vão mudar…</string>
+    <string name="ckpt_restore_nothing">Nada mudou desde este ponto.</string>
+    <string name="ckpt_will_restore">será restaurado</string>
+    <string name="ckpt_will_revert">será revertido</string>
+    <string name="ckpt_will_delete">será excluído</string>
+    <plurals name="ckpt_tracked">
+        <item quantity="one">%d arquivo</item>
+        <item quantity="other">%d arquivos</item>
+    </plurals>
+
+    <string name="proc_title">Processos</string>
+    <string name="proc_empty">Nenhum comando em segundo plano neste chat.</string>
+    <string name="proc_section_running">Em execução</string>
+    <string name="proc_section_finished">Concluídos</string>
+    <string name="proc_state_running">em execução</string>
+    <string name="proc_state_exited">código %1$d</string>
+    <string name="proc_state_exited_none">terminou sem código</string>
+    <string name="proc_state_stopped">parado</string>
+    <string name="proc_output">Saída</string>
+    <string name="proc_no_output">Ainda sem saída</string>
+    <plurals name="proc_dropped">
+        <item quantity="one">%d linha descartada do buffer</item>
+        <item quantity="other">%d linhas descartadas do buffer</item>
+    </plurals>
+    <string name="proc_stop">Parar</string>
+    <string name="proc_stop_title">Parar %1$s?</string>
+    <string name="proc_stop_body">O processo recebe um sinal de parada e deixa de responder. A saída fica no registro do chat; o comando pode ser iniciado de novo à mão.</string>
+
+    <string name="mention_label">Arquivos do projeto</string>
+    <string name="mention_recent">Tocados neste chat</string>
+    <string name="mention_searching">Buscando…</string>
+    <string name="mention_none">Nada encontrado</string>
+    <string name="mention_none_touched">Nenhum arquivo tocado neste chat ainda. Digite para buscar no projeto.</string>
+    <string name="mention_close">Fechar menu</string>
+</resources>

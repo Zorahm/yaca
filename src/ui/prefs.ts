@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import { DEFAULT_PREFS, onPreferences, preferences, type Preferences } from "../core/client";
 import { setLocale } from "../i18n";
 import type { Locale } from "../i18n";
+import { syncTrayLabels } from "../core/tray";
 
 /** The media query that asks the system for the theme. */
 const DARK = "(prefers-color-scheme: dark)";
@@ -55,6 +56,12 @@ export function applyPrefs(prefs: Preferences): void {
 
   if (prefs.compact) root.setAttribute("data-compact", "on");
   else root.removeAttribute("data-compact");
+
+  // On a phone the browser's own bars and the task switcher take this colour:
+  // the window ground, or the page sits in a frame of another edition.
+  const bar = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  const ground = getComputedStyle(root).getPropertyValue("--bg").trim();
+  if (bar !== null && ground !== "") bar.content = ground;
 }
 
 /**
@@ -76,6 +83,7 @@ export async function bootPrefs(): Promise<Preferences> {
     console.error("could not read app preferences", e);
   }
   setLocale(localeOf(prefs));
+  await syncTrayLabels();
   applyPrefs(prefs);
   return prefs;
 }
@@ -99,6 +107,7 @@ export function usePreferences(initial: Preferences): Preferences {
     const off = onPreferences((next) => {
       if (!live) return;
       setLocale(localeOf(next));
+      void syncTrayLabels();
       applyPrefs(next);
       setPrefs(next);
     });

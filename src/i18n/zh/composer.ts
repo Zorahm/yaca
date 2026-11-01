@@ -62,6 +62,8 @@ export const composer = {
   "composer.stop": "停止",
   "composer.attach": "附加文件",
   "composer.detach": "移除",
+  "composer.add": "添加",
+  "composer.add_back": "返回",
   "attachment.gone": "{path} — 文件已不存在",
   "composer.queued": "排队中",
   "composer.queued_cancel": "取消",

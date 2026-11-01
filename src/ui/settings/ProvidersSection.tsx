@@ -41,9 +41,23 @@ export function ProvidersSection({
   models: ModelInfo[];
   onChanged: () => void;
 }) {
-  const { providers, error, save, remove } = useProviders();
+  const { providers, error, save, remove, ask } = useProviders();
   const [editing, setEditing] = useState<Editing | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  // Rows being asked now. A set, not one id: two rows may be asked at once.
+  const [asking, setAsking] = useState<ReadonlySet<string>>(new Set());
+
+  const askRow = (spec: ProviderSpec) => {
+    setAsking((now) => new Set(now).add(spec.id));
+    void ask(spec).finally(() => {
+      setAsking((now) => {
+        const next = new Set(now);
+        next.delete(spec.id);
+        return next;
+      });
+      onChanged();
+    });
+  };
 
   const done = () => {
     setEditing(null);
@@ -97,6 +111,8 @@ export function ProvidersSection({
                 key={spec.id}
                 spec={spec}
                 confirming={confirming === spec.id}
+                asking={asking.has(spec.id)}
+                onAsk={() => askRow(spec)}
                 onEdit={() => setEditing({ draft: draftFromSpec(spec), isNew: false })}
                 onDeleteStart={() => setConfirming(spec.id)}
                 onDeleteCancel={() => setConfirming(null)}
@@ -124,6 +140,8 @@ export function ProvidersSection({
 function ProviderRow({
   spec,
   confirming,
+  asking,
+  onAsk,
   onEdit,
   onDeleteStart,
   onDeleteCancel,
@@ -131,6 +149,8 @@ function ProviderRow({
 }: {
   spec: ProviderSpec;
   confirming: boolean;
+  asking: boolean;
+  onAsk: () => void;
   onEdit: () => void;
   onDeleteStart: () => void;
   onDeleteCancel: () => void;
@@ -163,10 +183,12 @@ function ProviderRow({
       <div className="prov-actions">
         {/* Asking for models is the most common thing done with an unconfigured
             provider, and the button sits where the trouble is visible: before, one had
-            to open the form and scroll it to the end. */}
+            to open the form and scroll it to the end. It asks right here; the form
+            is the pencil next to it. */}
         {!answered && (
-          <button type="button" className="btn btn-small" onClick={onEdit}>
-            <ArrowClockwise size={13} /> {t("prov.models_ask")}
+          <button type="button" className="btn btn-small" disabled={asking} onClick={onAsk}>
+            <ArrowClockwise size={13} className={asking ? "pulse" : undefined} />{" "}
+            {asking ? t("prov.models_asking") : t("prov.models_ask")}
           </button>
         )}
 

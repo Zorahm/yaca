@@ -48,6 +48,25 @@ fn error_of(events: &[AgentEvent]) -> Option<(String, String, bool)> {
 }
 
 #[tokio::test]
+async fn an_empty_or_whitespace_answer_is_reported_as_failed() {
+    for text in ["", " \n\t"] {
+        let dir = TempProject::new();
+        let provider = Arc::new(MockProvider::new(vec![Turn::Events(script_text(text))]));
+        let handle = session(&dir, provider, Mode::Manual);
+        let mut rx = handle.subscribe();
+        ask(&handle, "hello").await;
+        let events = until(&mut rx, is_turn_over).await;
+        let (code, message, retryable) = error_of(&events).expect("missing empty answer error");
+        assert_eq!(code, "empty_answer");
+        assert!(!message.contains("reasoning"), "{message}");
+        assert!(retryable);
+        assert!(matches!(events.last(), Some(AgentEvent::TurnFinished {
+            stop_reason: StopReason::Failed, ..
+        })));
+    }
+}
+
+#[tokio::test]
 async fn reasoning_with_no_answer_ends_the_turn_with_an_error_block() {
     let dir = TempProject::new();
     let provider = Arc::new(MockProvider::new(vec![Turn::Events(thinking_only(

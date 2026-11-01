@@ -39,7 +39,8 @@ that opens the context window. Slide-over panels hold processes, a file diff,
 checkpoints, providers and each chat's browser. A separate settings window
 holds preferences, providers, MCP servers, plugins, skills, language servers and
 model routing. The window is frameless on Windows and ships as an NSIS
-installer.
+installer. Closing the main window hides it in the system tray while chats keep
+running. The tray icon restores the window, and its context menu exits Yaca.
 
 ## Capabilities and Constraints
 
@@ -47,8 +48,14 @@ installer.
   tools, 22px diff line (20px in compact mode).
 - No stubs: a control that silently does nothing is not declared at all.
 - Every user-facing string goes through i18n keys.
+- Background commands have a visible count and a direct link to their state and
+  output, including after they finish. The project is the default shell directory;
+  commands can use any existing directory as their working directory.
 - Two themes exist, light by default and dark, plus "follow the system".
-- Motion is limited to state pulses.
+- Motion is limited to state pulses and short transitions of layers coming and
+  going.
+- A narrow window (a phone) gets its own layout: the sidebar is a drawer, panels
+  and settings take the screen, and Back closes the layer on top.
 - Any provider speaking the Anthropic or OpenAI protocol, local servers
   included; a model router can pick the model per task.
 - Extensible by skills, named subagents, project hooks, plugins, MCP servers

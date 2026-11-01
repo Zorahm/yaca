@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notify_channel_needs_you">対応が必要</string>
+    <string name="notify_channel_needs_you_desc">コンピューター上のチャットからの、回答を待つ権限要求・質問・フォーム。</string>
+    <string name="notify_channel_turn_finished">ターン完了</string>
+    <string name="notify_channel_turn_finished_desc">コンピューター上のチャットがターンを終え、次のメッセージを待っています。</string>
+    <string name="notify_channel_connection">接続</string>
+    <string name="notify_channel_connection_desc">アプリがバックグラウンドにある間、スマホが接続しているコンピューターを表示します。</string>
+
+    <string name="notify_permission_title">エージェントが許可を求めています</string>
+    <string name="notify_question_title">エージェントから質問があります</string>
+    <string name="notify_elicitation_title">サーバーが入力を必要としています</string>
+    <string name="notify_turn_finished_title">完了: %1$s</string>
+    <!-- The chat title and the project, both as the host names them. -->
+    <string name="notify_chat_line">%1$s · %2$s</string>
+    <string name="notify_action_allow_once">今回のみ許可</string>
+    <string name="notify_action_deny">拒否</string>
+    <string name="notify_action_open">開く</string>
+    <string name="notify_answer_failed">回答を送信できませんでした。チャットを開いて回答してください。</string>
+
+    <string name="notify_connection_connected">%1$s に接続中</string>
+    <string name="notify_connection_connecting">接続中…</string>
+    <string name="notify_connection_disconnect">切断</string>
+
+    <string name="notify_prompt_title">エージェントの対応が必要なときに通知を受け取る</string>
+    <string name="notify_prompt_body">チャットからの許可要求と質問は、アプリを閉じている間は通知でのみ届きます。許可すると、アプリを開かずに回答できます。</string>
+    <string name="notify_prompt_allow">許可</string>
+    <string name="notify_prompt_later">今はしない</string>
+</resources>

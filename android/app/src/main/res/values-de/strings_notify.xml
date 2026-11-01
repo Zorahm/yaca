@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notify_channel_needs_you">Wartet auf dich</string>
+    <string name="notify_channel_needs_you_desc">Berechtigungsanfragen, Fragen und Formulare aus einem Chat auf deinem Computer, die auf deine Antwort warten.</string>
+    <string name="notify_channel_turn_finished">Durchlauf beendet</string>
+    <string name="notify_channel_turn_finished_desc">Ein Chat auf deinem Computer hat seinen Durchlauf beendet und wartet auf deine nächste Nachricht.</string>
+    <string name="notify_channel_connection">Verbindung</string>
+    <string name="notify_channel_connection_desc">Zeigt, mit welchen Computern das Telefon verbunden ist, solange die App im Hintergrund ist.</string>
+
+    <string name="notify_permission_title">Der Agent fragt nach einer Berechtigung</string>
+    <string name="notify_question_title">Der Agent hat eine Frage gestellt</string>
+    <string name="notify_elicitation_title">Ein Server braucht Eingaben</string>
+    <string name="notify_turn_finished_title">Fertig: %1$s</string>
+    <!-- The chat title and the project, both as the host names them. -->
+    <string name="notify_chat_line">%1$s · %2$s</string>
+    <string name="notify_action_allow_once">Einmal erlauben</string>
+    <string name="notify_action_deny">Ablehnen</string>
+    <string name="notify_action_open">Öffnen</string>
+    <string name="notify_answer_failed">Deine Antwort konnte nicht gesendet werden. Öffne den Chat, um zu antworten.</string>
+
+    <string name="notify_connection_connected">Verbunden mit %1$s</string>
+    <string name="notify_connection_connecting">Verbindung wird aufgebaut…</string>
+    <string name="notify_connection_disconnect">Trennen</string>
+
+    <string name="notify_prompt_title">Benachrichtigt werden, wenn der Agent dich braucht</string>
+    <string name="notify_prompt_body">Berechtigungsanfragen und Fragen aus deinen Chats kommen bei geschlossener App nur als Benachrichtigung. So kannst du ohne Öffnen der App antworten.</string>
+    <string name="notify_prompt_allow">Erlauben</string>
+    <string name="notify_prompt_later">Nicht jetzt</string>
+</resources>

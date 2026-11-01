@@ -11,18 +11,21 @@
  * whose headers never mention `{key}` gets neither a required key field nor
  * a warning about a missing key (§10).
  *
- * Models are asked for, not typed, and mostly not asked for from here. The
- * shell asks on its own the moment a key is stored (`set_api_key`) and when a
- * provider is saved without a list (`save_provider`), and this hook only takes
- * the answer. What is left here is the button: `ask()` sends the draft, so a
- * lookup after an edit of the address goes to the new one.
+ * Models are asked for, not typed. The shell asks on its own the moment a key
+ * is stored (`set_api_key`) and when a provider is saved without a list
+ * (`save_provider`). This hook asks too, with the draft, whenever an edit
+ * changes how the provider is reached — address, protocol, headers — once the
+ * typing settles, and after a key is stored or forgotten under a draft the
+ * shell has not seen. The list on screen stays until the new answer arrives,
+ * and only the newest question's answer is taken: an older one that lands
+ * late describes an address that is no longer in the form.
  *
  * A new provider has no id until it is saved (`newProviderId`), so it has
  * nothing to keep a key under and nothing to be asked as. Its key travels
  * with the save, and the shell asks it then.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   apiKeySource,
@@ -41,6 +44,22 @@ import {
   type KeyState,
   type ProviderDraft,
 } from "./provider";
+
+/** How long the draft must stay still before an edit of it is asked about. */
+const SETTLE_MS = 700;
+
+/**
+ * Everything in the draft that decides where a lookup goes and what it says.
+ * Two drafts with the same reach get the same answer, so an edit that keeps it
+ * (the display name) asks nobody.
+ */
+function reachOf(draft: ProviderDraft): string {
+  return JSON.stringify([
+    draft.protocol,
+    draft.baseUrl.trim(),
+    draft.headers.map((header) => [header.name.trim(), header.value]),
+  ]);
+}
 
 /** The provider's models in what the shell answered, or `null` if it is not there. */
 function modelsIn(asked: Asked, id: string): Array<ModelInfo> | null {
@@ -71,6 +90,15 @@ export function useProviderForm({
 
   const [modelsBusy, setModelsBusy] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  // Whether the last question asked from this form was answered: the "ok"
+  // beside "asking" and the error.
+  const [modelsAnswered, setModelsAnswered] = useState(false);
+  // The number of the newest question; an answer to any other is dropped.
+  const asked = useRef(0);
+  // The reach the shell's saved provider has, which its own lookups go to,
+  // and the reach the list on screen was last asked for.
+  const openedWith = useRef(reachOf(initial));
+  const askedFor = useRef(openedWith.current);
 
   /**
    * Ask the provider for its list.
@@ -78,12 +106,16 @@ export function useProviderForm({
    * Asked against the draft rather than the saved spec: the address is the
    * thing people edit, and a lookup after an edit has to go to the new one. An
    * empty answer stays empty — "no models" is an answer too, and keeping the
-   * previous list over it would show what the provider no longer serves.
+   * previous list over it would show what the provider no longer serves. A
+   * refusal keeps the list: it says nothing about what the provider serves.
    */
   const ask = useCallback(async (current: ProviderDraft) => {
     if (!current.id.trim() || !current.baseUrl.trim()) return;
+    const question = ++asked.current;
+    askedFor.current = reachOf(current);
     setModelsBusy(true);
     setModelsError(null);
+    setModelsAnswered(false);
     try {
       const models = await discoverModels({
         id: current.id.trim(),
@@ -97,15 +129,30 @@ export function useProviderForm({
         ),
         models: [],
       });
+      if (question !== asked.current) return;
       setDraft((now) => ({ ...now, models }));
+      setModelsAnswered(true);
     } catch (e) {
+      if (question !== asked.current) return;
       setModelsError(String(e));
     } finally {
-      setModelsBusy(false);
+      if (question === asked.current) setModelsBusy(false);
     }
   }, []);
 
   const askForModels = useCallback(() => void ask(draft), [ask, draft]);
+
+  // An edit of how the provider is reached is asked about on its own, once
+  // the typing stops. The reach the form opened with was asked already (that
+  // is where its list came from), and a new provider has no id to ask as.
+  const reach = reachOf(draft);
+  const latest = useRef(draft);
+  latest.current = draft;
+  useEffect(() => {
+    if (isNew || reach === askedFor.current) return;
+    const timer = setTimeout(() => void ask(latest.current), SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [isNew, reach, ask]);
 
   // --- key section ---------------------------------------------------------
 
@@ -146,17 +193,33 @@ export function useProviderForm({
     setKeyError(null);
     setModelsError(null);
     try {
-      const asked = await setApiKey(value, id);
+      const answer = await setApiKey(value, id);
       // The value has done its job; keeping it in the field would keep a
       // secret on screen for no reason.
       setKeyValue("");
       loadSource();
       // The key was the thing missing to ask with (§10), and the shell has
-      // asked already. Its refusal belongs to the models, not to the key:
-      // the key is stored either way.
-      const models = modelsIn(asked, id);
-      if (asked.pollError !== null) setModelsError(asked.pollError);
-      else if (models !== null) setDraft((now) => ({ ...now, models }));
+      // asked already: the saved provider. A draft that reaches elsewhere is
+      // asked again with the new key, since that answer is about an address
+      // no longer in the form.
+      if (reachOf(draft) !== openedWith.current) {
+        void ask(draft);
+        return;
+      }
+      // Its refusal belongs to the models, not to the key: the key is stored
+      // either way. It also outdates whatever the form was still asking.
+      asked.current += 1;
+      askedFor.current = openedWith.current;
+      setModelsBusy(false);
+      const models = modelsIn(answer, id);
+      if (answer.pollError !== null) {
+        setModelsError(answer.pollError);
+        setModelsAnswered(false);
+      } else if (models !== null) {
+        setDraft((now) => ({ ...now, models }));
+        setModelsError(null);
+        setModelsAnswered(true);
+      }
     } catch (e) {
       setKeyError(String(e));
     } finally {
@@ -175,6 +238,9 @@ export function useProviderForm({
     try {
       await forgetApiKey(id);
       loadSource();
+      // Without the key the provider may no longer answer, and the form
+      // should say so now rather than at the first message.
+      void ask(draft);
     } catch (e) {
       setKeyError(String(e));
     } finally {
@@ -224,14 +290,17 @@ export function useProviderForm({
       if (keyValue.trim()) {
         // The key goes first: if the keychain refuses, nothing is saved
         // half-way and the error points at the only thing that failed.
-        const asked = await setApiKey(keyValue.trim(), spec.id);
+        const answer = await setApiKey(keyValue.trim(), spec.id);
         setKeyValue("");
         // A provider already in the list was asked with the new key just now,
         // and the draft's list is from before it: saving that over the answer
         // would undo the lookup. A new provider is not in the list yet —
-        // nobody was asked, and the save below asks.
-        const models = modelsIn(asked, spec.id);
-        if (asked.pollError === null && models !== null) spec = { ...spec, models };
+        // nobody was asked, and the save below asks. Neither was a draft that
+        // reaches elsewhere: the shell asked the old address, so the spec goes
+        // without a list and the save asks the new one.
+        const models = modelsIn(answer, spec.id);
+        if (reachOf(draft) !== openedWith.current) spec = { ...spec, models: [] };
+        else if (answer.pollError === null && models !== null) spec = { ...spec, models };
       }
       if (await onSave(spec)) onSaved();
     } catch (e) {
@@ -250,6 +319,7 @@ export function useProviderForm({
     askForModels,
     modelsBusy,
     modelsError,
+    modelsAnswered,
     problems,
     busy,
     error,

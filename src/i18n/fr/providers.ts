@@ -46,7 +46,7 @@ export const providers = {
 
   "prov.form_models": "Modèles",
   "prov.form_models_hint":
-    "La liste vient du fournisseur lui-même : il est interrogé dès qu'une clé est enregistrée, et « Interroger » pose la question à nouveau. Yaca travaille avec ce qu'il a répondu ; le prix est donné en dollars par million de tokens, zéro signifiant « gratuit ou inconnu ».",
+    "La liste vient du fournisseur lui-même : il est interrogé dès qu'une clé est enregistrée, puis de nouveau quand l'adresse, le protocole ou les en-têtes changent ; « Interroger » pose la question encore une fois. Tant que la réponse n'est pas arrivée, l'ancienne liste reste affichée. Yaca travaille avec ce qu'il a répondu ; le prix est donné en dollars par million de tokens, zéro signifiant « gratuit ou inconnu ».",
   "prov.form_model_context": "Contexte, tokens",
   "prov.form_model_output": "Sortie max., tokens",
   "prov.form_model_effort": "gère l'effort",
@@ -61,6 +61,7 @@ export const providers = {
 
   "prov.saved_unasked":
     "« {name} » est enregistré, mais il n'a pas répondu avec ses modèles : {error}",
+  "prov.ask_failed": "« {name} » n'a pas répondu avec ses modèles : {error}",
   "prov.error_name": "Donnez un nom au fournisseur",
   "prov.error_url": "Indiquez l'URL de base du fournisseur",
   "prov.error_header_name": "L'en-tête {n} n'a pas de nom",

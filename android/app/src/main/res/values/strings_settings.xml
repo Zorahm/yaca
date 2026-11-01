@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_connection">Connection</string>
+    <string name="settings_stay_connected">Stay connected in the background</string>
+    <string name="settings_stay_connected_desc">Keeps your computers connected while the app is closed, with a persistent notification, so their questions reach you. Off: the connection stops when you leave the app.</string>
+    <string name="settings_section_notifications">Notifications</string>
+    <string name="settings_turn_finished">Notify when a turn finishes</string>
+    <string name="settings_turn_finished_desc">A quiet notification when a chat is done and waits for you.</string>
+    <string name="settings_system_notifications">Notification settings</string>
+    <string name="settings_system_notifications_desc">Sounds, importance and blocking, in the system settings.</string>
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_wallpaper_colours">Use wallpaper colours</string>
+    <string name="settings_wallpaper_colours_desc">Material You: the colours follow your wallpaper.</string>
+    <string name="settings_section_about">About</string>
+    <string name="settings_version">Version %1$s</string>
+</resources>

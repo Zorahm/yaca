@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pairing_title">Vincular un ordenador</string>
+    <string name="pairing_heading">Conecta un ordenador</string>
+    <string name="pairing_body">Escanea el código QR que Yaca muestra en tu ordenador.</string>
+    <string name="pairing_camera_rationale">Yaca usa la cámara solo para leer el código de vinculación. No se guarda nada.</string>
+    <string name="pairing_camera_denied">El acceso a la cámara está desactivado. Pega el enlace de vinculación.</string>
+    <string name="pairing_camera_unavailable">Yaca no puede usar la cámara de este teléfono. Pega el enlace de vinculación.</string>
+    <string name="pairing_camera_allow">Permitir cámara</string>
+    <string name="pairing_camera_note">El código es válido durante cinco minutos.</string>
+    <string name="pairing_paste">Pegar enlace de vinculación</string>
+    <string name="pairing_invalid_link">Eso no es un enlace de vinculación de Yaca.</string>
+    <string name="pairing_network">No se pudo contactar con el ordenador. Comprueba que ambos están en la misma red.</string>
+    <string name="pairing_storage">Se emparejó, pero el teléfono no pudo guardar la conexión. Vuelve a emparejar; la entrada sobrante se puede quitar en Yaca en el ordenador.</string>
+    <string name="pairing_in_progress">Vinculando con %1$s…</string>
+    <string name="pairing_confirm_title">¿Vincular con %1$s?</string>
+    <string name="pairing_confirm_body">El teléfono recibirá eventos de este ordenador hasta que lo olvides.</string>
+    <string name="pairing_confirm_action">Vincular</string>
+
+    <string name="refusal_unauthorized">Este teléfono ya no tiene permiso en ese ordenador. Vuelve a vincularlo.</string>
+    <string name="refusal_pairing_failed">El código de vinculación es incorrecto, ya se usó o caducó. Crea un código nuevo en Yaca y escanéalo otra vez.</string>
+    <string name="refusal_protocol_mismatch">El ordenador usa el protocolo %1$d y esta app usa el %2$d. Actualiza una de las dos.</string>
+    <string name="refusal_too_many_attempts">Demasiados intentos fallidos desde esta red. Inténtalo más tarde.</string>
+    <string name="refusal_handshake_expected">El ordenador cerró la conexión antes del saludo inicial. Inténtalo de nuevo.</string>
+</resources>

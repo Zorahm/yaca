@@ -25,15 +25,20 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 yaca-core.workspace = true
+yaca-remote.workspace = true
 
 serde.workspace = true
 serde_json.workspace = true
 # `unstable` is what lets a window hold a second webview — the browser
 # column's page; `devtools` keeps its DevTools in a release build.
-tauri = { version = "2", features = ["unstable", "devtools"] }
+tauri = { version = "2", features = ["unstable", "devtools", "tray-icon"] }
 # Choosing the project folder from the chip in §9.1. The webview has no dialog of its own.
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
+# The window comes back where it was left: size, position, maximized.
+# 2.4: the last release on Tauri 2.11. 2.5 needs 2.12, whose wry brings a
+# webview2-com the browser column below is not built against.
+tauri-plugin-window-state = "~2.4.1"
 # Toasts §15 — `notify-rust` directly, not a plugin: see the comment in `notify.rs`.
 notify-rust = "4.18"
 tokio.workspace = true
