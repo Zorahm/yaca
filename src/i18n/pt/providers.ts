@@ -48,6 +48,9 @@ export const providers = {
   "prov.form_models_hint":
     "A lista vem do próprio provedor: ele é consultado assim que a chave é salva, e de novo quando o endereço, o protocolo ou os cabeçalhos mudam; “Consultar” pergunta mais uma vez. Até a resposta chegar, a lista anterior continua visível. Com o que ele responder é que Yaca conversa; o preço é em dólares por milhão de tokens, e zero significa “gratuito ou desconhecido”.",
   "prov.form_model_context": "Contexto, tokens",
+  "prov.context_reopen": "Após salvar, inicie uma nova conversa ou reabra a atual para aplicar o tamanho do contexto.",
+  "prov.error_context": "Insira um número inteiro de tokens entre 1 e 4.294.967.295 para {name}.",
+  "prov.context_hint": "O contexto pode ser editado e é preservado ao atualizar o provedor. Controla o indicador e a compactação automática. O padrão é 1.000.000 de tokens.",
   "prov.form_model_output": "Saída máx., tokens",
   "prov.form_model_effort": "suporta esforço",
   "prov.models_ask": "Consultar",

@@ -26,6 +26,8 @@ export const panels = {
 
   // --- checkpoint ------------------------------------------------------
   "ckpt.empty": "Точек отката пока нет",
+  "ckpt.creating": "Создание чекпоинта…",
+  "ckpt.created": "Чекпоинт создан",
   "ckpt.open_panel": "Показать все точки",
   "ckpt.message": "перед сообщением",
   "ckpt.command": "перед {command}",

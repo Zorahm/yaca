@@ -28,6 +28,7 @@ Yaca is in beta (`1.0.0-beta`). Installers (Windows NSIS `.exe`, macOS `.dmg`, L
 - **Permissions.** Modes: "Plan", "Manual", "Auto", and "Edits" — ranging from read-only to editing without confirmation. Git commit and push always require approval.
 - **Checkpoints.** Snapshots project state before edits and commands, allowing you to roll back changes. The list of points is saved with the session, so it survives a window reload, closing and reopening the chat, and a restart.
 - **Reloading the window does not stop the agent.** Ctrl+R (or a hot reload in development) only redraws the window: running turns, background commands and open questions carry on in the app, and the window picks the chats up again where they are. Restarting the application itself still ends them.
+- **Background command results resume the agent.** The model can keep working after starting a background command. When that command exits on its own, its status and unread output are delivered at the next agent step, or wake an idle model in a new turn. Explicitly stopped commands do not trigger a new turn. The output included in the notification is bounded; the full output file remains available when provided.
 - **Sessions.** Project conversation history, search, Markdown export, and resumption from where you left off.
 - **Providers.** Ready to use by just entering an API key: OpenAI, Anthropic, Google AI Studio, OpenRouter, DeepSeek, z.ai (coding plan). Plus **Decision**, a ready entry for the small model that answers the router's questions: point it at a local server (Ollama's address is filled in) or a cloud one. Plus any custom servers compatible with OpenAI or Anthropic API formats, including local ones. After saving a key, models are queried automatically.
 - **Model router.** A small decision model answers typed questions about each message, and rules pick which model answers it; see [Model Router](#model-router).
@@ -67,6 +68,11 @@ Provider keys can be set in the Settings window or via the command line. Keys ar
 ```bash
 yaca key set --provider anthropic
 ```
+
+In Settings → Providers, edit a provider to set each model's context window in
+tokens. Save the provider, then start or reopen a chat to use the new size for
+the context meter and automatic compaction. Manual sizes survive model-list
+refreshes. Models whose context size cannot be detected use 1,000,000 tokens.
 
 ## Data Storage
 

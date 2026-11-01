@@ -48,6 +48,9 @@ export const providers = {
   "prov.form_models_hint":
     "列表由提供商自身提供：保存密钥后会立即查询，地址、协议或请求头改变时会再次查询；点击“查询”则再查一次。新的回答到达之前，仍显示原来的列表。提供商返回什么，就与之通信；价格以每百万 tokens 的美元数计，0 表示免费或未知。",
   "prov.form_model_context": "上下文，tokens",
+  "prov.context_reopen": "保存后，新建聊天或重新打开当前聊天以应用上下文大小。",
+  "prov.error_context": "请为 {name} 输入 1 到 4,294,967,295 之间的整数 token 数。",
+  "prov.context_hint": "上下文大小可手动修改，刷新提供商后仍会保留，用于用量指示和自动压缩。未知大小默认使用 1,000,000 token。",
   "prov.form_model_output": "最大输出，tokens",
   "prov.form_model_effort": "支持强度调节",
   "prov.models_ask": "查询",

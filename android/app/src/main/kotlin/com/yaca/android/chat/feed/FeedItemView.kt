@@ -27,6 +27,7 @@ fun FeedItemView(
         is FeedBlock.Permission -> PermissionBlock(block = item, actions = actions, modifier = modifier)
         is FeedBlock.Question -> QuestionBlock(block = item, actions = actions, modifier = modifier)
         is FeedBlock.Elicitation -> ElicitationBlock(block = item, actions = actions, modifier = modifier)
+        is FeedBlock.CheckpointCreating -> CheckpointCreatingLine(modifier)
         is FeedBlock.Checkpoint -> CheckpointDivider(checkpoint = item.checkpoint, onOpen = actions.onOpenCheckpoints, modifier = modifier)
         is FeedBlock.Restored -> RestoredDivider(block = item, modifier = modifier)
         is FeedBlock.Compacted -> CompactedCard(block = item, modifier = modifier)

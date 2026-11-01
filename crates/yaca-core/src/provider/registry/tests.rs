@@ -28,6 +28,27 @@ fn a_missing_file_gives_both_presets() {
 }
 
 #[test]
+fn loading_updates_old_guesses_but_preserves_reported_and_manual_windows() {
+    use crate::usage::ContextSource;
+    let dir = TempDir::new();
+    let mut provider = spec(Protocol::OpenAi);
+    provider.models = vec![unknown_model("guess"), unknown_model("reported"), unknown_model("manual")];
+    for model in &mut provider.models {
+        model.context_max = 128_000;
+    }
+    provider.models[1].context_source = ContextSource::ProviderReported;
+    provider.models[2].context_source = ContextSource::Hand;
+    let mut providers = Providers::default();
+    providers.put(provider);
+    providers.save(dir.path()).unwrap();
+    let loaded = Providers::load(dir.path()).unwrap();
+    let models = &loaded.get("gateway").unwrap().models;
+    assert_eq!(models[0].context_max, 1_000_000);
+    assert_eq!(models[1].context_max, 128_000);
+    assert_eq!(models[2].context_max, 128_000);
+}
+
+#[test]
 fn a_preset_without_models_honestly_refuses_to_be_chosen() {
     // While the list is empty there is nothing to talk to — and that is an error, not silence.
     assert!(ProviderSpec::openai().resolve_model("gpt-5").is_err());
@@ -137,6 +158,7 @@ fn a_model_not_in_the_list_is_an_error() {
         supports_thinking: false,
         context_source: crate::usage::ContextSource::DefaultGuess,
         supports_images: true,
+        by_hand: false,
     }];
 
     // Another provider's model is not silently substituted, it is rejected.

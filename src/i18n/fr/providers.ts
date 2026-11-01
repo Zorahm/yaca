@@ -48,6 +48,9 @@ export const providers = {
   "prov.form_models_hint":
     "La liste vient du fournisseur lui-même : il est interrogé dès qu'une clé est enregistrée, puis de nouveau quand l'adresse, le protocole ou les en-têtes changent ; « Interroger » pose la question encore une fois. Tant que la réponse n'est pas arrivée, l'ancienne liste reste affichée. Yaca travaille avec ce qu'il a répondu ; le prix est donné en dollars par million de tokens, zéro signifiant « gratuit ou inconnu ».",
   "prov.form_model_context": "Contexte, tokens",
+  "prov.context_reopen": "Après enregistrement, démarrez une nouvelle discussion ou rouvrez la discussion actuelle pour appliquer la taille du contexte.",
+  "prov.error_context": "Saisissez un nombre entier de tokens entre 1 et 4 294 967 295 pour {name}.",
+  "prov.context_hint": "La taille du contexte est modifiable et conservée après actualisation. Elle contrôle la jauge et la compression automatique. La valeur par défaut est de 1 000 000 de tokens.",
   "prov.form_model_output": "Sortie max., tokens",
   "prov.form_model_effort": "gère l'effort",
   "prov.models_ask": "Interroger",

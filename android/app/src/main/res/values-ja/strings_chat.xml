@@ -21,6 +21,8 @@
     <string name="chat_working_for">%1$s 作業中</string>
     <string name="chat_work_with_failed">%1$s（%2$s）</string>
 
+    <string name="checkpoint_creating">チェックポイントを作成中…</string>
+    <string name="checkpoint_created">チェックポイントを作成しました</string>
     <string name="checkpoint_before_message">あなたのメッセージの前</string>
     <string name="checkpoint_before_command">%1$s の前</string>
     <string name="checkpoint_after_restore">復元の後</string>

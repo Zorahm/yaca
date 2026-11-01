@@ -272,6 +272,16 @@ impl Providers {
             .map_err(|e| CoreError::Config(format!("{} could not be parsed: {e}", path.display())))?;
         providers.ensure_presets();
         providers.forget_shipped_catalog();
+        // A cached guess is not a provider limit; keep it aligned with the
+        // current fallback without changing reported or manually set windows.
+        for model in providers.list.iter_mut().flat_map(|p| &mut p.models) {
+            if model.context_source == crate::usage::ContextSource::DefaultGuess
+                && model.context_max == 128_000
+                && !model.by_hand
+            {
+                model.context_max = crate::usage::unknown_model(&model.id).context_max;
+            }
+        }
         Ok(providers)
     }
 

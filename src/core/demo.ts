@@ -132,6 +132,7 @@ export const demoModels: ModelInfo[] = [
     supportsEffort: true,
     supportsThinking: true,
     contextSource: "provider_reported",
+    byHand: false,
     supportsImages: true,
   },
   {
@@ -144,6 +145,7 @@ export const demoModels: ModelInfo[] = [
     supportsEffort: true,
     supportsThinking: true,
     contextSource: "provider_reported",
+    byHand: false,
     supportsImages: true,
   },
 ];

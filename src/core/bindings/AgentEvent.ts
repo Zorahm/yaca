@@ -3,6 +3,7 @@ import type { BlockId } from "./BlockId";
 import type { CallId } from "./CallId";
 import type { CheckpointChange } from "./CheckpointChange";
 import type { CheckpointId } from "./CheckpointId";
+import type { CheckpointReason } from "./CheckpointReason";
 import type { CheckpointSummary } from "./CheckpointSummary";
 import type { ElicitationReply } from "./ElicitationReply";
 import type { ElicitationRequest } from "./ElicitationRequest";
@@ -90,7 +91,7 @@ total: number, text: string, } | { "type": "planProposed", plan: string, } | { "
  * How many lines were pushed out of the buffer. The panel says so outright:
  * output lost in silence cannot be told apart from output that never existed.
  */
-dropped: number, } | { "type": "processOutput", id: ProcessId, chunk: string, } | { "type": "checkpointCreated", checkpoint: CheckpointSummary, } | { "type": "checkpointsUpdated", checkpoints: Array<CheckpointSummary>, } | { "type": "checkpointPreviewed", id: CheckpointId, files: Array<CheckpointChange>, } | { "type": "checkpointRestored", id: CheckpointId, at: TsMillis, files: number, } | { "type": "contextCompacted", summary: string, freed: number, } | { "type": "summaryEdited", summary: string, } | { "type": "subagentUsage", callId: CallId, tokens: TokenCounts, } | { "type": "routeDecided", route: string | null, provider: string, model: string, matched: Array<string>, } | { "type": "usageUpdated", usage: UsageSnapshot, } | { "type": "turnFinished", turnId: TurnId, stopReason: StopReason, 
+dropped: number, } | { "type": "processOutput", id: ProcessId, chunk: string, } | { "type": "checkpointCreating", id: CheckpointId, reason: CheckpointReason, } | { "type": "checkpointCreationFinished", id: CheckpointId, } | { "type": "checkpointCreated", checkpoint: CheckpointSummary, } | { "type": "checkpointsUpdated", checkpoints: Array<CheckpointSummary>, } | { "type": "checkpointPreviewed", id: CheckpointId, files: Array<CheckpointChange>, } | { "type": "checkpointRestored", id: CheckpointId, at: TsMillis, files: number, } | { "type": "contextCompacted", summary: string, freed: number, } | { "type": "summaryEdited", summary: string, } | { "type": "subagentUsage", callId: CallId, tokens: TokenCounts, } | { "type": "routeDecided", route: string | null, provider: string, model: string, matched: Array<string>, } | { "type": "usageUpdated", usage: UsageSnapshot, } | { "type": "turnFinished", turnId: TurnId, stopReason: StopReason, 
 /**
  * When the turn ended. With `TurnStarted::at` it is the turn's
  * duration, which the feed shows under the answer. Zero in a journal

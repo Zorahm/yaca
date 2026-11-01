@@ -48,6 +48,9 @@ export const providers = {
   "prov.form_models_hint":
     "Die Liste kommt vom Anbieter selbst: Er wird abgefragt, sobald ein Schlüssel gespeichert ist, und erneut, wenn sich Adresse, Protokoll oder Header ändern; „Abfragen“ fragt noch einmal. Bis die Antwort da ist, bleibt die bisherige Liste stehen. Was er antwortet, damit wird gearbeitet; der Preis steht in Dollar pro Million Token, null bedeutet „kostenlos oder unbekannt“.",
   "prov.form_model_context": "Kontext, Token",
+  "prov.context_reopen": "Nach dem Speichern einen neuen Chat starten oder den aktuellen erneut öffnen, um die Kontextgröße anzuwenden.",
+  "prov.error_context": "Geben Sie für {name} eine ganze Tokenzahl von 1 bis 4.294.967.295 ein.",
+  "prov.context_hint": "Die Kontextgröße ist editierbar, bleibt bei Anbieterabfragen erhalten und steuert Anzeige und automatische Komprimierung. Unbekannte Größen verwenden 1.000.000 Token.",
   "prov.form_model_output": "Max. Ausgabe, Token",
   "prov.form_model_effort": "unterstützt Aufwand",
   "prov.models_ask": "Abfragen",

@@ -48,6 +48,9 @@ export const providers = {
   "prov.form_models_hint":
     "La lista la da el propio proveedor: se le consulta en cuanto se guarda la clave, y otra vez cuando cambian la dirección, el protocolo o las cabeceras; «Consultar» vuelve a preguntar. Hasta que llega la respuesta, se ve la lista anterior. Con lo que responda se trabaja; el precio va en dólares por millón de tokens, y cero significa «gratis o desconocido».",
   "prov.form_model_context": "Contexto, tokens",
+  "prov.context_reopen": "Después de guardar, inicia un chat nuevo o vuelve a abrir el actual para aplicar el tamaño del contexto.",
+  "prov.error_context": "Introduce un número entero de tokens entre 1 y 4.294.967.295 para {name}.",
+  "prov.context_hint": "Puedes editar el contexto. Se conserva al actualizar el proveedor y controla el indicador y la compactación automática. El valor predeterminado es 1.000.000 de tokens.",
   "prov.form_model_output": "Salida máx., tokens",
   "prov.form_model_effort": "admite esfuerzo",
   "prov.models_ask": "Consultar",

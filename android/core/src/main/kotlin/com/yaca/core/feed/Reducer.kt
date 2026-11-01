@@ -2,6 +2,8 @@ package com.yaca.core.feed
 
 import com.yaca.core.model.AgentEvent
 import com.yaca.core.model.AgentEventCheckpointCreated
+import com.yaca.core.model.AgentEventCheckpointCreating
+import com.yaca.core.model.AgentEventCheckpointCreationFinished
 import com.yaca.core.model.AgentEventCheckpointPreviewed
 import com.yaca.core.model.AgentEventCheckpointRestored
 import com.yaca.core.model.AgentEventCheckpointsUpdated
@@ -75,6 +77,8 @@ private fun FeedDraft.applyEvent(event: AgentEvent) {
         // The chat list reads the title (`src/ui/chats.ts`); the feed does not draw it.
         is AgentEventTitleSet -> Unit
 
+        is AgentEventCheckpointCreating -> onCheckpointCreating(event)
+        is AgentEventCheckpointCreationFinished -> onCheckpointCreationFinished(event)
         is AgentEventCheckpointCreated -> onCheckpointCreated(event)
         is AgentEventCheckpointsUpdated -> onCheckpointsUpdated(event)
         is AgentEventCheckpointPreviewed -> onCheckpointPreviewed(event)

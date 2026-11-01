@@ -48,6 +48,9 @@ export const providers = {
   "prov.form_models_hint":
     "The list comes from the provider itself: it is asked as soon as a key is saved, and again whenever the address, protocol or headers change; Ask asks once more. Until the answer arrives, the previous list stays. Whatever it answers is what Yaca talks to; the price is dollars per million tokens, and zero means free or unknown.",
   "prov.form_model_context": "Context, tokens",
+  "prov.context_reopen": "After saving, start a new chat or reopen the current chat to apply the context size.",
+  "prov.error_context": "Enter a whole number of tokens from 1 to 4,294,967,295 for {name}.",
+  "prov.context_hint": "You can edit the context size. It survives provider refreshes and controls the meter and automatic compaction. Unknown sizes default to 1,000,000 tokens.",
   "prov.form_model_output": "Max output, tokens",
   "prov.form_model_effort": "supports effort",
   "prov.models_ask": "Ask",

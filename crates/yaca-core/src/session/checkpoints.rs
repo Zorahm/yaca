@@ -23,8 +23,12 @@ use super::Shared;
 /// true — there is no point to roll back to. Refusing to run the command
 /// instead would trade a missing safety net for a dead agent.
 pub(super) async fn create(shared: &Arc<Shared>, reason: CheckpointReason) {
+    let id = CheckpointId::new();
+    shared.emit(AgentEvent::CheckpointCreating { id: id.clone(), reason: reason.clone() });
     let checkpoints = shared.checkpoints.clone();
     let outcome = tokio::task::spawn_blocking(move || checkpoints.create(reason)).await;
+
+    shared.emit(AgentEvent::CheckpointCreationFinished { id });
 
     match outcome {
         Ok(Ok(Some(checkpoint))) => {
@@ -83,11 +87,16 @@ pub(super) async fn restore(shared: &Arc<Shared>, id: CheckpointId) {
         failed(
             shared,
             format!(
-                "the rollback could not reach {} file(s): {}",
+                "the rollback changed {} file(s), but could not reach {} file(s): {}",
+                restored.touched.len(),
                 restored.failed.len(),
                 restored.failed.join(", ")
             ),
         );
+        // A partial rollback is not a successful rollback. The checkpoint
+        // list may still have changed even though some paths failed.
+        emit_list(shared);
+        return;
     }
 
     shared.emit(AgentEvent::CheckpointRestored {

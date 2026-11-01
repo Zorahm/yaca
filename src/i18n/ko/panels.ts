@@ -26,6 +26,8 @@ export const panels = {
   "agents.prompt_less": "접기",
 
   "ckpt.empty": "아직 되돌리기 지점이 없습니다",
+  "ckpt.creating": "체크포인트 생성 중…",
+  "ckpt.created": "체크포인트 생성됨",
   "ckpt.open_panel": "모든 지점 보기",
   "ckpt.message": "메시지 전",
   "ckpt.command": "{command} 전",

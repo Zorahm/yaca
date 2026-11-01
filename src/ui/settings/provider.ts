@@ -6,10 +6,7 @@
  * form edits: drafts, and the problems that keep a draft from becoming a
  * spec.
  *
- * Models are not drafted at all any more. They come from the provider itself
- * (`provider::models`), which knows its own context windows, output caps and
- * `effort` support better than anyone typing them in, so the draft carries the
- * answer as it arrived and the form only shows it.
+ * Models come from the provider, with optional context-window overrides.
  */
 
 import type { Key, Params } from "../../i18n";
@@ -22,6 +19,21 @@ import {
 import type { ModelInfo, Protocol, ProviderSpec } from "../../core/client";
 
 export { KEY_PLACEHOLDER, isPreset };
+
+export const MAX_CONTEXT_TOKENS = 0xffff_ffff;
+
+/** Context sizes cross the bridge as Rust's unsigned 32-bit token counts. */
+export function validContextSize(value: number): boolean {
+  return Number.isInteger(value) && value >= 1 && value <= MAX_CONTEXT_TOKENS;
+}
+
+/** Keep edits made in the form while a model lookup was in flight. */
+export function keepContextEdits(saved: ModelInfo[], models: ModelInfo[]): ModelInfo[] {
+  return models.map((model) => {
+    const previous = saved.find((m) => m.id === model.id && m.contextSource === "hand");
+    return previous ? { ...model, contextMax: previous.contextMax, contextSource: "hand" } : model;
+  });
+}
 
 /** Header rows as the editor holds them: a name-less row is a validation
     problem, not a header, so it never reaches the merge. */
@@ -149,6 +161,11 @@ function validate(
 
   if (!draft.displayName.trim()) problems.push({ key: "prov.error_name" });
   if (!draft.baseUrl.trim()) problems.push({ key: "prov.error_url" });
+  for (const model of draft.models) {
+    if (model.contextSource === "hand" && !validContextSize(model.contextMax)) {
+      problems.push({ key: "prov.error_context", params: { name: model.displayName } });
+    }
+  }
 
   const names = new Set<string>();
   draft.headers.forEach((header, index) => {
@@ -184,8 +201,7 @@ function validate(
                 .map((header) => [header.name.trim(), header.value])
                 .filter(([name]) => name !== ""),
             ),
-            // Stored as the provider sent them: re-checking its own answer would mean
-            // holding an opinion of our own about the models (§0).
+            // Keep provider capabilities together with the user's context edits.
             models: draft.models,
           },
   };

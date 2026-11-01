@@ -104,9 +104,7 @@ pub enum Stopper {
 
 /// A background command ended on its own while the model was not looking.
 ///
-/// Held until the worker can hand it over: between a batch of calls and the
-/// model's next step, or ahead of the next message of the human's. The model
-/// is not woken for it — a turn costs tokens the human did not ask to spend.
+/// Delivered between agent steps, or used to wake the worker when idle.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExitNotice {
     pub id: ProcessId,
@@ -453,6 +451,19 @@ impl Processes {
     /// Endings the model has not heard about, taken out of the queue.
     pub fn take_notices(&self) -> Vec<ExitNotice> {
         std::mem::take(&mut *self.notices())
+    }
+
+    /// Subscribe before checking the queue so an exit cannot be lost between them.
+    pub async fn notice_waiting(&self) {
+        let mut ended = self.0.ended.subscribe();
+        loop {
+            if !self.notices().is_empty() {
+                return;
+            }
+            if ended.changed().await.is_err() {
+                return;
+            }
+        }
     }
 
     /// A row was selected in the panel: its whole buffer goes out once, and

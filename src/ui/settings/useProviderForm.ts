@@ -39,6 +39,7 @@ import {
 import {
   draftProblems,
   draftToSpec,
+  keepContextEdits,
   needsKey,
   type HeaderDraft,
   type KeyState,
@@ -130,7 +131,7 @@ export function useProviderForm({
         models: [],
       });
       if (question !== asked.current) return;
-      setDraft((now) => ({ ...now, models }));
+      setDraft((now) => ({ ...now, models: keepContextEdits(now.models, models) }));
       setModelsAnswered(true);
     } catch (e) {
       if (question !== asked.current) return;
@@ -216,7 +217,7 @@ export function useProviderForm({
         setModelsError(answer.pollError);
         setModelsAnswered(false);
       } else if (models !== null) {
-        setDraft((now) => ({ ...now, models }));
+        setDraft((now) => ({ ...now, models: keepContextEdits(now.models, models) }));
         setModelsError(null);
         setModelsAnswered(true);
       }
@@ -300,7 +301,9 @@ export function useProviderForm({
         // without a list and the save asks the new one.
         const models = modelsIn(answer, spec.id);
         if (reachOf(draft) !== openedWith.current) spec = { ...spec, models: [] };
-        else if (answer.pollError === null && models !== null) spec = { ...spec, models };
+        else if (answer.pollError === null && models !== null) {
+          spec = { ...spec, models: keepContextEdits(spec.models, models) };
+        }
       }
       if (await onSave(spec)) onSaved();
     } catch (e) {

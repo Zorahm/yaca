@@ -203,6 +203,8 @@ export function Checkpoint({
           <span className="divider-dot"><Circle size={6} weight="fill" /></span>
           <span>{timeOf(checkpoint.at)}</span>
           <span>·</span>
+          <span>{t("ckpt.created")}</span>
+          <span>·</span>
           <span className="divider-reason">{reasonText(checkpoint.reason)}</span>
         </button>
         <span className="divider-line" />

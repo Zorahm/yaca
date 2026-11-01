@@ -122,7 +122,7 @@ impl Pricing {
 #[serde(rename_all = "snake_case")]
 pub enum ContextSource {
     /// The server said nothing of what `provider::models` names — the
-    /// `unknown_model`'s 128 000 stands, and it is a guess, not a fact.
+    /// `unknown_model`'s 1 000 000 stands, and it is a guess, not a fact.
     #[default]
     DefaultGuess,
     /// The provider answered with a number from its own model list.
@@ -133,6 +133,10 @@ pub enum ContextSource {
     /// The local server answered with the model's architectural maximum: what a
     /// fresh load will get, but not necessarily what the session runs under.
     DetectedMaximum,
+    /// A person typed the number in the models panel (§10). It is no more a
+    /// guess than a server's answer, and the tag keeps the ring from drawing it
+    /// dashed — and the local probe from writing over it.
+    Hand,
 }
 
 /// A model available in the switcher (§7.1).
@@ -173,6 +177,16 @@ pub struct ModelInfo {
     /// a screenshot it could have read, and nothing says why.
     #[serde(default = "yes")]
     pub supports_images: bool,
+    /// Whether the row was written by hand in the models panel (§10) rather
+    /// than answered by the provider.
+    ///
+    /// Such a row is kept as it is when the provider is asked again — the point
+    /// of writing it was to differ from the answer — while everything else is
+    /// replaced by what the address says now
+    /// (`provider::models::keep_hand_edits`). `default` is `false`: a row from
+    /// before the field existed is what the provider answered.
+    #[serde(default)]
+    pub by_hand: bool,
 }
 
 fn yes() -> bool {
@@ -237,6 +251,7 @@ pub fn catalog() -> Vec<ModelInfo> {
         // Written down, not answered — but a stated constant, not a guess.
         context_source: ContextSource::ProviderReported,
         supports_images: true,
+        by_hand: false,
     };
     vec![
         m("claude-opus-5", "Opus 5", 1_000_000, 128_000),
@@ -259,14 +274,14 @@ pub fn model_info(id: &str) -> Option<ModelInfo> {
 }
 
 /// A model that is not in the provider's list. Counted as free and with a
-/// conservative window, but it does not fail: §8 promises to work with any
+/// default million-token window, but it does not fail: §8 promises to work with any
 /// model, including ones Yaca has never heard of.
 pub fn unknown_model(id: &str) -> ModelInfo {
     ModelInfo {
         id: id.to_string(),
         provider_id: String::new(),
         display_name: id.to_string(),
-        context_max: 128_000,
+        context_max: 1_000_000,
         max_output: 8_192,
         pricing: price_of(id).unwrap_or(Pricing {
             input: 0.0,
@@ -276,6 +291,7 @@ pub fn unknown_model(id: &str) -> ModelInfo {
         supports_thinking: false,
         context_source: ContextSource::DefaultGuess,
         supports_images: true,
+        by_hand: false,
     }
 }
 

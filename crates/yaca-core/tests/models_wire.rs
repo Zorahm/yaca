@@ -32,6 +32,31 @@ fn json(body: &str) -> String {
 }
 
 #[tokio::test]
+async fn refreshing_preserves_manual_context_and_updates_other_capabilities() {
+    use yaca_core::usage::{unknown_model, ContextSource};
+    let (base, seen) = serve(json(
+        r#"{"data":[{"id":"m","context_length":1000000,"top_provider":{"max_completion_tokens":16000}}]}"#,
+    )).await;
+    let dir = TempProject::new();
+    let mut provider = keyless(base);
+    let mut model = unknown_model("m");
+    model.context_max = 750_000;
+    model.context_source = ContextSource::Hand;
+    provider.models.push(model);
+    let mut providers = Providers::default();
+    providers.put(provider);
+    providers.save(dir.path()).unwrap();
+    let refreshed = refresh(dir.path(), "gateway").await.unwrap();
+    let model = &refreshed.get("gateway").unwrap().models[0];
+    assert_eq!(model.context_max, 750_000);
+    assert_eq!(model.context_source, ContextSource::Hand);
+    assert_eq!(model.max_output, 16_000);
+    let loaded = Providers::load(dir.path()).unwrap();
+    assert_eq!(&loaded.get("gateway").unwrap().models[0], model);
+    seen.await.unwrap();
+}
+
+#[tokio::test]
 async fn list_arrives_in_pages_and_is_joined() {
     let first = json(
         r#"{"data":[{"id":"claude-opus-5","display_name":"Claude Opus 5","max_input_tokens":1000000,"max_tokens":128000,"capabilities":{"effort":{"supported":true},"thinking":{"types":{"adaptive":{"supported":true}}}}}],"has_more":true,"last_id":"claude-opus-5"}"#,
@@ -183,7 +208,7 @@ async fn lm_studio_window_is_detected_for_the_whole_list_with_one_probe() {
     assert_eq!(models[1].context_source, yaca_core::usage::ContextSource::DetectedAllocated);
     // No fields of its own: the guess stays a guess, visibly.
     assert_eq!(models[0].context_source, yaca_core::usage::ContextSource::DefaultGuess);
-    assert_eq!(models[0].context_max, 128_000);
+    assert_eq!(models[0].context_max, 1_000_000);
 
     let seen = seen.await.unwrap();
     assert!(seen[0].headers.contains("GET /v1/models"));
@@ -252,7 +277,7 @@ async fn a_local_server_that_says_nothing_keeps_the_openai_default() {
         .unwrap();
     let m = &models[0];
     assert_eq!(m.context_source, yaca_core::usage::ContextSource::DefaultGuess);
-    assert_eq!(m.context_max, 128_000);
+    assert_eq!(m.context_max, 1_000_000);
 
     let seen = seen.await.unwrap();
     // No third endpoint to be tried: `/api/ps` refusing means this is not an

@@ -237,6 +237,7 @@ impl Worker {
                 biased;
                 _ = cancel.cancelled() => return None,
                 _ = self.shared.background.ready() => {}
+                _ = self.shared.processes.notice_waiting() => {}
                 _ = inbox.message_waiting() => {}
             }
 

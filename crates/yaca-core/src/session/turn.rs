@@ -94,8 +94,26 @@ impl Worker {
     pub(super) async fn run(mut self, rx: mpsc::Receiver<Job>) {
         self.session_start().await;
         let mut inbox = Inbox::new(rx);
-        while let Some(job) = inbox.next().await {
+        loop {
+            let processes = self.shared.processes.clone();
+            let job = tokio::select! {
+                biased;
+                job = inbox.next() => match job {
+                    Some(job) => Some(job),
+                    None => break,
+                },
+                _ = processes.notice_waiting() => None,
+            };
             let token = CancellationToken::new();
+            let Some(job) = job else {
+                let Some(note) = self.process_note() else { continue };
+                self.start(token.clone());
+                self.run_turn(String::new(), Vec::new(), token, &mut inbox,
+                    Some(Message { role: Role::User, content: vec![note] })).await;
+                self.save_isolated_work("Background command results".into()).await;
+                self.set_busy(false);
+                continue;
+            };
             match job {
                 // Taken off the queue here, not when it was sent. A message
                 // cancelled while it waited is gone from the queue, and then
@@ -106,7 +124,7 @@ impl Worker {
                     };
                     self.start(token.clone());
                     let subject = message.text.clone();
-                    self.run_turn(message.text, message.attachments, token, &mut inbox)
+                    self.run_turn(message.text, message.attachments, token, &mut inbox, None)
                         .await;
                     self.save_isolated_work(subject).await;
                 }
@@ -172,10 +190,11 @@ impl Worker {
         attachments: Vec<String>,
         cancel: CancellationToken,
         inbox: &mut Inbox,
+        opening: Option<Message>,
     ) {
         let turn_id = TurnId::new();
         let end = self
-            .steps(&turn_id, text, attachments, &cancel, inbox)
+            .steps(&turn_id, text, attachments, &cancel, inbox, opening)
             .await;
 
         // Before the turn's last event: background subagents do not outlive
@@ -207,8 +226,13 @@ impl Worker {
         attachments: Vec<String>,
         cancel: &CancellationToken,
         inbox: &mut Inbox,
+        opening: Option<Message>,
     ) -> End {
-        let Some(mut opening) = self.hear_checked(turn_id, text, attachments, cancel).await else {
+        let opening = match opening {
+            Some(opening) => Some(opening),
+            None => self.hear_checked(turn_id, text, attachments, cancel).await,
+        };
+        let Some(mut opening) = opening else {
             // A plugin's hook kept the message from the model, and said why.
             return End::Finished(StopReason::EndTurn);
         };
@@ -332,6 +356,10 @@ impl Worker {
             // cap ends with its last call half-written — that one is answered
             // with an error rather than run (`calls::garbled`).
             if done.calls.is_empty() {
+                if let Some(note) = self.process_note() {
+                    self.remember(turn_id, Message { role: Role::User, content: vec![note] });
+                    continue;
+                }
                 // Nothing left to do is not the end while subagents are still
                 // out: their reports are what the agent sent them for.
                 if !self.shared.background.pending() {
@@ -436,10 +464,7 @@ impl Worker {
     /// Background commands that ended on their own since the model last heard
     /// anything, as a note it reads with its next input.
     ///
-    /// Delivered at the next point the model is being spoken to anyway — after
-    /// a batch of calls, or with the human's next message — and not by waking
-    /// it: an idle agent starting a turn nobody asked for spends the human's
-    /// money on a guess about what they want done with a crashed server.
+    /// Delivered between steps, or as the opening of a new turn when idle.
     pub(super) fn process_note(&self) -> Option<ContentBlock> {
         let notices = self.shared.processes.take_notices();
         if notices.is_empty() {
@@ -458,6 +483,13 @@ impl Worker {
 ",
                 n.id, n.command
             ));
+            if let Some(output) = self.shared.processes.read(n.id, 16 * 1024) {
+                if output.missed > 0 {
+                    text.push_str(&format!("  {} earlier output lines were dropped.\n", output.missed));
+                }
+                text.push_str(&output.text);
+                text.push('\n');
+            }
             // A command that outgrew the foreground has its whole output on
             // disk; the buffer behind BashOutput keeps only the tail.
             if let Some(file) = &n.file {

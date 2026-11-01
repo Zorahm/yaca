@@ -9,4 +9,4 @@
  * of a fallback that §10 asks for. An old `providers.json` has no such field —
  * `default` keeps a guess recorded there a guess.
  */
-export type ContextSource = "default_guess" | "provider_reported" | "detected_allocated" | "detected_maximum";
+export type ContextSource = "default_guess" | "provider_reported" | "detected_allocated" | "detected_maximum" | "hand";

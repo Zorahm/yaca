@@ -26,6 +26,8 @@ export const panels = {
   "agents.prompt_less": "Einklappen",
 
   "ckpt.empty": "Noch keine Wiederherstellungspunkte",
+  "ckpt.creating": "Checkpoint wird erstellt…",
+  "ckpt.created": "Checkpoint erstellt",
   "ckpt.open_panel": "Alle Punkte anzeigen",
   "ckpt.message": "vor der Nachricht",
   "ckpt.command": "vor {command}",

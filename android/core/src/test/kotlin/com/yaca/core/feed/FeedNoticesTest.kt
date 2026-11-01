@@ -129,17 +129,17 @@ class FeedNoticesTest {
     // the point taken for a message
 
     @Test
-    fun `stands above the card it follows in the stream`() {
+    fun `stands below the card it follows in the stream`() {
         assertEquals(
-            listOf(FeedBlock.Checkpoint::class, FeedBlock.Human::class),
+            listOf(FeedBlock.Human::class, FeedBlock.Checkpoint::class),
             kinds(runFeed(said("one"), point())),
         )
     }
 
     @Test
-    fun `stands above the card past the notes of the prompt hooks`() {
+    fun `stands below the card before the notes of the prompt hooks`() {
         assertEquals(
-            listOf(FeedBlock.Checkpoint::class, FeedBlock.Human::class, FeedBlock.Hook::class),
+            listOf(FeedBlock.Human::class, FeedBlock.Checkpoint::class, FeedBlock.Hook::class),
             kinds(runFeed(said("one"), note(false), point())),
         )
     }

@@ -1035,10 +1035,31 @@
 
 /* How long the turn took, and when: the line under an answer. */
 .turn-time {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
   font-size: 11.5px;
   line-height: 21px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+.feed-processes {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.feed-processes:hover {
+  background: var(--sunk);
 }
 
 .divider {

@@ -26,6 +26,8 @@ export const panels = {
   "agents.prompt_less": "Contraer",
 
   "ckpt.empty": "Todavía no hay puntos de control",
+  "ckpt.creating": "Creando punto de control…",
+  "ckpt.created": "Punto de control creado",
   "ckpt.open_panel": "Mostrar todos los puntos",
   "ckpt.message": "antes del mensaje",
   "ckpt.command": "antes de {command}",

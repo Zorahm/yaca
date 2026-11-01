@@ -1,6 +1,8 @@
 package com.yaca.core.feed
 
 import com.yaca.core.model.AgentEventCheckpointCreated
+import com.yaca.core.model.AgentEventCheckpointCreating
+import com.yaca.core.model.AgentEventCheckpointCreationFinished
 import com.yaca.core.model.AgentEventCheckpointPreviewed
 import com.yaca.core.model.AgentEventCheckpointRestored
 import com.yaca.core.model.AgentEventCheckpointsUpdated
@@ -13,6 +15,27 @@ import com.yaca.core.model.CheckpointReasonMessage
 
 internal fun FeedDraft.onCheckpointCreated(event: AgentEventCheckpointCreated) {
     placePoint(FeedBlock.Checkpoint(key("ckpt"), event.checkpoint))
+}
+
+internal fun FeedDraft.onCheckpointCreating(event: AgentEventCheckpointCreating) {
+    val block = FeedBlock.CheckpointCreating(key("ckpt-live"), event.id)
+    if (event.reason is CheckpointReasonMessage) {
+        var at = blocks.lastIndex
+        while (at >= 0) {
+            val seen = blocks[at]
+            if (seen !is FeedBlock.Hook || seen.blocked) break
+            at--
+        }
+        if (at >= 0 && blocks[at] is FeedBlock.Human) {
+            blocks.add(at + 1, block)
+            return
+        }
+    }
+    blocks.add(block)
+}
+
+internal fun FeedDraft.onCheckpointCreationFinished(event: AgentEventCheckpointCreationFinished) {
+    blocks.removeAll { it is FeedBlock.CheckpointCreating && it.id == event.id }
 }
 
 internal fun FeedDraft.onCheckpointsUpdated(event: AgentEventCheckpointsUpdated) {
@@ -42,7 +65,7 @@ internal fun FeedDraft.onSummaryEdited(event: AgentEventSummaryEdited) {
 }
 
 /**
- * The divider of a point taken for a message stands above that message.
+ * A message checkpoint is shown immediately below that message.
  *
  * The core sends the message's card first, so the feed is not empty while the snapshot is
  * taken, and the point after it, perhaps with the notes of the prompt hooks in between.
@@ -59,7 +82,7 @@ private fun FeedDraft.placePoint(block: FeedBlock.Checkpoint) {
             at -= 1
         }
         if (at >= 0 && blocks[at] is FeedBlock.Human) {
-            blocks.add(at, block)
+            blocks.add(at + 1, block)
             return
         }
     }

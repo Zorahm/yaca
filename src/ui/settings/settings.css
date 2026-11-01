@@ -764,7 +764,7 @@
 
 .prov-model-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 72px 72px 110px 56px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 140px 72px 110px 56px;
   gap: 8px;
   align-items: baseline;
   padding: 6px 10px;
@@ -779,6 +779,27 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.prov-context-field {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.prov-context-field .prov-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.prov-context-field .prov-input[aria-invalid="true"] {
+  border-color: var(--err);
+}
+
+@media (max-width: 900px) {
+  .prov-model-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
 }
 
 .prov-model-id {

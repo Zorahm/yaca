@@ -10,6 +10,14 @@ import kotlinx.serialization.Serializable
 // dividers in the feed and listed for rollback.
 
 @Serializable
+@SerialName("checkpointCreating")
+data class AgentEventCheckpointCreating(val id: CheckpointId, val reason: CheckpointReason) : AgentEvent
+
+@Serializable
+@SerialName("checkpointCreationFinished")
+data class AgentEventCheckpointCreationFinished(val id: CheckpointId) : AgentEvent
+
+@Serializable
 @SerialName("checkpointCreated")
 data class AgentEventCheckpointCreated(
     val checkpoint: CheckpointSummary,

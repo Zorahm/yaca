@@ -21,6 +21,8 @@
     <string name="chat_working_for">已工作 %1$s</string>
     <string name="chat_work_with_failed">%1$s（%2$s）</string>
 
+    <string name="checkpoint_creating">正在创建检查点…</string>
+    <string name="checkpoint_created">已创建检查点</string>
     <string name="checkpoint_before_message">你的消息之前</string>
     <string name="checkpoint_before_command">%1$s 之前</string>
     <string name="checkpoint_after_restore">恢复之后</string>

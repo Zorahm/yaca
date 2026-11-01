@@ -191,12 +191,19 @@ export function ProviderForm({
         <section className="prov-section">
           <span className="prov-label">{t("prov.form_models")}</span>
           <div className="prov-hint">{t("prov.form_models_hint")}</div>
+          <div className="prov-hint">{t("prov.context_hint")}</div>
+          <div className="prov-hint">{t("prov.context_reopen")}</div>
           <ModelsList
             models={draft.models}
             busy={form.modelsBusy || form.keyBusy}
             answered={form.modelsAnswered}
             error={form.modelsError}
             onAsk={form.askForModels}
+            onContext={(id, contextMax) => form.patch({
+              models: draft.models.map((model) => model.id === id
+                ? { ...model, contextMax, contextSource: "hand" }
+                : model),
+            })}
           />
         </section>
       )}

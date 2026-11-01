@@ -25,6 +25,7 @@ function model(providerId: string, id: string, displayName = id): ModelInfo {
     supportsEffort: false,
     supportsThinking: false,
     contextSource: "default_guess",
+    byHand: false,
     supportsImages: true,
   };
 }

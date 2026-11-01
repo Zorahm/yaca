@@ -79,6 +79,11 @@ sealed interface FeedBlock {
         val status: ElicitationStatus,
     ) : FeedBlock, FeedItem
 
+    data class CheckpointCreating(
+        override val key: String,
+        val id: com.yaca.core.model.CheckpointId,
+    ) : FeedBlock, FeedItem
+
     data class Checkpoint(
         override val key: String,
         val checkpoint: CheckpointSummary,

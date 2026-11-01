@@ -383,6 +383,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
     },
     previewCheckpoint: (id) => send(commands.previewCheckpoint(id)),
     openCheckpoints: () => setPanel("checkpoints"),
+    openProcesses: () => setPanel("processes"),
     restoreCheckpoint: (id) => send(commands.restoreCheckpoint(id)),
     cancelPreview: () => {
       if (active) chats.patch(active.id, { feed: { ...active.feed, preview: null } });
@@ -626,8 +627,6 @@ export default function App({ prefs }: { prefs: Preferences }) {
           narrow={narrow}
           panelOpen={panel !== null}
           runningProcesses={runningProcesses}
-          processCount={active.feed.processes.length}
-          onOpenProcesses={() => setPanel("processes")}
           onToggleSidebar={() =>
             narrow ? setDrawerOpen(true) : setSidebarOpen((now) => !now)
           }

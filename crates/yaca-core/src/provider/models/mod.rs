@@ -7,9 +7,9 @@
 //!
 //! **What is asked for is what makes a model run.** Whether a model accepts
 //! `output_config.effort` and adaptive thinking decides between an answer and a
-//! 400, so those two are read carefully. The context window only moves a
-//! number in the ring §7.1, so a provider that keeps quiet about it gets a
-//! conservative default rather than a refusal.
+//! 400, so those two are read carefully. The context window controls the
+//! ring and automatic compaction, so a provider that keeps quiet about it gets a
+//! million-token default rather than a refusal.
 //!
 //! Prices are not asked for because nobody serves them. Anthropic's Models API
 //! has no price field at all, and the price list behind
@@ -34,7 +34,7 @@ use super::http;
 use super::registry::{Protocol, ProviderSpec, Providers};
 use crate::error::{CoreError, ProviderError};
 use crate::secrets;
-use crate::usage::ModelInfo;
+use crate::usage::{ContextSource, ModelInfo};
 
 mod anthropic;
 mod local;
@@ -65,7 +65,26 @@ pub async fn discover(
     for m in &mut models {
         m.provider_id = spec.id.clone();
     }
+    keep_hand_edits(&spec.models, &mut models);
     Ok(models)
+}
+
+/// Refresh capabilities and prices without losing a person's context override.
+pub fn keep_hand_edits(saved: &[ModelInfo], models: &mut Vec<ModelInfo>) {
+    for previous in saved {
+        if previous.by_hand {
+            if let Some(model) = models.iter_mut().find(|m| m.id == previous.id) {
+                *model = previous.clone();
+            } else {
+                models.push(previous.clone());
+            }
+        } else if previous.context_source == ContextSource::Hand {
+            if let Some(model) = models.iter_mut().find(|m| m.id == previous.id) {
+                model.context_max = previous.context_max;
+                model.context_source = ContextSource::Hand;
+            }
+        }
+    }
 }
 
 /// Asks a saved provider for its models and writes the answer into
@@ -77,18 +96,19 @@ pub async fn refresh(dir: &Path, id: &str) -> Result<Providers, CoreError> {
     let missing = || CoreError::Config(format!("provider «{id}» is not in the list"));
 
     let spec = Providers::load(dir)?.get(id).cloned().ok_or_else(missing)?;
-    let models = discover(&spec, stored_key(&spec).as_deref()).await?;
+    let mut models = discover(&spec, stored_key(&spec).as_deref()).await?;
 
     // Read again rather than kept from above: the question took a round trip,
     // and whatever was saved meanwhile must not be written over with a copy
     // from before it.
     let mut providers = Providers::load(dir)?;
-    providers
+    let current = providers
         .list
         .iter_mut()
         .find(|p| p.id == id)
-        .ok_or_else(missing)?
-        .models = models;
+        .ok_or_else(missing)?;
+    keep_hand_edits(&current.models, &mut models);
+    current.models = models;
     providers.save(dir)?;
     Ok(providers)
 }

@@ -26,6 +26,8 @@ export const panels = {
   "agents.prompt_less": "折りたたむ",
 
   "ckpt.empty": "ロールバックポイントはまだありません",
+  "ckpt.creating": "チェックポイントを作成中…",
+  "ckpt.created": "チェックポイントを作成しました",
   "ckpt.open_panel": "すべてのポイントを表示",
   "ckpt.message": "メッセージの前",
   "ckpt.command": "{command} の前",

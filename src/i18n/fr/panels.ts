@@ -26,6 +26,8 @@ export const panels = {
   "agents.prompt_less": "Réduire",
 
   "ckpt.empty": "Aucun point de contrôle pour l'instant",
+  "ckpt.creating": "Création du point de contrôle…",
+  "ckpt.created": "Point de contrôle créé",
   "ckpt.open_panel": "Afficher tous les points",
   "ckpt.message": "avant le message",
   "ckpt.command": "avant {command}",

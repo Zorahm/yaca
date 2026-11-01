@@ -400,6 +400,11 @@ fn human(event: &AgentEvent) -> Option<String> {
         }
         // §5.8. The id is printed because the CLI has no panel to click: it is
         // the only way to name a point when driving the core by hand.
+        AgentEvent::CheckpointCreating { reason, .. } => format!(
+            "\n\x1b[2mCreating checkpoint · {}\x1b[0m",
+            checkpoint_reason(reason)
+        ),
+        AgentEvent::CheckpointCreationFinished { .. } => "\n\x1b[2mCheckpoint creation finished\x1b[0m".into(),
         AgentEvent::CheckpointCreated { checkpoint } => format!(
             "\n\x1b[2m── ● {} · {}\x1b[0m",
             checkpoint.id,

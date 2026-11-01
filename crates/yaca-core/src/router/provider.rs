@@ -380,6 +380,7 @@ fn virtual_model(name: &str, targets: &[Target], default: usize) -> Result<Model
         supports_effort: targets.iter().any(|t| t.info.supports_effort),
         supports_thinking: targets.iter().any(|t| t.info.supports_thinking),
         supports_images: targets.iter().any(|t| t.info.supports_images),
+        by_hand: false,
     })
 }
 

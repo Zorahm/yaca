@@ -112,30 +112,6 @@
   min-width: 12px;
 }
 
-.top-processes {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 11.5px;
-  white-space: nowrap;
-}
-
-.top-processes:hover {
-  background: var(--sunk);
-}
-
-@media (max-width: 900px) {
-  .top-process-label {
-    display: none;
-  }
-}
-
 .top-dot {
   position: absolute;
   top: 4px;

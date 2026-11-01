@@ -55,6 +55,8 @@ pub fn with_checkpoints(
             | AgentEvent::LspUpdated { .. }
             | AgentEvent::ProcessOutputReset { .. }
             | AgentEvent::ProcessOutput { .. }
+            | AgentEvent::CheckpointCreating { .. }
+            | AgentEvent::CheckpointCreationFinished { .. }
             | AgentEvent::CheckpointsUpdated { .. }
             | AgentEvent::CheckpointPreviewed { .. } => continue,
 

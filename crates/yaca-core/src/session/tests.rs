@@ -87,6 +87,8 @@ async fn text_response_yields_exact_expected_stream() {
             "userMessage",
             // §5.8: the point is taken before the turn touches anything —
             // that is what `Esc Esc` returns to (§13).
+            "checkpointCreating",
+            "checkpointCreationFinished",
             "checkpointCreated",
             "checkpointsUpdated",
             "turnStarted",
@@ -96,11 +98,11 @@ async fn text_response_yields_exact_expected_stream() {
         ]
     );
 
-    match &events[5] {
+    match &events[7] {
         AgentEvent::TextDelta { text, .. } => assert_eq!(text, "This is in Rust."),
         other => panic!("not a delta: {other:?}"),
     }
-    match &events[7] {
+    match &events[9] {
         AgentEvent::TurnFinished { stop_reason, .. } => {
             assert_eq!(*stop_reason, StopReason::EndTurn)
         }
@@ -132,6 +134,8 @@ async fn tool_call_completes_roundtrip_and_caption_does_not_go_to_model() {
         vec![
             "stateChanged",
             "userMessage",
+            "checkpointCreating",
+            "checkpointCreationFinished",
             "checkpointCreated",
             "checkpointsUpdated",
             "turnStarted",
@@ -145,7 +149,7 @@ async fn tool_call_completes_roundtrip_and_caption_does_not_go_to_model() {
         ]
     );
 
-    match &events[6] {
+    match &events[8] {
         AgentEvent::ToolCallStarted {
             tool,
             description,
@@ -165,7 +169,7 @@ async fn tool_call_completes_roundtrip_and_caption_does_not_go_to_model() {
         other => panic!("not a tool start: {other:?}"),
     }
 
-    match &events[7] {
+    match &events[9] {
         AgentEvent::ToolCallProgress { chunk, .. } => assert!(chunk.contains("fn main")),
         other => panic!("not tool output: {other:?}"),
     }
@@ -274,6 +278,8 @@ async fn provider_error_clears_ring_rather_than_hanging() {
         vec![
             "stateChanged",
             "userMessage",
+            "checkpointCreating",
+            "checkpointCreationFinished",
             "checkpointCreated",
             "checkpointsUpdated",
             "turnStarted",
@@ -281,7 +287,7 @@ async fn provider_error_clears_ring_rather_than_hanging() {
             "turnFinished",
         ]
     );
-    match &events[5] {
+    match &events[7] {
         AgentEvent::Error {
             code, retryable, ..
         } => {
@@ -326,6 +332,8 @@ async fn rate_limit_retries_and_shows_attempt_count() {
         vec![
             "stateChanged",
             "userMessage",
+            "checkpointCreating",
+            "checkpointCreationFinished",
             "checkpointCreated",
             "checkpointsUpdated",
             "turnStarted",
@@ -335,7 +343,7 @@ async fn rate_limit_retries_and_shows_attempt_count() {
             "turnFinished",
         ]
     );
-    match &events[5] {
+    match &events[7] {
         AgentEvent::RetryScheduled { attempt, of, .. } => {
             // §5.10: "Retry in 4 s · attempt 2 of 5".
             assert_eq!((*attempt, *of), (2, 5));

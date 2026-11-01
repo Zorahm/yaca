@@ -377,35 +377,31 @@ fn last_user_text(provider: &MockProvider, request: usize) -> String {
 }
 
 #[tokio::test]
-async fn a_background_command_that_ends_is_reported_with_the_next_message() {
+async fn a_background_command_wakes_an_idle_model_with_output() {
     let dir = TempProject::new();
+    let command = if cfg!(windows) {
+        "while (!(Test-Path release)) { Start-Sleep -Milliseconds 25 }; echo wake_output; exit 3"
+    } else {
+        "while [ ! -f release ]; do sleep 0.05; done; echo wake_output; exit 3"
+    };
     let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(background("c1", "echo up& exit 3")),
+        Turn::Events(background("c1", command)),
         Turn::Events(script_text("started")),
-        Turn::Events(script_text("I see")),
+        Turn::Events(script_text("I see the command result")),
     ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
-
     ask(&handle, "start server").await;
     answer_and_finish(&handle, &mut rx, PermissionAnswer::Allow).await;
-
-    // The command dies while nobody is asking anything. The model is not woken
-    // for it: no request goes out until the human speaks.
-    until_within(&mut rx, Duration::from_secs(20), |e| {
-        matches!(e, AgentEvent::ProcessesUpdated { processes }
-            if processes.iter().all(|p| p.state != ProcessState::Running))
-    })
-    .await;
     assert_eq!(provider.seen.lock().unwrap().len(), 2);
-
-    ask(&handle, "how are things?").await;
-    until(&mut rx, is_turn_over).await;
-
+    dir.write("release", "ready");
+    let events = until_within(&mut rx, Duration::from_secs(30), is_turn_over).await;
+    assert!(events.iter().any(|event| matches!(event, AgentEvent::TurnStarted { .. })));
+    assert!(!events.iter().any(|event| matches!(event, AgentEvent::UserMessage { .. } | AgentEvent::CheckpointCreating { .. })));
+    assert_eq!(provider.seen.lock().unwrap().len(), 3);
     let note = last_user_text(&provider, 2);
     assert!(note.contains("exit code 3"), "{note}");
-    assert!(note.contains("echo up"), "{note}");
-    assert!(note.contains("how are things?"), "{note}");
+    assert!(note.contains("wake_output"), "{note}");
 }
 
 #[tokio::test]

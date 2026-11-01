@@ -245,7 +245,8 @@ Left-clicking the tray icon or choosing "Open Yaca" restores it; the tray's
 right-click menu contains "Close" to exit the application. The title-bar close
 button is labelled "Hide to system tray" to make its effect explicit.
 
-Once a chat has background commands, the top bar shows a direct Processes button
+Once a chat has background commands, the end of the feed, beside the turn's
+working/worked status, shows a direct Processes button
 with the running count, or the finished count when none remain running. It stays
 visible after commands finish. Opening the process panel selects a running command
 or the latest finished one when no row was selected, so output is visible at once.

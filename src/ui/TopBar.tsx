@@ -1,8 +1,8 @@
 /**
  * Top bar.
  *
- * Holds navigation and the identification of the session. Commands get a direct
- * link with a count: they can keep running after the agent finishes its turn.
+ * Holds navigation and the identification of the session. Background commands
+ * have a direct link beside the turn status at the end of the feed.
  * There is no mark in the header — the square with a reflected `C` lives on the
  * home screen and in the app icon.
  *
@@ -21,7 +21,7 @@
  * there, and wears the menu icon a phone expects in that corner.
  */
 
-import { ArrowLeft, ArrowRight, Globe, List, Terminal } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, Globe, List } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import { t } from "../i18n";
@@ -40,8 +40,6 @@ export function TopBar({
   narrow = false,
   panelOpen,
   runningProcesses,
-  processCount,
-  onOpenProcesses,
   onToggleSidebar,
   onTogglePanel,
   browser,
@@ -61,17 +59,12 @@ export function TopBar({
   panelOpen: boolean;
   /** The dot on the panel button — while there are live background commands. */
   runningProcesses: number;
-  processCount: number;
-  onOpenProcesses: () => void;
   onToggleSidebar: () => void;
   onTogglePanel: () => void;
   /** `null` where this build has no browser. */
   browser: { open: boolean; busy: boolean; onToggle: () => void } | null;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
-  const processStatus = runningProcesses > 0
-    ? t("proc.active_count", { n: runningProcesses })
-    : t("proc.finished_count", { n: processCount });
 
   return (
     <div className="top">
@@ -145,19 +138,6 @@ export function TopBar({
       </span>
 
       <div className="top-gap" />
-
-      {processCount > 0 && (
-        <button
-          className="top-processes"
-          onClick={onOpenProcesses}
-          aria-label={`${t("top.processes")}, ${processStatus}`}
-        >
-          <Terminal size={16} />
-          <span className="top-process-label">{t("top.processes")}</span>
-          {runningProcesses > 0 && <span className="pulse" aria-hidden="true">●</span>}
-          <span>{processStatus}</span>
-        </button>
-      )}
 
       {browser !== null && (
         <div className="top-icon-wrap">

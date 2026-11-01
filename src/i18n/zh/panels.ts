@@ -26,6 +26,8 @@ export const panels = {
   "agents.prompt_less": "收起",
 
   "ckpt.empty": "暂无回滚点",
+  "ckpt.creating": "正在创建检查点…",
+  "ckpt.created": "已创建检查点",
   "ckpt.open_panel": "显示所有回滚点",
   "ckpt.message": "在消息之前",
   "ckpt.command": "在 {command} 之前",

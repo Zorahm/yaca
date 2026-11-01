@@ -21,6 +21,8 @@
     <string name="chat_working_for">Arbeitet seit %1$s</string>
     <string name="chat_work_with_failed">%1$s (%2$s)</string>
 
+    <string name="checkpoint_creating">Checkpoint wird erstellt…</string>
+    <string name="checkpoint_created">Checkpoint erstellt</string>
     <string name="checkpoint_before_message">Vor deiner Nachricht</string>
     <string name="checkpoint_before_command">Vor %1$s</string>
     <string name="checkpoint_after_restore">Nach einer Wiederherstellung</string>

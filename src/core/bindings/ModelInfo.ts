@@ -36,4 +36,15 @@ contextSource: ContextSource,
  * (`session::vision`); a model wrongly taken to be blind is never shown
  * a screenshot it could have read, and nothing says why.
  */
-supportsImages: boolean, };
+supportsImages: boolean, 
+/**
+ * Whether the row was written by hand in the models panel (§10) rather
+ * than answered by the provider.
+ *
+ * Such a row is kept as it is when the provider is asked again — the point
+ * of writing it was to differ from the answer — while everything else is
+ * replaced by what the address says now
+ * (`provider::models::keep_hand_edits`). `default` is `false`: a row from
+ * before the field existed is what the provider answered.
+ */
+byHand: boolean, };

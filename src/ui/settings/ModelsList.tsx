@@ -1,10 +1,9 @@
 /**
  * The provider's model list (§10) — asked for, not typed.
  *
- * Everything here came from the provider's own `/v1/models`: it knows its
- * context windows, its output caps and which of its models take `effort`
- * better than anyone filling in six fields per row, and a number typed by hand
- * goes stale the week a model changes. So the list is shown, not edited.
+ * Capabilities and prices come from the provider's own `/v1/models`.
+ * The context window can be overridden when the provider omits it or reports
+ * a limit that differs from the user's deployment.
  *
  * What the row shows is what decides whether a model runs and what it costs —
  * `effort`, the caps, the price. A price of zero is not hidden: a local model
@@ -20,6 +19,7 @@
 import { t, tp } from "../../i18n";
 import type { ModelInfo } from "../../core/client";
 import { money, tokens } from "../format";
+import { MAX_CONTEXT_TOKENS, validContextSize } from "./provider";
 
 export function ModelsList({
   models,
@@ -27,6 +27,7 @@ export function ModelsList({
   answered,
   error,
   onAsk,
+  onContext,
 }: {
   models: ModelInfo[];
   busy: boolean;
@@ -35,6 +36,7 @@ export function ModelsList({
   /** The provider's refusal. An empty list after success is not an error. */
   error: string | null;
   onAsk: () => void;
+  onContext: (id: string, context: number) => void;
 }) {
   return (
     <div className="prov-rows">
@@ -56,9 +58,21 @@ export function ModelsList({
         <div className="prov-model-row" key={model.id}>
           <span className="prov-model-name">{model.displayName}</span>
           <span className="prov-model-id">{model.id}</span>
-          <span className="prov-model-num" title={t("prov.form_model_context")}>
-            {tokens(model.contextMax)}
-          </span>
+          <label className="prov-context-field">
+            <span className="prov-hint">{t("prov.form_model_context")}</span>
+            <input
+              className="prov-input prov-input-mono"
+              type="number"
+              min={1}
+              max={MAX_CONTEXT_TOKENS}
+              step={1}
+              value={model.contextMax || ""}
+              disabled={busy}
+              aria-label={`${model.displayName}: ${t("prov.form_model_context")}`}
+              aria-invalid={!validContextSize(model.contextMax)}
+              onChange={(e) => onContext(model.id, e.target.valueAsNumber)}
+            />
+          </label>
           <span className="prov-model-num" title={t("prov.form_model_output")}>
             {tokens(model.maxOutput)}
           </span>

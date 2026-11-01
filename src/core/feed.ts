@@ -119,6 +119,7 @@ export type FeedBlock =
       status: ElicitationStatus;
     }
   | { kind: "checkpoint"; key: string; checkpoint: CheckpointSummary }
+  | { kind: "checkpointCreating"; key: string; id: string }
   | { kind: "restored"; key: string; at: number; files: number }
   | { kind: "compacted"; key: string; summary: string; freed: number }
   | { kind: "plan"; key: string; plan: string }
@@ -449,6 +450,24 @@ function apply(feed: Feed, event: AgentEvent): void {
       });
       return;
 
+    case "checkpointCreating": {
+      const block: FeedBlock = { kind: "checkpointCreating", key: key("ckpt-live"), id: event.id };
+      let at = feed.blocks.length - 1;
+      if (event.reason.type === "message") {
+        while (at >= 0 && feed.blocks[at].kind === "hook" && !(feed.blocks[at] as Extract<FeedBlock, { kind: "hook" }>).blocked) at--;
+        if (at >= 0 && feed.blocks[at].kind === "human") {
+          feed.blocks.splice(at + 1, 0, block);
+          return;
+        }
+      }
+      feed.blocks.push(block);
+      return;
+    }
+
+    case "checkpointCreationFinished":
+      feed.blocks = feed.blocks.filter((block) => block.kind !== "checkpointCreating" || block.id !== event.id);
+      return;
+
     case "checkpointCreated":
       placePoint(feed, {
         kind: "checkpoint",
@@ -631,7 +650,7 @@ function endTurn(feed: Feed, endedAt: number): void {
 }
 
 /**
- * §5.8: the divider of a point taken for a message stands above that message.
+ * A message checkpoint is shown immediately below that message.
  *
  * The core sends the message's card first, so the feed is not empty while the
  * snapshot is taken, and the point after it, perhaps with the notes of the
@@ -649,7 +668,7 @@ function placePoint(feed: Feed, block: Extract<FeedBlock, { kind: "checkpoint" }
       at -= 1;
     }
     if (at >= 0 && feed.blocks[at].kind === "human") {
-      feed.blocks.splice(at, 0, block);
+      feed.blocks.splice(at + 1, 0, block);
       return;
     }
   }

@@ -5,9 +5,8 @@
  * override — that is how a local gateway drops `authorization` — and must not
  * be mistaken for a missing one.
  *
- * Models are not validated here at all any more: they arrive from the provider
- * (`discoverModels`), and second-guessing its own answer would mean the window
- * having an opinion about what the provider serves.
+ * Provider metadata passes through; only manually edited context sizes need
+ * validation before they can be saved.
  */
 
 import { describe, expect, it } from "vitest";
@@ -17,6 +16,7 @@ import {
   draftFromSpec,
   draftProblems,
   draftToSpec,
+  keepContextEdits,
   emptyDraft,
   mergedHeaders,
   needsKey,
@@ -104,6 +104,7 @@ describe("drafts and specs", () => {
         supportsEffort: false,
         supportsThinking: false,
         contextSource: "default_guess",
+        byHand: false,
         supportsImages: true,
       },
     ],
@@ -111,6 +112,21 @@ describe("drafts and specs", () => {
 
   it("round-trips a spec through a draft unchanged", () => {
     expect(draftToSpec(draftFromSpec(spec))).toEqual(spec);
+  });
+
+  it("keeps a context override while updating the provider's other fields", () => {
+    const previous = { ...spec.models[0], contextSource: "hand" as const, contextMax: 750000 };
+    const reported = { ...spec.models[0], maxOutput: 64000, contextMax: 1000000 };
+    const merged = keepContextEdits([previous], [reported]);
+    expect(merged[0]).toEqual({ ...reported, contextMax: 750000, contextSource: "hand" });
+    expect(draftToSpec({ ...draftFromSpec(spec), models: merged })?.models).toEqual(merged);
+  });
+
+  it.each([NaN, 0, -1, 1.5, 4294967296])("rejects an invalid manual context: %s", (contextMax) => {
+    const draft = draftFromSpec(spec);
+    draft.models = [{ ...draft.models[0], contextSource: "hand", contextMax }];
+    expect(problemsOf(draft)).toContain("prov.error_context");
+    expect(draftToSpec(draft)).toBeNull();
   });
 
   it("accepts an empty model list: nobody has asked the provider yet", () => {

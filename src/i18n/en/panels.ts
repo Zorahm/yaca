@@ -26,6 +26,8 @@ export const panels = {
   "agents.prompt_less": "Collapse",
 
   "ckpt.empty": "No checkpoints yet",
+  "ckpt.creating": "Creating checkpoint…",
+  "ckpt.created": "Checkpoint created",
   "ckpt.open_panel": "Show every checkpoint",
   "ckpt.message": "before the message",
   "ckpt.command": "before {command}",

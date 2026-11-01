@@ -86,7 +86,9 @@ impl Tool for Bash {
                 "description": "Start the command and return at once. Read what it \
                                 has printed since with BashOutput, or wait for a line \
                                 or for its end with BashWait. Stop it with BashKill, \
-                                restart it with BashRestart.",
+                                restart it with BashRestart. Keep working meanwhile; \
+                                when it exits on its own, its status and unread output \
+                                are delivered automatically, waking you if idle.",
             },
         })
     }

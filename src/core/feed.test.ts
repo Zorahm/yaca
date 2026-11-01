@@ -741,6 +741,17 @@ describe("plugin hooks in the feed", () => {
 });
 
 describe("the point taken for a message", () => {
+  it("shows snapshot progress below the message and clears only the completed operation", () => {
+    const feed = run(said("one"),
+      { type: "checkpointCreating", id: "first", reason: { type: "message" } },
+      { type: "checkpointCreating", id: "second", reason: { type: "command", command: "test" } },
+      { type: "checkpointCreationFinished", id: "first" });
+    expect(feed.blocks.map((block) => block.kind)).toEqual(["human", "checkpointCreating"]);
+    expect(feed.blocks[1]).toMatchObject({ id: "second" });
+    const finished = reduceAll(feed, [{ type: "checkpointCreationFinished", id: "second" }]);
+    expect(finished.blocks.map((block) => block.kind)).toEqual(["human"]);
+  });
+
   const point = (reason: "message" | "rollback" = "message"): AgentEvent => ({
     type: "checkpointCreated",
     checkpoint: { id: `ckpt_${reason}`, at: 1, reason: { type: reason }, tracked: 3 },
@@ -754,12 +765,12 @@ describe("the point taken for a message", () => {
   });
   const kinds = (feed: Feed) => feed.blocks.map((b) => b.kind);
 
-  it("stands above the card it follows in the stream", () => {
-    expect(kinds(run(said("one"), point()))).toEqual(["checkpoint", "human"]);
+  it("stands below the card it follows in the stream", () => {
+    expect(kinds(run(said("one"), point()))).toEqual(["human", "checkpoint"]);
   });
 
-  it("stands above the card past the notes of the prompt hooks", () => {
-    expect(kinds(run(said("one"), note(false), point()))).toEqual(["checkpoint", "human", "hook"]);
+  it("stands below the card before the notes of the prompt hooks", () => {
+    expect(kinds(run(said("one"), note(false), point()))).toEqual(["human", "checkpoint", "hook"]);
   });
 
   it("stays where it is in a journal written point first", () => {

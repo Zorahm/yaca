@@ -29,6 +29,7 @@
 //! * [`AgentEvent::ProcessOutput`] — the live tail of the selected row.
 //!
 //! The checkpoint slice adds three more on top of §15's `CheckpointCreated`:
+//! `CheckpointCreating` and `CheckpointCreationFinished` describe an in-flight snapshot.
 //!
 //! * [`AgentEvent::CheckpointsUpdated`] — the whole list of points. §1.1 gives
 //!   checkpoints a panel, and a panel assembled from twenty separate
@@ -144,7 +145,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::change::{FileDiff, FileFact, FileView};
-use crate::checkpoint::{CheckpointChange, CheckpointSummary};
+use crate::checkpoint::{CheckpointChange, CheckpointReason, CheckpointSummary};
 use crate::id::{BlockId, CallId, CheckpointId, QueuedId, RequestId, TurnId};
 use crate::intent::{Effort, Mode};
 use crate::mcp::McpServerSummary;
@@ -381,6 +382,14 @@ pub enum AgentEvent {
     #[serde(rename_all = "camelCase")]
     ProcessOutput { id: ProcessId, chunk: String },
 
+    /// A snapshot has started. The id pairs it with its completion.
+    #[serde(rename_all = "camelCase")]
+    CheckpointCreating { id: CheckpointId, reason: CheckpointReason },
+
+    /// A snapshot task has finished, whether it created a point or not.
+    #[serde(rename_all = "camelCase")]
+    CheckpointCreationFinished { id: CheckpointId },
+
     /// A divider line in the feed (§5.8): `── ● 14:32 · before applying…`.
     ///
     /// Only sent when the point is new. A snapshot of a tree that has not moved
@@ -557,6 +566,8 @@ impl AgentEvent {
             AgentEvent::LspUpdated { .. } => "lspUpdated",
             AgentEvent::ProcessOutputReset { .. } => "processOutputReset",
             AgentEvent::ProcessOutput { .. } => "processOutput",
+            AgentEvent::CheckpointCreating { .. } => "checkpointCreating",
+            AgentEvent::CheckpointCreationFinished { .. } => "checkpointCreationFinished",
             AgentEvent::CheckpointCreated { .. } => "checkpointCreated",
             AgentEvent::CheckpointsUpdated { .. } => "checkpointsUpdated",
             AgentEvent::CheckpointPreviewed { .. } => "checkpointPreviewed",

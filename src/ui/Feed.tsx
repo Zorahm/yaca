@@ -54,7 +54,7 @@ import { timeOf } from "./format";
 import { tp } from "../i18n";
 import { shouldHold, shouldStick, type ScrollState } from "./feedScroll";
 import { Work } from "./Work";
-import { TurnLive, TurnTime } from "./TurnTime";
+import { ProcessStatus, TurnLive, TurnTime } from "./TurnTime";
 
 /** The feed's end point, allowing for a lagging measurement (see the bottom hold). */
 const END_PAD = 240;
@@ -78,6 +78,7 @@ export type FeedActions = {
   cancelPreview: () => void;
   /** A click on a checkpoint line opens the panel with all the points. */
   openCheckpoints: () => void;
+  openProcesses: () => void;
   editSummary: (text: string) => void;
   openFile: (path: string) => void;
   /** Opens the agents panel on these subagents, by their `Task` call ids. */
@@ -224,7 +225,9 @@ export function Feed({
         {/* A running turn counts up under everything it has said so far. */}
         {busy && feed.turn && (
           <div className="block feed-item" key="turn-live">
-            <TurnLive startedAt={feed.turn.startedAt} />
+            <TurnLive startedAt={feed.turn.startedAt}>
+              <ProcessStatus processes={feed.processes} onOpen={actions.openProcesses} />
+            </TurnLive>
           </div>
         )}
         {/* Air between the last block and the composer. A feed item of its own,
@@ -321,6 +324,9 @@ function Block({
         />
       );
 
+    case "checkpointCreating":
+      return <div className="divider" role="status"><span className="spinner" aria-hidden="true" /> {t("ckpt.creating")}</div>;
+
     case "checkpoint":
       return (
         <Checkpoint
@@ -390,6 +396,9 @@ function Block({
       return <HookNote block={block} />;
 
     case "turnTime":
-      return <TurnTime startedAt={block.startedAt} endedAt={block.endedAt} />;
+      return <TurnTime startedAt={block.startedAt} endedAt={block.endedAt}>
+        {!feed.turn && [...feed.blocks].reverse().find((item) => item.kind === "turnTime")?.key === block.key &&
+          <ProcessStatus processes={feed.processes} onOpen={actions.openProcesses} />}
+      </TurnTime>;
   }
 }
