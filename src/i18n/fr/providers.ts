@@ -56,6 +56,10 @@ export const providers = {
   "prov.models_ask": "Interroger",
   "prov.models_asking": "Interrogation…",
   "prov.models_none": "Aucun modèle",
+  "prov.price_input": "Entrée $ / 1M",
+  "prov.price_output": "Sortie $ / 1M",
+  "prov.price_hint": "Si le fournisseur ne donne pas de prix, indiquez le tarif par million de jetons. Pour les nouvelles conversations.",
+  "prov.error_price": "Prix invalide pour {name}",
   "prov.models_price": "$ / 1M en entrée et en sortie",
   "prov.models_effort": "effort",
 

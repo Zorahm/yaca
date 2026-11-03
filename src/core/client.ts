@@ -32,6 +32,7 @@ import type { FileFact } from "./bindings/FileFact";
 import type { FileView } from "./bindings/FileView";
 import type { Effort } from "./bindings/Effort";
 import type { Mode } from "./bindings/Mode";
+import type { Profile } from "./bindings/Profile";
 import type { McpServerSettings } from "./bindings/McpServerSettings";
 import type { McpServerSummary } from "./bindings/McpServerSummary";
 import type { McpSource } from "./bindings/McpSource";
@@ -117,6 +118,7 @@ export type {
   Hunk,
   ViewSegment,
   Mode,
+  Profile,
   McpServerSettings,
   McpServerSummary,
   McpSource,
@@ -207,6 +209,11 @@ let demoProjects: string[] = [demoState.projectRoot];
 
 export function projects(): Promise<string[]> {
   return inTauri ? invoke<string[]>("projects") : Promise.resolve([...demoProjects]);
+}
+
+/** The application-owned home for projectless conversations. */
+export function chatRoot(): Promise<string> {
+  return inTauri ? invoke<string>("chat_root") : Promise.resolve("/yaca/conversations");
 }
 
 /** Adds a project to the list without starting a chat (§9.1). Returns the whole list. */
@@ -374,8 +381,8 @@ export function userName(): Promise<string | null> {
  */
 export function projectStartup(path: string): Promise<Startup> {
   if (!inTauri) {
-    const { mode, provider, model, effort } = demoState;
-    return Promise.resolve({ mode, provider, model, effort });
+    const { mode, profile, provider, model, effort } = demoState;
+    return Promise.resolve({ mode, profile, provider, model, effort });
   }
   return invoke<Startup>("project_startup", { path });
 }
@@ -918,6 +925,7 @@ export const commands = {
   }),
   cancel: (): Command => ({ type: "cancel" }),
   setMode: (mode: Mode): Command => ({ type: "setMode", mode }),
+  setProfile: (profile: Profile): Command => ({ type: "setProfile", profile }),
   setModel: (model: string): Command => ({ type: "setModel", model }),
   setEffort: (effort: Effort): Command => ({ type: "setEffort", effort }),
   answerPermission: (requestId: string, answer: PermissionAnswer): Command => ({
@@ -1053,6 +1061,7 @@ export const DEFAULT_PREFS: Preferences = {
   language: "system",
   notifications: true,
   respectRobots: true,
+  summarizeWebFetch: false,
   shell: "auto",
   checkUpdates: true,
 };
@@ -1103,6 +1112,7 @@ export function onPreferences(
 export function emptySettings(): Settings {
   return {
     mode: null,
+    profile: null,
     provider: null,
     model: null,
     compactModel: null,

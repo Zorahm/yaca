@@ -51,6 +51,8 @@ export const settings = {
   "tools.shell_auto": "Auto",
   "tools.shell_pwsh": "PowerShell 7",
   "tools.shell_windows": "Windows PowerShell",
+  "tools.web_summary": "Résumer les pages WebFetch",
+  "tools.web_summary_hint": "Le petit modèle du routeur résume les pages ; sans routeur, le modèle choisi est utilisé. Pour les nouvelles conversations.",
   "tools.robots": "Respecter robots.txt",
   "tools.robots_hint":
     "Une page fermée par une règle Disallow n'est pas chargée : l'agent reçoit un refus et la raison. Désactivez cette option quand le site fermé ainsi est le vôtre ; un Disallow y vise souvent seulement l'indexation par les moteurs de recherche.",
@@ -122,6 +124,8 @@ export const settings = {
   "rules.title": "Mode et règles",
   "rules.lede":
     "Stocké dans .yaca/settings.json du projet, il décrit comment une session démarre. Une conversation déjà en cours n'est pas touchée : pour elle, il y a ⇧⇥ dans la zone de saisie.",
+  "rules.profile": "À quoi sert un chat par défaut",
+  "rules.profile_hint": "Non défini = Code. Documents, c'est Word, Excel et PowerPoint : les mêmes outils, sans serveurs de langage ni carnets.",
   "rules.mode": "Mode par défaut",
   "rules.mode_hint": "Non défini = Auto : les modifications de fichiers se font sans demander ; commandes, réseau et écritures MCP sont jugés par le modèle Decision (à défaut, celui de la session).",
   "rules.allowed": "Toujours autorisé",

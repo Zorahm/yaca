@@ -34,12 +34,15 @@ import type { MenuCommand } from "./slash";
 import { Composer, type ComposerActions, type ComposerSettings } from "./Composer";
 import { plainPath, relativeTo } from "./format";
 import { imageActions } from "./images";
+import { YakMascot } from "./YakMascot";
+import type { Profile } from "../core/client";
 
 export function Home({
   models,
   commands,
   onRefreshCommands,
   project,
+  profile,
   error,
   onStart,
   onPickProject,
@@ -52,6 +55,7 @@ export function Home({
   onRefreshCommands: () => void;
   /** The project picked in the window: the session list beside it reads the same one (§9.1). */
   project: string | null;
+  profile: Profile;
   /** A session start error: it comes from the window, not from here. */
   error: string | null;
   onStart: (
@@ -70,6 +74,7 @@ export function Home({
   const [name, setName] = useState<string | null>(null);
   const [startup, setStartup] = useState<Startup | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const [keystrokes, setKeystrokes] = useState(0);
 
   useEffect(() => {
     void userName().then(setName);
@@ -92,7 +97,7 @@ export function Home({
     projectStartup(project).then(
       (defaults) => {
         if (current) {
-          setStartup(defaults);
+          setStartup({ ...defaults, profile });
           setFailure(null);
         }
       },
@@ -103,11 +108,12 @@ export function Home({
     return () => {
       current = false;
     };
-  }, [project, configured]);
+  }, [project, configured, profile]);
 
   const ready = project !== null && startup !== null;
   const settings: ComposerSettings = {
     mode: startup?.mode ?? "auto",
+    profile,
     provider: startup?.provider ?? "",
     model: startup?.model ?? "",
     effort: startup?.effort ?? "extra",
@@ -126,12 +132,15 @@ export function Home({
   const actions: ComposerActions = {
     send: (text, attachments) => {
       if (project !== null && startup !== null) {
-        onStart(project, text, startup, attachments);
+        onStart(project, text, { ...startup, profile }, attachments);
       }
     },
     // There is no stop button here: `busy` on the home screen is always false.
     stop: () => {},
+    // A count rather than a flag: every keystroke must play the mascot's reaction again.
+    typed: () => setKeystrokes((count) => count + 1),
     setMode: (mode) => change({ mode }),
+    setProfile: (profile) => change({ profile }),
     setModel: (model, providerId) =>
       change(providerId ? { model, provider: providerId } : { model }),
     setEffort: (effort) => change({ effort }),
@@ -169,14 +178,19 @@ export function Home({
 
       <div className="home-body">
         <div className="home-wrap">
-          <div className="home-greeting">
-            <h1>{name === null ? t("home.greeting") : t("home.greeting_named", { name })}</h1>
+          <div className="home-intro">
+            <YakMascot keystrokes={keystrokes} />
+            <div className="home-copy">
+              <div className="home-greeting">
+                <h1>{name === null ? t("home.greeting") : t("home.greeting_named", { name })}</h1>
+              </div>
+              <p className="home-lead">{t(profile === "chat" ? "home.lead_chat" : "home.lead")}</p>
+            </div>
           </div>
-          <p className="home-lead">{t("home.lead")}</p>
 
           {/* The project is the folder: a card that names it and the one
               button that changes it (§9). */}
-          <div className="home-pick">
+          {profile === "code" && <div className="home-pick">
             <div className="home-pick-text">
               <div className="home-pick-title">{t("home.pick_title")}</div>
               <div className="home-pick-path" title={project ?? undefined}>
@@ -186,7 +200,7 @@ export function Home({
             <button className="btn" onClick={onPickProject} disabled={!hasFileDialogs}>
               {t("home.pick_project")}
             </button>
-          </div>
+          </div>}
 
           {/* Before the first message a provider may be missing, and that is
               said here, not discovered by a refused send (§9.1, §10). */}

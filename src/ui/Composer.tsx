@@ -34,6 +34,7 @@ import type {
   Mode,
   ModelInfo,
   PluginSummary,
+  Profile,
   UsageSnapshot,
 } from "../core/client";
 import type { Feed } from "../core/feed";
@@ -58,6 +59,11 @@ export type ComposerActions = {
   send: (text: string, attachments: string[]) => void;
   stop: () => void;
   setMode: (mode: Mode) => void;
+  /**
+   * Code or documents (§7.1). Not a level of trust, so not one of the modes: a
+   * chat about a report still asks before writing or running anything.
+   */
+  setProfile: (profile: Profile) => void;
   /**
    * Bypassing permissions (§8) is a decision about a running session. Where there
    * is no session, there is no action either, and the mode menu shows no row that
@@ -125,11 +131,18 @@ export type ComposerActions = {
    * merged into the turn. No action — no button; the chip only shows that it waits.
    */
   cancelQueued?: (id: string) => void;
+  /**
+   * Each change the person makes to the text. The home screen's mascot reacts to it;
+   * no session screen does.
+   */
+  typed?: () => void;
 };
 
 /** What the bottom row of §7.1 shows and switches. */
 export type ComposerSettings = {
   mode: Mode;
+  /** What the chat is for: code, or documents. */
+  profile: Profile;
   provider?: string;
   model: string;
   effort: Effort;
@@ -174,9 +187,9 @@ export function Composer({
   draftKey: string;
 }) {
   const [text, setText] = useState(() => localStorage.getItem(draftKey) ?? "");
-  const [menu, setMenu] = useState<"attach" | "mode" | "model" | "effort" | "context" | null>(
-    null,
-  );
+  const [menu, setMenu] = useState<
+    "attach" | "mode" | "model" | "effort" | "context" | null
+  >(null);
 
   // The plugin list is read when the `＋` menu opens, not kept: the settings
   // window may have switched one since.
@@ -456,6 +469,7 @@ export function Composer({
             onChange={(e) => {
               setText(e.target.value);
               setCaret(e.target.selectionStart);
+              actions.typed?.();
             }}
             onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
             onPaste={pasteImages}

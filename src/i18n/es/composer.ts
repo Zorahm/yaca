@@ -90,6 +90,12 @@ export const composer = {
   "mention.searching": "buscando…",
   "mention.none": "no se encontró nada",
 
+  "profile.title": "Para qué es el chat",
+  "profile.code": "Código",
+  "profile.chat": "Chat",
+  "profile.code_note": "Un proyecto y su código: servidores de lenguaje y cuadernos",
+  "profile.chat_note": "Word, Excel, PowerPoint y los archivos de la persona",
+
   "mode.title": "Modo",
   "mode.plan": "Plan",
   "mode.manual": "Manual",

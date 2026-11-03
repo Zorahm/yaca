@@ -51,6 +51,8 @@ export const settings = {
   "tools.shell_auto": "自動",
   "tools.shell_pwsh": "PowerShell 7",
   "tools.shell_windows": "Windows PowerShell",
+  "tools.web_summary": "WebFetch ページを要約",
+  "tools.web_summary_hint": "ルーターの小型モデルがページを要約します。ルーターがない場合は選択中のモデルを使用します。新しいチャットに適用されます。",
   "tools.robots": "robots.txt を遵守",
   "tools.robots_hint":
     "Disallow ルールで閉じられたページは取得されず、エージェントは拒否と理由を受け取ります。閉じているのが自分のサイトの場合はオフにしてください。そこでの Disallow は多くの場合、検索エンジンへの制限にすぎません。",
@@ -119,6 +121,8 @@ export const settings = {
   "rules.title": "モードとルール",
   "rules.lede":
     "プロジェクトの .yaca/settings.json に保存され、セッションの開始方法を決めます。進行中の会話には影響しません。それにはコンポーザーの ⇧⇥ を使います。",
+  "rules.profile": "既定のチャットの用途",
+  "rules.profile_hint": "未設定の場合は「コード」。「文書」は Word、Excel、PowerPoint です: 同じ道具を、言語サーバーとノートブック抜きで使います。",
   "rules.mode": "既定のモード",
   "rules.mode_hint": "未設定の場合は「自動」: ファイルの変更は確認なしで行い、コマンド・ネットワーク・MCP の書き込みは Decision モデル（なければセッションのモデル）が判断します。",
   "rules.allowed": "常に許可",

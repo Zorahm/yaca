@@ -56,6 +56,10 @@ export const providers = {
   "prov.models_ask": "查询",
   "prov.models_asking": "查询中…",
   "prov.models_none": "没有模型",
+  "prov.price_input": "输入 $ / 百万",
+  "prov.price_output": "输出 $ / 百万",
+  "prov.price_hint": "如果服务商未提供价格，请输入每百万令牌的费率。适用于新聊天。",
+  "prov.error_price": "模型 {name} 的价格无效",
   "prov.models_price": "$ / 1M 输入与输出",
   "prov.models_effort": "强度",
 

@@ -90,6 +90,12 @@ export const composer = {
   "mention.searching": "검색 중…",
   "mention.none": "찾을 수 없음",
 
+  "profile.title": "채팅의 용도",
+  "profile.code": "코드",
+  "profile.chat": "채팅",
+  "profile.code_note": "프로젝트와 그 코드: 언어 서버와 노트북",
+  "profile.chat_note": "Word, Excel, PowerPoint 와 사용자의 파일",
+
   "mode.title": "모드",
   "mode.plan": "계획",
   "mode.manual": "수동",

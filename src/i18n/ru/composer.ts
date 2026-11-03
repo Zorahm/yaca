@@ -91,6 +91,12 @@ export const composer = {
   "mention.searching": "ищем…",
   "mention.none": "ничего не найдено",
 
+  "profile.title": "Чем занят чат",
+  "profile.code": "Код",
+  "profile.chat": "Чат",
+  "profile.code_note": "Проект и его код: языковые серверы и ноутбуки",
+  "profile.chat_note": "Word, Excel, PowerPoint и файлы человека",
+
   "mode.title": "Режим",
   "mode.plan": "План",
   "mode.manual": "Ручной",

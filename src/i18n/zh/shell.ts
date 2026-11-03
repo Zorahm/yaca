@@ -43,6 +43,8 @@ export const shell = {
   "home.not_chosen": "未选择",
   "home.lead":
     "选择项目文件夹，智能体便会开始处理其中的文件。模式、模型和强度可以在发送第一条消息之前更改。",
+   "home.lead_chat":
+     "写下你需要的帮助，智能体便会开始对话。模式、模型和强度可以在发送第一条消息之前更改。",
   "home.no_provider": "没有提供商。",
   "home.no_provider_hint": "添加模型密钥后才能发送消息。",
 

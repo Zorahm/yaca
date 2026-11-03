@@ -51,6 +51,8 @@ export const settings = {
   "tools.shell_auto": "Automático",
   "tools.shell_pwsh": "PowerShell 7",
   "tools.shell_windows": "Windows PowerShell",
+  "tools.web_summary": "Resumir páginas de WebFetch",
+  "tools.web_summary_hint": "El modelo pequeño del router resume páginas; sin router se usa el modelo elegido. Para chats nuevos.",
   "tools.robots": "Respetar robots.txt",
   "tools.robots_hint":
     "Una página bloqueada por una regla Disallow no se descarga: el agente recibe una negativa y el motivo. Conviene desactivarlo cuando el sitio bloqueado es propio, porque un Disallow ahí suele estar solo contra la indexación.",
@@ -122,6 +124,8 @@ export const settings = {
   "rules.title": "Modo y reglas",
   "rules.lede":
     "Se guarda en .yaca/settings.json del proyecto y describe cómo empieza una sesión. No afecta a una conversación en curso: para eso está ⇧⇥ en el compositor.",
+  "rules.profile": "Para qué es un chat por defecto",
+  "rules.profile_hint": "Si no está definido, es Código. Documentos es Word, Excel y PowerPoint: las mismas herramientas, sin servidores de lenguaje ni cuadernos.",
   "rules.mode": "Modo por defecto",
   "rules.mode_hint": "Si no está definido, es Automático: los cambios de archivos van sin preguntar; comandos, red y escrituras MCP los juzga el modelo Decision (si no hay, el de la sesión).",
   "rules.allowed": "Permitido siempre",

@@ -55,6 +55,7 @@ export function percent(ratio: number, digits: number): string {
 
 /** `$0.31`. Four digits for tiny amounts: three cents are not zero. */
 export function money(usd: number): string {
+  if (usd > 0 && usd < 0.0001) return Number(usd.toPrecision(2)).toString();
   return usd < 0.01 && usd > 0 ? usd.toFixed(4) : usd.toFixed(2);
 }
 

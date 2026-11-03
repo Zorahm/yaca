@@ -56,6 +56,10 @@ export const providers = {
   "prov.models_ask": "Consultar",
   "prov.models_asking": "Consultando…",
   "prov.models_none": "Nenhum modelo",
+  "prov.price_input": "Entrada $ / 1M",
+  "prov.price_output": "Saída $ / 1M",
+  "prov.price_hint": "Se o provedor não informar o preço, digite a tarifa por milhão de tokens. Aplica-se a novas conversas.",
+  "prov.error_price": "Preço inválido para {name}",
   "prov.models_price": "$ / 1 M entrada e saída",
   "prov.models_effort": "esforço",
 

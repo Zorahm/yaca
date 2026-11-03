@@ -51,6 +51,8 @@ export const settings = {
   "tools.shell_auto": "자동",
   "tools.shell_pwsh": "PowerShell 7",
   "tools.shell_windows": "Windows PowerShell",
+  "tools.web_summary": "WebFetch 페이지 요약",
+  "tools.web_summary_hint": "라우터의 소형 모델이 페이지를 요약합니다. 라우터가 없으면 선택한 모델을 사용합니다. 새 채팅에 적용됩니다.",
   "tools.robots": "robots.txt 준수",
   "tools.robots_hint":
     "Disallow 규칙으로 막힌 페이지는 가져오지 않습니다. 에이전트는 거부와 그 이유를 받습니다. 막힌 사이트가 본인 사이트라면 끄세요. 거기 있는 Disallow는 대개 검색 엔진 색인만 막으려는 것입니다.",
@@ -119,6 +121,8 @@ export const settings = {
   "rules.title": "모드와 규칙",
   "rules.lede":
     "프로젝트의 .yaca/settings.json에 저장되며, 세션이 어떻게 시작할지를 정합니다. 이미 진행 중인 대화에는 영향을 주지 않습니다. 그런 대화에는 입력창의 ⇧⇥를 사용하세요.",
+  "rules.profile": "기본 채팅 용도",
+  "rules.profile_hint": "설정하지 않으면 코드입니다. 문서는 Word, Excel, PowerPoint 를 뜻하며, 같은 도구를 언어 서버와 노트북 없이 사용합니다.",
   "rules.mode": "기본 모드",
   "rules.mode_hint": "설정하지 않으면 자동입니다: 파일 변경은 묻지 않고 진행하고, 명령·네트워크·MCP 쓰기는 Decision 모델(없으면 세션 모델)이 판단합니다.",
   "rules.allowed": "항상 허용",

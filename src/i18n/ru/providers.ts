@@ -55,6 +55,10 @@ export const providers = {
   "prov.models_ask": "Опросить",
   "prov.models_asking": "Спрашиваем…",
   "prov.models_none": "Моделей нет",
+  "prov.price_input": "Вход $ / 1M",
+  "prov.price_output": "Выход $ / 1M",
+  "prov.price_hint": "Если провайдер не сообщает цену, укажите тариф за миллион токенов. Изменения действуют в новых чатах.",
+  "prov.error_price": "Некорректный тариф модели {name}",
   "prov.models_price": "$ / 1M вход и выход",
   "prov.models_effort": "усилие",
 

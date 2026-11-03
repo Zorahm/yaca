@@ -90,6 +90,12 @@ export const composer = {
   "mention.searching": "搜索中…",
   "mention.none": "未找到",
 
+  "profile.title": "聊天用途",
+  "profile.code": "代码",
+  "profile.chat": "聊天",
+  "profile.code_note": "项目及其代码：语言服务器和笔记本",
+  "profile.chat_note": "Word、Excel、PowerPoint 和用户的文件",
+
   "mode.title": "模式",
   "mode.plan": "计划",
   "mode.manual": "手动",

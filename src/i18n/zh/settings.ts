@@ -51,6 +51,8 @@ export const settings = {
   "tools.shell_auto": "自动",
   "tools.shell_pwsh": "PowerShell 7",
   "tools.shell_windows": "Windows PowerShell",
+  "tools.web_summary": "总结 WebFetch 页面",
+  "tools.web_summary_hint": "路由器的小模型总结页面；没有路由器时使用所选模型。适用于新聊天。",
   "tools.robots": "遵守 robots.txt",
   "tools.robots_hint":
     "被 Disallow 规则禁止的页面不会被加载：智能体会收到拒绝及其原因。当该站点是你自己的网站时请关闭此项——那里的 Disallow 通常只是针对搜索引擎的收录限制。",
@@ -119,6 +121,8 @@ export const settings = {
   "rules.title": "模式与规则",
   "rules.lede":
     "保存在项目的 .yaca/settings.json 中，描述会话的起始状态。已在进行中的对话不受影响——为此请使用输入框中的 ⇧⇥。",
+  "rules.profile": "默认的聊天用途",
+  "rules.profile_hint": "未设置时是代码。文档指的是 Word、Excel 和 PowerPoint：同样的工具，不需要语言服务器和笔记本。",
   "rules.mode": "默认模式",
   "rules.mode_hint": "未设置时为“自动”：文件改动无需询问，命令、网络和 MCP 写入由 Decision 模型（没有则由会话模型）判断。",
   "rules.allowed": "始终允许",

@@ -59,6 +59,7 @@ describe("a chat taken back from the shell", () => {
       provider: "anthropic",
       model: "m",
       mode: "manual",
+      profile: "code",
       effort: "medium",
       busy: true,
       bypass: false,

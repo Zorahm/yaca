@@ -2,8 +2,8 @@
  * Action row and its expansion.
  *
  * The expansion happens inside the group: the row grows downward, the neighbours
- * stay in place. Only the running one is expanded by default — a list of fifteen
- * actions reads as a list, not as a wall of text.
+ * stay in place. Rows open only on request, so arriving calls and results do
+ * not expand the feed while someone is reading it.
  *
  * There is no `Task` row here: subagents stand in the feed as a plate
  * (`AgentsPlate`), and their actions are these same rows in the agents panel.
@@ -30,8 +30,7 @@ export function ActionRowView({
   onOpenFile: (path: string) => void;
 }) {
   const running = row.state === "running";
-  const [override, setOverride] = useState<boolean | null>(null);
-  const open = override ?? running;
+  const [open, setOpen] = useState(false);
   const counts = rowCounts(row);
   const files = rowFiles(row);
   // What the model asked and what came back must not look alike: the request
@@ -56,7 +55,7 @@ export function ActionRowView({
       <button
         className={file ? "row-head row-head-file" : "row-head"}
         aria-expanded={open}
-        onClick={() => setOverride(!open)}
+        onClick={() => setOpen(!open)}
       >
         <RowSign row={row} />
         {/* A click on the file name opens the file panel, a click elsewhere
@@ -116,9 +115,9 @@ export function ActionRowView({
             // What a file holds is framed like a diff; what a command printed
             // is plain text under its box.
             <CodeBlock text={row.output} error={row.state === "failed"} plain={boxed} />
-          ) : (
+          ) : !running ? (
             <div className="row-target row-dim">{t("row.no_output")}</div>
-          )}
+          ) : null}
 
           {/* The reason an action did not go through is shown in full: the caption
               cuts it to one line, and there is nothing to fix from a truncated text. */}

@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { baseName, relativeTo } from "./format";
+import { baseName, money, relativeTo } from "./format";
 
 describe("path from the project root", () => {
   it("strips the root regardless of the separator", () => {
@@ -43,5 +43,12 @@ describe("file name", () => {
     expect(baseName("src/ui/App.tsx")).toBe("App.tsx");
     expect(baseName("D:\\Kod\\README.md")).toBe("README.md");
     expect(baseName("README.md")).toBe("README.md");
+  });
+});
+
+describe("money", () => {
+  it("does not display a nonzero charge as zero", () => {
+    expect(Number(money(0.000003))).toBeGreaterThan(0);
+    expect(money(0)).toBe("0.00");
   });
 });

@@ -22,6 +22,7 @@ function model(providerId: string, id: string, displayName = id): ModelInfo {
     contextMax: 128000,
     maxOutput: 8000,
     pricing: { input: 0, output: 0 },
+    pricingByHand: false,
     supportsEffort: false,
     supportsThinking: false,
     contextSource: "default_guess",

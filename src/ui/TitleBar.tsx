@@ -1,6 +1,6 @@
 /**
- * The window's own title bar (`core/frame`): the mark and the name, the Help
- * menu, the empty stretch the window is dragged by, and the three buttons.
+ * The window's own title bar (`core/frame`): the Help menu, the empty stretch
+ * the window is dragged by, and the three buttons.
  *
  * It replaces two strips of the system's — the title and, under it, a menu
  * bar holding the single word "Help" — with one.
@@ -17,7 +17,6 @@ import { useEffect, useState } from "react";
 
 import { windowControls, type WindowControls } from "../core/frame";
 import { t } from "../i18n";
-import { YacaMark } from "./Logo";
 
 import "./popmenu.css";
 import "./titlebar.css";
@@ -46,11 +45,6 @@ export function TitleBar({
 
   return (
     <header className="title" data-tauri-drag-region>
-      <div className="title-brand" data-tauri-drag-region>
-        <YacaMark size={15} />
-        Yaca
-      </div>
-
       <DropdownMenu.Root>
         <DropdownMenu.Trigger className="title-menu">{t("menu.help")}</DropdownMenu.Trigger>
         <DropdownMenu.Portal>

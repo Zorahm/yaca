@@ -56,6 +56,10 @@ export const providers = {
   "prov.models_ask": "Abfragen",
   "prov.models_asking": "Frage ab…",
   "prov.models_none": "Keine Modelle",
+  "prov.price_input": "Eingabe $ / 1M",
+  "prov.price_output": "Ausgabe $ / 1M",
+  "prov.price_hint": "Wenn der Anbieter keinen Preis meldet, geben Sie den Tarif pro Million Tokens ein. Gilt für neue Chats.",
+  "prov.error_price": "Ungültiger Preis für {name}",
   "prov.models_price": "$ / 1 Mio. Ein- und Ausgabe",
   "prov.models_effort": "Aufwand",
 

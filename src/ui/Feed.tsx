@@ -112,6 +112,14 @@ export function Feed({
    */
   const stuckRef = useRef(stuck);
   const commanded = useRef<number | null>(null);
+  const reading = useRef(false);
+
+  function releaseFollow() {
+    reading.current = true;
+    stuckRef.current = false;
+    commanded.current = null;
+    setStuck(false);
+  }
 
   /**
    * The bottom is held not by the scroll container, but by a replica of the window
@@ -156,7 +164,7 @@ export function Feed({
       // in the middle of the stream. Only the person's movement up releases it, which
       // is what shouldHold keeps.
       down = shouldHold(state, commanded.current);
-    } else if (shouldStick(state)) {
+    } else if (!reading.current && shouldStick(state)) {
       down = true;
     }
     if (!down) commanded.current = null;
@@ -182,6 +190,7 @@ export function Feed({
         if (at === -1) return;
         // The person has gone to look at the feed: letting go of the stickiness at
         // once, not by a scroll event — the target could have landed at the very bottom.
+        reading.current = true;
         stuckRef.current = false;
         commanded.current = null;
         handle.current?.scrollToIndex(at, { align: "start" });
@@ -194,7 +203,26 @@ export function Feed({
   const unread = Math.max(0, count - seen);
 
   return (
-    <div className="feed-wrap">
+    <div
+      className="feed-wrap"
+      onClickCapture={(event) => {
+        if (event.target instanceof Element && event.target.closest("button[aria-expanded]")) {
+          releaseFollow();
+        }
+      }}
+      onWheelCapture={(event) => {
+        if (event.deltaY < 0) releaseFollow();
+        else if (event.deltaY > 0) reading.current = false;
+      }}
+      onTouchStartCapture={() => { reading.current = false; }}
+      onPointerDownCapture={(event) => {
+        if (event.target === event.currentTarget.querySelector(".feed")) reading.current = false;
+      }}
+      onKeyDownCapture={(event) => {
+        if (["ArrowUp", "PageUp", "Home"].includes(event.key)) releaseFollow();
+        if (["ArrowDown", "PageDown", "End"].includes(event.key)) reading.current = false;
+      }}
+    >
       <VList
         className="feed"
         ref={handle}
@@ -237,9 +265,13 @@ export function Feed({
         <div className="feed-end" key="feed-end" aria-hidden="true" />
       </VList>
 
-      {!stuck && unread > 0 && (
-        <button className="btn btn-small feed-jump" onClick={() => setStuck(true)}>
-          {t("feed.jump")} · {unread}
+      {!stuck && (
+        <button className="btn btn-small feed-jump" onClick={() => {
+          reading.current = false;
+          stuckRef.current = true;
+          setStuck(true);
+        }}>
+          {t("feed.jump")}{unread > 0 && <> · {unread}</>}
         </button>
       )}
     </div>

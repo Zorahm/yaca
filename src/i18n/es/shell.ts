@@ -43,6 +43,8 @@ export const shell = {
   "home.not_chosen": "sin elegir",
   "home.lead":
     "Elige la carpeta del proyecto y el agente empezará a trabajar con sus archivos. El modo, el modelo y el esfuerzo se pueden cambiar antes del primer mensaje.",
+   "home.lead_chat":
+     "Escribe en qué necesitas ayuda y el agente empezará la conversación. El modo, el modelo y el esfuerzo se pueden cambiar antes del primer mensaje.",
   "home.no_provider": "No hay proveedor.",
   "home.no_provider_hint": "Añade una clave de modelo para poder escribir mensajes.",
 

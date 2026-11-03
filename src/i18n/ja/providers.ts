@@ -56,6 +56,10 @@ export const providers = {
   "prov.models_ask": "問い合わせ",
   "prov.models_asking": "問い合わせ中…",
   "prov.models_none": "モデルがありません",
+  "prov.price_input": "入力 $ / 100万",
+  "prov.price_output": "出力 $ / 100万",
+  "prov.price_hint": "プロバイダーが価格を返さない場合は、100万トークンあたりの料金を入力します。新しいチャットに適用されます。",
+  "prov.error_price": "{name} の料金が無効です",
   "prov.models_price": "$ / 1M 入力・出力",
   "prov.models_effort": "推論の強度",
 

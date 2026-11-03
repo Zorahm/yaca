@@ -56,6 +56,10 @@ export const providers = {
   "prov.models_ask": "Ask",
   "prov.models_asking": "Asking…",
   "prov.models_none": "No models",
+  "prov.price_input": "Input $ / 1M",
+  "prov.price_output": "Output $ / 1M",
+  "prov.price_hint": "If the provider does not report a price, enter its rate per million tokens. Changes apply to new chats.",
+  "prov.error_price": "Invalid price for model {name}",
   "prov.models_price": "$ / 1M in and out",
   "prov.models_effort": "effort",
 

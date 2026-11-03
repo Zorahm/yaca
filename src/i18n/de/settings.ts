@@ -51,6 +51,8 @@ export const settings = {
   "tools.shell_auto": "Auto",
   "tools.shell_pwsh": "PowerShell 7",
   "tools.shell_windows": "Windows PowerShell",
+  "tools.web_summary": "WebFetch-Seiten zusammenfassen",
+  "tools.web_summary_hint": "Das kleine Routermodell fasst Seiten zusammen; ohne Router wird das gewählte Modell verwendet. Gilt für neue Chats.",
   "tools.robots": "robots.txt beachten",
   "tools.robots_hint":
     "Eine Seite, die eine Disallow-Regel sperrt, wird nicht geladen: Der Agent erhält eine Ablehnung mit Begründung. Ausschalten, wenn die gesperrte Seite die eigene ist – Disallow steht dort oft nur gegen die Indexierung durch Suchmaschinen.",
@@ -122,6 +124,8 @@ export const settings = {
   "rules.title": "Modus und Regeln",
   "rules.lede":
     "Liegt in .yaca/settings.json des Projekts und legt fest, wie eine Sitzung beginnt. Ein laufendes Gespräch bleibt davon unberührt – dafür gibt es ⇧⇥ im Eingabefeld.",
+  "rules.profile": "Wofür ein Chat standardmäßig ist",
+  "rules.profile_hint": "Nicht gesetzt bedeutet Code. Dokumente heißt Word, Excel und PowerPoint: dieselben Werkzeuge, ohne Sprachserver und Notebooks.",
   "rules.mode": "Standardmodus",
   "rules.mode_hint": "Nicht gesetzt bedeutet Auto: Dateiänderungen ohne Nachfrage; Befehle, Netzwerk und MCP-Schreibzugriffe beurteilt das Decision-Modell (ohne dieses das Modell der Sitzung).",
   "rules.allowed": "Immer erlaubt",

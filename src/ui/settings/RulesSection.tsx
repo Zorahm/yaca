@@ -16,7 +16,7 @@ import { useState } from "react";
 
 import { refusal, type Refusal, type ScopeKey, type Settings } from "../../core/client";
 import { t, type Key } from "../../i18n";
-import type { Mode } from "../../core/client";
+import type { Mode, Profile } from "../../core/client";
 import { Row, Segments } from "./Row";
 
 /** Scope kinds from §5.7 plus domain and MCP server — both beyond the spec, and
@@ -94,6 +94,20 @@ export function RulesSection({
       </div>
 
       <div className="set-rows">
+        <Row name={t("rules.profile")} hint={t("rules.profile_hint")}>
+          <Segments<Profile | "">
+            label={t("rules.profile")}
+            value={settings.profile ?? ""}
+            options={[
+              { value: "code", label: t("profile.code") },
+              { value: "chat", label: t("profile.chat") },
+            ]}
+            onChange={(profile) =>
+              onPatch((now) => ({ ...now, profile: profile === "" ? null : profile }))
+            }
+          />
+        </Row>
+
         <Row name={t("rules.mode")} hint={t("rules.mode_hint")}>
           <Segments<Mode | "">
             label={t("rules.mode")}

@@ -764,7 +764,7 @@
 
 .prov-model-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 140px 72px 110px 56px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 110px 55px 82px 82px 50px;
   gap: 8px;
   align-items: baseline;
   padding: 6px 10px;

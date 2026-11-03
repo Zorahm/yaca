@@ -43,6 +43,8 @@ export const shell = {
   "home.not_chosen": "nicht gewählt",
   "home.lead":
     "Projektordner auswählen, dann arbeitet der Agent mit dessen Dateien. Modus, Modell und Aufwand lassen sich bis zur ersten Nachricht ändern.",
+   "home.lead_chat":
+     "Schreiben Sie, wobei Sie Hilfe brauchen, dann beginnt der Agent das Gespräch. Modus, Modell und Aufwand lassen sich bis zur ersten Nachricht ändern.",
   "home.no_provider": "Kein Anbieter.",
   "home.no_provider_hint": "Einen Modellschlüssel hinzufügen, um Nachrichten schreiben zu können.",
 

@@ -51,6 +51,8 @@ export const settings = {
   "tools.shell_auto": "Auto",
   "tools.shell_pwsh": "PowerShell 7",
   "tools.shell_windows": "Windows PowerShell",
+  "tools.web_summary": "Summarize WebFetch pages",
+  "tools.web_summary_hint": "The router’s small model summarizes pages for the agent; without a router, the selected model is used. Applies to new chats.",
   "tools.robots": "Honour robots.txt",
   "tools.robots_hint":
     "A page closed by a Disallow rule is not fetched: the agent gets a refusal and the reason. Turn it off when the site closed that way is your own — a Disallow there is often only about search engines.",
@@ -122,6 +124,8 @@ export const settings = {
   "rules.title": "Mode and rules",
   "rules.lede":
     "Kept in the project's .yaca/settings.json and describes how a session starts. It does not touch a conversation already running — that is what ⇧⇥ in the composer is for.",
+  "rules.profile": "What a chat is for by default",
+  "rules.profile_hint": "Unset means Code. Documents is Word, Excel and PowerPoint: the same tools, without language servers and notebooks.",
   "rules.mode": "Default mode",
   "rules.mode_hint": "Unset means Auto: file changes run without asking, while commands, network and MCP writes are judged by the Decision model (the session's own model if there is none).",
   "rules.allowed": "Always allowed",

@@ -34,23 +34,10 @@
   user-select: none;
 }
 
-.title-brand {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 10px 0 12px;
-  font: 600 12.5px var(--display);
-  color: var(--ink);
-}
-
-/* A press on the drawing would land on the drawing, which is not marked for
-   dragging; letting it through gives it to the brand, which is. */
-.title-brand .yaca-mark {
-  pointer-events: none;
-}
-
 .title-menu {
   align-self: center;
+  /* Off the window's edge, where the brand used to leave room. */
+  margin-left: 4px;
   height: 24px;
   padding: 0 8px;
   border-radius: var(--radius-s);

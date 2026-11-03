@@ -193,12 +193,14 @@ export function ProviderForm({
           <div className="prov-hint">{t("prov.form_models_hint")}</div>
           <div className="prov-hint">{t("prov.context_hint")}</div>
           <div className="prov-hint">{t("prov.context_reopen")}</div>
+          <div className="prov-hint">{t("prov.price_hint")}</div>
           <ModelsList
             models={draft.models}
             busy={form.modelsBusy || form.keyBusy}
             answered={form.modelsAnswered}
             error={form.modelsError}
             onAsk={form.askForModels}
+            onPrice={(id, kind, value) => form.patch({ models: draft.models.map((model) => model.id === id ? { ...model, pricing: { ...model.pricing, [kind]: value }, pricingByHand: true } : model) })}
             onContext={(id, contextMax) => form.patch({
               models: draft.models.map((model) => model.id === id
                 ? { ...model, contextMax, contextSource: "hand" }

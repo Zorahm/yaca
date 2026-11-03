@@ -18,7 +18,7 @@
 
 import { t, tp } from "../../i18n";
 import type { ModelInfo } from "../../core/client";
-import { money, tokens } from "../format";
+import { tokens } from "../format";
 import { MAX_CONTEXT_TOKENS, validContextSize } from "./provider";
 
 export function ModelsList({
@@ -28,6 +28,7 @@ export function ModelsList({
   error,
   onAsk,
   onContext,
+  onPrice,
 }: {
   models: ModelInfo[];
   busy: boolean;
@@ -37,6 +38,7 @@ export function ModelsList({
   error: string | null;
   onAsk: () => void;
   onContext: (id: string, context: number) => void;
+  onPrice: (id: string, kind: "input" | "output", value: number) => void;
 }) {
   return (
     <div className="prov-rows">
@@ -76,9 +78,16 @@ export function ModelsList({
           <span className="prov-model-num" title={t("prov.form_model_output")}>
             {tokens(model.maxOutput)}
           </span>
-          <span className="prov-model-num" title={t("prov.models_price")}>
-            {money(model.pricing.input)} / {money(model.pricing.output)}
-          </span>
+          {(["input", "output"] as const).map((kind) => (
+            <label className="prov-context-field" key={kind}>
+              <span className="prov-hint">{t(kind === "input" ? "prov.price_input" : "prov.price_output")}</span>
+              <input className="prov-input prov-input-mono" type="number" min={0} step="any"
+                value={Number.isFinite(model.pricing[kind]) ? model.pricing[kind] : ""} disabled={busy}
+                aria-label={`${model.displayName}: ${t(kind === "input" ? "prov.price_input" : "prov.price_output")}`}
+                aria-invalid={!Number.isFinite(model.pricing[kind]) || model.pricing[kind] < 0}
+                onChange={(e) => onPrice(model.id, kind, e.target.valueAsNumber)} />
+            </label>
+          ))}
           {model.supportsEffort && (
             <span className="prov-model-flag" title={t("prov.form_model_effort")}>
               {t("prov.models_effort")}

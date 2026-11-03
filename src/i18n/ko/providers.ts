@@ -56,6 +56,10 @@ export const providers = {
   "prov.models_ask": "조회",
   "prov.models_asking": "조회 중…",
   "prov.models_none": "모델 없음",
+  "prov.price_input": "입력 $ / 100만",
+  "prov.price_output": "출력 $ / 100만",
+  "prov.price_hint": "제공자가 가격을 제공하지 않으면 토큰 백만 개당 요금을 입력하세요. 새 채팅에 적용됩니다.",
+  "prov.error_price": "{name} 모델의 가격이 올바르지 않습니다",
   "prov.models_price": "$ / 1M 입력·출력",
   "prov.models_effort": "추론 강도",
 

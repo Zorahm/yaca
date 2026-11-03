@@ -61,6 +61,8 @@ export type ActionRow = {
   target: string | null;
   input: unknown;
   state: ActionState;
+  /** Arguments are still being composed; execution has not started yet. */
+  preparing?: boolean;
   /** The reason for a failure, a broken invariant or a refusal by the human. */
   message: string | null;
   meta: ToolMeta | null;
@@ -280,7 +282,20 @@ function apply(feed: Feed, event: AgentEvent): void {
       appendThinking(feed, event.blockId, event.text);
       return;
 
+    case "toolCallPreparing":
     case "toolCallStarted": {
+      const preparing = event.type === "toolCallPreparing";
+      // Execution updates the preview in place, even if text, a checkpoint or
+      // another call has arrived since. Its key and position must not change.
+      if (patchRow(feed, event.callId, (row) => ({
+        ...row,
+        tool: event.tool,
+        description: event.description,
+        target: event.target,
+        input: event.input,
+        preparing,
+        state: "running",
+      }))) return;
       const row: ActionRow = {
         callId: event.callId,
         tool: event.tool,
@@ -288,6 +303,7 @@ function apply(feed: Feed, event: AgentEvent): void {
         target: event.target,
         input: event.input,
         state: "running",
+        preparing,
         message: null,
         meta: null,
         output: "",
@@ -323,7 +339,7 @@ function apply(feed: Feed, event: AgentEvent): void {
 
     case "toolCallFinished":
       patchRow(feed, event.callId, (row) => ({
-        ...row,
+        ...cancelled(row, true),
         state: "done",
         meta: event.meta,
       }));
@@ -331,7 +347,7 @@ function apply(feed: Feed, event: AgentEvent): void {
 
     case "toolCallFailed":
       patchRow(feed, event.callId, (row) => ({
-        ...row,
+        ...cancelled(row, true),
         state: "failed",
         message: event.message,
       }));
@@ -339,7 +355,7 @@ function apply(feed: Feed, event: AgentEvent): void {
 
     case "toolCallRejected":
       patchRow(feed, event.callId, (row) => ({
-        ...row,
+        ...cancelled(row, true),
         state: "rejected",
         message: event.reason,
       }));
@@ -349,7 +365,7 @@ function apply(feed: Feed, event: AgentEvent): void {
       // A refused permission and a stopped running call are one kind of outcome
       // (the human's decision), but not one phrase.
       patchRow(feed, event.callId, (row) => ({
-        ...row,
+        ...cancelled(row, true),
         state: event.stopped ? "stopped" : "denied",
         message: event.reason,
       }));
@@ -623,6 +639,9 @@ function apply(feed: Feed, event: AgentEvent): void {
       return;
 
     case "turnFinished":
+      // A broken provider stream may end before a preview reaches execution.
+      // Background calls that really started keep their running state.
+      cancelRunning(feed, true);
       if (feed.turn) {
         const code = missingOutcome(feed.blocks.slice(feed.turn.blockStart), event.stopReason === "failed");
         if (code) feed.blocks.push({ kind: "error", key: key("err"), code, message: "", retryable: true });
@@ -755,20 +774,22 @@ function patchIn(
   return null;
 }
 
-function cancelRunning(feed: Feed): void {
+function cancelRunning(feed: Feed, preparingOnly = false): void {
   for (let i = feed.blocks.length - 1; i >= 0; i -= 1) {
     const block = feed.blocks[i];
     if (block.kind !== "actions") continue;
-    if (!flatRows(block.rows).some((r) => r.state === "running")) continue;
-    feed.blocks[i] = { ...block, rows: block.rows.map(cancelled) };
+    if (!flatRows(block.rows).some((r) => r.state === "running" && (!preparingOnly || r.preparing))) continue;
+    feed.blocks[i] = { ...block, rows: block.rows.map((row) => cancelled(row, preparingOnly)) };
   }
 }
 
-function cancelled(row: ActionRow): ActionRow {
+function cancelled(row: ActionRow, preparingOnly = false): ActionRow {
   return {
     ...row,
-    ...(row.state === "running" ? { state: "failed" as const, message: null } : {}),
-    children: row.children.map(cancelled),
+    ...(row.state === "running" && (!preparingOnly || row.preparing)
+      ? { state: "failed" as const, message: null, preparing: false }
+      : {}),
+    children: row.children.map((child) => cancelled(child, preparingOnly)),
   };
 }
 

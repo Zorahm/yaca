@@ -12,8 +12,7 @@
  *
  * What the agent says is not in here: text divides the work (`core/work`).
  *
- * The item is open while the turn is adding to it and folds once the agent
- * speaks — unless a person opened or closed it: their choice outlives ours.
+ * Expansion belongs to the reader; stream updates never open or close it.
  */
 
 import { Brain, CaretDown, CaretRight, Check } from "@phosphor-icons/react";
@@ -41,8 +40,7 @@ export function Work({
   preview: { id: string; files: CheckpointChange[] } | null;
   actions: FeedActions;
 }) {
-  const [override, setOverride] = useState<boolean | null>(null);
-  const open = override ?? live;
+  const [open, setOpen] = useState(false);
 
   const rows = workRows(steps);
   const head = summary(rows);
@@ -53,7 +51,7 @@ export function Work({
       <button
         className="group-head"
         aria-expanded={open}
-        onClick={() => setOverride(!open)}
+        onClick={() => setOpen(!open)}
       >
         {live ? (
           <Spinner />
@@ -130,23 +128,21 @@ export function Work({
 }
 
 /**
- * A thought as a row of the card. Like a running call, it is open while it is
- * being written and folds to its first line after.
+ * A thought as a row of the card, folded to its first line until opened.
  *
  * No duration: the stream carries no start time for a thought, and timing it
  * by the window's clock would show, in a reopened session, the time of a
  * different run.
  */
 function Thought({ text, live }: { text: string; live: boolean }) {
-  const [override, setOverride] = useState<boolean | null>(null);
-  const open = override ?? live;
+  const [open, setOpen] = useState(false);
 
   return (
     <div className={open ? "row row-open" : "row"}>
       <button
         className="row-head"
         aria-expanded={open}
-        onClick={() => setOverride(!open)}
+        onClick={() => setOpen(!open)}
       >
         <span className={live ? "sign pulse" : "sign"} aria-hidden="true">
           <Brain size={14} />

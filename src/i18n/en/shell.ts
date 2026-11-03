@@ -43,6 +43,8 @@ export const shell = {
   "home.not_chosen": "not chosen",
   "home.lead":
     "Pick a project folder and the agent starts working with its files. Mode, model and effort can be changed before the first message.",
+   "home.lead_chat":
+     "Write what you need, and the agent starts the conversation. Mode, model and effort can be changed before the first message.",
   "home.no_provider": "No provider.",
   "home.no_provider_hint": "Add a model key to be able to write messages.",
 

@@ -25,6 +25,7 @@ import {
   addProject as rememberProject,
   chooseFiles,
   chooseFolder,
+  chatRoot as getChatRoot,
   enabledPlugins,
   commands,
   forgetProject as dropProject,
@@ -42,6 +43,7 @@ import {
   type QuestionReply,
   type Preferences,
   type ProcessId,
+  type Profile,
 } from "./core/client";
 import { agentsOf } from "./core/agents";
 import { touchedFiles, visible } from "./core/feed";
@@ -166,6 +168,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
   const [projects, setProjects] = useState<string[]>([]);
   const [slashCommands, setSlashCommands] = useState<MenuCommand[]>([]);
   const [draft, setDraft] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile>("code");
+  const [chatRoot, setChatRoot] = useState<string | null>(null);
   const [panel, setPanel] = useState<PanelKind | null>(null);
   const [filePanelPath, setFilePanelPath] = useState<string | null>(null);
   // The subagents the agents panel opens on: those of the plate last pressed.
@@ -227,7 +231,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
    * request rather than by a subscription: the project's files live outside the
    * `AgentEvent` stream.
    */
-  const project = active?.project ?? draft;
+  const homeProject = profile === "chat" ? chatRoot : draft;
+  const project = active?.project ?? homeProject;
   // The conversation's images in order — the viewer pages through them.
   const activeFeed = active?.feed ?? null;
   const gallery = useMemo(() => galleryOf(activeFeed), [activeFeed]);
@@ -255,6 +260,14 @@ export default function App({ prefs }: { prefs: Preferences }) {
       setDraft((now) => now ?? list[0] ?? null);
     }, failed);
   }, [failed]);
+
+  useEffect(() => {
+    void getChatRoot().then(setChatRoot, failed);
+  }, [failed]);
+
+  useEffect(() => {
+    if (active && chatRoot) setProfile(active.project === chatRoot ? "chat" : "code");
+  }, [active?.id, active?.project, chatRoot]);
 
   /** Models change in the providers panel and are re-read after it. */
   const refreshProviders = useCallback(() => {
@@ -417,6 +430,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
     searchFiles: (query) => send(commands.searchFiles(query)),
     stop: () => send(commands.cancel()),
     setMode: (mode) => send(commands.setMode(mode)),
+    setProfile: (profile) => send(commands.setProfile(profile)),
     setBypass: (on) => send(commands.setBypass(on)),
     setModel: (model) => send(commands.setModel(model)),
     setEffort: (effort: Effort) => send(commands.setEffort(effort)),
@@ -503,15 +517,26 @@ export default function App({ prefs }: { prefs: Preferences }) {
   const sidebar = (collapsed: boolean) => (
     <Sidebar
       projects={projects}
+      profile={profile}
+      chatRoot={chatRoot}
+      onProfile={(next) => {
+        if (next === profile) return;
+        setProfile(next);
+        setPanel(null);
+        chats.activate(null);
+      }}
       chats={chats.chats}
       activeId={active?.id ?? null}
-      current={active?.project ?? draft}
+      current={active?.project ?? homeProject}
       // Re-reading the lists makes sense when they may have changed: a chat was
       // opened or closed, a turn ended, and a title changed.
       reload={chats.chats.map((chat) => `${chat.id}:${chat.title}`).join("|")}
       onNewChat={(project) => {
         shutDrawer();
-        newChat(project);
+        if (profile === "chat") {
+          setPanel(null);
+          chats.activate(null);
+        } else newChat(project);
       }}
       onOpenSession={(project, id) => {
         shutDrawer();
@@ -571,7 +596,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
           models={models}
           commands={slashCommands}
           onRefreshCommands={refreshCommands}
-          project={draft}
+          project={homeProject}
+          profile={profile}
           error={error}
           onStart={(path, text, startup, attachments) =>
             void chats.start(path, text, startup, attachments).catch(failed)
@@ -656,6 +682,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
         <Composer
           settings={{
             mode: state.mode,
+            profile: state.profile,
             provider: state.provider,
             model: state.model,
             effort: state.effort,

@@ -101,6 +101,7 @@ describe("drafts and specs", () => {
         contextMax: 256000,
         maxOutput: 32000,
         pricing: { input: 0, output: 0 },
+        pricingByHand: false,
         supportsEffort: false,
         supportsThinking: false,
         contextSource: "default_guess",
@@ -120,6 +121,12 @@ describe("drafts and specs", () => {
     const merged = keepContextEdits([previous], [reported]);
     expect(merged[0]).toEqual({ ...reported, contextMax: 750000, contextSource: "hand" });
     expect(draftToSpec({ ...draftFromSpec(spec), models: merged })?.models).toEqual(merged);
+  });
+
+  it("preserves a manually entered price when models refresh", () => {
+    const previous = { ...spec.models[0], pricingByHand: true, pricing: { input: 2, output: 8 } };
+    const reported = { ...spec.models[0], maxOutput: 64000 };
+    expect(keepContextEdits([previous], [reported])[0]).toEqual({ ...reported, pricingByHand: true, pricing: previous.pricing });
   });
 
   it.each([NaN, 0, -1, 1.5, 4294967296])("rejects an invalid manual context: %s", (contextMax) => {

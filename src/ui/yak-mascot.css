@@ -1,0 +1,23 @@
+.yak-mascot {
+  display: block;
+  flex-shrink: 0;
+  width: 156px;
+  height: 156px;
+  color: var(--ink);
+  border-radius: 50%;
+}
+
+.yak-mascot svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.yak-mascot .yaca-mark-core {
+  fill: var(--accent);
+}
+
+@media (max-width: 679.98px), (max-height: 740px) {
+  .yak-mascot { width: 124px; height: 124px; }
+}

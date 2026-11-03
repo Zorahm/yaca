@@ -30,8 +30,9 @@ export function validContextSize(value: number): boolean {
 /** Keep edits made in the form while a model lookup was in flight. */
 export function keepContextEdits(saved: ModelInfo[], models: ModelInfo[]): ModelInfo[] {
   return models.map((model) => {
-    const previous = saved.find((m) => m.id === model.id && m.contextSource === "hand");
-    return previous ? { ...model, contextMax: previous.contextMax, contextSource: "hand" } : model;
+    const previous = saved.find((m) => m.id === model.id);
+    if (!previous) return model;
+    return { ...model, ...(previous.contextSource === "hand" ? { contextMax: previous.contextMax, contextSource: "hand" as const } : {}), ...(previous.pricingByHand ? { pricing: previous.pricing, pricingByHand: true } : {}) };
   });
 }
 
@@ -162,6 +163,9 @@ function validate(
   if (!draft.displayName.trim()) problems.push({ key: "prov.error_name" });
   if (!draft.baseUrl.trim()) problems.push({ key: "prov.error_url" });
   for (const model of draft.models) {
+    if (!Number.isFinite(model.pricing.input) || model.pricing.input < 0 || !Number.isFinite(model.pricing.output) || model.pricing.output < 0) {
+      problems.push({ key: "prov.error_price", params: { name: model.displayName } });
+    }
     if (model.contextSource === "hand" && !validContextSize(model.contextMax)) {
       problems.push({ key: "prov.error_context", params: { name: model.displayName } });
     }

@@ -112,6 +112,7 @@ export function ToolsSection({
           </Row>
         )}
 
+        <Row name={t("tools.web_summary")} hint={t("tools.web_summary_hint")}><Switch on={prefs.summarizeWebFetch} label={t("tools.web_summary")} onChange={(summarizeWebFetch) => onPatch({ summarizeWebFetch })} /></Row>
         <Row name={t("tools.robots")} hint={t("tools.robots_hint")}>
           <Switch
             on={prefs.respectRobots}

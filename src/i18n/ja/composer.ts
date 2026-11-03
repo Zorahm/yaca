@@ -90,6 +90,12 @@ export const composer = {
   "mention.searching": "検索中…",
   "mention.none": "見つかりません",
 
+  "profile.title": "チャットの用途",
+  "profile.code": "コード",
+  "profile.chat": "チャット",
+  "profile.code_note": "プロジェクトとそのコード: 言語サーバーとノートブック",
+  "profile.chat_note": "Word、Excel、PowerPoint と利用者のファイル",
+
   "mode.title": "モード",
   "mode.plan": "プラン",
   "mode.manual": "手動",

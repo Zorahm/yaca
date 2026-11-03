@@ -26,14 +26,16 @@ import { ArrowCircleUp, Gear, Plus, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
 import { t } from "../../i18n";
-import { ownTitleBar } from "../../core/frame";
-import { YacaMark } from "../Logo";
+import { YacaLockup } from "../Logo";
 import { SIDE, type Bounds } from "../resize";
+import { Segments } from "../settings/Row";
 import { Splitter } from "../Splitter";
 import { ProjectGroup } from "./ProjectGroup";
+import { SessionList } from "./SessionList";
+import { PROFILES, PROFILE_KEY } from "../ProfileMenu";
 import { useSwipeShut } from "./useSwipeShut";
 import type { Chat } from "../chats";
-import type { ReleaseInfo, SessionId } from "../../core/client";
+import type { Profile, ReleaseInfo, SessionId } from "../../core/client";
 
 /** Search over the journals is linear in their size (README); the debounce
     keeps it to one pass per pause rather than one per keystroke. */
@@ -41,6 +43,9 @@ const SEARCH_DEBOUNCE_MS = 200;
 
 export function Sidebar({
   projects,
+  profile,
+  onProfile,
+  chatRoot,
   chats,
   activeId,
   current,
@@ -62,6 +67,9 @@ export function Sidebar({
 }: {
   /** Projects the window knows about, freshest first. */
   projects: string[];
+  profile: Profile;
+  onProfile: (profile: Profile) => void;
+  chatRoot: string | null;
   /** Every chat open in the window, in any project. */
   chats: Chat[];
   activeId: SessionId | null;
@@ -155,15 +163,15 @@ export function Sidebar({
         />
       )}
       <div className="side-head">
-        {/* Where the window draws its own title bar the mark and the name
-            are in it, a few pixels above; twice in one corner is once too
-            many. */}
-        {!ownTitleBar && (
-          <div className="side-brand">
-            <YacaMark size={22} />
-            Yaca
-          </div>
-        )}
+        <div className="side-top">
+          <YacaLockup height={24} />
+          <Segments
+            label={t("profile.title")}
+            value={profile}
+            options={PROFILES.map((item) => ({ value: item, label: t(PROFILE_KEY[item]) }))}
+            onChange={onProfile}
+          />
+        </div>
 
         <button
           className="side-row side-new"
@@ -187,6 +195,11 @@ export function Sidebar({
       </div>
 
       <div className="side-scroll">
+        {profile === "chat" && chatRoot !== null ? (
+          <SessionList project={chatRoot} open={chats.filter((chat) => chat.project === chatRoot)}
+            activeId={activeId} query={query} reload={reload}
+            onOpen={(id) => onOpenSession(chatRoot, id)} onClose={onCloseChat} />
+        ) : profile === "code" && <>
         {projects.length > 0 && <div className="side-label">{t("side.projects")}</div>}
         {projects.length === 0 ? (
           <div className="side-empty">{t("side.no_projects")}</div>
@@ -211,6 +224,7 @@ export function Sidebar({
             />
           ))
         )}
+        </>}
       </div>
 
       {update !== null && (
