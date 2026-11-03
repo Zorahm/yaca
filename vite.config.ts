@@ -68,8 +68,8 @@ export default defineConfig(async () => ({
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      // Cargo can lock its output while Vite is watching the frontend.
+      ignored: ["**/src-tauri/**", "**/target/**"],
     },
   },
 }));
