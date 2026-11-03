@@ -298,8 +298,8 @@ a permission request. Scrollbars are 10px with an 8px-rounded thumb.
 - **Wells.** Output, diff and inline code sit on `sunk`, mono, 6px radius.
 - **Diff.** 22px lines (20px compact), `add`/`del` washes, 52px gutter.
 - **Notices and bars.** `note-bg` with `note-line` for warnings; errors in `err`.
-- **Composer.** `surface`, 12px radius, mode, model and effort menus, and the
-  status ring of the context window; the ring opens a 340px context panel.
+- **Composer.** `surface`, 12px radius, profile, mode, model and effort menus, and
+  the status ring of the context window; the ring opens a 340px context panel.
 - **Menus.** `surface`, `shadow-pop`, 10px radius; the model list is 360px with a
   search field and scrolls at a fixed height.
 - **Focus.** A 2px accent outline with 2px offset on everything interactive.

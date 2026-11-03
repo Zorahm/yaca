@@ -24,8 +24,9 @@ Yaca is in beta (`1.0.0-beta`). Installers (Windows NSIS `.exe`, macOS `.dmg`, L
 ## Features
 
 - **Conversations with models about code.** Streaming responses, thinking/reasoning, task lists, token and cost tracking.
-- **Project manipulation.** Read, search, edit, and delete files, including the text of PDFs and the cells of Jupyter notebooks; see [PDFs and Notebooks](#pdfs-and-notebooks). Run shell commands and background processes, and wait for a line of their output or for them to end with `BashWait` instead of polling.
+- **Project manipulation.** Read, search, edit, and delete files, including the text of PDFs, Word, Excel and PowerPoint files, and the cells of Jupyter notebooks; see [PDFs and Notebooks](#pdfs-and-notebooks) and [Chat mode and Office documents](#chat-mode-and-office-documents). Run shell commands and background processes, and wait for a line of their output or for them to end with `BashWait` instead of polling.
 - **Permissions.** Modes: "Plan", "Manual", "Auto", and "Edits" — ranging from read-only to editing without confirmation. Git commit and push always require approval.
+- **Two kinds of chat.** *Code* is the coding agent; *Documents* is a chat about the person's files, with a prompt about Word, Excel and PowerPoint and the office skills Yaca ships with; see [Chat mode and Office documents](#chat-mode-and-office-documents).
 - **Checkpoints.** Snapshots project state before edits and commands, allowing you to roll back changes. The list of points is saved with the session, so it survives a window reload, closing and reopening the chat, and a restart.
 - **Reloading the window does not stop the agent.** Ctrl+R (or a hot reload in development) only redraws the window: running turns, background commands and open questions carry on in the app, and the window picks the chats up again where they are. Restarting the application itself still ends them.
 - **Background command results resume the agent.** The model can keep working after starting a background command. When that command exits on its own, its status and unread output are delivered at the next agent step, or wake an idle model in a new turn. Explicitly stopped commands do not trigger a new turn. The output included in the notification is bounded; the full output file remains available when provided.
@@ -159,6 +160,8 @@ Where Yaca looks for skills, in descending order of precedence:
 | Plugins | skills from enabled [plugins](#plugins), named `plugin:skill` |
 
 A project skill overrides a user skill with the same name; within the same scope, `.yaca` overrides `.agents`, which in turn overrides `.claude`. Yaca only reads these directories, so skills from Claude Code and other clients work without copying.
+
+Yaca writes to one of them: the `docx`, `xlsx` and `pptx` skills it ships with are installed into `skills/` in the app settings directory on start, rewritten only when the bundled text changes. They are ordinary skills from then on — editable, shadowed by a project skill of the same name, visible in `yaca skills` and in Settings. See [Office skills](#office-skills).
 
 The model sees a catalog: the name and description of each skill. It loads a matching skill using the `Skill` tool, and reads skill files using the same tool (`file`), even if the skill is located outside the project. Skill scripts run via standard `Bash` with the usual permission prompt. Skills can also be invoked manually via `/name arguments`. A command with the same name in `.yaca/commands/` takes precedence over the skill there too. The list in the prompt is read when opening a chat, while the skill content is read upon invocation, so skill edits take effect immediately, while newly added skills appear in the list starting with the next chat.
 
@@ -415,6 +418,32 @@ Not supported:
 - **Image and HTML outputs of notebook cells.** Only their type is shown (`[image/png output omitted]`).
 - **Running notebook cells.** Use `Bash` with `jupyter nbconvert --execute` or similar.
 
+## Chat mode and Office documents
+
+The composer's bottom row has two chips before the model: the **profile**, which says what the chat is for, and the **mode**, which says how far Yaca may go. They are separate on purpose — a chat about a report still asks before it writes a file or runs a script.
+
+- **Code** (the default) is the coding agent described in this README: language servers, notebooks, the code-writing rules in the prompt.
+- **Documents** is a chat about the person's files. Most tools are the same — reading, searching, writing and running a command are how a document is made too. What it leaves out is what only means something in a repository: `Lsp`, `Rename` and `NotebookEdit` are not in the request at all, and a call the model makes up is answered with "unknown tool". The prompt talks about Word, Excel and PowerPoint instead of source files, and carries the one rule a model gets wrong on its own: an office file is a ZIP of XML, so it is produced by a script, never written as text.
+
+The profile is chosen on the home screen with the first message, switched in the composer afterwards (`SetProfile`), and remembered per project in `.yaca/settings.json` (`profile`) and for the next new chat in the app's settings.
+
+### Reading Word, Excel and PowerPoint
+
+`Read` opens `.docx`, `.xlsx` and `.pptx` itself — pure Rust over the ZIP, nothing installed next to the app:
+
+- **Word.** Paragraphs, with headings as Markdown headings and tables as Markdown tables. Deleted text and tracked deletions are left out.
+- **Excel.** One table per sheet, up to 8 sheets, 200 rows and 40 columns each, and what was left out is said. Shared strings are resolved, and a date is shown as a date rather than Excel's day number.
+- **PowerPoint.** Slide by slide, with the speaker notes. A slide that is only a picture says so.
+- **Pictures.** The images embedded in the file go to the model as images, up to eight per read, right after the text. `ExtractImages` writes all of them out as files — `report media/image1.png` next to the document by default — so they can be inserted into another document, looked at with `ReadImage`, or sent.
+
+The macro-enabled and template extensions (`docm`, `dotx`, `xlsm`, `pptm`, …) are the same packages and are read the same way. Not supported: `.doc`, `.xls` and `.ppt` from before Office 2007 (convert them with LibreOffice), charts and SmartArt as data, and password-protected files.
+
+### Office skills
+
+Yaca ships three skills — `docx`, `xlsx`, `pptx` — adapted from [AgentChat](https://github.com/Zorahm/AgentChat/tree/master/skills) for Yaca's tools. They are installed into the user's skills folder (`<config>/skills`) on start, rewritten only when the bundled text changes, and listed in the catalog like any other skill, so the model loads one when a document is the job: the library to use (python-docx, openpyxl/pandas, python-pptx), how to build tables, charts, images and speaker notes, how to edit a file without rewriting it, and how to check the result. The `docx` skill carries `scripts/replace.py`, a run-aware find-and-replace for Word files, where a visible word is often split across several runs.
+
+A project's own `.yaca/skills` and the user's own skills shadow the bundled ones by name.
+
 ## Token Savings
 
 Three tools prevent the model from echoing large blocks of text that already exist elsewhere:
@@ -559,6 +588,7 @@ The wire is checked from both sides: `cargo test -p yaca-remote --test fixtures`
 
 - **Gap: the app has never been compiled.** The Android SDK was not installed when it was written; the core was built and tested, the app only read. Expect a first round of compile fixes.
 - **Gap: no whole-file tab in the diff panel**, and a file the host cannot read shows as unavailable without the reason (the core does not send it).
+- **Gap: no profile switch.** `SessionState` carries `profile` and the core takes `setProfile`, but the phone's composer only offers the modes, so a chat started there is about code. The field decodes and is ignored, so nothing on the phone is wrong — the switch simply is not there.
 
 ## Architecture
 

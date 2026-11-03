@@ -34,8 +34,10 @@ The session window: a left sidebar with projects and chats, a top bar, a
 centred feed (human message, agent text, collapsed reasoning, action groups
 with diffs and command output, task list, permission request with numbered
 answers, checkpoint dividers with rollback, errors, history compaction),
-notification bars and a composer with mode, model, effort and a status ring
-that opens the context window. Slide-over panels hold processes, a file diff,
+notification bars and a composer with profile, mode, model, effort and a status
+ring that opens the context window. The profile says what the chat is for — code,
+or the person's documents (Word, Excel, PowerPoint) — and the mode says how far
+the agent may go; they are separate axes, and the row shows both. Slide-over panels hold processes, a file diff,
 checkpoints, providers and each chat's browser. A separate settings window
 holds preferences, providers, MCP servers, plugins, skills, language servers and
 model routing. The window is frameless on Windows and ships as an NSIS
@@ -60,7 +62,8 @@ running. The tray icon restores the window, and its context menu exits Yaca.
   included; a model router can pick the model per task.
 - Extensible by skills, named subagents, project hooks, plugins, MCP servers
   (with OAuth) and language servers. Each chat gets a browser the model drives.
-- Reads PDFs and notebooks; keeps provider keys in the system credential store.
+- Reads PDFs, notebooks and Word, Excel and PowerPoint files; keeps provider
+  keys in the system credential store.
 
 ## Brand Commitments
 
