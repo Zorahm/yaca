@@ -32,14 +32,18 @@ async fn serve(browser: Weak<Browser>, mut end: ServerEnd) {
     while let Some(message) = end.incoming.recv().await {
         // Notifications want no answer, and an answer to a request of ours
         // cannot come: the server asks nothing.
-        let (Some(id), Some(method)) = (message.get("id").cloned(), message["method"].as_str()) else {
+        let (Some(id), Some(method)) = (message.get("id").cloned(), message["method"].as_str())
+        else {
             continue;
         };
         let params = message.get("params").cloned().unwrap_or(Value::Null);
         match method {
             "initialize" => {
                 let asked = params["protocolVersion"].as_str().unwrap_or_default();
-                let version = VERSIONS.iter().find(|v| **v == asked).unwrap_or(&VERSIONS[0]);
+                let version = VERSIONS
+                    .iter()
+                    .find(|v| **v == asked)
+                    .unwrap_or(&VERSIONS[0]);
                 answer(
                     &end.outgoing,
                     id,
@@ -61,9 +65,16 @@ async fn serve(browser: Weak<Browser>, mut end: ServerEnd) {
                 let out = end.outgoing.clone();
                 tokio::spawn(async move {
                     let name = params["name"].as_str().unwrap_or_default().to_string();
-                    let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
+                    let args = params
+                        .get("arguments")
+                        .cloned()
+                        .unwrap_or_else(|| json!({}));
                     let reply = run(&browser, &name, &args).await;
-                    answer(&out, id, json!({ "content": reply.content, "isError": reply.error }));
+                    answer(
+                        &out,
+                        id,
+                        json!({ "content": reply.content, "isError": reply.error }),
+                    );
                 });
             }
             _ => refuse(&end.outgoing, id, -32601, &format!("no method {method}")),

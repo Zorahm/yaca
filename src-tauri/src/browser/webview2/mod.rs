@@ -53,7 +53,8 @@ const EVENTS: &[&str] = &[
 /// tracking, which would take a webview past the window's edge for hidden.
 /// The first three features are the ones wry turns off by default; passing
 /// our own arguments replaces its, so they are repeated.
-const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion \
+const BROWSER_ARGS: &str =
+    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion \
      --disable-background-timer-throttling --disable-renderer-backgrounding \
      --disable-backgrounding-occluded-windows";
 
@@ -142,14 +143,24 @@ impl WebView2 {
             changed,
         });
         tokio::spawn(events::follow(Arc::downgrade(&shared), cdp.clone(), rx));
-        for domain in ["Page.enable", "Runtime.enable", "Network.enable", "DOM.enable", "Overlay.enable"] {
+        for domain in [
+            "Page.enable",
+            "Runtime.enable",
+            "Network.enable",
+            "DOM.enable",
+            "Overlay.enable",
+        ] {
             cdp.call(domain, json!({})).await?;
         }
         let tree = cdp.call("Page.getFrameTree", json!({})).await?;
         if let Some(id) = tree["frameTree"]["frame"]["id"].as_str() {
             *shared.main_frame.lock().unwrap() = id.to_string();
         }
-        Ok(Arc::new(WebView2 { webview, cdp, shared }))
+        Ok(Arc::new(WebView2 {
+            webview,
+            cdp,
+            shared,
+        }))
     }
 
     async fn world(&self) -> Result<i64> {
@@ -169,7 +180,10 @@ impl WebView2 {
             .ok_or("the page has no room for the browser's helpers")?;
         let loaded = self
             .cdp
-            .call("Runtime.evaluate", json!({ "expression": PAGE_JS, "contextId": id }))
+            .call(
+                "Runtime.evaluate",
+                json!({ "expression": PAGE_JS, "contextId": id }),
+            )
             .await?;
         thrown(&loaded)?;
         *self.shared.world.lock().unwrap() = Some(id);
@@ -181,7 +195,10 @@ impl WebView2 {
         if let (Some(params), Some(extra)) = (params.as_object_mut(), extra.as_object()) {
             params.extend(extra.clone());
         }
-        self.cdp.call("Input.dispatchMouseEvent", params).await.map(drop)
+        self.cdp
+            .call("Input.dispatchMouseEvent", params)
+            .await
+            .map(drop)
     }
 
     async fn wait_loaded(&self, since: u64, limit: Duration, grace: Duration) -> Load {
@@ -241,22 +258,30 @@ fn png_size(png: &[u8]) -> (u32, u32) {
 impl Engine for WebView2 {
     async fn navigate(&self, url: &str, limit: Duration) -> Result<Load> {
         let since = self.loads();
-        let answer = self.cdp.call("Page.navigate", json!({ "url": url })).await?;
+        let answer = self
+            .cdp
+            .call("Page.navigate", json!({ "url": url }))
+            .await?;
         if let Some(why) = answer["errorText"].as_str().filter(|text| !text.is_empty()) {
             return Err(format!("{url} did not open: {why}"));
         }
-        Ok(match self.wait_loaded(since, limit, NAVIGATION_GRACE).await {
-            // A jump within the same document loads nothing and is done.
-            Load::Nothing => Load::Done,
-            other => other,
-        })
+        Ok(
+            match self.wait_loaded(since, limit, NAVIGATION_GRACE).await {
+                // A jump within the same document loads nothing and is done.
+                Load::Nothing => Load::Done,
+                other => other,
+            },
+        )
     }
 
     async fn step(&self, step: Step, limit: Duration) -> Result<Load> {
         let since = self.loads();
         match step {
             Step::Back | Step::Forward => {
-                let history = self.cdp.call("Page.getNavigationHistory", json!({})).await?;
+                let history = self
+                    .cdp
+                    .call("Page.getNavigationHistory", json!({}))
+                    .await?;
                 let at = history["currentIndex"].as_i64().unwrap_or(0);
                 let to = if step == Step::Back { at - 1 } else { at + 1 };
                 let entry = usize::try_from(to)
@@ -280,10 +305,12 @@ impl Engine for WebView2 {
                 return Ok(Load::Done);
             }
         }
-        Ok(match self.wait_loaded(since, limit, NAVIGATION_GRACE).await {
-            Load::Nothing => Load::Done,
-            other => other,
-        })
+        Ok(
+            match self.wait_loaded(since, limit, NAVIGATION_GRACE).await {
+                Load::Nothing => Load::Done,
+                other => other,
+            },
+        )
     }
 
     async fn settle(&self, since: u64, limit: Duration) -> Result<Load> {
@@ -419,12 +446,19 @@ impl Engine for WebView2 {
                 }),
             )
             .await?;
-        let data = answer["data"].as_str().ok_or("the browser returned no image")?;
+        let data = answer["data"]
+            .as_str()
+            .ok_or("the browser returned no image")?;
         let png = base64::engine::general_purpose::STANDARD
             .decode(data)
             .map_err(|e| format!("the image did not decode: {e}"))?;
         let (width, height) = png_size(&png);
-        Ok(Shot { png, width, height, cut })
+        Ok(Shot {
+            png,
+            width,
+            height,
+            cut,
+        })
     }
 
     async fn click(&self, x: f64, y: f64, button: Button, count: u32) -> Result<()> {
@@ -447,11 +481,15 @@ impl Engine for WebView2 {
     }
 
     async fn wheel(&self, x: f64, y: f64, dx: f64, dy: f64) -> Result<()> {
-        self.mouse("mouseWheel", x, y, json!({ "deltaX": dx, "deltaY": dy })).await
+        self.mouse("mouseWheel", x, y, json!({ "deltaX": dx, "deltaY": dy }))
+            .await
     }
 
     async fn insert_text(&self, text: &str) -> Result<()> {
-        self.cdp.call("Input.insertText", json!({ "text": text })).await.map(drop)
+        self.cdp
+            .call("Input.insertText", json!({ "text": text }))
+            .await
+            .map(drop)
     }
 
     async fn press(&self, press: &Press) -> Result<()> {
@@ -526,9 +564,14 @@ impl Engine for WebView2 {
                     .map(drop)
             }
             None => {
-                self.cdp.call("Emulation.clearDeviceMetricsOverride", json!({})).await?;
                 self.cdp
-                    .call("Emulation.setTouchEmulationEnabled", json!({ "enabled": false }))
+                    .call("Emulation.clearDeviceMetricsOverride", json!({}))
+                    .await?;
+                self.cdp
+                    .call(
+                        "Emulation.setTouchEmulationEnabled",
+                        json!({ "enabled": false }),
+                    )
                     .await
                     .map(drop)
             }

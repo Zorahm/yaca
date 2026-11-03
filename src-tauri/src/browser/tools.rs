@@ -221,7 +221,9 @@ pub fn open_page(browser: &Browser) -> Result<Arc<dyn Engine>, String> {
 }
 
 fn string<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
-    args.get(key).and_then(Value::as_str).filter(|s| !s.trim().is_empty())
+    args.get(key)
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty())
 }
 
 async fn navigate(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String> {
@@ -266,7 +268,10 @@ async fn screenshot(browser: &Arc<Browser>, args: &Value) -> Result<Reply, Strin
                 width: found["width"].as_f64().unwrap_or(0.0),
                 height: found["height"].as_f64().unwrap_or(0.0),
             };
-            (Area::Box(rect), found["label"].as_str().unwrap_or("the element").to_string())
+            (
+                Area::Box(rect),
+                found["label"].as_str().unwrap_or("the element").to_string(),
+            )
         }
         (None, true) => (
             Area::FullPage {
@@ -277,7 +282,12 @@ async fn screenshot(browser: &Arc<Browser>, args: &Value) -> Result<Reply, Strin
         (None, false) => (Area::Viewport, "the visible part of the page".to_string()),
     };
     let shot = engine.screenshot(area).await?;
-    let mut text = format!("{}screenshot of {of}: {}×{}", status(browser), shot.width, shot.height);
+    let mut text = format!(
+        "{}screenshot of {of}: {}×{}",
+        status(browser),
+        shot.width,
+        shot.height
+    );
     if shot.cut {
         text.push_str(&format!(
             " (cut off {} viewports down; scroll and take another for the rest)",
@@ -302,7 +312,9 @@ async fn read_page(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String
     let selector = string(args, "selector");
     let text = match string(args, "mode").unwrap_or("snapshot") {
         "text" => {
-            let html = engine.helper(&format!("html({})", json!({ "selector": selector }))).await?;
+            let html = engine
+                .helper(&format!("html({})", json!({ "selector": selector })))
+                .await?;
             let markdown = htmd::convert(html.as_str().unwrap_or_default())
                 .map_err(|e| format!("the page did not convert to text: {e}"))?;
             cut(markdown.trim(), TEXT_LIMIT)
@@ -310,7 +322,10 @@ async fn read_page(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String
         "snapshot" => {
             let limit = args["limit"].as_u64().unwrap_or(400).clamp(20, 2000);
             let snapshot = engine
-                .helper(&format!("snapshot({})", json!({ "selector": selector, "limit": limit })))
+                .helper(&format!(
+                    "snapshot({})",
+                    json!({ "selector": selector, "limit": limit })
+                ))
                 .await?;
             let mut text = snapshot["text"].as_str().unwrap_or_default().to_string();
             let more = snapshot["more"].as_u64().unwrap_or(0);
@@ -352,14 +367,24 @@ async fn logs(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String> {
     let engine = open_page(browser)?;
     let errors = args["errors_only"].as_bool() == Some(true);
     let filter = string(args, "filter").map(str::to_lowercase);
-    let keep = |line: &str| filter.as_ref().is_none_or(|f| line.to_lowercase().contains(f));
+    let keep = |line: &str| {
+        filter
+            .as_ref()
+            .is_none_or(|f| line.to_lowercase().contains(f))
+    };
     let limit = args["limit"].as_u64().unwrap_or(100).clamp(1, 500) as usize;
     let lines: Vec<String> = match string(args, "kind") {
         Some("console") => engine
             .logs()
             .console_entries()
             .into_iter()
-            .filter(|e| !errors || matches!(e.level.as_str(), "error" | "warning" | "assert" | "exception"))
+            .filter(|e| {
+                !errors
+                    || matches!(
+                        e.level.as_str(),
+                        "error" | "warning" | "assert" | "exception"
+                    )
+            })
             .map(|e| format!("[{}] {}", e.level, cut(&e.text, 2_000)))
             .filter(|line| keep(line))
             .collect(),

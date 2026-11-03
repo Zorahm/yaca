@@ -38,7 +38,9 @@ pub async fn act(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String> 
     let since = engine.loads();
     let done = match action {
         "click" | "double_click" | "right_click" => {
-            let aim = aim(&*engine, args).await?.ok_or("say where to click: ref, selector, or x and y")?;
+            let aim = aim(&*engine, args)
+                .await?
+                .ok_or("say where to click: ref, selector, or x and y")?;
             let (button, count) = match action {
                 "double_click" => (Button::Left, 2),
                 "right_click" => (Button::Right, 1),
@@ -49,7 +51,9 @@ pub async fn act(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String> 
             with_warning(format!("{} {}.", verb(action), aim.label), aim.warning)
         }
         "hover" => {
-            let aim = aim(&*engine, args).await?.ok_or("say where to hover: ref, selector, or x and y")?;
+            let aim = aim(&*engine, args)
+                .await?
+                .ok_or("say where to hover: ref, selector, or x and y")?;
             ring(&*engine, aim.ring).await;
             engine.hover(aim.x, aim.y).await?;
             with_warning(format!("Hovered over {}.", aim.label), aim.warning)
@@ -60,7 +64,10 @@ pub async fn act(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String> 
                 Some(target) => {
                     let clear = args["clear"].as_bool() != Some(false);
                     let focused = engine.helper(&format!("focus({target}, {clear})")).await?;
-                    let label = focused["label"].as_str().unwrap_or("the element").to_string();
+                    let label = focused["label"]
+                        .as_str()
+                        .unwrap_or("the element")
+                        .to_string();
                     if focused["editable"].as_bool() != Some(true) {
                         return Err(format!("{label} is not a text field"));
                     }
@@ -76,7 +83,9 @@ pub async fn act(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String> 
             format!("Typed {} characters into {label}.", text.chars().count())
         }
         "press" => {
-            let key = args["text"].as_str().ok_or("press needs the key in text, such as Enter")?;
+            let key = args["text"]
+                .as_str()
+                .ok_or("press needs the key in text, such as Enter")?;
             let press = keys::parse(key)?;
             if let Some(target) = target(args) {
                 let focused = engine.helper(&format!("focus({target}, false)")).await?;
@@ -87,7 +96,11 @@ pub async fn act(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String> 
         }
         "scroll" => {
             let dx = args["dx"].as_f64().unwrap_or(0.0);
-            let dy = args["dy"].as_f64().unwrap_or(if args["dx"].is_number() { 0.0 } else { SCROLL_DEFAULT });
+            let dy = args["dy"].as_f64().unwrap_or(if args["dx"].is_number() {
+                0.0
+            } else {
+                SCROLL_DEFAULT
+            });
             match aim(&*engine, args).await? {
                 // Bringing an element into view is the scroll asked for,
                 // unless a distance says to scroll inside it.
@@ -110,14 +123,20 @@ pub async fn act(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String> 
         "select" => {
             let target = target(args).ok_or("select needs the <select> by ref or selector")?;
             let values: Vec<String> = match &args["values"] {
-                Value::Array(list) => list.iter().filter_map(Value::as_str).map(str::to_string).collect(),
+                Value::Array(list) => list
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect(),
                 Value::String(one) => vec![one.clone()],
                 _ => Vec::new(),
             };
             if values.is_empty() {
                 return Err("select needs values".into());
             }
-            let chosen = engine.helper(&format!("choose({target}, {})", json!(values))).await?;
+            let chosen = engine
+                .helper(&format!("choose({target}, {})", json!(values)))
+                .await?;
             ring(&*engine, rect(&chosen["rect"])).await;
             let picked: Vec<&str> = chosen["picked"]
                 .as_array()
@@ -139,7 +158,9 @@ pub async fn act(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String> 
         Load::Pending => "\nThe page navigated and is still loading.",
     };
     Ok(Reply {
-        content: vec![json!({ "type": "text", "text": format!("{}{done}{after}", status(browser)) })],
+        content: vec![
+            json!({ "type": "text", "text": format!("{}{done}{after}", status(browser)) }),
+        ],
         error: false,
     })
 }
@@ -184,7 +205,9 @@ async fn aim(engine: &dyn Engine, args: &Value) -> Result<Option<Aim>, String> {
             warning = Some(format!("{label} is disabled"));
         }
         if let Some(cover) = found["covered"].as_str() {
-            warning = Some(format!("{label} is covered by {cover}, which got the event instead"));
+            warning = Some(format!(
+                "{label} is covered by {cover}, which got the event instead"
+            ));
         }
         return Ok(Some(Aim {
             x: found["x"].as_f64().unwrap_or(0.0),
@@ -216,7 +239,10 @@ async fn aim(engine: &dyn Engine, args: &Value) -> Result<Option<Aim>, String> {
 }
 
 async fn wait(engine: &dyn Engine, args: &Value) -> Result<String, String> {
-    let ms = args["timeout_ms"].as_u64().unwrap_or(WAIT_DEFAULT_MS).clamp(100, WAIT_MAX_MS);
+    let ms = args["timeout_ms"]
+        .as_u64()
+        .unwrap_or(WAIT_DEFAULT_MS)
+        .clamp(100, WAIT_MAX_MS);
     let query = match (args["selector"].as_str(), args["text"].as_str()) {
         (Some(selector), _) => json!({ "selector": selector }),
         (None, Some(text)) => json!({ "text": text }),

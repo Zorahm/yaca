@@ -82,6 +82,7 @@ impl Host for DesktopHost {
         }
         let startup = startup.map(|s| Startup {
             mode: s.mode,
+            profile: s.profile,
             provider: s.provider,
             model: s.model,
             effort: s.effort,

@@ -19,12 +19,12 @@
 
 use std::time::Duration;
 
-use yaca_core::event::AgentEvent;
-use yaca_core::id::SessionId;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::broadcast::Receiver;
 use tokio_util::sync::CancellationToken;
+use yaca_core::event::AgentEvent;
+use yaca_core::id::SessionId;
 use yaca_remote::frame::Lag;
 
 /// Frame at 60 fps.
@@ -53,7 +53,14 @@ pub async fn pump(
     // The window goes on past a lag. A lost delta is a glitch, and a lag that never catches
     // up is worse; the remote server stops instead, because its client starts over anyway.
     yaca_remote::frame::pump(events, stop, FRAME, Lag::Skip, move |events| {
-        let _ = app.emit(channel, EventFrame { session: session.clone(), epoch, events });
+        let _ = app.emit(
+            channel,
+            EventFrame {
+                session: session.clone(),
+                epoch,
+                events,
+            },
+        );
     })
     .await;
 }

@@ -77,7 +77,11 @@ pub fn parse(combo: &str) -> Result<Press, String> {
             "control" | "ctrl" => CONTROL,
             "meta" | "cmd" | "command" | "win" => META,
             "shift" => SHIFT,
-            other => return Err(format!("\"{other}\" is not a modifier: use Alt, Control, Meta or Shift")),
+            other => {
+                return Err(format!(
+                    "\"{other}\" is not a modifier: use Alt, Control, Meta or Shift"
+                ))
+            }
         };
     }
 
@@ -123,7 +127,11 @@ pub fn parse(combo: &str) -> Result<Press, String> {
         (String::new(), 0)
     };
     // Shift+a types "A", as it would on a keyboard.
-    let shown = if modifiers & SHIFT != 0 { c.to_uppercase().collect() } else { c.to_string() };
+    let shown = if modifiers & SHIFT != 0 {
+        c.to_uppercase().collect()
+    } else {
+        c.to_string()
+    };
     Ok(Press {
         key: shown.clone(),
         code,
@@ -140,7 +148,10 @@ mod tests {
     #[test]
     fn named_keys_and_their_aliases() {
         let enter = parse("Enter").unwrap();
-        assert_eq!((enter.key.as_str(), enter.key_code, enter.text.as_deref()), ("Enter", 13, Some("\r")));
+        assert_eq!(
+            (enter.key.as_str(), enter.key_code, enter.text.as_deref()),
+            ("Enter", 13, Some("\r"))
+        );
         assert_eq!(parse("return").unwrap(), enter);
         assert_eq!(parse("Esc").unwrap().key, "Escape");
         assert_eq!(parse("Space").unwrap().text.as_deref(), Some(" "));
@@ -151,7 +162,10 @@ mod tests {
     fn modifiers_combine_and_stop_the_key_from_typing() {
         let select_all = parse("Control+a").unwrap();
         assert_eq!(select_all.modifiers, CONTROL);
-        assert_eq!((select_all.code.as_str(), select_all.key_code), ("KeyA", 65));
+        assert_eq!(
+            (select_all.code.as_str(), select_all.key_code),
+            ("KeyA", 65)
+        );
         assert_eq!(select_all.text, None);
 
         let back = parse("Shift+Tab").unwrap();

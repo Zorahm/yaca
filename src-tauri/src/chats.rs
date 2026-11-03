@@ -46,6 +46,12 @@ pub(crate) async fn open_chat(
     // This one is an application-level setting and is not in the project's
     // file: it reaches the core as a config field, like the mode and the effort.
     config.respect_robots = state.prefs().respect_robots;
+    config.summarize_web_fetch = state.prefs().summarize_web_fetch;
+    config.web_fetch_model = yaca_core::router::attach::web_fetch_setup(&config_dir()?, &providers);
+    config.web_fetch_pricing = config
+        .web_fetch_model
+        .as_ref()
+        .and_then(|setup| yaca_core::router::attach::setup_pricing(&providers, setup));
     config.shell = state.prefs().shell;
     // The human's own MCP servers and their approvals of a project's: both
     // live in the configuration directory, like the providers.
@@ -58,7 +64,9 @@ pub(crate) async fn open_chat(
     config.lsp_autodetect = true;
     config.user_skills = yaca_core::skills::user_dirs(&config_home);
     config.user_agents = yaca_core::agents::user_dirs(&config_home);
-    config.plugins = yaca_core::plugin::PluginSources::standard(&config_home).load().enabled();
+    config.plugins = yaca_core::plugin::PluginSources::standard(&config_home)
+        .load()
+        .enabled();
     config.mcp_approvals = Some(config_home);
     config.journal = Some(yaca_core::store::chats_dir().map_err(|e| e.to_string())?);
     if let Some(id) = resume {
@@ -67,12 +75,17 @@ pub(crate) async fn open_chat(
 
     if let Some(startup) = startup {
         config.mode = startup.mode;
+        config.profile = startup.profile;
         config.choose_model(startup.provider, startup.model);
         config.effort = startup.effort;
     }
 
     // The small model the `Decision` tool asks, if there is one.
     config.decision = yaca_core::router::attach::decision_setup(&config_dir()?, &providers);
+    config.decision_pricing = config
+        .decision
+        .as_ref()
+        .and_then(|setup| yaca_core::router::attach::setup_pricing(&providers, setup));
 
     // The chat's browser, offered to its session as an MCP server of the
     // window's own. The page itself is made on first use.
@@ -111,8 +124,10 @@ pub(crate) async fn open_chat(
     // sidebar is read from the top down, and today's work is at the top.
     let dir = config_dir()?;
     let mut settings = AppSettings::load(&dir);
-    settings.remember_project(root);
-    settings.save(&dir).map_err(|e| e.to_string())?;
+    if root != std::fs::canonicalize(dir.join("conversations")).unwrap_or_default() {
+        settings.remember_project(root);
+        settings.save(&dir).map_err(|e| e.to_string())?;
+    }
 
     let id = handle.id().clone();
     if let Some((browser, _)) = browser {

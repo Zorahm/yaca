@@ -40,10 +40,7 @@ pub struct AppSettings {
     /// The last mode, model and effort picked on the home screen: what the
     /// next new chat starts with, over the project's own settings (see
     /// [`crate::startup`]).
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "lenient"
-    )]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "lenient")]
     last_startup: Option<Startup>,
 }
 
@@ -246,12 +243,13 @@ mod tests {
     /// cannot read is dropped without taking the project list with it.
     #[test]
     fn the_last_startup_survives_a_save_and_a_broken_one_is_dropped() {
-        use yaca_core::{Effort, Mode};
+        use yaca_core::{Effort, Mode, Profile};
 
         let dir = temp_dir();
         let one = project(&dir, "one");
         let startup = Startup {
             mode: Mode::Auto,
+            profile: Profile::Chat,
             provider: "mimo".into(),
             model: "mimo-v2.6-flash".into(),
             effort: Effort::Medium,
@@ -264,7 +262,7 @@ mod tests {
 
         let json = serde_json::json!({
             "projects": [one],
-            "lastStartup": { "mode": "someday", "provider": "x", "model": "y", "effort": "max" },
+            "lastStartup": { "mode": "someday", "profile": "code", "provider": "x", "model": "y", "effort": "max" },
         });
         fs::write(dir.join(FILE), json.to_string()).unwrap();
         let loaded = AppSettings::load(&dir);

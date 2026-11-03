@@ -288,6 +288,9 @@ mod tests {
         let body = toast_body("src/main.rs");
         assert!(body.starts_with("The agent asks for permission"));
         assert!(body.ends_with("src/main.rs"));
-        assert!(body.contains(": "), "no separator between the parts: {body}");
+        assert!(
+            body.contains(": "),
+            "no separator between the parts: {body}"
+        );
     }
 }

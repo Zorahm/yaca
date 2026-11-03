@@ -25,13 +25,13 @@ mod update;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use tauri::{Manager, State};
 use yaca_core::event::{AgentEvent, SessionState};
 use yaca_core::id::{SessionId, TurnId};
 use yaca_core::provider::registry;
 use yaca_core::slash::{self, SlashCommand};
 use yaca_core::store::{SearchHit, SessionMeta, SessionStore};
 use yaca_core::{Command, SessionHandle};
-use tauri::{Manager, State};
 
 use settings::AppSettings;
 use startup::Startup;
@@ -80,6 +80,16 @@ fn listed(settings: &AppSettings) -> Vec<String> {
 #[tauri::command]
 fn projects() -> Result<Vec<String>, String> {
     Ok(listed(&AppSettings::load(&config_dir()?)))
+}
+
+/// The application-owned parent for conversations without a project.
+#[tauri::command]
+fn chat_root() -> Result<String, String> {
+    let path = config_dir()?.join("conversations");
+    std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+    Ok(project_path(&path.to_string_lossy())?
+        .to_string_lossy()
+        .into_owned())
 }
 
 /// Adds a project to the list without starting a chat (§9.1).
@@ -322,8 +332,11 @@ fn session_feed(project: String, id: String) -> Result<Vec<AgentEvent>, String> 
 fn project_commands(project: String) -> Result<Vec<SlashCommand>, String> {
     let mut commands = slash::load(&project_path(&project)?);
     // After the project's: the core looks a typed name up in the same order.
-    let plugins = yaca_core::plugin::PluginSources::standard(&config_dir()?).load().enabled();
-    let taken: std::collections::HashSet<String> = commands.iter().map(|c| c.name.clone()).collect();
+    let plugins = yaca_core::plugin::PluginSources::standard(&config_dir()?)
+        .load()
+        .enabled();
+    let taken: std::collections::HashSet<String> =
+        commands.iter().map(|c| c.name.clone()).collect();
     commands.extend(
         yaca_core::plugin::commands(&plugins)
             .into_iter()
@@ -338,33 +351,47 @@ fn project_commands(project: String) -> Result<Vec<SlashCommand>, String> {
 #[tauri::command]
 fn project_skills(project: String) -> Result<yaca_core::skills::SkillReport, String> {
     let config = config_dir()?;
-    let plugins = yaca_core::plugin::PluginSources::standard(&config).load().enabled();
-    Ok(yaca_core::skills::SkillRoots::new(&project_path(&project)?, yaca_core::skills::user_dirs(&config))
-        .with_plugins(&plugins)
-        .scan()
-        .report())
+    let plugins = yaca_core::plugin::PluginSources::standard(&config)
+        .load()
+        .enabled();
+    Ok(yaca_core::skills::SkillRoots::new(
+        &project_path(&project)?,
+        yaca_core::skills::user_dirs(&config),
+    )
+    .with_plugins(&plugins)
+    .scan()
+    .report())
 }
 
 /// Every plugin found — Yaca's own and Claude Code's — with its switch and
 /// what did not load. Read on every call, like the skills.
 #[tauri::command]
 fn list_plugins() -> Result<yaca_core::plugin::PluginReport, String> {
-    Ok(yaca_core::plugin::PluginSources::standard(&config_dir()?).load().report())
+    Ok(yaca_core::plugin::PluginSources::standard(&config_dir()?)
+        .load()
+        .report())
 }
 
 /// Turns a plugin on or off for the chats opened after this; an open chat
 /// keeps the plugins it started with, as it keeps its MCP servers.
 #[tauri::command]
-fn set_plugin_enabled(id: String, enabled: bool) -> Result<yaca_core::plugin::PluginReport, String> {
+fn set_plugin_enabled(
+    id: String,
+    enabled: bool,
+) -> Result<yaca_core::plugin::PluginReport, String> {
     let config = config_dir()?;
     yaca_core::plugin::set_enabled(&config, &id, enabled).map_err(|e| e.to_string())?;
-    Ok(yaca_core::plugin::PluginSources::standard(&config).load().report())
+    Ok(yaca_core::plugin::PluginSources::standard(&config)
+        .load()
+        .report())
 }
 
 /// Runs an installer operation off the event loop: it is git and the disk,
 /// and a clone takes as long as the network does.
 async fn installing<T: Send + 'static>(
-    work: impl FnOnce(&yaca_core::plugin::install::Installer) -> Result<T, yaca_core::error::CoreError> + Send + 'static,
+    work: impl FnOnce(&yaca_core::plugin::install::Installer) -> Result<T, yaca_core::error::CoreError>
+        + Send
+        + 'static,
 ) -> Result<T, String> {
     let config = config_dir()?;
     tauri::async_runtime::spawn_blocking(move || {
@@ -375,12 +402,15 @@ async fn installing<T: Send + 'static>(
 }
 
 #[tauri::command]
-async fn list_marketplaces() -> Result<Vec<yaca_core::plugin::install::MarketplaceSummary>, String> {
+async fn list_marketplaces() -> Result<Vec<yaca_core::plugin::install::MarketplaceSummary>, String>
+{
     installing(|i| Ok(i.marketplaces())).await
 }
 
 #[tauri::command]
-async fn add_marketplace(source: String) -> Result<yaca_core::plugin::install::MarketplaceSummary, String> {
+async fn add_marketplace(
+    source: String,
+) -> Result<yaca_core::plugin::install::MarketplaceSummary, String> {
     installing(move |i| i.add_marketplace(&source)).await
 }
 
@@ -390,13 +420,17 @@ async fn remove_marketplace(name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn refresh_marketplace(name: String) -> Result<yaca_core::plugin::install::MarketplaceSummary, String> {
+async fn refresh_marketplace(
+    name: String,
+) -> Result<yaca_core::plugin::install::MarketplaceSummary, String> {
     installing(move |i| i.refresh_marketplace(&name)).await
 }
 
 /// What a marketplace offers; fetches it the first time it is looked into.
 #[tauri::command]
-async fn marketplace_catalog(name: String) -> Result<Vec<yaca_core::plugin::install::CatalogEntry>, String> {
+async fn marketplace_catalog(
+    name: String,
+) -> Result<Vec<yaca_core::plugin::install::CatalogEntry>, String> {
     installing(move |i| i.catalog(&name)).await
 }
 
@@ -515,7 +549,9 @@ fn only_the_window(
 ) -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     move |invoke| {
         if invoke.message.webview_ref().label() != "main" {
-            invoke.resolver.reject("commands are for the Yaca window only");
+            invoke
+                .resolver
+                .reject("commands are for the Yaca window only");
             return true;
         }
         handler(invoke)
@@ -552,6 +588,14 @@ pub fn run() {
             if let Ok(dir) = config_dir() {
                 app.state::<AppState>()
                     .set_prefs(AppSettings::load(&dir).prefs().clone());
+                // The office skills Yaca ships with, into the human's own
+                // folder. A folder that cannot be written is not a reason to
+                // refuse to start: the chats work, only without the guides.
+                if let Some(skills) = yaca_core::skills::user_dirs(&dir).into_iter().next() {
+                    if let Err(why) = yaca_core::skills::bundled::install(&skills) {
+                        eprintln!("warning: {why}");
+                    }
+                }
             }
             tray::setup(app.handle())?;
             update::watch(app.handle().clone());
@@ -562,6 +606,7 @@ pub fn run() {
         .on_window_event(tray::on_window_event)
         .invoke_handler(only_the_window(tauri::generate_handler![
             projects,
+            chat_root,
             add_project,
             forget_project,
             startup::project_startup,

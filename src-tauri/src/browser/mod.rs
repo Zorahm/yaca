@@ -149,7 +149,9 @@ impl Browser {
                 browser.emit();
             }
         });
-        let engine = webview2::WebView2::open(window, self.label.clone(), profile()?, plan.bounds, changed).await?;
+        let engine =
+            webview2::WebView2::open(window, self.label.clone(), profile()?, plan.bounds, changed)
+                .await?;
         Ok(engine)
     }
 
@@ -211,7 +213,10 @@ impl Browser {
             session: session.to_string(),
             opened: location.is_some(),
             url: location.as_ref().map(|l| l.url.clone()).unwrap_or_default(),
-            title: location.as_ref().map(|l| l.title.clone()).unwrap_or_default(),
+            title: location
+                .as_ref()
+                .map(|l| l.title.clone())
+                .unwrap_or_default(),
             loading: location.as_ref().is_some_and(|l| l.loading),
             can_go_back: location.as_ref().is_some_and(|l| l.can_go_back),
             can_go_forward: location.as_ref().is_some_and(|l| l.can_go_forward),
@@ -352,7 +357,10 @@ pub fn allowed(url: &Url) -> bool {
     match url.scheme() {
         "http" | "https" => {
             let host = url.host_str().unwrap_or_default();
-            if matches!(host, "tauri.localhost" | "ipc.localhost" | "asset.localhost") {
+            if matches!(
+                host,
+                "tauri.localhost" | "ipc.localhost" | "asset.localhost"
+            ) {
                 return false;
             }
             // The window's dev server, in a build that loads from one.
@@ -400,10 +408,17 @@ pub async fn browser_place(
 /// Fails with a code the column words for the human: `bad_address` for what
 /// is not an address, `failed: <why>` for a page that did not open.
 #[tauri::command]
-pub async fn browser_open(browsers: State<'_, Browsers>, session: String, url: String) -> Result<(), String> {
+pub async fn browser_open(
+    browsers: State<'_, Browsers>,
+    session: String,
+    url: String,
+) -> Result<(), String> {
     let browser = browsers.get(&session)?;
     let url = normalize(&url).map_err(|_| "bad_address".to_string())?;
-    let engine = browser.engine().await.map_err(|why| format!("failed: {why}"))?;
+    let engine = browser
+        .engine()
+        .await
+        .map_err(|why| format!("failed: {why}"))?;
     engine
         .navigate(&url, LOAD_LIMIT)
         .await
@@ -412,7 +427,11 @@ pub async fn browser_open(browsers: State<'_, Browsers>, session: String, url: S
 }
 
 #[tauri::command]
-pub async fn browser_go(browsers: State<'_, Browsers>, session: String, step: String) -> Result<(), String> {
+pub async fn browser_go(
+    browsers: State<'_, Browsers>,
+    session: String,
+    step: String,
+) -> Result<(), String> {
     let step = match step.as_str() {
         "back" => Step::Back,
         "forward" => Step::Forward,
@@ -426,14 +445,20 @@ pub async fn browser_go(browsers: State<'_, Browsers>, session: String, step: St
 
 /// Opens the page in the system's own browser.
 #[tauri::command]
-pub fn browser_external(app: AppHandle, browsers: State<'_, Browsers>, session: String) -> Result<(), String> {
+pub fn browser_external(
+    app: AppHandle,
+    browsers: State<'_, Browsers>,
+    session: String,
+) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     let engine = tools::open_page(&*browsers.get(&session)?)?;
     let url = engine.location().url;
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return Err("only a web page opens in another browser".into());
     }
-    app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -444,7 +469,10 @@ pub fn browser_devtools(browsers: State<'_, Browsers>, session: String) -> Resul
 
 /// The cross in the header: the page follows the column again.
 #[tauri::command]
-pub async fn browser_reset_viewport(browsers: State<'_, Browsers>, session: String) -> Result<(), String> {
+pub async fn browser_reset_viewport(
+    browsers: State<'_, Browsers>,
+    session: String,
+) -> Result<(), String> {
     browsers.get(&session)?.force(None).await
 }
 
@@ -454,11 +482,23 @@ mod tests {
 
     #[test]
     fn bare_addresses_get_the_scheme_they_mean() {
-        assert_eq!(normalize("localhost:5173").unwrap(), "http://localhost:5173");
-        assert_eq!(normalize(" 127.0.0.1:8080/app ").unwrap(), "http://127.0.0.1:8080/app");
+        assert_eq!(
+            normalize("localhost:5173").unwrap(),
+            "http://localhost:5173"
+        );
+        assert_eq!(
+            normalize(" 127.0.0.1:8080/app ").unwrap(),
+            "http://127.0.0.1:8080/app"
+        );
         assert_eq!(normalize("shop.test").unwrap(), "http://shop.test");
-        assert_eq!(normalize("example.com/docs").unwrap(), "https://example.com/docs");
-        assert_eq!(normalize("https://example.com").unwrap(), "https://example.com");
+        assert_eq!(
+            normalize("example.com/docs").unwrap(),
+            "https://example.com/docs"
+        );
+        assert_eq!(
+            normalize("https://example.com").unwrap(),
+            "https://example.com"
+        );
         assert_eq!(normalize("about:blank").unwrap(), "about:blank");
     }
 

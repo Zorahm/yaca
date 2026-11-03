@@ -12,7 +12,11 @@ use super::Shared;
 use crate::browser::logs::{console_text, NetworkEntry};
 
 /// Runs until the webview goes, which drops the last sender.
-pub(crate) async fn follow(shared: Weak<Shared>, cdp: Cdp, mut events: mpsc::UnboundedReceiver<Event>) {
+pub(crate) async fn follow(
+    shared: Weak<Shared>,
+    cdp: Cdp,
+    mut events: mpsc::UnboundedReceiver<Event>,
+) {
     while let Some((name, params)) = events.recv().await {
         let Some(shared) = shared.upgrade() else {
             return;
@@ -38,7 +42,8 @@ pub(crate) async fn follow(shared: Weak<Shared>, cdp: Cdp, mut events: mpsc::Unb
                 history(&shared, &cdp).await;
             }
             "Page.navigatedWithinDocument" if is_main(&params["frameId"]) => {
-                shared.location.lock().unwrap().url = params["url"].as_str().unwrap_or_default().into();
+                shared.location.lock().unwrap().url =
+                    params["url"].as_str().unwrap_or_default().into();
                 history(&shared, &cdp).await;
             }
             "Page.frameStartedLoading" if is_main(&params["frameId"]) => {
@@ -69,7 +74,10 @@ pub(crate) async fn follow(shared: Weak<Shared>, cdp: Cdp, mut events: mpsc::Unb
                 *shared.world.lock().unwrap() = None;
             }
             "Runtime.consoleAPICalled" => {
-                let args = params["args"].as_array().map(Vec::as_slice).unwrap_or_default();
+                let args = params["args"]
+                    .as_array()
+                    .map(Vec::as_slice)
+                    .unwrap_or_default();
                 shared
                     .logs
                     .console(params["type"].as_str().unwrap_or("log"), console_text(args));
@@ -109,10 +117,13 @@ pub(crate) async fn follow(shared: Weak<Shared>, cdp: Cdp, mut events: mpsc::Unb
                 } else {
                     params["errorText"].as_str().unwrap_or("failed").to_string()
                 };
-                shared.logs.failure(params["requestId"].as_str().unwrap_or_default(), why);
+                shared
+                    .logs
+                    .failure(params["requestId"].as_str().unwrap_or_default(), why);
             }
             "yaca.title" => {
-                shared.location.lock().unwrap().title = params["title"].as_str().unwrap_or_default().into();
+                shared.location.lock().unwrap().title =
+                    params["title"].as_str().unwrap_or_default().into();
                 (shared.changed)();
             }
             "yaca.open" => {

@@ -49,7 +49,9 @@ pub enum Button {
 pub enum Area {
     Viewport,
     /// The whole document, cut off at this height.
-    FullPage { max_height: f64 },
+    FullPage {
+        max_height: f64,
+    },
     /// A box in document pixels.
     Box(Rect),
 }

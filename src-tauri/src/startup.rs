@@ -11,7 +11,7 @@
 
 use yaca_core::provider::registry::Providers;
 use yaca_core::router::ROUTER_ID;
-use yaca_core::{Effort, Mode, SessionConfig};
+use yaca_core::{Effort, Mode, Profile, SessionConfig};
 
 use crate::settings::AppSettings;
 use crate::{config_dir, routing};
@@ -27,6 +27,9 @@ use crate::{config_dir, routing};
 #[serde(rename_all = "camelCase")]
 pub struct Startup {
     pub mode: Mode,
+    /// Code or documents (§7.1). Not a trust level, so not part of the mode.
+    #[serde(default)]
+    pub profile: Profile,
     pub provider: String,
     pub model: String,
     pub effort: Effort,
@@ -51,9 +54,9 @@ pub fn project_startup(path: String) -> Result<Startup, String> {
     let config = SessionConfig::open(&path).map_err(|e| e.to_string())?;
     let last = AppSettings::load(&config_dir()?).last_startup().cloned();
 
-    let (mode, effort) = match &last {
-        Some(last) => (last.mode, last.effort),
-        None => (config.mode, config.effort),
+    let (mode, profile, effort) = match &last {
+        Some(last) => (last.mode, last.profile, last.effort),
+        None => (config.mode, config.profile, config.effort),
     };
     let (provider, model) = match last.and_then(|last| settle(&last.provider, &last.model).ok()) {
         Some(pair) => pair,
@@ -61,6 +64,7 @@ pub fn project_startup(path: String) -> Result<Startup, String> {
     };
     Ok(Startup {
         mode,
+        profile,
         provider,
         model,
         effort,

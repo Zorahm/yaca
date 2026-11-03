@@ -28,8 +28,22 @@ const AWAY: f64 = -20_000.0;
 /// The model's sizes for the common devices.
 pub const PRESETS: [(&str, Size, bool); 3] = [
     ("desktop", DEFAULT, false),
-    ("tablet", Size { width: 820.0, height: 1180.0 }, true),
-    ("mobile", Size { width: 390.0, height: 844.0 }, true),
+    (
+        "tablet",
+        Size {
+            width: 820.0,
+            height: 1180.0,
+        },
+        true,
+    ),
+    (
+        "mobile",
+        Size {
+            width: 390.0,
+            height: 844.0,
+        },
+        true,
+    ),
 ];
 
 /// Smallest and largest size the model may ask for, in CSS pixels.
@@ -152,14 +166,20 @@ fn away(size: Size) -> Rect {
 
 /// The size the model asked for, from `viewport`'s arguments: a preset name,
 /// or both sides.
-pub fn forced(preset: Option<&str>, width: Option<f64>, height: Option<f64>) -> Result<Option<Forced>, String> {
+pub fn forced(
+    preset: Option<&str>,
+    width: Option<f64>,
+    height: Option<f64>,
+) -> Result<Option<Forced>, String> {
     match (preset, width, height) {
         (Some("panel"), None, None) => Ok(None),
         (Some(name), None, None) => PRESETS
             .iter()
             .find(|(preset, ..)| *preset == name)
             .map(|&(_, size, mobile)| Some(Forced { size, mobile }))
-            .ok_or_else(|| format!("unknown preset \"{name}\": use desktop, tablet, mobile or panel")),
+            .ok_or_else(|| {
+                format!("unknown preset \"{name}\": use desktop, tablet, mobile or panel")
+            }),
         (None, Some(width), Some(height)) => {
             let side = |value: f64| (MIN_SIDE..=MAX_SIDE).contains(&value);
             if !side(width) || !side(height) {
@@ -195,7 +215,13 @@ mod tests {
         let plan = plan(Some(COLUMN), None);
         assert_eq!(plan.bounds, COLUMN);
         assert_eq!(plan.emulate, None);
-        assert_eq!(plan.viewport, Size { width: 500.0, height: 700.0 });
+        assert_eq!(
+            plan.viewport,
+            Size {
+                width: 500.0,
+                height: 700.0
+            }
+        );
         assert_eq!(plan.source, ViewportSource::Panel);
     }
 
@@ -211,7 +237,10 @@ mod tests {
     #[test]
     fn the_models_size_is_drawn_scaled_down_into_the_column() {
         let big = Forced {
-            size: Size { width: 1000.0, height: 700.0 },
+            size: Size {
+                width: 1000.0,
+                height: 700.0,
+            },
             mobile: false,
         };
         let plan = plan(Some(COLUMN), Some(big));
@@ -222,10 +251,19 @@ mod tests {
         assert_eq!(plan.source, ViewportSource::Model);
 
         let small = Forced {
-            size: Size { width: 390.0, height: 600.0 },
+            size: Size {
+                width: 390.0,
+                height: 600.0,
+            },
             mobile: true,
         };
-        assert_eq!(super::plan(Some(COLUMN), Some(small)).emulate.unwrap().scale, 1.0);
+        assert_eq!(
+            super::plan(Some(COLUMN), Some(small))
+                .emulate
+                .unwrap()
+                .scale,
+            1.0
+        );
     }
 
     #[test]

@@ -37,9 +37,7 @@ pub fn project_settings(project: String) -> Result<Settings, String> {
 /// once. One project, one settings window, one write.
 #[tauri::command]
 pub fn save_project_settings(project: String, settings: Settings) -> Result<(), String> {
-    settings
-        .save(&root(&project)?)
-        .map_err(|e| e.to_string())
+    settings.save(&root(&project)?).map_err(|e| e.to_string())
 }
 
 /// Directories the snapshot walk never enters, whatever the project says

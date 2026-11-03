@@ -93,6 +93,7 @@ pub struct Preferences {
     /// effort. The core stays headless — it is handed a flag, not a settings
     /// file it has no business reading.
     pub respect_robots: bool,
+    pub summarize_web_fetch: bool,
     /// Which shell the agent's commands run through (§10). Windows only:
     /// elsewhere there is one shell and nothing to choose.
     ///
@@ -116,6 +117,7 @@ impl Default for Preferences {
             language: Language::default(),
             notifications: true,
             respect_robots: true,
+            summarize_web_fetch: false,
             shell: ShellChoice::default(),
             check_updates: true,
         }

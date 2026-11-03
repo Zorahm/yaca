@@ -14,7 +14,8 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
     ICoreWebView2, ICoreWebView2DevToolsProtocolEventReceivedEventArgs,
 };
 use webview2_com::{
-    take_pwstr, CallDevToolsProtocolMethodCompletedHandler, DevToolsProtocolEventReceivedEventHandler,
+    take_pwstr, CallDevToolsProtocolMethodCompletedHandler,
+    DevToolsProtocolEventReceivedEventHandler,
 };
 use windows::core::{HSTRING, PWSTR};
 
@@ -67,7 +68,11 @@ impl Cdp {
                 // WebView2 requires; the strings outlive the call.
                 let called = unsafe {
                     platform.controller().CoreWebView2().and_then(|core| {
-                        core.CallDevToolsProtocolMethod(&HSTRING::from(&name), &HSTRING::from(&body), &handler)
+                        core.CallDevToolsProtocolMethod(
+                            &HSTRING::from(&name),
+                            &HSTRING::from(&body),
+                            &handler,
+                        )
                     })
                 };
                 if let Err(err) = called {
@@ -79,13 +84,22 @@ impl Cdp {
         let json = match tokio::time::timeout(LIMIT, rx).await {
             Ok(Ok(answer)) => answer?,
             Ok(Err(_)) => return Err("the browser is gone".into()),
-            Err(_) => return Err(format!("the browser did not answer {method} in {} s", LIMIT.as_secs())),
+            Err(_) => {
+                return Err(format!(
+                    "the browser did not answer {method} in {} s",
+                    LIMIT.as_secs()
+                ))
+            }
         };
         serde_json::from_str(&json).map_err(|e| format!("{method}: unreadable answer: {e}"))
     }
 
     /// Hands every event of `names` to `sink`, from now until the webview goes.
-    pub fn subscribe(&self, names: &'static [&'static str], sink: mpsc::UnboundedSender<Event>) -> Result<()> {
+    pub fn subscribe(
+        &self,
+        names: &'static [&'static str],
+        sink: mpsc::UnboundedSender<Event>,
+    ) -> Result<()> {
         self.webview
             .with_webview(move |platform| {
                 // SAFETY: as in `call`: the UI thread, and COM objects that
@@ -96,26 +110,32 @@ impl Cdp {
                 };
                 for &name in names {
                     let sink = sink.clone();
-                    let handler = DevToolsProtocolEventReceivedEventHandler::create(Box::new(
-                        move |_, args: Option<ICoreWebView2DevToolsProtocolEventReceivedEventArgs>| {
-                            if let Some(args) = args {
-                                let mut json = PWSTR::null();
-                                // SAFETY: WebView2 allocates the string and
-                                // `take_pwstr` frees it.
-                                unsafe { args.ParameterObjectAsJson(&mut json)? };
-                                let text = take_pwstr(json);
-                                if let Ok(params) = serde_json::from_str(&text) {
-                                    let _ = sink.send((name, params));
+                    let handler =
+                        DevToolsProtocolEventReceivedEventHandler::create(Box::new(
+                            move |_,
+                                  args: Option<
+                                ICoreWebView2DevToolsProtocolEventReceivedEventArgs,
+                            >| {
+                                if let Some(args) = args {
+                                    let mut json = PWSTR::null();
+                                    // SAFETY: WebView2 allocates the string and
+                                    // `take_pwstr` frees it.
+                                    unsafe { args.ParameterObjectAsJson(&mut json)? };
+                                    let text = take_pwstr(json);
+                                    if let Ok(params) = serde_json::from_str(&text) {
+                                        let _ = sink.send((name, params));
+                                    }
                                 }
-                            }
-                            Ok(())
-                        },
-                    ));
+                                Ok(())
+                            },
+                        ));
                     let mut token = 0i64;
                     // SAFETY: see above.
                     let _ = unsafe {
                         core.GetDevToolsProtocolEventReceiver(&HSTRING::from(name))
-                            .and_then(|receiver| receiver.add_DevToolsProtocolEventReceived(&handler, &mut token))
+                            .and_then(|receiver| {
+                                receiver.add_DevToolsProtocolEventReceived(&handler, &mut token)
+                            })
                     };
                 }
             })

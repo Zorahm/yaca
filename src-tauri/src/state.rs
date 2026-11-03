@@ -15,9 +15,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::watch;
+use tokio_util::sync::CancellationToken;
 use yaca_core::id::SessionId;
 use yaca_core::{Attach, Replay, SessionHandle};
-use tokio_util::sync::CancellationToken;
 
 use crate::prefs::Preferences;
 
@@ -130,7 +130,11 @@ impl AppState {
         // The toast of §15 listens to the same stream separately: the bridge is about transport,
         // the watcher is about notifications, and folding them into one file would mean
         // mixing two responsibilities.
-        tokio::spawn(crate::notify::watch(app.clone(), handle.subscribe(), stop.clone()));
+        tokio::spawn(crate::notify::watch(
+            app.clone(),
+            handle.subscribe(),
+            stop.clone(),
+        ));
 
         let chat = Chat {
             handle,
@@ -189,7 +193,11 @@ impl AppState {
                 ));
                 // Watching the toasts starts over with the bridge: the one that
                 // was cancelled took its own stop token with it.
-                tokio::spawn(crate::notify::watch(app.clone(), chat.handle.subscribe(), stop));
+                tokio::spawn(crate::notify::watch(
+                    app.clone(),
+                    chat.handle.subscribe(),
+                    stop,
+                ));
 
                 Rebound {
                     handle: chat.handle.clone(),

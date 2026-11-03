@@ -46,6 +46,9 @@ pub fn project_mcp_file(project: String) -> Result<Servers, String> {
 
 /// The servers of an open chat as they are now.
 #[tauri::command]
-pub fn session_mcp(state: State<'_, AppState>, session: String) -> Result<Vec<McpServerSummary>, String> {
+pub fn session_mcp(
+    state: State<'_, AppState>,
+    session: String,
+) -> Result<Vec<McpServerSummary>, String> {
     Ok(crate::chat(&state, &session)?.mcp())
 }
