@@ -44,10 +44,10 @@
 {"type":"turnFinished","turnId":"turn-5","stopReason":"refusal","at":1767000050000}
 {"type":"turnFinished","turnId":"turn-6","stopReason":"pauseTurn","at":1767000060000}
 {"type":"turnFinished","turnId":"turn-7","stopReason":"failed","at":1767000070000}
-{"type":"stateChanged","state":{"projectRoot":"C:/Projects/yaca-demo","provider":"anthropic","model":"model-0","mode":"plan","effort":"low","busy":true,"bypass":false,"isolation":null}}
-{"type":"stateChanged","state":{"projectRoot":"C:/Projects/yaca-demo","provider":"anthropic","model":"model-1","mode":"manual","effort":"medium","busy":false,"bypass":false,"isolation":{"branch":"yaca/session-2","path":"C:/Projects/yaca-demo-wt"}}}
-{"type":"stateChanged","state":{"projectRoot":"C:/Projects/yaca-demo","provider":"anthropic","model":"model-2","mode":"auto","effort":"high","busy":true,"bypass":false,"isolation":null}}
-{"type":"stateChanged","state":{"projectRoot":"C:/Projects/yaca-demo","provider":"anthropic","model":"model-3","mode":"edits","effort":"extra","busy":false,"bypass":true,"isolation":{"branch":"yaca/session-2","path":"C:/Projects/yaca-demo-wt"}}}
+{"type":"stateChanged","state":{"projectRoot":"C:/Projects/yaca-demo","provider":"anthropic","model":"model-0","mode":"plan","profile":"code","effort":"low","busy":true,"bypass":false,"isolation":null}}
+{"type":"stateChanged","state":{"projectRoot":"C:/Projects/yaca-demo","provider":"anthropic","model":"model-1","mode":"manual","profile":"chat","effort":"medium","busy":false,"bypass":false,"isolation":{"branch":"yaca/session-2","path":"C:/Projects/yaca-demo-wt"}}}
+{"type":"stateChanged","state":{"projectRoot":"C:/Projects/yaca-demo","provider":"anthropic","model":"model-2","mode":"auto","profile":"code","effort":"high","busy":true,"bypass":false,"isolation":null}}
+{"type":"stateChanged","state":{"projectRoot":"C:/Projects/yaca-demo","provider":"anthropic","model":"model-3","mode":"edits","profile":"chat","effort":"extra","busy":false,"bypass":true,"isolation":{"branch":"yaca/session-2","path":"C:/Projects/yaca-demo-wt"}}}
 {"type":"permissionRequested","request":{"id":"req-1","callId":"call-1","kind":"runCommand","target":"cargo","detail":"cargo test -p yaca-remote --test fixtures","note":"crates/yaca-remote","sizeBytes":null,"files":null,"invariant":null,"unsaved":null,"server":null,"scopes":[{"type":"tool","name":"Edit"},{"type":"directory","path":"src"},{"type":"commandPrefix","prefix":"cargo"},{"type":"domain","host":"docs.rs"},{"type":"mcpServer","server":"asana"}],"position":1,"total":13}}
 {"type":"permissionResolved","requestId":"req-1"}
 {"type":"permissionRequested","request":{"id":"req-2","callId":"call-2","kind":"deleteFile","target":"old.rs","detail":"src/old.rs","note":null,"sizeBytes":2048,"files":null,"invariant":null,"unsaved":null,"server":null,"scopes":[],"position":2,"total":13}}

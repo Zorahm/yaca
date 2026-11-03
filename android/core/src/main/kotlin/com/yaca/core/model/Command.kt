@@ -35,6 +35,13 @@ data class CommandSetMode(
     val mode: Mode,
 ) : Command
 
+/** What the chat is for, switched the way the mode is. */
+@Serializable
+@SerialName("setProfile")
+data class CommandSetProfile(
+    val profile: Profile,
+) : Command
+
 @Serializable
 @SerialName("setModel")
 data class CommandSetModel(

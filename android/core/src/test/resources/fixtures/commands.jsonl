@@ -23,6 +23,8 @@
 {"type":"setMode","mode":"manual"}
 {"type":"setMode","mode":"auto"}
 {"type":"setMode","mode":"edits"}
+{"type":"setProfile","profile":"code"}
+{"type":"setProfile","profile":"chat"}
 {"type":"setEffort","effort":"low"}
 {"type":"setEffort","effort":"medium"}
 {"type":"setEffort","effort":"high"}

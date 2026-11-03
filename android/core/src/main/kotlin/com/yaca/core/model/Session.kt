@@ -12,6 +12,13 @@ enum class Mode {
     @SerialName("edits") EDITS,
 }
 
+/** What a chat is for: code, or the person's documents. Not a level of trust. */
+@Serializable
+enum class Profile {
+    @SerialName("code") CODE,
+    @SerialName("chat") CHAT,
+}
+
 /** Reasoning effort, the bottom-right corner of the composer. */
 @Serializable
 enum class Effort {
@@ -39,6 +46,11 @@ data class SessionState(
     val provider: String = "",
     val model: String,
     val mode: Mode,
+    /**
+     * What the chat is for. The phone's composer does not offer it yet — it is switched from the
+     * desktop — but the field decodes, so a chat started here shows the truth.
+     */
+    val profile: Profile = Profile.CODE,
     val effort: Effort,
     val busy: Boolean,
     /** Permission bypass: a flag on top of the mode, not a fifth mode. */

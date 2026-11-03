@@ -7,8 +7,8 @@
 {"type":"request","id":5,"call":{"kind":"sessionFeed","project":"yaca-demo","session":"s-1"}}
 {"type":"request","id":6,"call":{"kind":"openChat","project":"yaca-demo","resume":null,"startup":null}}
 {"type":"request","id":7,"call":{"kind":"openChat","project":"yaca-demo","resume":"s-1","startup":null}}
-{"type":"request","id":8,"call":{"kind":"openChat","project":"yaca-demo","resume":null,"startup":{"mode":"auto","provider":"anthropic","model":"model-0","effort":"high"}}}
-{"type":"request","id":9,"call":{"kind":"openChat","project":"yaca-demo","resume":"s-2","startup":{"mode":"auto","provider":"anthropic","model":"model-0","effort":"high"}}}
+{"type":"request","id":8,"call":{"kind":"openChat","project":"yaca-demo","resume":null,"startup":{"mode":"auto","profile":"code","provider":"anthropic","model":"model-0","effort":"high"}}}
+{"type":"request","id":9,"call":{"kind":"openChat","project":"yaca-demo","resume":"s-2","startup":{"mode":"auto","profile":"code","provider":"anthropic","model":"model-0","effort":"high"}}}
 {"type":"request","id":10,"call":{"kind":"attach","session":"s-1"}}
 {"type":"request","id":11,"call":{"kind":"detach","session":"s-1"}}
 {"type":"request","id":12,"call":{"kind":"closeChat","session":"s-1"}}
