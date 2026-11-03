@@ -52,7 +52,12 @@ pub struct RunRecord {
 }
 
 pub async fn run_task(task: &Task, plan: &Plan, opts: &RunOptions<'_>) -> RunRecord {
-    let mut result = TaskResult::new(&task.id, &plan.provider_id, &plan.model, mode_name(task.mode));
+    let mut result = TaskResult::new(
+        &task.id,
+        &plan.provider_id,
+        &plan.model,
+        mode_name(task.mode),
+    );
     let mut observed = Observed::default();
 
     let tree = match prepare_tree(task, opts) {
@@ -62,7 +67,10 @@ pub async fn run_task(task: &Task, plan: &Plan, opts: &RunOptions<'_>) -> RunRec
             // produces a result, so the summary shows the task and why.
             result.failure = Some(format!("cannot prepare the tree: {e:#}"));
             result.judge();
-            return RunRecord { result, events: Vec::new() };
+            return RunRecord {
+                result,
+                events: Vec::new(),
+            };
         }
     };
 
@@ -89,7 +97,10 @@ pub async fn run_task(task: &Task, plan: &Plan, opts: &RunOptions<'_>) -> RunRec
     result.errors = observed.errors.clone();
     result.judge();
 
-    RunRecord { result, events: observed.log }
+    RunRecord {
+        result,
+        events: observed.log,
+    }
 }
 
 fn prepare_tree(task: &Task, opts: &RunOptions<'_>) -> anyhow::Result<WorkDir> {
@@ -129,11 +140,16 @@ async fn drive(
     // on before the message, so the first write is not already asked about.
     if handle.send(Command::SetBypass { on: true }).await.is_err()
         || handle
-            .send(Command::SendMessage { text: task.prompt.clone(), attachments: Vec::new() })
+            .send(Command::SendMessage {
+                text: task.prompt.clone(),
+                attachments: Vec::new(),
+            })
             .await
             .is_err()
     {
-        observed.errors.push("the session stopped before the message was sent".into());
+        observed
+            .errors
+            .push("the session stopped before the message was sent".into());
         return Stopped::NeverStarted;
     }
 
@@ -191,14 +207,19 @@ async fn pump(
             Ok(event) => {
                 observed.observe(&event);
                 answer(handle, &event, observed).await?;
-                if matches!(event, AgentEvent::TurnFinished { .. } | AgentEvent::TurnCancelled { .. }) {
+                if matches!(
+                    event,
+                    AgentEvent::TurnFinished { .. } | AgentEvent::TurnCancelled { .. }
+                ) {
                     return Ok(());
                 }
             }
             // Lagging loses events, which makes the counts a lower bound. Say
             // so in the result rather than letting the numbers look exact.
             Err(RecvError::Lagged(n)) => {
-                observed.errors.push(format!("the event stream lagged; {n} events were lost"));
+                observed
+                    .errors
+                    .push(format!("the event stream lagged; {n} events were lost"));
             }
             Err(RecvError::Closed) => {
                 return Err("the event stream closed before the turn ended".into());
@@ -207,7 +228,11 @@ async fn pump(
     }
 }
 
-async fn answer(handle: &SessionHandle, event: &AgentEvent, observed: &mut Observed) -> Result<(), String> {
+async fn answer(
+    handle: &SessionHandle,
+    event: &AgentEvent,
+    observed: &mut Observed,
+) -> Result<(), String> {
     let sent = |what: &str| format!("the session stopped while {what} was being answered");
     match event {
         AgentEvent::PermissionRequested { request } => {
@@ -215,7 +240,9 @@ async fn answer(handle: &SessionHandle, event: &AgentEvent, observed: &mut Obser
             handle
                 .send(Command::AnswerPermission {
                     request_id: request.id.clone(),
-                    answer: PermissionAnswer::Deny { reason: Some(DENY_REASON.into()) },
+                    answer: PermissionAnswer::Deny {
+                        reason: Some(DENY_REASON.into()),
+                    },
                 })
                 .await
                 .map_err(|_| sent("a permission"))?;

@@ -55,7 +55,11 @@ impl Attachments {
     }
 
     pub(crate) fn detach(&self, session: &SessionId) {
-        if let Some(cancel) = self.lock().get_mut(session).and_then(|slot| slot.cancel.take()) {
+        if let Some(cancel) = self
+            .lock()
+            .get_mut(session)
+            .and_then(|slot| slot.cancel.take())
+        {
             cancel.cancel();
         }
     }

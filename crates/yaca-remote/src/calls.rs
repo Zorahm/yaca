@@ -23,7 +23,11 @@ pub(crate) async fn answer(conn: &Conn, id: u64, call: Call) -> bool {
         Ok(reply) => CallResult::Ok { reply },
         Err(error) => CallResult::Error { error },
     };
-    if !conn.outbox.send(ServerMessage::Response { id, result }).await {
+    if !conn
+        .outbox
+        .send(ServerMessage::Response { id, result })
+        .await
+    {
         return false;
     }
     // Only now: an attachment's frames must come after its reply, never before it.
@@ -48,9 +52,11 @@ async fn dispatch(conn: &Conn, call: Call, pump: &mut Option<Started>) -> Result
         Call::ListChats => Ok(Reply::Chats {
             chats: host.live_chats().iter().map(summary).collect(),
         }),
-        Call::SessionFeed { project, session } => blocking(host, move |h| h.feed(&project, &session))
-            .await
-            .map(|events| Reply::Feed { events }),
+        Call::SessionFeed { project, session } => {
+            blocking(host, move |h| h.feed(&project, &session))
+                .await
+                .map(|events| Reply::Feed { events })
+        }
         Call::OpenChat {
             project,
             resume,
@@ -91,7 +97,11 @@ where
         .map_err(host_error)
 }
 
-async fn send(host: &Arc<dyn Host>, session: &SessionId, command: Command) -> Result<Reply, CallError> {
+async fn send(
+    host: &Arc<dyn Host>,
+    session: &SessionId,
+    command: Command,
+) -> Result<Reply, CallError> {
     let live = host.chat(session).ok_or_else(chat_not_open)?;
     live.handle
         .send(command)

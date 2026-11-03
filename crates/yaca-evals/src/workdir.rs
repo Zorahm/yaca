@@ -24,7 +24,10 @@ pub fn create_unique(parent: &Path, label: &str) -> io::Result<PathBuf> {
         .unwrap_or_default();
     loop {
         let seq = SEQ.fetch_add(1, Ordering::Relaxed);
-        let candidate = parent.join(format!("{label}-{nanos:x}-{:x}-{seq:x}", std::process::id()));
+        let candidate = parent.join(format!(
+            "{label}-{nanos:x}-{:x}-{seq:x}",
+            std::process::id()
+        ));
         match fs::create_dir(&candidate) {
             Ok(()) => return Ok(candidate),
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
@@ -95,8 +98,9 @@ mod tests {
     #[test]
     fn names_do_not_repeat_even_in_a_tight_loop() {
         let parent = scratch("uniq-parent");
-        let names: std::collections::HashSet<PathBuf> =
-            (0..200).map(|_| create_unique(&parent, "run").unwrap()).collect();
+        let names: std::collections::HashSet<PathBuf> = (0..200)
+            .map(|_| create_unique(&parent, "run").unwrap())
+            .collect();
         assert_eq!(names.len(), 200);
     }
 
@@ -109,7 +113,10 @@ mod tests {
         let dst = scratch("copy-dst").join("tree");
 
         copy_tree(&src, &dst).unwrap();
-        assert_eq!(fs::read_to_string(dst.join("src/nested/a.rs")).unwrap(), "fn a() {}");
+        assert_eq!(
+            fs::read_to_string(dst.join("src/nested/a.rs")).unwrap(),
+            "fn a() {}"
+        );
         assert_eq!(fs::read_to_string(dst.join("top.txt")).unwrap(), "t");
 
         fs::write(dst.join("top.txt"), "changed").unwrap();

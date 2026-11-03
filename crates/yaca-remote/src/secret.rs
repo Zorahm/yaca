@@ -29,5 +29,8 @@ pub(crate) fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 /// Used for the certificate fingerprint and for hashing device tokens, which
 /// are both one-way digests in hex form.
 pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }

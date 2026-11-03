@@ -47,8 +47,11 @@ impl Outbox {
 /// Writes queued messages until the connection ends. A failed write ends the
 /// connection: the socket is no longer usable, and the jobs that feed the queue
 /// stop with it.
-pub(crate) async fn run<S>(mut sink: S, mut messages: mpsc::Receiver<ServerMessage>, token: CancellationToken)
-where
+pub(crate) async fn run<S>(
+    mut sink: S,
+    mut messages: mpsc::Receiver<ServerMessage>,
+    token: CancellationToken,
+) where
     S: Sink<Message> + Unpin,
 {
     let mut ping = interval_at(Instant::now() + PING_EVERY, PING_EVERY);

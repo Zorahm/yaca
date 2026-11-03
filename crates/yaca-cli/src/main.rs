@@ -14,7 +14,7 @@ use yaca_core::event::AgentEvent;
 use yaca_core::id::SessionId;
 use yaca_core::mcp::McpStatus;
 use yaca_core::process::ProcessState;
-use yaca_core::{Command, Effort, Mode, PermissionAnswer};
+use yaca_core::{Command, Effort, Mode, PermissionAnswer, Profile};
 
 use session_config::{session_config, Choice};
 
@@ -112,6 +112,14 @@ struct Args {
     #[arg(short, long, default_value = "extra")]
     effort: String,
 
+    /// code | chat — what the run is for (§7.1).
+    ///
+    /// `code` is the default, as in the window. `chat` is a chat about the
+    /// person's documents: the same tools, without the language server and the
+    /// notebook, and a prompt about Word, Excel and PowerPoint instead of source.
+    #[arg(long, default_value = "code")]
+    profile: String,
+
     /// Work in a git worktree of this run's own, on branch `yaca/<session>`.
     ///
     /// Needs a repository with a commit; what is uncommitted is not in it.
@@ -155,11 +163,17 @@ async fn main() -> Result<()> {
 
     match args.command {
         Some(Cmd::Session(cmd)) => return sessions::run(&args.project, cmd),
-        Some(Cmd::Mcp { approve, login, logout }) => {
-            return mcp::run(&args.project, approve, login, logout).await
-        }
+        Some(Cmd::Mcp {
+            approve,
+            login,
+            logout,
+        }) => return mcp::run(&args.project, approve, login, logout).await,
         Some(Cmd::Skills) => return skills::run(&args.project),
-        Some(Cmd::Plugins { action, enable, disable }) => return plugins::run(action, enable, disable),
+        Some(Cmd::Plugins {
+            action,
+            enable,
+            disable,
+        }) => return plugins::run(action, enable, disable),
         Some(Cmd::Serve(options)) => return serve::run(&args.project, options).await,
         None => {}
     }
@@ -186,6 +200,7 @@ async fn main() -> Result<()> {
             provider: args.provider.unwrap_or_default(),
             model: args.model.unwrap_or_default(),
             mode: Some(parse_mode(&args.mode)?),
+            profile: Some(parse_profile(&args.profile)?),
             effort: Some(parse_effort(&args.effort)?),
             resume: args.resume.map(SessionId::from),
             journal,
@@ -269,6 +284,14 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+fn parse_profile(s: &str) -> Result<Profile> {
+    Ok(match s {
+        "code" => Profile::Code,
+        "chat" => Profile::Chat,
+        other => anyhow::bail!("unknown profile: {other}"),
+    })
+}
+
 fn parse_mode(s: &str) -> Result<Mode> {
     Ok(match s {
         "plan" => Mode::Plan,
@@ -331,7 +354,10 @@ fn human(event: &AgentEvent) -> Option<String> {
         // tool finished, turning a progress stream into a dump.
         AgentEvent::ToolCallProgress { chunk, .. } => format!("\x1b[2m{chunk}\x1b[0m"),
         AgentEvent::ToolCallFinished { meta, .. } => {
-            format!("\x1b[2m  {} lines · {} ms\x1b[0m", meta.lines, meta.duration_ms)
+            format!(
+                "\x1b[2m  {} lines · {} ms\x1b[0m",
+                meta.lines, meta.duration_ms
+            )
         }
         AgentEvent::ToolCallFailed { message, .. } => format!("\x1b[31m  ✕ {message}\x1b[0m"),
         AgentEvent::ToolCallRejected { reason, .. } => format!("\x1b[33m  ⊘ {reason}\x1b[0m"),
@@ -361,8 +387,13 @@ fn human(event: &AgentEvent) -> Option<String> {
             of,
             delay_ms,
             ..
-        } => format!("\x1b[2mRetry in {} s · attempt {attempt} of {of}\x1b[0m", delay_ms / 1000),
-        AgentEvent::Error { code, message, .. } => format!("\x1b[31mError {code}: {message}\x1b[0m"),
+        } => format!(
+            "\x1b[2mRetry in {} s · attempt {attempt} of {of}\x1b[0m",
+            delay_ms / 1000
+        ),
+        AgentEvent::Error { code, message, .. } => {
+            format!("\x1b[31mError {code}: {message}\x1b[0m")
+        }
         AgentEvent::PlanProposed { plan } => format!("\n--- plan ---\n{plan}\n"),
         AgentEvent::TextShown { path, text, .. } => format!("\n--- {path} ---\n{text}\n"),
         AgentEvent::FileChanged { fact, .. } => format!(
@@ -377,13 +408,18 @@ fn human(event: &AgentEvent) -> Option<String> {
                         McpStatus::Connecting => "connecting".to_string(),
                         McpStatus::Ready => format!("ready · {} tools", s.tools.len()),
                         McpStatus::Failed => {
-                            format!("failed: {}", s.reason.as_deref().unwrap_or("reason unknown"))
+                            format!(
+                                "failed: {}",
+                                s.reason.as_deref().unwrap_or("reason unknown")
+                            )
                         }
                         McpStatus::Disabled => "disabled".to_string(),
                         McpStatus::NeedsApproval => {
                             format!("waiting for approval: yaca mcp --approve {}", s.name)
                         }
-                        McpStatus::NeedsLogin => format!("login needed: yaca mcp --login {}", s.name),
+                        McpStatus::NeedsLogin => {
+                            format!("login needed: yaca mcp --login {}", s.name)
+                        }
                         McpStatus::LoggingIn => "logging in".to_string(),
                     };
                     format!("  {} · {status_text}", s.name)
@@ -404,7 +440,9 @@ fn human(event: &AgentEvent) -> Option<String> {
             "\n\x1b[2mCreating checkpoint · {}\x1b[0m",
             checkpoint_reason(reason)
         ),
-        AgentEvent::CheckpointCreationFinished { .. } => "\n\x1b[2mCheckpoint creation finished\x1b[0m".into(),
+        AgentEvent::CheckpointCreationFinished { .. } => {
+            "\n\x1b[2mCheckpoint creation finished\x1b[0m".into()
+        }
         AgentEvent::CheckpointCreated { checkpoint } => format!(
             "\n\x1b[2m── ● {} · {}\x1b[0m",
             checkpoint.id,

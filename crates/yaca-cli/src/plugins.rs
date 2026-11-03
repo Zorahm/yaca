@@ -6,8 +6,8 @@
 
 use anyhow::{anyhow, bail, Result};
 use clap::Subcommand;
-use yaca_core::plugin::install::{CatalogEntry, Installer};
 use yaca_core::plugin::install::marketplace::MarketplaceOrigin;
+use yaca_core::plugin::install::{CatalogEntry, Installer};
 use yaca_core::plugin::{self, PluginFormat, PluginOrigin, PluginSources, PluginSummary};
 use yaca_core::provider::registry;
 
@@ -19,7 +19,10 @@ pub enum Action {
         action: Market,
     },
     /// What a marketplace offers, narrowed by a word in the name or description.
-    Browse { marketplace: String, query: Option<String> },
+    Browse {
+        marketplace: String,
+        query: Option<String>,
+    },
     /// Install `plugin@marketplace`, or a plugin from a folder, `owner/repo`
     /// or a git address. Installed plugins are on.
     Install { target: String },
@@ -33,10 +36,16 @@ pub enum Action {
 pub enum Market {
     List,
     /// A folder, `owner/repo` on GitHub, or a git address.
-    Add { source: String },
-    Remove { name: String },
+    Add {
+        source: String,
+    },
+    Remove {
+        name: String,
+    },
     /// Fetch one marketplace again, or all that were fetched before.
-    Update { name: Option<String> },
+    Update {
+        name: Option<String>,
+    },
 }
 
 pub fn run(action: Option<Action>, enable: Option<String>, disable: Option<String>) -> Result<()> {
@@ -148,7 +157,12 @@ fn market(installer: &Installer, action: Market) -> Result<()> {
         Market::Update { name } => {
             let names: Vec<String> = match name {
                 Some(n) => vec![n],
-                None => installer.marketplaces().into_iter().filter(|m| m.fetched).map(|m| m.name).collect(),
+                None => installer
+                    .marketplaces()
+                    .into_iter()
+                    .filter(|m| m.fetched)
+                    .map(|m| m.name)
+                    .collect(),
             };
             for name in names {
                 match installer.refresh_marketplace(&name) {
@@ -165,7 +179,12 @@ fn print_catalog(entries: &[CatalogEntry], query: Option<&str>) {
     let query = query.map(str::to_lowercase);
     let matches = |e: &CatalogEntry| {
         query.as_deref().is_none_or(|q| {
-            e.name.to_lowercase().contains(q) || e.description.as_deref().unwrap_or("").to_lowercase().contains(q)
+            e.name.to_lowercase().contains(q)
+                || e.description
+                    .as_deref()
+                    .unwrap_or("")
+                    .to_lowercase()
+                    .contains(q)
         })
     };
     for e in entries.iter().filter(|e| matches(e)) {
@@ -192,7 +211,11 @@ fn print_plugin(p: &PluginSummary) {
         PluginFormat::Claude => "Claude format",
         PluginFormat::AgentPlugins => "Agent Plugins",
     };
-    let version = p.version.as_deref().map(|v| format!(" {v}")).unwrap_or_default();
+    let version = p
+        .version
+        .as_deref()
+        .map(|v| format!(" {v}"))
+        .unwrap_or_default();
     println!("[{state}] {}{version} ({origin}, {format})", p.id);
     if let Some(d) = &p.description {
         println!("  {d}");

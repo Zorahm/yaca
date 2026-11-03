@@ -12,8 +12,18 @@ use yaca_core::skills::{self, SkillRoots, SkillScope};
 
 pub fn run(project: &Path) -> Result<()> {
     let config_dir = registry::config_dir()?;
-    let plugins = yaca_core::plugin::PluginSources::standard(&config_dir).load().enabled();
-    let report = SkillRoots::new(project, skills::user_dirs(&config_dir))
+    let plugins = yaca_core::plugin::PluginSources::standard(&config_dir)
+        .load()
+        .enabled();
+    let user = skills::user_dirs(&config_dir);
+    // The list says what a session would see, and a session installs the
+    // bundled office skills first.
+    if let Some(first) = user.first() {
+        if let Err(why) = skills::bundled::install(first) {
+            eprintln!("warning: {why}");
+        }
+    }
+    let report = SkillRoots::new(project, user)
         .with_plugins(&plugins)
         .scan()
         .report();

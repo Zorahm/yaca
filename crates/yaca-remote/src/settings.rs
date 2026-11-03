@@ -57,9 +57,9 @@ impl RemoteSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::files::TestDir;
     #[cfg(unix)]
     use crate::files::write_atomic;
+    use crate::files::TestDir;
 
     #[test]
     fn default_is_disabled_on_the_default_port() {
@@ -71,7 +71,10 @@ mod tests {
 
     #[test]
     fn remote_dir_is_a_child_of_the_config_dir() {
-        assert_eq!(remote_dir(Path::new("/x/yaca")), Path::new("/x/yaca").join("remote"));
+        assert_eq!(
+            remote_dir(Path::new("/x/yaca")),
+            Path::new("/x/yaca").join("remote")
+        );
     }
 
     #[test]
@@ -146,7 +149,10 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = TestDir::new();
         write_atomic(&dir.path().join("secret"), b"x").unwrap();
-        let mode = std::fs::metadata(dir.path().join("secret")).unwrap().permissions().mode();
+        let mode = std::fs::metadata(dir.path().join("secret"))
+            .unwrap()
+            .permissions()
+            .mode();
         assert_eq!(mode & 0o777, 0o600);
     }
 }

@@ -26,7 +26,9 @@ pub async fn run(
     let servers = Mcp::for_project(
         project,
         &mcp::config::load_global(&config_dir)?,
-        &yaca_core::plugin::PluginSources::standard(&config_dir).load().enabled(),
+        &yaca_core::plugin::PluginSources::standard(&config_dir)
+            .load()
+            .enabled(),
         Some(&config_dir),
         EventSink::new(events),
     )?;

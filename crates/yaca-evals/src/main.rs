@@ -43,7 +43,10 @@ use yaca_evals::workdir::create_unique;
 const DEFAULT_TASKS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../evals/tasks");
 
 #[derive(Parser, Debug)]
-#[command(name = "yaca-evals", about = "Run Yaca against real tasks with a real model")]
+#[command(
+    name = "yaca-evals",
+    about = "Run Yaca against real tasks with a real model"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Cmd,
@@ -121,7 +124,10 @@ async fn run(args: RunArgs) -> Result<bool> {
     let started_ms = now_ms();
     let out_dir = create_unique(&args.out, "run").context("cannot create the output directory")?;
     let work_root = std::env::temp_dir().join("yaca-evals");
-    let options = RunOptions { work_root: &work_root, keep_workdirs: args.keep_workdirs };
+    let options = RunOptions {
+        work_root: &work_root,
+        keep_workdirs: args.keep_workdirs,
+    };
 
     eprintln!(
         "yaca-evals: {} task(s) -> {}",
@@ -131,7 +137,13 @@ async fn run(args: RunArgs) -> Result<bool> {
 
     let mut results: Vec<TaskResult> = Vec::with_capacity(tasks.len());
     for (index, (task, plan)) in tasks.iter().zip(&plans).enumerate() {
-        eprintln!("[{}/{}] {} ({}) ...", index + 1, tasks.len(), task.id, plan.model);
+        eprintln!(
+            "[{}/{}] {} ({}) ...",
+            index + 1,
+            tasks.len(),
+            task.id,
+            plan.model
+        );
         let record = run_task(task, plan, &options).await;
         persist(&out_dir, task, &record.result, &record.events)?;
         eprintln!(
@@ -139,8 +151,13 @@ async fn run(args: RunArgs) -> Result<bool> {
             index + 1,
             tasks.len(),
             task.id,
-            if record.result.solved { "solved".to_string() } else {
-                format!("FAILED: {}", record.result.failure.clone().unwrap_or_default())
+            if record.result.solved {
+                "solved".to_string()
+            } else {
+                format!(
+                    "FAILED: {}",
+                    record.result.failure.clone().unwrap_or_default()
+                )
             }
         );
         results.push(record.result);
@@ -155,7 +172,12 @@ async fn run(args: RunArgs) -> Result<bool> {
 
 /// Written after each task, not at the end: a run that is interrupted halfway
 /// keeps what it finished.
-fn persist(out_dir: &std::path::Path, task: &Task, result: &TaskResult, events: &[String]) -> Result<()> {
+fn persist(
+    out_dir: &std::path::Path,
+    task: &Task,
+    result: &TaskResult,
+    events: &[String],
+) -> Result<()> {
     let dir = out_dir.join(&task.id);
     write_json(&dir.join("result.json"), result)?;
     let mut log = events.join("\n");

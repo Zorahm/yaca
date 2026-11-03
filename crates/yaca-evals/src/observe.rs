@@ -104,14 +104,22 @@ mod tests {
         obs.observe(&tool("Edit"));
         obs.observe(&AgentEvent::UsageUpdated {
             usage: UsageSnapshot {
-                total: TokenCounts { input: 10, output: 2, ..Default::default() },
+                total: TokenCounts {
+                    input: 10,
+                    output: 2,
+                    ..Default::default()
+                },
                 cost_usd: 0.25,
                 ..Default::default()
             },
         });
         obs.observe(&AgentEvent::UsageUpdated {
             usage: UsageSnapshot {
-                total: TokenCounts { input: 30, output: 5, ..Default::default() },
+                total: TokenCounts {
+                    input: 30,
+                    output: 5,
+                    ..Default::default()
+                },
                 cost_usd: 0.5,
                 ..Default::default()
             },

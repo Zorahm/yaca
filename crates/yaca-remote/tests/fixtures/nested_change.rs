@@ -2,7 +2,9 @@
 //! and the checkpoints a rollback reads. One small edit to `src/greet.rs` runs
 //! through all of them, so the Kotlin side decodes a realistic diff, not a stub.
 
-use yaca_core::change::{ChangeKind, DiffLine, FileDiff, FileFact, FileView, Hunk, LineKind, Span, ViewSegment};
+use yaca_core::change::{
+    ChangeKind, DiffLine, FileDiff, FileFact, FileView, Hunk, LineKind, Span, ViewSegment,
+};
 use yaca_core::checkpoint::{CheckpointChange, CheckpointSummary};
 
 use crate::ids;
@@ -38,9 +40,27 @@ pub fn greet_hunks() -> Vec<Hunk> {
             new_start: 1,
             new_lines: 3,
             lines: vec![
-                line(LineKind::Context, Some(1), Some(1), "pub fn greet() -> &'static str {", vec![]),
-                line(LineKind::Del, Some(2), None, "    \"hello\"", vec![span(4, 11)]),
-                line(LineKind::Add, None, Some(2), "    \"hello, world\"", vec![span(4, 18)]),
+                line(
+                    LineKind::Context,
+                    Some(1),
+                    Some(1),
+                    "pub fn greet() -> &'static str {",
+                    vec![],
+                ),
+                line(
+                    LineKind::Del,
+                    Some(2),
+                    None,
+                    "    \"hello\"",
+                    vec![span(4, 11)],
+                ),
+                line(
+                    LineKind::Add,
+                    None,
+                    Some(2),
+                    "    \"hello, world\"",
+                    vec![span(4, 18)],
+                ),
                 line(LineKind::Context, Some(3), Some(3), "}", vec![]),
             ],
         },
@@ -50,7 +70,13 @@ pub fn greet_hunks() -> Vec<Hunk> {
             new_start: 8,
             new_lines: 4,
             lines: vec![
-                line(LineKind::Add, None, Some(8), "pub fn farewell() -> &'static str {", vec![]),
+                line(
+                    LineKind::Add,
+                    None,
+                    Some(8),
+                    "pub fn farewell() -> &'static str {",
+                    vec![],
+                ),
                 line(LineKind::Add, None, Some(9), "    \"bye\"", vec![]),
                 line(LineKind::Add, None, Some(10), "}", vec![]),
                 line(LineKind::Context, Some(8), Some(11), "", vec![]),
@@ -101,8 +127,20 @@ pub fn view_segments() -> Vec<ViewSegment> {
         ViewSegment::Unchanged {
             lines: vec![
                 line(LineKind::Context, Some(4), Some(4), "", vec![]),
-                line(LineKind::Context, Some(5), Some(5), "pub fn main() {", vec![]),
-                line(LineKind::Context, Some(6), Some(6), "    println!(\"{}\", greet());", vec![]),
+                line(
+                    LineKind::Context,
+                    Some(5),
+                    Some(5),
+                    "pub fn main() {",
+                    vec![],
+                ),
+                line(
+                    LineKind::Context,
+                    Some(6),
+                    Some(6),
+                    "    println!(\"{}\", greet());",
+                    vec![],
+                ),
                 line(LineKind::Context, Some(7), Some(7), "}", vec![]),
             ],
         },
@@ -141,7 +179,12 @@ pub fn checkpoint_summaries() -> Vec<CheckpointSummary> {
 pub fn checkpoint_changes() -> Vec<CheckpointChange> {
     variants::change_kinds()
         .into_iter()
-        .zip(["src/greet.rs", "docs/notes.md", "old/legacy.txt", "src/hello.rs"])
+        .zip([
+            "src/greet.rs",
+            "docs/notes.md",
+            "old/legacy.txt",
+            "src/hello.rs",
+        ])
         .map(|(kind, path)| CheckpointChange {
             path: path.to_owned(),
             kind,

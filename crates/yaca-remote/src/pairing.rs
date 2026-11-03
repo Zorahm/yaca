@@ -14,9 +14,9 @@ use qrcode::QrCode;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::error::Error;
 use crate::files::epoch_ms;
 use crate::secret::{constant_time_eq, random_token};
-use crate::error::Error;
 
 pub const PAIRING_TTL: Duration = Duration::from_secs(300);
 /// 128 bits: enough that a code cannot be guessed inside its lifetime, even
@@ -55,9 +55,12 @@ impl Pairing {
     /// the screen shows one code at a time, and that is the one that should work.
     pub fn issue(&self) -> Result<(String, SystemTime), Error> {
         let code = random_token(CODE_BYTES)?;
-        let expires = SystemTime::now()
-            .checked_add(self.ttl)
-            .ok_or_else(|| Error::Clock(format!("pairing lifetime of {:?} does not fit the clock", self.ttl)))?;
+        let expires = SystemTime::now().checked_add(self.ttl).ok_or_else(|| {
+            Error::Clock(format!(
+                "pairing lifetime of {:?} does not fit the clock",
+                self.ttl
+            ))
+        })?;
         *self.lock() = Some(Active {
             code: code.clone(),
             expires,
@@ -227,7 +230,9 @@ mod tests {
     fn a_code_is_long_enough_and_url_safe() {
         let (code, _) = Pairing::new().issue().unwrap();
         assert_eq!(code.len(), 22);
-        assert!(code.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+        assert!(code
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
     }
 
     #[test]

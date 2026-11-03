@@ -136,12 +136,26 @@ impl Summary {
 /// The table on stdout. Plain text, aligned by character count so the Cyrillic
 /// in failure notes does not push the columns out.
 pub fn render_table(summary: &Summary) -> String {
-    let header = ["TASK", "RESULT", "STOP", "TURNS", "TOOLS", "IN/OUT TOKENS", "COST", "TIME", "NOTE"];
+    let header = [
+        "TASK",
+        "RESULT",
+        "STOP",
+        "TURNS",
+        "TOOLS",
+        "IN/OUT TOKENS",
+        "COST",
+        "TIME",
+        "NOTE",
+    ];
     let mut rows: Vec<Vec<String>> = vec![header.iter().map(|s| s.to_string()).collect()];
     for t in &summary.tasks {
         rows.push(vec![
             t.task.clone(),
-            if t.solved { "solved".into() } else { "FAILED".into() },
+            if t.solved {
+                "solved".into()
+            } else {
+                "FAILED".into()
+            },
             t.stop_reason.clone(),
             t.turns.to_string(),
             t.tool_calls_total.to_string(),
@@ -245,7 +259,10 @@ mod tests {
         });
         t.judge();
         assert!(!t.solved);
-        assert!(t.failure.unwrap().starts_with("expect: src/a.rs does not contain"));
+        assert!(t
+            .failure
+            .unwrap()
+            .starts_with("expect: src/a.rs does not contain"));
     }
 
     #[test]
@@ -261,9 +278,23 @@ mod tests {
     fn the_result_json_has_the_fields_a_comparison_reads() {
         let value = serde_json::to_value(passing()).unwrap();
         for key in [
-            "task", "solved", "provider", "model", "mode", "stopReason", "turns",
-            "toolCalls", "toolCallsTotal", "tokens", "costUsd", "wallMs",
-            "permissionsDenied", "questionsDismissed", "errors", "checks", "failure",
+            "task",
+            "solved",
+            "provider",
+            "model",
+            "mode",
+            "stopReason",
+            "turns",
+            "toolCalls",
+            "toolCallsTotal",
+            "tokens",
+            "costUsd",
+            "wallMs",
+            "permissionsDenied",
+            "questionsDismissed",
+            "errors",
+            "checks",
+            "failure",
         ] {
             assert!(value.get(key).is_some(), "missing `{key}` in {value}");
         }

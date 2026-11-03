@@ -276,7 +276,13 @@ fn write_wire_fixtures() {
         Some("type"),
         expected::CLIENT_MESSAGES,
     );
-    check_names("Call", &calls, names::call_name, Some("kind"), expected::CALLS);
+    check_names(
+        "Call",
+        &calls,
+        names::call_name,
+        Some("kind"),
+        expected::CALLS,
+    );
     check_names(
         "ServerMessage",
         &server,
@@ -284,7 +290,13 @@ fn write_wire_fixtures() {
         Some("type"),
         expected::SERVER_MESSAGES,
     );
-    check_names("Reply", &replies, names::reply_name, Some("kind"), expected::REPLIES);
+    check_names(
+        "Reply",
+        &replies,
+        names::reply_name,
+        Some("kind"),
+        expected::REPLIES,
+    );
     check_names(
         "CallResult",
         &results,

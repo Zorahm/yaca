@@ -50,5 +50,8 @@ async fn every_starting_tree_fails_its_check() {
         }
     }
     let _ = std::fs::remove_dir_all(&work);
-    assert!(solved_already.is_empty(), "already passing before any work: {solved_already:?}");
+    assert!(
+        solved_already.is_empty(),
+        "already passing before any work: {solved_already:?}"
+    );
 }

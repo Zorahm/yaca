@@ -52,7 +52,9 @@ impl ChatsWatch {
         let live = conn.shared.host.live_chats();
         self.follow(&live, conn);
         let chats = live.iter().map(summary).collect();
-        conn.outbox.send(ServerMessage::ChatsChanged { chats }).await
+        conn.outbox
+            .send(ServerMessage::ChatsChanged { chats })
+            .await
     }
 
     /// Stops the watchers of chats that closed and starts one for each chat that
@@ -77,7 +79,12 @@ impl ChatsWatch {
             // Subscribed before the list that tells the phone about this chat goes
             // out, so a turn that starts once the phone knows of the chat is seen.
             let events = chat.handle.subscribe();
-            tokio::spawn(attention::watch(chat.clone(), events, conn.outbox.clone(), stop.clone()));
+            tokio::spawn(attention::watch(
+                chat.clone(),
+                events,
+                conn.outbox.clone(),
+                stop.clone(),
+            ));
             self.attention.insert(
                 id.clone(),
                 Watched {

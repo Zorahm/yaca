@@ -77,7 +77,11 @@ pub fn machine_name() -> String {
         .ok()
         .or_else(|| std::env::var("HOSTNAME").ok())
         .and_then(non_empty)
-        .or_else(|| std::fs::read_to_string("/etc/hostname").ok().and_then(non_empty))
+        .or_else(|| {
+            std::fs::read_to_string("/etc/hostname")
+                .ok()
+                .and_then(non_empty)
+        })
         .unwrap_or_else(|| "Yaca".to_string())
 }
 

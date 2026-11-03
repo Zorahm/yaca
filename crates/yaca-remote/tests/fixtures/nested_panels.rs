@@ -90,23 +90,18 @@ pub fn permission_requests() -> Vec<PermissionRequest> {
         .collect();
 
     let first_invariant = requests.len() as u32 + 1;
-    requests.extend(
-        variants::invariants()
-            .into_iter()
-            .enumerate()
-            .map(|(i, invariant): (usize, Invariant)| {
-                PermissionRequest {
-                    note: Some(".".to_owned()),
-                    invariant: Some(invariant),
-                    ..blank_request(
-                        first_invariant + i as u32,
-                        PermissionKind::RunCommand,
-                        "git",
-                        "git commit -m \"Release notes\"",
-                    )
-                }
-            }),
-    );
+    requests.extend(variants::invariants().into_iter().enumerate().map(
+        |(i, invariant): (usize, Invariant)| PermissionRequest {
+            note: Some(".".to_owned()),
+            invariant: Some(invariant),
+            ..blank_request(
+                first_invariant + i as u32,
+                PermissionKind::RunCommand,
+                "git",
+                "git commit -m \"Release notes\"",
+            )
+        },
+    ));
 
     // Every optional field set, then none set.
     let n = requests.len() as u32 + 1;

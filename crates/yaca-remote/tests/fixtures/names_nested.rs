@@ -2,6 +2,7 @@
 //! Same rule as `names.rs`: every variant is listed, no wildcard arm, so a new
 //! variant breaks the build until the builders in `variants.rs` produce it.
 
+use yaca_core::change::ViewSegment;
 use yaca_core::change::{ChangeKind, LineKind};
 use yaca_core::checkpoint::CheckpointReason;
 use yaca_core::event::{StopReason, TodoStatus};
@@ -13,7 +14,6 @@ use yaca_core::process::ProcessState;
 use yaca_core::question::QuestionReply;
 use yaca_core::usage::ContextSource;
 use yaca_remote::protocol::ErrorCode;
-use yaca_core::change::ViewSegment;
 
 pub(crate) fn stop_reason_name(reason: &StopReason) -> &'static str {
     match reason {
@@ -168,6 +168,7 @@ pub(crate) fn context_source_name(source: &ContextSource) -> &'static str {
         ContextSource::ProviderReported => "provider_reported",
         ContextSource::DetectedAllocated => "detected_allocated",
         ContextSource::DetectedMaximum => "detected_maximum",
+        ContextSource::Hand => "hand",
     }
 }
 

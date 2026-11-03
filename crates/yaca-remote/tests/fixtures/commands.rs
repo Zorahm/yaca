@@ -39,9 +39,7 @@ pub fn all() -> Vec<Command> {
         Command::ReadFileView {
             path: "src/greet.rs".to_owned(),
         },
-        Command::CancelQueued {
-            id: ids::queued(1),
-        },
+        Command::CancelQueued { id: ids::queued(1) },
         Command::SearchFiles {
             query: "gre".to_owned(),
         },
@@ -71,33 +69,32 @@ pub fn all() -> Vec<Command> {
             .map(|mode| Command::SetMode { mode }),
     );
     commands.extend(
+        variants::profiles()
+            .into_iter()
+            .map(|profile| Command::SetProfile { profile }),
+    );
+    commands.extend(
         variants::efforts()
             .into_iter()
             .map(|effort| Command::SetEffort { effort }),
     );
-    commands.extend(
-        variants::permission_answers()
-            .into_iter()
-            .map(|answer| Command::AnswerPermission {
-                request_id: ids::request(1),
-                answer,
-            }),
-    );
-    commands.extend(
-        variants::question_replies()
-            .into_iter()
-            .map(|answer| Command::AnswerQuestion {
-                request_id: ids::request(2),
-                answer,
-            }),
-    );
-    commands.extend(
-        variants::elicitation_replies()
-            .into_iter()
-            .map(|reply| Command::AnswerElicitation {
-                request_id: ids::request(3),
-                reply,
-            }),
-    );
+    commands.extend(variants::permission_answers().into_iter().map(|answer| {
+        Command::AnswerPermission {
+            request_id: ids::request(1),
+            answer,
+        }
+    }));
+    commands.extend(variants::question_replies().into_iter().map(|answer| {
+        Command::AnswerQuestion {
+            request_id: ids::request(2),
+            answer,
+        }
+    }));
+    commands.extend(variants::elicitation_replies().into_iter().map(|reply| {
+        Command::AnswerElicitation {
+            request_id: ids::request(3),
+            reply,
+        }
+    }));
     commands
 }

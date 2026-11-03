@@ -16,8 +16,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::error::Error;
-use crate::protocol::DeviceId;
 use crate::files::{epoch_ms, load_json_or_default, save_json};
+use crate::protocol::DeviceId;
 use crate::secret::{constant_time_eq, random_token, sha256_hex};
 
 const FILE: &str = "devices.json";
@@ -252,7 +252,10 @@ mod tests {
             devices.register("Pixel 8").unwrap()
         };
         let text = std::fs::read_to_string(dir.path().join(FILE)).unwrap();
-        assert!(!text.contains(&token), "devices.json must not contain the token");
+        assert!(
+            !text.contains(&token),
+            "devices.json must not contain the token"
+        );
         assert!(text.contains("tokenHash"));
 
         let reloaded = Devices::load(dir.path());
@@ -309,7 +312,9 @@ mod tests {
     fn random_token_is_base64url_of_the_requested_size() {
         let token = random_token(16).unwrap();
         assert_eq!(token.len(), 22);
-        assert!(token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+        assert!(token
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
         assert_ne!(token, random_token(16).unwrap());
     }
 

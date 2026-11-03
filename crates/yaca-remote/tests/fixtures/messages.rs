@@ -5,11 +5,11 @@
 
 use yaca_core::event::AgentEvent;
 use yaca_core::Command;
+use yaca_core::{Effort, Mode, Profile};
 use yaca_remote::protocol::{
-    CallError, CallResult, Call, ChatSummary, ClientMessage, DeviceId, HostInfo, Reply,
+    Call, CallError, CallResult, ChatSummary, ClientMessage, DeviceId, HostInfo, Reply,
     ServerMessage, Startup, PROTOCOL_VERSION,
 };
-use yaca_core::{Effort, Mode};
 
 use crate::ids::{self, PROJECT};
 use crate::nested_session;
@@ -26,6 +26,7 @@ fn host_info() -> HostInfo {
 fn startup() -> Startup {
     Startup {
         mode: Mode::Auto,
+        profile: Profile::Code,
         provider: "anthropic".to_owned(),
         model: "model-0".to_owned(),
         effort: Effort::High,
@@ -47,12 +48,15 @@ pub fn client_messages() -> Vec<ClientMessage> {
             protocol: PROTOCOL_VERSION,
         },
     ];
-    messages.extend(calls().into_iter().enumerate().map(|(i, call)| {
-        ClientMessage::Request {
-            id: i as u64 + 1,
-            call,
-        }
-    }));
+    messages.extend(
+        calls()
+            .into_iter()
+            .enumerate()
+            .map(|(i, call)| ClientMessage::Request {
+                id: i as u64 + 1,
+                call,
+            }),
+    );
     messages
 }
 
@@ -213,23 +217,29 @@ pub fn server_messages() -> Vec<ServerMessage> {
             .into_iter()
             .map(|reason| ServerMessage::Refused { reason }),
     );
-    messages.extend(replies().into_iter().enumerate().map(|(i, reply)| {
-        ServerMessage::Response {
-            id: i as u64 + 1,
-            result: CallResult::Ok { reply },
-        }
-    }));
-    messages.extend(variants::error_codes().into_iter().enumerate().map(|(i, code)| {
-        ServerMessage::Response {
-            id: 100 + i as u64,
-            result: CallResult::Error {
-                error: CallError {
-                    code,
-                    message: "The chat is not open on this host.".to_owned(),
+    messages.extend(
+        replies()
+            .into_iter()
+            .enumerate()
+            .map(|(i, reply)| ServerMessage::Response {
+                id: i as u64 + 1,
+                result: CallResult::Ok { reply },
+            }),
+    );
+    messages.extend(
+        variants::error_codes()
+            .into_iter()
+            .enumerate()
+            .map(|(i, code)| ServerMessage::Response {
+                id: 100 + i as u64,
+                result: CallResult::Error {
+                    error: CallError {
+                        code,
+                        message: "The chat is not open on this host.".to_owned(),
+                    },
                 },
-            },
-        }
-    }));
+            }),
+    );
     messages.push(ServerMessage::Frame {
         session: ids::session(1),
         epoch: 1,

@@ -39,7 +39,10 @@ pub fn startup(addr: SocketAddr, fingerprint: &str, projects: &[PathBuf], lan: &
 pub fn pairing(offer: &PairingOffer) -> Result<()> {
     println!("{}", qr_text(&offer.uri)?);
     println!("{}", offer.uri);
-    println!("pairing code expires in {} s, and works once", remaining_secs(offer.expires_at));
+    println!(
+        "pairing code expires in {} s, and works once",
+        remaining_secs(offer.expires_at)
+    );
     Ok(())
 }
 
@@ -48,7 +51,12 @@ pub fn devices(list: &[DeviceSummary]) {
         println!("no devices paired");
     }
     for device in list {
-        println!("{}  {}  last seen {}", device.id, device.name, ago(device.last_seen));
+        println!(
+            "{}  {}  last seen {}",
+            device.id,
+            device.name,
+            ago(device.last_seen)
+        );
     }
 }
 

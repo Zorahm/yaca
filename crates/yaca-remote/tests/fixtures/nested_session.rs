@@ -63,6 +63,8 @@ pub fn model_infos() -> Vec<ModelInfo> {
             supports_thinking: true,
             context_source,
             supports_images: i % 2 == 0,
+            pricing_by_hand: false,
+            by_hand: false,
         })
         .collect()
 }
@@ -121,6 +123,8 @@ pub fn session_states() -> Vec<SessionState> {
                 provider: "anthropic".to_owned(),
                 model: format!("model-{i}"),
                 mode,
+                // Every profile is written, alternating with the mode.
+                profile: variants::profiles()[i % 2],
                 effort,
                 busy: i % 2 == 0,
                 bypass: i == 3,

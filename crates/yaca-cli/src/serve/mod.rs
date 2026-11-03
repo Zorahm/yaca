@@ -127,9 +127,20 @@ mod tests {
     #[test]
     fn projects_port_bind_and_pair_are_read() {
         let options = serve_options(&[
-            "yaca", "serve", "a", "b", "--port", "5000", "--bind", "127.0.0.1", "--pair",
+            "yaca",
+            "serve",
+            "a",
+            "b",
+            "--port",
+            "5000",
+            "--bind",
+            "127.0.0.1",
+            "--pair",
         ]);
-        assert_eq!(options.projects, vec![PathBuf::from("a"), PathBuf::from("b")]);
+        assert_eq!(
+            options.projects,
+            vec![PathBuf::from("a"), PathBuf::from("b")]
+        );
         assert_eq!(options.port, Some(5000));
         assert_eq!(options.bind, IpAddr::V4(Ipv4Addr::LOCALHOST));
         assert!(options.pair);

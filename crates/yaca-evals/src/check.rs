@@ -90,13 +90,27 @@ pub fn evaluate_expect(root: &Path, expect: &Expect) -> ExpectReport {
                 }
                 Err(e) => (false, format!("cannot read {path}: {e}")),
             };
-            ExpectReport { path: path.clone(), kind: "contains", passed, detail }
+            ExpectReport {
+                path: path.clone(),
+                kind: "contains",
+                passed,
+                detail,
+            }
         }
         Expect::Absent { path } => {
             // `symlink_metadata` so a dangling link still counts as present.
             let present = std::fs::symlink_metadata(root.join(path)).is_ok();
-            let detail = if present { format!("{path} still exists") } else { "absent".into() };
-            ExpectReport { path: path.clone(), kind: "absent", passed: !present, detail }
+            let detail = if present {
+                format!("{path} still exists")
+            } else {
+                "absent".into()
+            };
+            ExpectReport {
+                path: path.clone(),
+                kind: "absent",
+                passed: !present,
+                detail,
+            }
         }
     }
 }
@@ -174,15 +188,24 @@ mod tests {
     }
 
     fn check(command: &str, cwd: &str) -> Check {
-        Check { command: command.into(), cwd: cwd.into() }
+        Check {
+            command: command.into(),
+            cwd: cwd.into(),
+        }
     }
 
     #[test]
     fn contains_passes_only_when_the_text_is_there() {
         let root = tree("contains");
         std::fs::write(root.join("a.rs"), "pub fn median() {}").unwrap();
-        let yes = Expect::Contains { path: "a.rs".into(), text: "fn median".into() };
-        let no = Expect::Contains { path: "a.rs".into(), text: "fn mean".into() };
+        let yes = Expect::Contains {
+            path: "a.rs".into(),
+            text: "fn median".into(),
+        };
+        let no = Expect::Contains {
+            path: "a.rs".into(),
+            text: "fn mean".into(),
+        };
         assert!(evaluate_expect(&root, &yes).passed);
         let miss = evaluate_expect(&root, &no);
         assert!(!miss.passed);
@@ -194,7 +217,10 @@ mod tests {
         let root = tree("contains-missing");
         let r = evaluate_expect(
             &root,
-            &Expect::Contains { path: "nope.rs".into(), text: "x".into() },
+            &Expect::Contains {
+                path: "nope.rs".into(),
+                text: "x".into(),
+            },
         );
         assert!(!r.passed);
         assert!(r.detail.contains("cannot read"));
@@ -204,8 +230,12 @@ mod tests {
     fn absent_passes_only_when_the_file_is_gone() {
         let root = tree("absent");
         std::fs::write(root.join("old.rs"), "").unwrap();
-        let gone = Expect::Absent { path: "gone.rs".into() };
-        let still = Expect::Absent { path: "old.rs".into() };
+        let gone = Expect::Absent {
+            path: "gone.rs".into(),
+        };
+        let still = Expect::Absent {
+            path: "old.rs".into(),
+        };
         assert!(evaluate_expect(&root, &gone).passed);
         assert!(!evaluate_expect(&root, &still).passed);
     }
@@ -248,8 +278,17 @@ mod tests {
     #[tokio::test]
     async fn output_is_captured_for_the_report() {
         let root = tree("output");
-        let r = run_command(&root, &check("echo hello-from-check", "."), Duration::from_secs(60)).await;
-        assert!(r.output_tail.contains("hello-from-check"), "{}", r.output_tail);
+        let r = run_command(
+            &root,
+            &check("echo hello-from-check", "."),
+            Duration::from_secs(60),
+        )
+        .await;
+        assert!(
+            r.output_tail.contains("hello-from-check"),
+            "{}",
+            r.output_tail
+        );
     }
 
     #[test]

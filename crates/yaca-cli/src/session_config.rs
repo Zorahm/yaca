@@ -16,7 +16,7 @@ use yaca_core::provider::registry::{self, Providers};
 use yaca_core::provider::{self, Provider};
 use yaca_core::router::{self, ROUTER_ID};
 use yaca_core::secrets;
-use yaca_core::{Effort, Mode, SessionConfig};
+use yaca_core::{Effort, Mode, Profile, SessionConfig};
 
 /// What the caller chooses on top of the project's settings. A field left at its
 /// empty value leaves the project, or the recorded chat, in charge.
@@ -27,6 +27,8 @@ pub struct Choice {
     pub model: String,
     /// `None` keeps the project's mode.
     pub mode: Option<Mode>,
+    /// `None` keeps the project's profile: code, or documents.
+    pub profile: Option<Profile>,
     /// `None` keeps the project's effort.
     pub effort: Option<Effort>,
     /// A recorded chat to continue. Needs `journal`, which is set for it.
@@ -39,7 +41,10 @@ pub struct Choice {
 
 /// The config and the provider a chat in `project` starts with. The error is
 /// English text for the person: an unknown provider, a setting that cannot be read.
-pub fn session_config(project: &Path, choose: Choice) -> Result<(SessionConfig, Arc<dyn Provider>)> {
+pub fn session_config(
+    project: &Path,
+    choose: Choice,
+) -> Result<(SessionConfig, Arc<dyn Provider>)> {
     // The same `providers.json` the window reads: a gateway configured there
     // must answer from the CLI too, or the core cannot be run without the
     // interface.
@@ -53,8 +58,18 @@ pub fn session_config(project: &Path, choose: Choice) -> Result<(SessionConfig, 
     config.lsp_servers = yaca_core::lsp::config::load_global(&config_dir)?;
     config.lsp_autodetect = true;
     config.user_skills = yaca_core::skills::user_dirs(&config_dir);
+    // The office skills Yaca ships with, into the human's own folder. A
+    // folder that cannot be written is not a reason to refuse the chat: the
+    // session works, only without the Word, Excel and PowerPoint guides.
+    if let Some(skills) = config.user_skills.first() {
+        if let Err(why) = yaca_core::skills::bundled::install(skills) {
+            eprintln!("warning: {why}");
+        }
+    }
     config.user_agents = yaca_core::agents::user_dirs(&config_dir);
-    config.plugins = yaca_core::plugin::PluginSources::standard(&config_dir).load().enabled();
+    config.plugins = yaca_core::plugin::PluginSources::standard(&config_dir)
+        .load()
+        .enabled();
     config.mcp_approvals = Some(config_dir.clone());
     // The window's chats folder, so that a session recorded here is listed
     // there, and one held there can be resumed here.
@@ -72,12 +87,19 @@ pub fn session_config(project: &Path, choose: Choice) -> Result<(SessionConfig, 
     if let Some(mode) = choose.mode {
         config.mode = mode;
     }
+    if let Some(profile) = choose.profile {
+        config.profile = profile;
+    }
     if let Some(effort) = choose.effort {
         config.effort = effort;
     }
     // The small model the `Decision` tool asks, when the Decision provider or
     // the router has one: the same rule the window applies, from the same place.
     config.decision = router::attach::decision_setup(&config_dir, &providers);
+    config.decision_pricing = config
+        .decision
+        .as_ref()
+        .and_then(|setup| router::attach::setup_pricing(&providers, setup));
     let provider = if config.provider == ROUTER_ID {
         router::attach::attach(&config_dir, &providers, &mut config)?
     } else {

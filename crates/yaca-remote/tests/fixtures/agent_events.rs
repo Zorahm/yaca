@@ -212,13 +212,15 @@ fn conversation() -> Vec<AgentEvent> {
     ];
 
     // The same edit under every kind of file change, the moved one with its origin.
-    events.extend(variants::change_kinds().into_iter().map(|kind| {
-        AgentEvent::FileChanged {
-            call_id: ids::call(1),
-            fact: nested_change::fact("src/greet.rs", kind),
-            diff: nested_change::greet_diff(),
-        }
-    }));
+    events.extend(
+        variants::change_kinds()
+            .into_iter()
+            .map(|kind| AgentEvent::FileChanged {
+                call_id: ids::call(1),
+                fact: nested_change::fact("src/greet.rs", kind),
+                diff: nested_change::greet_diff(),
+            }),
+    );
     events.push(AgentEvent::FileChanged {
         call_id: ids::call(7),
         fact: nested_change::fact("src/big.rs", ChangeKind::Modified),

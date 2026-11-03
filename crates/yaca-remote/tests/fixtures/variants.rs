@@ -17,6 +17,7 @@ use yaca_core::permission::{Invariant, PermissionAnswer, PermissionKind, ScopeKe
 use yaca_core::process::ProcessState;
 use yaca_core::question::QuestionReply;
 use yaca_core::usage::ContextSource;
+use yaca_core::Profile;
 use yaca_remote::protocol::{Attention, ErrorCode, Refusal, PROTOCOL_VERSION};
 
 pub fn stop_reasons() -> Vec<StopReason> {
@@ -45,11 +46,19 @@ pub fn permission_kinds() -> Vec<PermissionKind> {
 
 pub fn scope_keys() -> Vec<ScopeKey> {
     vec![
-        ScopeKey::Tool { name: "Edit".into() },
+        ScopeKey::Tool {
+            name: "Edit".into(),
+        },
         ScopeKey::Directory { path: "src".into() },
-        ScopeKey::CommandPrefix { prefix: "cargo".into() },
-        ScopeKey::Domain { host: "docs.rs".into() },
-        ScopeKey::McpServer { server: "asana".into() },
+        ScopeKey::CommandPrefix {
+            prefix: "cargo".into(),
+        },
+        ScopeKey::Domain {
+            host: "docs.rs".into(),
+        },
+        ScopeKey::McpServer {
+            server: "asana".into(),
+        },
     ]
 }
 
@@ -63,7 +72,9 @@ pub fn permission_answers() -> Vec<PermissionAnswer> {
             reason: Some("use the existing helper".into()),
         },
         PermissionAnswer::DenyAlways {
-            scope: ScopeKey::CommandPrefix { prefix: "rm".into() },
+            scope: ScopeKey::CommandPrefix {
+                prefix: "rm".into(),
+            },
             reason: None,
         },
     ]
@@ -129,7 +140,13 @@ pub fn modes() -> Vec<Mode> {
 }
 
 pub fn efforts() -> Vec<Effort> {
-    vec![Effort::Low, Effort::Medium, Effort::High, Effort::Extra, Effort::Max]
+    vec![
+        Effort::Low,
+        Effort::Medium,
+        Effort::High,
+        Effort::Extra,
+        Effort::Max,
+    ]
 }
 
 pub fn line_kinds() -> Vec<LineKind> {
@@ -159,7 +176,16 @@ pub fn lsp_statuses() -> Vec<LspStatus> {
 }
 
 pub fn todo_statuses() -> Vec<TodoStatus> {
-    vec![TodoStatus::Pending, TodoStatus::InProgress, TodoStatus::Completed]
+    vec![
+        TodoStatus::Pending,
+        TodoStatus::InProgress,
+        TodoStatus::Completed,
+    ]
+}
+
+/// Both profiles: the state is written with each of them.
+pub fn profiles() -> Vec<Profile> {
+    Profile::ALL.to_vec()
 }
 
 pub fn context_sources() -> Vec<ContextSource> {
@@ -168,6 +194,7 @@ pub fn context_sources() -> Vec<ContextSource> {
         ContextSource::ProviderReported,
         ContextSource::DetectedAllocated,
         ContextSource::DetectedMaximum,
+        ContextSource::Hand,
     ]
 }
 
@@ -205,7 +232,11 @@ pub fn mcp_transports() -> Vec<McpTransport> {
 }
 
 pub fn error_codes() -> Vec<ErrorCode> {
-    vec![ErrorCode::ChatNotOpen, ErrorCode::BadRequest, ErrorCode::Host]
+    vec![
+        ErrorCode::ChatNotOpen,
+        ErrorCode::BadRequest,
+        ErrorCode::Host,
+    ]
 }
 
 pub fn refusals() -> Vec<Refusal> {

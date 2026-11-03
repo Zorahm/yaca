@@ -7,18 +7,18 @@ use yaca_core::event::AgentEvent;
 use yaca_core::id::SessionId;
 use yaca_core::Command;
 use yaca_remote::protocol::{
-    Attention, Call, CallResult, ClientMessage, DeviceId, ErrorCode, Refusal, Reply,
-    ServerMessage, PROTOCOL_VERSION,
+    Attention, Call, CallResult, ClientMessage, DeviceId, ErrorCode, Refusal, Reply, ServerMessage,
+    PROTOCOL_VERSION,
 };
 
-use common::{
-    code_of, connect, hello_message, pair_message, start, Client, TempDir, TestHost,
-};
+use common::{code_of, connect, hello_message, pair_message, start, Client, TempDir, TestHost};
 
 /// Pairs a phone and disconnects it, returning the credentials it was given.
 async fn pair(server: &yaca_remote::RemoteServer) -> (DeviceId, String) {
     let code = code_of(&server.offer_pairing().unwrap().uri);
-    let mut phone = connect(server.local_addr(), server.fingerprint()).await.unwrap();
+    let mut phone = connect(server.local_addr(), server.fingerprint())
+        .await
+        .unwrap();
     phone.send(&pair_message(&code)).await;
     match phone.read().await {
         Some(ServerMessage::Paired {
@@ -30,7 +30,9 @@ async fn pair(server: &yaca_remote::RemoteServer) -> (DeviceId, String) {
 
 /// A connection that has been welcomed back with the given credentials.
 async fn hello(server: &yaca_remote::RemoteServer, device: &DeviceId, token: &str) -> Client {
-    let mut phone = connect(server.local_addr(), server.fingerprint()).await.unwrap();
+    let mut phone = connect(server.local_addr(), server.fingerprint())
+        .await
+        .unwrap();
     phone.send(&hello_message(device.clone(), token)).await;
     match phone.read().await {
         Some(ServerMessage::Welcome { .. }) => phone,
@@ -45,7 +47,9 @@ async fn pairing_once_then_hello_then_refusals() {
     let offer = server.offer_pairing().unwrap();
     let code = code_of(&offer.uri);
 
-    let mut phone = connect(server.local_addr(), server.fingerprint()).await.unwrap();
+    let mut phone = connect(server.local_addr(), server.fingerprint())
+        .await
+        .unwrap();
     phone.send(&pair_message(&code)).await;
     let (device, token) = match phone.read().await {
         Some(ServerMessage::Paired {
@@ -62,7 +66,9 @@ async fn pairing_once_then_hello_then_refusals() {
     drop(phone);
 
     // The code is spent by the pairing above.
-    let mut again = connect(server.local_addr(), server.fingerprint()).await.unwrap();
+    let mut again = connect(server.local_addr(), server.fingerprint())
+        .await
+        .unwrap();
     again.send(&pair_message(&code)).await;
     assert_eq!(
         again.read().await,
@@ -74,8 +80,12 @@ async fn pairing_once_then_hello_then_refusals() {
     // The paired device gets in with its token.
     drop(hello(&server, &device, &token).await);
 
-    let mut wrong_token = connect(server.local_addr(), server.fingerprint()).await.unwrap();
-    wrong_token.send(&hello_message(device.clone(), "not the token")).await;
+    let mut wrong_token = connect(server.local_addr(), server.fingerprint())
+        .await
+        .unwrap();
+    wrong_token
+        .send(&hello_message(device.clone(), "not the token"))
+        .await;
     assert_eq!(
         wrong_token.read().await,
         Some(ServerMessage::Refused {
@@ -83,7 +93,9 @@ async fn pairing_once_then_hello_then_refusals() {
         })
     );
 
-    let mut old = connect(server.local_addr(), server.fingerprint()).await.unwrap();
+    let mut old = connect(server.local_addr(), server.fingerprint())
+        .await
+        .unwrap();
     old.send(&ClientMessage::Hello {
         device_id: device,
         token,
@@ -109,7 +121,9 @@ async fn a_client_pinning_another_fingerprint_fails_the_tls_handshake() {
     assert!(connect(server.local_addr(), &wrong).await.is_err());
 
     // The same server with the right pin is reachable, so the failure above was the pin.
-    assert!(connect(server.local_addr(), server.fingerprint()).await.is_ok());
+    assert!(connect(server.local_addr(), server.fingerprint())
+        .await
+        .is_ok());
 }
 
 #[tokio::test]
@@ -199,7 +213,10 @@ async fn an_attached_chat_streams_its_turn_and_asks_for_attention() {
             _ => {}
         }
     }
-    assert!(text.contains("Hello from the mock."), "streamed text was {text:?}");
+    assert!(
+        text.contains("Hello from the mock."),
+        "streamed text was {text:?}"
+    );
 }
 
 #[tokio::test]
@@ -208,7 +225,9 @@ async fn revoking_a_device_closes_its_connection_and_its_token_stops_working() {
     let server = start(&dir, TestHost::new()).await;
     let code = code_of(&server.offer_pairing().unwrap().uri);
 
-    let mut phone = connect(server.local_addr(), server.fingerprint()).await.unwrap();
+    let mut phone = connect(server.local_addr(), server.fingerprint())
+        .await
+        .unwrap();
     phone.send(&pair_message(&code)).await;
     let device = match phone.read().await {
         Some(ServerMessage::Paired { device_id, .. }) => device_id,
@@ -219,7 +238,9 @@ async fn revoking_a_device_closes_its_connection_and_its_token_stops_working() {
     phone.read_to_close().await;
 
     let token = "stolen";
-    let mut later = connect(server.local_addr(), server.fingerprint()).await.unwrap();
+    let mut later = connect(server.local_addr(), server.fingerprint())
+        .await
+        .unwrap();
     later.send(&hello_message(device, token)).await;
     assert_eq!(
         later.read().await,
@@ -236,7 +257,9 @@ async fn five_failed_handshakes_refuse_the_sixth_connection_before_it_speaks() {
     let server = start(&dir, TestHost::new()).await;
 
     for _ in 0..5 {
-        let mut attempt = connect(server.local_addr(), server.fingerprint()).await.unwrap();
+        let mut attempt = connect(server.local_addr(), server.fingerprint())
+            .await
+            .unwrap();
         attempt
             .send(&hello_message(DeviceId("nobody".into()), "wrong"))
             .await;
@@ -249,7 +272,9 @@ async fn five_failed_handshakes_refuse_the_sixth_connection_before_it_speaks() {
     }
 
     // Nothing is sent: the refusal comes before any message is read.
-    let mut sixth = connect(server.local_addr(), server.fingerprint()).await.unwrap();
+    let mut sixth = connect(server.local_addr(), server.fingerprint())
+        .await
+        .unwrap();
     assert_eq!(
         sixth.read().await,
         Some(ServerMessage::Refused {

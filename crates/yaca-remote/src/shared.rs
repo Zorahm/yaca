@@ -65,7 +65,11 @@ impl Shared {
     /// cancels under the same lock after removing the device. So whichever comes
     /// first, a connection is either refused here or found by the revoke: none can
     /// slip between the two.
-    pub(crate) fn register(self: &Arc<Self>, device: &DeviceId, token: CancellationToken) -> Option<LiveGuard> {
+    pub(crate) fn register(
+        self: &Arc<Self>,
+        device: &DeviceId,
+        token: CancellationToken,
+    ) -> Option<LiveGuard> {
         let mut table = self.table();
         if !self.devices.contains(device) {
             return None;

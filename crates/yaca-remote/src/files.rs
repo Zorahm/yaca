@@ -45,7 +45,10 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), Error> {
 
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
     std::fs::create_dir_all(dir)?;
-    let name = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default();
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy())
+        .unwrap_or_default();
     let tmp = dir.join(format!(".{name}.{}.tmp", uuid::Uuid::new_v4().simple()));
 
     let mut options = std::fs::OpenOptions::new();
@@ -79,7 +82,10 @@ pub(crate) struct TestDir(std::path::PathBuf);
 #[cfg(test)]
 impl TestDir {
     pub(crate) fn new() -> Self {
-        Self(std::env::temp_dir().join(format!("yaca-remote-test-{}", uuid::Uuid::new_v4().simple())))
+        Self(std::env::temp_dir().join(format!(
+            "yaca-remote-test-{}",
+            uuid::Uuid::new_v4().simple()
+        )))
     }
 
     pub(crate) fn path(&self) -> &Path {
@@ -100,4 +106,3 @@ pub(crate) fn epoch_ms(time: SystemTime) -> u64 {
     time.duration_since(UNIX_EPOCH)
         .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
 }
-

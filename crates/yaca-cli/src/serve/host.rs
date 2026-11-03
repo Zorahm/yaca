@@ -30,7 +30,10 @@ pub fn canonical_projects(requested: &[PathBuf]) -> Result<Vec<PathBuf>> {
     let mut projects: Vec<PathBuf> = Vec::new();
     for path in requested {
         let canon = std::fs::canonicalize(path).with_context(|| {
-            format!("project {} does not exist or cannot be opened", path.display())
+            format!(
+                "project {} does not exist or cannot be opened",
+                path.display()
+            )
         })?;
         if !canon.is_dir() {
             bail!("project {} is not a folder", path.display());
@@ -85,7 +88,8 @@ impl CliHost {
     }
 
     fn bump(&self) {
-        self.changed.send_modify(|count| *count = count.wrapping_add(1));
+        self.changed
+            .send_modify(|count| *count = count.wrapping_add(1));
     }
 }
 
@@ -138,8 +142,8 @@ impl Host for CliHost {
                 return Err(format!("there is no recorded chat {id} in {name}"));
             }
         }
-        let (config, provider) = session_config(root, choice_for(startup, resume))
-            .map_err(|e| format!("{e:#}"))?;
+        let (config, provider) =
+            session_config(root, choice_for(startup, resume)).map_err(|e| format!("{e:#}"))?;
         let handle = yaca_core::spawn(config, provider).map_err(|e| e.to_string())?;
         let chat = LiveChat {
             handle: Arc::new(handle),
@@ -188,14 +192,21 @@ impl Host for CliHost {
 /// `yaca serve` starts is journaled, so it can be resumed and is listed by the
 /// window.
 fn choice_for(startup: Option<Startup>, resume: Option<SessionId>) -> Choice {
-    let (provider, model, mode, effort) = match startup {
-        Some(s) => (s.provider, s.model, Some(s.mode), Some(s.effort)),
-        None => (String::new(), String::new(), None, None),
+    let (provider, model, mode, profile, effort) = match startup {
+        Some(s) => (
+            s.provider,
+            s.model,
+            Some(s.mode),
+            Some(s.profile),
+            Some(s.effort),
+        ),
+        None => (String::new(), String::new(), None, None, None),
     };
     Choice {
         provider,
         model,
         mode,
+        profile,
         effort,
         resume,
         journal: true,
@@ -301,7 +312,10 @@ mod tests {
     #[test]
     fn the_listed_name_drops_the_verbatim_prefix_windows_adds() {
         assert_eq!(shown(Path::new(r"\\?\C:\Kod")), r"C:\Kod");
-        assert_eq!(shown(Path::new(r"\\?\UNC\server\share\dir")), r"\\server\share\dir");
+        assert_eq!(
+            shown(Path::new(r"\\?\UNC\server\share\dir")),
+            r"\\server\share\dir"
+        );
         assert_eq!(shown(Path::new("/home/me/project")), "/home/me/project");
     }
 

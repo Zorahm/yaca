@@ -87,20 +87,37 @@ mod tests {
         ];
         assert_eq!(
             reachable(input),
-            vec![v4(192, 168, 1, 20), v4(10, 0, 0, 3), v6("2001:db8::5"), v6("fd00::7")]
+            vec![
+                v4(192, 168, 1, 20),
+                v4(10, 0, 0, 3),
+                v6("2001:db8::5"),
+                v6("fd00::7")
+            ]
         );
     }
 
     #[test]
     fn keeps_the_order_given_within_a_family() {
         let input = [v4(10, 0, 0, 9), v4(10, 0, 0, 2), v4(10, 0, 0, 7)];
-        assert_eq!(reachable(input), vec![v4(10, 0, 0, 9), v4(10, 0, 0, 2), v4(10, 0, 0, 7)]);
+        assert_eq!(
+            reachable(input),
+            vec![v4(10, 0, 0, 9), v4(10, 0, 0, 2), v4(10, 0, 0, 7)]
+        );
     }
 
     #[test]
     fn removes_duplicates_at_their_first_place() {
-        let input = [v4(10, 0, 0, 2), v4(10, 0, 0, 1), v4(10, 0, 0, 2), v6("2001:db8::1"), v6("2001:db8::1")];
-        assert_eq!(reachable(input), vec![v4(10, 0, 0, 2), v4(10, 0, 0, 1), v6("2001:db8::1")]);
+        let input = [
+            v4(10, 0, 0, 2),
+            v4(10, 0, 0, 1),
+            v4(10, 0, 0, 2),
+            v6("2001:db8::1"),
+            v6("2001:db8::1"),
+        ];
+        assert_eq!(
+            reachable(input),
+            vec![v4(10, 0, 0, 2), v4(10, 0, 0, 1), v6("2001:db8::1")]
+        );
     }
 
     #[test]

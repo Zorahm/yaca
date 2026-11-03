@@ -16,7 +16,9 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_util::sync::CancellationToken;
 
 use crate::connection::{Ws, HANDSHAKE_TIMEOUT};
-use crate::protocol::{ClientMessage, DeviceId, HostInfo, Refusal, ServerMessage, PROTOCOL_VERSION};
+use crate::protocol::{
+    ClientMessage, DeviceId, HostInfo, Refusal, ServerMessage, PROTOCOL_VERSION,
+};
 use crate::shared::{LiveGuard, Shared};
 use crate::writer::encode;
 

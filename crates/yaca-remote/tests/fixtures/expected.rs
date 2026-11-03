@@ -53,6 +53,7 @@ pub const COMMANDS: &[&str] = &[
     "sendMessage",
     "cancel",
     "setMode",
+    "setProfile",
     "setModel",
     "setEffort",
     "previewCheckpoint",
@@ -102,14 +103,7 @@ pub const SERVER_MESSAGES: &[&str] = &[
 ];
 
 pub const REPLIES: &[&str] = &[
-    "projects",
-    "sessions",
-    "models",
-    "chats",
-    "feed",
-    "opened",
-    "attached",
-    "done",
+    "projects", "sessions", "models", "chats", "feed", "opened", "attached", "done",
 ];
 
 pub const CALL_RESULTS: &[&str] = &["ok", "error"];
@@ -187,6 +181,7 @@ pub const CONTEXT_SOURCES: &[&str] = &[
     "provider_reported",
     "detected_allocated",
     "detected_maximum",
+    "hand",
 ];
 
 pub const INVARIANTS: &[&str] = &["gitCommit", "gitPush", "gitUnresolved", "gitConfig"];

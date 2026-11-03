@@ -118,8 +118,8 @@ impl Host for TestHost {
             return Err("the test host does not resume chats".into());
         }
         let provider = Arc::new(MockProvider::text("Hello from the mock."));
-        let handle = yaca_core::spawn(SessionConfig::new(project), provider)
-            .map_err(|e| e.to_string())?;
+        let handle =
+            yaca_core::spawn(SessionConfig::new(project), provider).map_err(|e| e.to_string())?;
         let live = LiveChat {
             handle: Arc::new(handle),
             project: project.to_string(),
@@ -197,7 +197,9 @@ impl ServerCertVerifier for Pinned {
         if fingerprint(end_entity.as_ref()) == self.fingerprint {
             Ok(ServerCertVerified::assertion())
         } else {
-            Err(rustls::Error::General("certificate is not the pinned one".into()))
+            Err(rustls::Error::General(
+                "certificate is not the pinned one".into(),
+            ))
         }
     }
 
@@ -207,7 +209,12 @@ impl ServerCertVerifier for Pinned {
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        verify_tls12_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
+        verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
     }
 
     fn verify_tls13_signature(
@@ -216,11 +223,18 @@ impl ServerCertVerifier for Pinned {
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        verify_tls13_signature(message, cert, dss, &self.provider.signature_verification_algorithms)
+        verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        self.provider.signature_verification_algorithms.supported_schemes()
+        self.provider
+            .signature_verification_algorithms
+            .supported_schemes()
     }
 }
 
@@ -299,10 +313,16 @@ impl Client {
     /// held for [`Client::next`], so waiting for one thing never loses another.
     pub async fn wait_for(&mut self, wanted: impl Fn(&ServerMessage) -> bool) -> ServerMessage {
         if let Some(at) = self.pending.iter().position(&wanted) {
-            return self.pending.remove(at).expect("the position was just found");
+            return self
+                .pending
+                .remove(at)
+                .expect("the position was just found");
         }
         loop {
-            let message = self.read().await.expect("the connection closed while waiting");
+            let message = self
+                .read()
+                .await
+                .expect("the connection closed while waiting");
             if wanted(&message) {
                 return message;
             }

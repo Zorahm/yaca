@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use yaca_core::event::{AgentEvent, SessionState};
 use yaca_core::id::{RequestId, SessionId};
 use yaca_core::usage::ModelInfo;
-use yaca_core::{Command, Effort, Mode, SessionMeta, StopReason};
+use yaca_core::{Command, Effort, Mode, Profile, SessionMeta, StopReason};
 
 /// Raised on any change a client of the previous version would misread. A
 /// handshake with another number is refused with
@@ -95,15 +95,23 @@ pub enum Call {
     CloseChat { session: SessionId },
     /// A core command for a running chat. Its effect arrives as events of an
     /// attached chat, not in the reply. → [`Reply::Done`]
-    Send { session: SessionId, command: Command },
+    Send {
+        session: SessionId,
+        command: Command,
+    },
 }
 
-/// What a new chat starts with, chosen before it exists. The same four the
-/// desktop's home screen picks.
+/// What a new chat starts with, chosen before it exists. The same five the
+/// desktop's home screen picks: the mode (how far Yaca may go), the profile
+/// (code or documents), the provider, the model and the effort.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Startup {
     pub mode: Mode,
+    /// Absent from a client written before the field existed: a chat about
+    /// code, as it always was.
+    #[serde(default)]
+    pub profile: Profile,
     pub provider: String,
     pub model: String,
     pub effort: Effort,
@@ -121,10 +129,17 @@ pub enum ServerMessage {
         host: HostInfo,
     },
     /// The answer to a successful [`ClientMessage::Hello`].
-    Welcome { host: HostInfo },
+    Welcome {
+        host: HostInfo,
+    },
     /// The handshake failed. The socket closes after this.
-    Refused { reason: Refusal },
-    Response { id: u64, result: CallResult },
+    Refused {
+        reason: Refusal,
+    },
+    Response {
+        id: u64,
+        result: CallResult,
+    },
     /// Events of an attached chat, in order, batched per frame with
     /// consecutive deltas of one block merged.
     Frame {
@@ -135,10 +150,14 @@ pub enum ServerMessage {
     /// This connection fell behind the chat's stream and events were lost.
     /// The server has stopped sending the chat; the client attaches again to
     /// get a whole feed.
-    Resync { session: SessionId },
+    Resync {
+        session: SessionId,
+    },
     /// The set of chats running on the host changed: one opened or closed,
     /// here, in another client or in the host's window.
-    ChatsChanged { chats: Vec<ChatSummary> },
+    ChatsChanged {
+        chats: Vec<ChatSummary>,
+    },
     /// A running chat needs the human, or finished its turn. Sent for every
     /// running chat, attached or not: this is what the phone notifies about.
     Attention {
@@ -185,14 +204,26 @@ pub enum CallResult {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Reply {
-    Projects { projects: Vec<String> },
-    Sessions { sessions: Vec<SessionMeta> },
-    Models { models: Vec<ModelInfo> },
-    Chats { chats: Vec<ChatSummary> },
-    Feed { events: Vec<AgentEvent> },
+    Projects {
+        projects: Vec<String>,
+    },
+    Sessions {
+        sessions: Vec<SessionMeta>,
+    },
+    Models {
+        models: Vec<ModelInfo>,
+    },
+    Chats {
+        chats: Vec<ChatSummary>,
+    },
+    Feed {
+        events: Vec<AgentEvent>,
+    },
     /// Boxed: a summary is several times the size of every other reply, and
     /// each response would carry that size otherwise.
-    Opened { chat: Box<ChatSummary> },
+    Opened {
+        chat: Box<ChatSummary>,
+    },
     Attached {
         session: SessionId,
         epoch: u32,

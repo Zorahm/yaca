@@ -110,7 +110,10 @@ pub fn load_tasks(root: &Path, only: &[String]) -> Result<Vec<Task>> {
     dirs.sort();
 
     for wanted in only {
-        if !dirs.iter().any(|d| d.file_name().is_some_and(|n| n == wanted.as_str())) {
+        if !dirs
+            .iter()
+            .any(|d| d.file_name().is_some_and(|n| n == wanted.as_str()))
+        {
             bail!("no task named `{wanted}` in {}", root.display());
         }
     }
@@ -159,7 +162,11 @@ fn validate(id: &str, raw: RawTask, dir: PathBuf, repo: PathBuf) -> Result<Task>
     let mode = match raw.mode.as_deref().unwrap_or("agent") {
         "agent" => TaskMode::Agent,
         "plan" => TaskMode::Plan,
-        other => return Err(fail(format!("mode must be `agent` or `plan`, not `{other}`"))),
+        other => {
+            return Err(fail(format!(
+                "mode must be `agent` or `plan`, not `{other}`"
+            )))
+        }
     };
     let timeout_secs = raw.timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS);
     if timeout_secs == 0 {
@@ -174,7 +181,10 @@ fn validate(id: &str, raw: RawTask, dir: PathBuf, repo: PathBuf) -> Result<Task>
             }
             let cwd = c.cwd.unwrap_or_else(|| ".".into());
             safe_relative(&cwd).map_err(|why| fail(format!("check.cwd {why}")))?;
-            Some(Check { command: c.command, cwd })
+            Some(Check {
+                command: c.command,
+                cwd,
+            })
         }
     };
 
@@ -235,9 +245,12 @@ pub fn safe_relative(path: &str) -> std::result::Result<(), String> {
     if p.is_absolute() || p.has_root() {
         return Err(format!("must be relative to the run's tree, not `{path}`"));
     }
-    if p.components()
-        .any(|c| matches!(c, Component::ParentDir | Component::Prefix(_) | Component::RootDir))
-    {
+    if p.components().any(|c| {
+        matches!(
+            c,
+            Component::ParentDir | Component::Prefix(_) | Component::RootDir
+        )
+    }) {
         return Err(format!("must not leave the run's tree: `{path}`"));
     }
     Ok(())
@@ -262,7 +275,10 @@ mod tests {
     #[test]
     fn a_minimal_task_gets_the_defaults() {
         let root = scratch();
-        let dir = task_json(&root, r#"{ "prompt": "do it", "check": { "command": "exit 0" } }"#);
+        let dir = task_json(
+            &root,
+            r#"{ "prompt": "do it", "check": { "command": "exit 0" } }"#,
+        );
         let task = load_task(&dir).unwrap();
         assert_eq!(task.mode, TaskMode::Agent);
         assert_eq!(task.timeout, Duration::from_secs(600));
@@ -286,8 +302,13 @@ mod tests {
         assert_eq!(
             task.expect,
             vec![
-                Expect::Contains { path: "src/a.rs".into(), text: "fn a".into() },
-                Expect::Absent { path: "old.rs".into() },
+                Expect::Contains {
+                    path: "src/a.rs".into(),
+                    text: "fn a".into()
+                },
+                Expect::Absent {
+                    path: "old.rs".into()
+                },
             ]
         );
     }
@@ -296,7 +317,10 @@ mod tests {
     fn an_expect_with_neither_or_both_conditions_is_refused() {
         let root = scratch();
         let neither = task_json(&root, r#"{ "prompt": "p", "expect": [ {"path": "a"} ] }"#);
-        assert!(load_task(&neither).unwrap_err().to_string().contains("needs"));
+        assert!(load_task(&neither)
+            .unwrap_err()
+            .to_string()
+            .contains("needs"));
         let both = task_json(
             &root,
             r#"{ "prompt": "p", "expect": [ {"path": "a", "contains": "x", "absent": true} ] }"#,
@@ -330,14 +354,20 @@ mod tests {
     #[test]
     fn unknown_fields_are_refused_so_a_typo_cannot_drop_a_check() {
         let root = scratch();
-        let dir = task_json(&root, r#"{ "prompt": "p", "chek": { "command": "exit 0" } }"#);
+        let dir = task_json(
+            &root,
+            r#"{ "prompt": "p", "chek": { "command": "exit 0" } }"#,
+        );
         assert!(load_task(&dir).is_err());
     }
 
     #[test]
     fn a_missing_repo_is_refused() {
         let root = scratch();
-        let dir = task_json(&root, r#"{ "prompt": "p", "check": { "command": "exit 0" } }"#);
+        let dir = task_json(
+            &root,
+            r#"{ "prompt": "p", "check": { "command": "exit 0" } }"#,
+        );
         std::fs::remove_dir_all(dir.join("repo")).unwrap();
         assert!(load_task(&dir).unwrap_err().to_string().contains("repo/"));
     }
@@ -345,7 +375,10 @@ mod tests {
     #[test]
     fn naming_an_unknown_task_is_an_error() {
         let root = scratch();
-        task_json(&root, r#"{ "prompt": "p", "check": { "command": "exit 0" } }"#);
+        task_json(
+            &root,
+            r#"{ "prompt": "p", "check": { "command": "exit 0" } }"#,
+        );
         let err = load_tasks(&root, &["nope".into()]).unwrap_err().to_string();
         assert!(err.contains("no task named `nope`"), "{err}");
     }
