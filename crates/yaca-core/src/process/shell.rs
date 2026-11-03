@@ -442,8 +442,7 @@ mod tests {
     async fn the_chosen_shell_is_the_one_that_runs() {
         let dir = TempDir::new();
         let shell = Shell::resolve(ShellChoice::WindowsPowerShell);
-        let mut spawned =
-            spawn(shell, "$PSVersionTable.PSVersion.Major", dir.path()).unwrap();
+        let mut spawned = spawn(shell, "$PSVersionTable.PSVersion.Major", dir.path()).unwrap();
         let mut bytes = Vec::new();
         while let Some(chunk) = spawned.output.recv().await {
             bytes.extend(chunk);

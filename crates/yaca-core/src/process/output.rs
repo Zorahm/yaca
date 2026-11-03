@@ -322,10 +322,7 @@ mod tests {
         // What the byte in the middle turns into depends on the platform —
         // a replacement character, or whatever the console codepage says.
         let out = stream.push(&[b'a', 0xFF, b'b']);
-        assert!(
-            out.starts_with('a') && out.ends_with('b'),
-            "got {out:?}"
-        );
+        assert!(out.starts_with('a') && out.ends_with('b'), "got {out:?}");
         assert_eq!(stream.flush(), "");
     }
 
@@ -342,10 +339,7 @@ mod tests {
         // Which letters these are depends on the machine's codepage, so the
         // test asserts the mechanism rather than the locale: real characters
         // came back, and not the lossy reading.
-        assert!(
-            !out.contains(char::REPLACEMENT_CHARACTER),
-            "got {out:?}"
-        );
+        assert!(!out.contains(char::REPLACEMENT_CHARACTER), "got {out:?}");
         assert_ne!(out, String::from_utf8_lossy(&bytes));
     }
 

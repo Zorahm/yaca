@@ -98,7 +98,13 @@ impl Version {
             }
         };
 
-        Some(Version { channel, major, minor, patch, pre })
+        Some(Version {
+            channel,
+            major,
+            minor,
+            patch,
+            pre,
+        })
     }
 }
 
@@ -203,7 +209,10 @@ fn installer_of(assets: &[GhAsset]) -> Option<String> {
 
 fn pick_installer(assets: &[GhAsset], suffixes: &[&str], arch: &[&str]) -> Option<String> {
     suffixes.iter().find_map(|suffix| {
-        let mut ours = assets.iter().filter(|a| a.name.ends_with(suffix)).peekable();
+        let mut ours = assets
+            .iter()
+            .filter(|a| a.name.ends_with(suffix))
+            .peekable();
         let first = ours.peek().map(|a| a.browser_download_url.clone());
         ours.find(|a| {
             let name = a.name.to_ascii_lowercase();
@@ -225,8 +234,16 @@ fn pick(releases: Vec<GhRelease>, current: Version) -> Option<ReleaseInfo> {
         .max_by_key(|(v, _)| *v)
         .map(|(_, r)| ReleaseInfo {
             version: r.tag_name.trim_start_matches(['v', 'V']).to_string(),
-            name: r.name.filter(|n| !n.trim().is_empty()).unwrap_or_else(|| r.tag_name.clone()),
-            changelog: r.body.unwrap_or_default().replace("\r\n", "\n").trim().to_string(),
+            name: r
+                .name
+                .filter(|n| !n.trim().is_empty())
+                .unwrap_or_else(|| r.tag_name.clone()),
+            changelog: r
+                .body
+                .unwrap_or_default()
+                .replace("\r\n", "\n")
+                .trim()
+                .to_string(),
             download_url: installer_of(&r.assets),
             url: r.html_url,
             published_at: r.published_at,
@@ -240,7 +257,10 @@ pub fn decide(current: &str, releases_json: &str) -> Result<UpdateCheck, UpdateE
     let running = Version::parse(current).ok_or(UpdateError::BadVersion)?;
     let releases: Vec<GhRelease> =
         serde_json::from_str(releases_json).map_err(|_| UpdateError::BadResponse)?;
-    Ok(UpdateCheck { current: current.to_string(), latest: pick(releases, running) })
+    Ok(UpdateCheck {
+        current: current.to_string(),
+        latest: pick(releases, running),
+    })
 }
 
 /// Asks GitHub whether a release newer than `current` exists.
@@ -268,7 +288,8 @@ async fn check_at(api: &str, current: &str) -> Result<UpdateCheck, UpdateError> 
     let status = response.status();
     // GitHub answers an exhausted anonymous quota with 403, or 429 when asked
     // too fast; both mean "not now" rather than "broken".
-    if status == reqwest::StatusCode::FORBIDDEN || status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+    if status == reqwest::StatusCode::FORBIDDEN || status == reqwest::StatusCode::TOO_MANY_REQUESTS
+    {
         return Err(UpdateError::RateLimited);
     }
     if !status.is_success() {
@@ -386,7 +407,10 @@ mod tests {
 
     #[test]
     fn a_release_is_not_offered_prereleases() {
-        let got = answer("1.0.0", vec![release("v1.1.0-beta", ""), release("v1.0.0", "")]);
+        let got = answer(
+            "1.0.0",
+            vec![release("v1.1.0-beta", ""), release("v1.0.0", "")],
+        );
         assert_eq!(got.latest, None);
     }
 
@@ -407,7 +431,10 @@ mod tests {
     fn drafts_and_unreadable_tags_are_skipped() {
         let mut draft = release("v2.0.0", "");
         draft["draft"] = serde_json::json!(true);
-        let got = answer("1.0.0", vec![draft, release("nightly", ""), release("v1.0.1", "")]);
+        let got = answer(
+            "1.0.0",
+            vec![draft, release("nightly", ""), release("v1.0.1", "")],
+        );
         assert_eq!(got.latest.unwrap().version, "1.0.1");
     }
 
@@ -426,12 +453,18 @@ mod tests {
     #[test]
     fn a_broken_answer_and_a_broken_version_are_told_apart() {
         assert_eq!(decide("1.0.0", "{").unwrap_err(), UpdateError::BadResponse);
-        assert_eq!(decide("1.0.0", "{\"message\":\"x\"}").unwrap_err(), UpdateError::BadResponse);
+        assert_eq!(
+            decide("1.0.0", "{\"message\":\"x\"}").unwrap_err(),
+            UpdateError::BadResponse
+        );
         assert_eq!(decide("soon", "[]").unwrap_err(), UpdateError::BadVersion);
     }
 
     fn asset(name: &str) -> GhAsset {
-        GhAsset { name: name.into(), browser_download_url: format!("https://example.test/{name}") }
+        GhAsset {
+            name: name.into(),
+            browser_download_url: format!("https://example.test/{name}"),
+        }
     }
 
     #[test]

@@ -15,7 +15,9 @@ use yaca_core::event::AgentEvent;
 use yaca_core::provider::mock::{script_text, MockProvider, Turn};
 use yaca_core::provider::{BlockKind, ProviderEvent};
 use yaca_core::usage::TokenCounts;
-use yaca_core::{Command, Mode, PermissionAnswer, Replay, SessionConfig, SessionHandle, StopReason};
+use yaca_core::{
+    Command, Mode, PermissionAnswer, Replay, SessionConfig, SessionHandle, StopReason,
+};
 
 use common::{ask, calls, is_turn_over, until, until_within, TempProject};
 
@@ -165,7 +167,10 @@ async fn a_pending_permission_is_still_pending_after_an_attach() {
     let mut rx = handle.subscribe();
 
     ask(&handle, "run it").await;
-    let seen = until(&mut rx, |e| matches!(e, AgentEvent::PermissionRequested { .. })).await;
+    let seen = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
     let request = match seen.last() {
         Some(AgentEvent::PermissionRequested { request }) => request.clone(),
         other => panic!("no request: {other:?}"),
@@ -188,7 +193,9 @@ async fn a_pending_permission_is_still_pending_after_an_attach() {
         "and it is not closed, as a replay of a dead run would close it"
     );
     assert!(
-        !before.iter().any(|e| matches!(e, AgentEvent::TurnCancelled { .. })),
+        !before
+            .iter()
+            .any(|e| matches!(e, AgentEvent::TurnCancelled { .. })),
         "the turn is running, not cancelled"
     );
 

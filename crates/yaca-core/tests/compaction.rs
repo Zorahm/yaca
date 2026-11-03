@@ -45,6 +45,7 @@ fn tiny_session(dir: &TempProject, provider: Arc<MockProvider>) -> SessionHandle
         supports_thinking: false,
         context_source: yaca_core::usage::ContextSource::ProviderReported,
         supports_images: true,
+        pricing_by_hand: false,
         by_hand: false,
     }];
     yaca_core::spawn(cfg, provider).unwrap()
@@ -55,7 +56,11 @@ fn read_step(id: &str, used: u32) -> Turn {
     // The limit differs per step: the same read four times with the same
     // answer is what the repeat check stops, and these tests are about the
     // window rather than about that.
-    let mut events = calls(&[(id, "Read", json!({ "path": "a.rs", "limit": 1_000 + id.bytes().last().map_or(0, u32::from) }))]);
+    let mut events = calls(&[(
+        id,
+        "Read",
+        json!({ "path": "a.rs", "limit": 1_000 + id.bytes().last().map_or(0, u32::from) }),
+    )]);
     if let Some(ProviderEvent::MessageStart { usage, .. }) = events.first_mut() {
         usage.input = used;
     }
@@ -123,7 +128,9 @@ async fn a_long_turn_is_compacted_between_its_steps() {
     let seen = until(&mut rx, is_turn_over).await;
 
     // Still one turn, and it goes on after the compaction.
-    let started = seen.iter().filter(|e| matches!(e, AgentEvent::TurnStarted { .. }));
+    let started = seen
+        .iter()
+        .filter(|e| matches!(e, AgentEvent::TurnStarted { .. }));
     assert_eq!(started.count(), 1);
     assert_eq!(finished_with(&seen), Some(StopReason::EndTurn));
     let last_step = position(
@@ -177,7 +184,9 @@ async fn a_request_refused_as_too_long_is_compacted_and_sent_again() {
 
     // Cured, so nothing to report: the error never reaches the feed.
     assert!(!seen.iter().any(|e| matches!(e, AgentEvent::Error { .. })));
-    assert!(seen.iter().any(|e| matches!(e, AgentEvent::ContextCompacted { .. })));
+    assert!(seen
+        .iter()
+        .any(|e| matches!(e, AgentEvent::ContextCompacted { .. })));
     assert_eq!(finished_with(&seen), Some(StopReason::EndTurn));
 
     let requests = provider.seen.lock().unwrap();
@@ -235,12 +244,21 @@ async fn the_usage_says_what_the_window_is_filled_with() {
 
     assert!(usage.context_used >= 4_000);
     assert_eq!(
-        b.system_prompt + b.instructions + b.memory + b.skills + b.tools + b.mcp_tools
-            + b.mcp_notes + b.messages,
+        b.system_prompt
+            + b.instructions
+            + b.memory
+            + b.skills
+            + b.tools
+            + b.mcp_tools
+            + b.mcp_notes
+            + b.messages,
         usage.context_used,
         "{b:?}"
     );
-    assert!(b.system_prompt > 0 && b.tools > 0 && b.messages > 0, "{b:?}");
+    assert!(
+        b.system_prompt > 0 && b.tools > 0 && b.messages > 0,
+        "{b:?}"
+    );
     assert!(b.instructions > 0, "AGENTS.md is in the prompt: {b:?}");
     // No MCP servers in this session, and nothing made up for them.
     assert_eq!((b.mcp_tools, b.mcp_notes), (0, 0));

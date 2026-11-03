@@ -118,10 +118,14 @@ async fn a_resumed_session_keeps_its_thinking_when_nothing_moved() {
     // reasoning would make the model re-derive what it already worked out.
     let sent = &requests(&provider)[0];
     assert_eq!(thoughts(sent), ["first thought"]);
-    assert!(sent.messages.iter().flat_map(|m| &m.content).any(|b| matches!(
-        b,
-        ContentBlock::Thinking { signature: Some(s), .. } if s == "sig"
-    )));
+    assert!(sent
+        .messages
+        .iter()
+        .flat_map(|m| &m.content)
+        .any(|b| matches!(
+            b,
+            ContentBlock::Thinking { signature: Some(s), .. } if s == "sig"
+        )));
 }
 
 #[tokio::test]
@@ -243,7 +247,10 @@ async fn switching_between_agent_modes_keeps_thinking() {
 
 /// Four thinking exchanges and a summary: two get summarized, two are kept.
 async fn compacted(dir: &TempProject, after: Vec<Turn>) -> (SessionHandle, Arc<MockProvider>) {
-    let mut turns: Vec<Turn> = ["one", "two", "three", "four"].iter().map(|l| reply(l)).collect();
+    let mut turns: Vec<Turn> = ["one", "two", "three", "four"]
+        .iter()
+        .map(|l| reply(l))
+        .collect();
     turns.push(Turn::Events(script_text("Fixed the date parser.")));
     turns.extend(after);
     let provider = Arc::new(MockProvider::new(turns));
@@ -254,7 +261,10 @@ async fn compacted(dir: &TempProject, after: Vec<Turn>) -> (SessionHandle, Arc<M
     }
     let mut rx = handle.subscribe();
     handle.send(Command::Compact).await.unwrap();
-    until(&mut rx, |e| matches!(e, AgentEvent::ContextCompacted { .. })).await;
+    until(&mut rx, |e| {
+        matches!(e, AgentEvent::ContextCompacted { .. })
+    })
+    .await;
     (handle, provider)
 }
 

@@ -262,7 +262,10 @@ async fn a_failing_project_stop_hook_sends_the_model_back_to_work() {
 #[tokio::test]
 async fn a_failing_prompt_hook_keeps_the_message_from_the_model() {
     let dir = TempProject::new();
-    configure(&dir, json!({ "userPromptSubmit": [{ "command": echo_and_exit("no-secrets", 1) }] }));
+    configure(
+        &dir,
+        json!({ "userPromptSubmit": [{ "command": echo_and_exit("no-secrets", 1) }] }),
+    );
     let provider = Arc::new(MockProvider::new(vec![Turn::Events(script_text("never"))]));
     let handle = session(&dir, provider.clone(), Mode::Auto);
     let mut rx = handle.subscribe();
@@ -270,7 +273,10 @@ async fn a_failing_prompt_hook_keeps_the_message_from_the_model() {
     ask(&handle, "here is my token").await;
     let seen = until_within(&mut rx, LIMIT, is_turn_over).await;
 
-    assert!(provider.seen.lock().unwrap().is_empty(), "the model never heard it");
+    assert!(
+        provider.seen.lock().unwrap().is_empty(),
+        "the model never heard it"
+    );
     assert!(seen.iter().any(|e| matches!(
         e,
         AgentEvent::HookReported { text, blocked: true, .. } if text.contains("no-secrets")
@@ -280,7 +286,10 @@ async fn a_failing_prompt_hook_keeps_the_message_from_the_model() {
 #[tokio::test]
 async fn a_session_start_hook_speaks_to_the_whole_session() {
     let dir = TempProject::new();
-    configure(&dir, json!({ "sessionStart": [{ "command": "echo house-rule-42" }] }));
+    configure(
+        &dir,
+        json!({ "sessionStart": [{ "command": "echo house-rule-42" }] }),
+    );
     let provider = Arc::new(MockProvider::new(vec![Turn::Events(script_text("ok"))]));
     let handle = session(&dir, provider.clone(), Mode::Auto);
     let mut rx = handle.subscribe();
@@ -309,7 +318,10 @@ async fn a_pre_hook_may_rewrite_the_call_before_it_runs() {
     ask(&handle, "create file").await;
     until_within(&mut rx, LIMIT, is_turn_over).await;
 
-    assert_eq!(std::fs::read_to_string(dir.path().join("a.rs")).unwrap(), "rewritten");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("a.rs")).unwrap(),
+        "rewritten"
+    );
     let (text, is_error) = tool_result_of(&provider, "w1");
     assert!(!is_error, "{text}");
     assert!(text.contains("changed this call's arguments"), "{text}");

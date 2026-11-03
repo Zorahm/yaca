@@ -18,6 +18,7 @@ use crate::error::ToolError;
 use crate::intent::Intent;
 use crate::lsp::format::{self, locate};
 use crate::lsp::{Lsp, LspError};
+use crate::profile::Profile;
 use crate::uri::file_uri;
 
 /// A lookup is not a build: a server that takes longer is stuck or indexing,
@@ -106,6 +107,11 @@ impl Tool for LspQuery {
         &[Intent::Plan, Intent::Agent]
     }
 
+    /// A language server knows nothing about a report: it is offered to code.
+    fn profiles(&self) -> &'static [Profile] {
+        &[Profile::Code]
+    }
+
     fn target(&self, input: &Value) -> Option<String> {
         input["path"].as_str().map(str::to_owned)
     }
@@ -147,8 +153,10 @@ impl Tool for LspQuery {
                 .ok_or_else(|| ToolError::failed("query is required for workspace_symbols"))?;
             let answer = ask("workspace/symbol", json!({ "query": query })).await?;
             let (text, total) = format::render_found(&answer, MAX_SYMBOLS, &show);
-            return Ok(found_or(text, total, format!("No symbols found for \"{query}\"."))
-                .truncated(total > MAX_SYMBOLS));
+            return Ok(
+                found_or(text, total, format!("No symbols found for \"{query}\"."))
+                    .truncated(total > MAX_SYMBOLS),
+            );
         }
 
         // The file is always `Some` from here: every other action needs it.
@@ -159,10 +167,16 @@ impl Tool for LspQuery {
 
         match action {
             "symbols" => {
-                let answer = ask("textDocument/documentSymbol", json!({ "textDocument": document })).await?;
+                let answer = ask(
+                    "textDocument/documentSymbol",
+                    json!({ "textDocument": document }),
+                )
+                .await?;
                 let (text, total) = format::render_outline(&answer, MAX_SYMBOLS);
-                Ok(found_or(text, total, format!("No symbols in {}.", file.shown))
-                    .truncated(total > MAX_SYMBOLS))
+                Ok(
+                    found_or(text, total, format!("No symbols in {}.", file.shown))
+                        .truncated(total > MAX_SYMBOLS),
+                )
             }
             "diagnostics" => diagnostics(&client, &file, &uri, before, told, ctx).await,
             "definition" | "references" | "hover" => {
@@ -203,8 +217,10 @@ impl Tool for LspQuery {
                                 let more = text.chars().count() > MAX_HOVER_CHARS;
                                 Ok(ToolOutput::new(cut).items(1).truncated(more))
                             }
-                            None => Ok(ToolOutput::new("The server has no information for this position.".into())
-                                .items(0)),
+                            None => Ok(ToolOutput::new(
+                                "The server has no information for this position.".into(),
+                            )
+                            .items(0)),
                         }
                     }
                 }
@@ -224,7 +240,9 @@ struct File {
 fn open(ctx: &ToolCtx, raw: &str) -> Result<File, ToolError> {
     let abs = ctx.ws.resolve_existing(raw)?;
     if abs.is_dir() {
-        return Err(ToolError::failed(format!("{raw} is a directory, not a file")));
+        return Err(ToolError::failed(format!(
+            "{raw} is a directory, not a file"
+        )));
     }
     let text = read_text(&abs)?.ok_or_else(|| ToolError::failed(format!("not found: {raw}")))?;
     Ok(File {
@@ -276,7 +294,11 @@ async fn diagnostics(
     // A document the server has just been told something new about is waited
     // for. One it already had is answered from what it last published, which
     // is current: nothing has changed since.
-    let after = if told { before } else { before.saturating_sub(1) };
+    let after = if told {
+        before
+    } else {
+        before.saturating_sub(1)
+    };
     let (items, arrived) = client
         .diagnostics(uri, after, DIAGNOSTICS_WAIT, &ctx.cancel)
         .await;

@@ -3,6 +3,7 @@ import type { HooksSettings } from "./HooksSettings";
 import type { McpServerSettings } from "./McpServerSettings";
 import type { Mode } from "./Mode";
 import type { PermissionSettings } from "./PermissionSettings";
+import type { Profile } from "./Profile";
 import type { ShadowSettings } from "./ShadowSettings";
 import type { VerifySettings } from "./VerifySettings";
 
@@ -13,6 +14,11 @@ export type Settings = {
  * one you get without asking for it.
  */
 mode: Mode | null, 
+/**
+ * What a session in this project is for (§7.1, §10): code, or documents.
+ * Absent means code.
+ */
+profile: Profile | null, 
 /**
  * The provider a session starts with (§10).
  */

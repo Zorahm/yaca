@@ -12,28 +12,29 @@
 pub mod ask_user;
 pub mod bash;
 mod bash_background;
-mod bash_cwd;
 pub mod bash_control;
+mod bash_cwd;
 pub mod bash_output;
 pub mod decision;
 pub mod delete_dir;
 pub mod delete_file;
 pub mod edit_file;
 pub mod exit_plan_mode;
+pub mod extract_images;
 pub mod extract_message;
 pub(crate) mod files;
-pub(crate) mod net;
 pub mod glob;
 pub mod grep;
 pub mod lsp;
 pub mod memory;
+pub(crate) mod net;
 pub mod notebook;
 pub(crate) mod page;
 pub(crate) mod pdf;
-pub(crate) mod robots;
-pub mod rename;
 pub mod read_file;
 pub mod read_image;
+pub mod rename;
+pub(crate) mod robots;
 pub mod search_message;
 pub mod send_text;
 pub mod set_title;
@@ -64,6 +65,7 @@ use crate::permission::PermissionNeed;
 use crate::picture::Picture;
 use crate::process::shell::Shell;
 use crate::process::Processes;
+use crate::profile::Profile;
 use crate::provider::ToolSchema;
 use crate::session::questions::Questions;
 use crate::session::subagent::Subagents;
@@ -145,6 +147,10 @@ pub struct ToolCtx {
     /// on the network, and the human decides it for the whole program. It arrives as a field of
     /// [`crate::SessionConfig`] — by the same route as the mode and the effort.
     pub respect_robots: bool,
+    pub web_fetch_model: Option<decision::DecisionSetup>,
+    pub(crate) aside_ledger: Option<Arc<crate::session::subagent::Ledger>>,
+    pub(crate) web_fetch_pricing: crate::usage::Pricing,
+    pub(crate) decision_pricing: crate::usage::Pricing,
     /// What was said in this conversation, from the session's journal. `None`
     /// where nothing is written down: the tools that read it are not offered
     /// there (`ToolRegistry::of_session`).
@@ -235,6 +241,13 @@ impl ToolOutput {
         self
     }
 
+    /// Images for the model, in the order it should read them: an office file
+    /// may hold several, and each is named after where it came from.
+    pub fn pictures(mut self, pictures: Vec<(String, Picture)>) -> Self {
+        self.pictures.extend(pictures);
+        self
+    }
+
     pub fn changed(mut self, change: FileChange) -> Self {
         self.changed = Some(change);
         self
@@ -303,6 +316,15 @@ pub trait Tool: Send + Sync {
 
     fn intents(&self) -> &'static [Intent];
 
+    /// The kinds of work this tool is offered for (§7.1). Both by default: a
+    /// tool that only means something in a codebase — a language server, a
+    /// notebook cell — says so here, and a chat about documents simply does not
+    /// see it. A tool left out is not merely hidden from the list: a call the
+    /// model makes up gets "unknown tool", like a tool the mode leaves out.
+    fn profiles(&self) -> &'static [Profile] {
+        Profile::ALL
+    }
+
     /// Whether a call may run at the same time as its neighbours in one batch (§5.4).
     ///
     /// The model calls tools in a batch precisely so that they run together, and five
@@ -365,12 +387,6 @@ pub trait Tool: Send + Sync {
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError>;
 }
 
-/// Text the system prompt puts into the description of the `description` field.
-const DESCRIPTION_FIELD_DOC: &str = "Single line, up to 60 characters, no trailing period: \
-what was done or discovered, in past tense first person, in the conversation's language. \
-Focus on the substance, not the tool: 'Found existing clipboard usage' \
-rather than 'Ran rg clipboard src/'. No tool names and no command flags.";
-
 /// The tools a subagent is not given: see [`ToolRegistry::delegated`].
 pub(crate) const AGENT_ONLY: [&str; 8] = [
     "Task",
@@ -391,7 +407,10 @@ pub struct ToolRegistry {
 impl ToolRegistry {
     pub fn new(tools: Vec<Arc<dyn Tool>>) -> Self {
         ToolRegistry {
-            tools: tools.into_iter().map(|t| (t.name().to_string(), t)).collect(),
+            tools: tools
+                .into_iter()
+                .map(|t| (t.name().to_string(), t))
+                .collect(),
         }
     }
 
@@ -423,6 +442,7 @@ impl ToolRegistry {
             Arc::new(memory::Memory),
             Arc::new(skill::Skill),
             Arc::new(edit_file::EditFile),
+            Arc::new(extract_images::ExtractImages),
             Arc::new(notebook::NotebookEdit),
             Arc::new(delete_file::DeleteFile),
             Arc::new(delete_dir::DeleteDir),
@@ -448,6 +468,12 @@ impl ToolRegistry {
             Arc::new(search_message::SearchMessage),
             Arc::new(extract_message::ExtractMessage),
         ])
+    }
+
+    pub(crate) fn with_web_fetch_summary(mut self) -> Self {
+        self.tools
+            .insert("WebFetch".into(), Arc::new(web_fetch::SummarizingWebFetch));
+        self
     }
 
     /// What a subagent works with: everything the agent has, less what
@@ -485,10 +511,10 @@ impl ToolRegistry {
     /// Plan mode, and a `write_file` it made up must get "unknown tool",
     /// not a permission request. Asking about an action that does not exist
     /// in this mode is an interface lying about the state (§0).
-    pub fn get(&self, name: &str, intent: Intent) -> Option<Arc<dyn Tool>> {
+    pub fn get(&self, name: &str, intent: Intent, profile: Profile) -> Option<Arc<dyn Tool>> {
         self.tools
             .get(name)
-            .filter(|t| intent.allows(t.intents()))
+            .filter(|t| intent.allows(t.intents()) && t.profiles().contains(&profile))
             .cloned()
     }
 
@@ -503,10 +529,10 @@ impl ToolRegistry {
     ///
     /// The order is deterministic (`BTreeMap`): the schemas go first in the request,
     /// and shuffling the list would reset the prompt cache on every turn.
-    pub fn schemas(&self, intent: Intent) -> Vec<ToolSchema> {
+    pub fn schemas(&self, intent: Intent, profile: Profile) -> Vec<ToolSchema> {
         self.tools
             .values()
-            .filter(|t| intent.allows(t.intents()))
+            .filter(|t| intent.allows(t.intents()) && t.profiles().contains(&profile))
             .map(|t| {
                 let mut schema = t.input_schema().unwrap_or_else(|| {
                     json!({
@@ -524,7 +550,7 @@ impl ToolRegistry {
                             json!({
                                 "type": "string",
                                 "maxLength": DESCRIPTION_MAX_CHARS,
-                                "description": DESCRIPTION_FIELD_DOC,
+                                "description": "Action caption; see <action_captions>.",
                             }),
                         );
                     }
@@ -606,7 +632,10 @@ pub(crate) mod tests_support {
         build_on(Arc::new(ws), tx)
     }
 
-    fn build_on(ws: Arc<Workspace>, tx: broadcast::Sender<AgentEvent>) -> (ToolCtx, Arc<Workspace>) {
+    fn build_on(
+        ws: Arc<Workspace>,
+        tx: broadcast::Sender<AgentEvent>,
+    ) -> (ToolCtx, Arc<Workspace>) {
         let events = EventSink::new(tx);
         let ctx = ToolCtx {
             processes: Processes::new(events.clone()),
@@ -619,6 +648,16 @@ pub(crate) mod tests_support {
             vision: true,
             shell: crate::process::shell::Shell::default(),
             respect_robots: true,
+            web_fetch_model: None,
+            aside_ledger: None,
+            web_fetch_pricing: crate::usage::Pricing {
+                input: 0.0,
+                output: 0.0,
+            },
+            decision_pricing: crate::usage::Pricing {
+                input: 0.0,
+                output: 0.0,
+            },
             title_locked: false,
             transcript: None,
             lsp: None,

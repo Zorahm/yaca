@@ -21,7 +21,7 @@ use crate::message::{strip_thinking, ContentBlock, Message, Role};
 use crate::provider::registry::{ProviderSpec, Providers};
 use crate::provider::{Provider, ProviderEvent, ProviderRequest, ProviderStream};
 use crate::router::config::{ModelRef, RoutingConfig};
-use crate::router::decision_model::ask;
+use crate::router::decision_model::ask_with_usage;
 use crate::router::file;
 use crate::router::rules;
 use crate::router::ROUTER_ID;
@@ -47,6 +47,7 @@ pub struct RouterProvider {
     /// Index of the default in `targets`.
     default: usize,
     decision: Arc<dyn Provider>,
+    decision_pricing: crate::usage::Pricing,
     /// Each decision's name and the index of its model in `targets`.
     decisions: Vec<DecisionRoute>,
     /// The decision each conversation holds, keyed by the hash of its first
@@ -101,6 +102,14 @@ impl RouterProvider {
             targets: Vec::new(),
         };
         let decision = pool.backend(&cfg.decision_model.model.provider)?;
+        let decision_pricing = providers
+            .get(&cfg.decision_model.model.provider)
+            .and_then(|p| p.model(&cfg.decision_model.model.model))
+            .map(|m| m.pricing)
+            .unwrap_or(crate::usage::Pricing {
+                input: 0.0,
+                output: 0.0,
+            });
         let default = pool.target(&cfg.default)?;
         let mut decisions = Vec::with_capacity(cfg.decisions.len());
         for decision in &cfg.decisions {
@@ -117,6 +126,7 @@ impl RouterProvider {
             targets,
             default,
             decision,
+            decision_pricing,
             decisions,
             sticky: Mutex::new(HashMap::new()),
         };
@@ -149,9 +159,9 @@ impl RouterProvider {
     /// Asks the decision model and applies the rules. Every failure of the
     /// model reaches here as unknown answers (see `ask`), so a broken model
     /// yields the default and never fails the turn.
-    async fn decide(&self, text: &str) -> Pick {
+    async fn decide(&self, text: &str) -> (Pick, Option<(crate::usage::TokenCounts, Option<f64>)>) {
         let timeout = Duration::from_millis(u64::from(self.cfg.decision_model.timeout_ms));
-        let answers = ask(
+        let (answers, usage) = ask_with_usage(
             self.decision.as_ref(),
             &self.cfg.decision_model.model.model,
             &self.cfg.signals,
@@ -160,12 +170,12 @@ impl RouterProvider {
         )
         .await;
         let Some(matched) = rules::pick(&self.cfg, &answers) else {
-            return self.fallback();
+            return (self.fallback(), usage);
         };
         // Decision names are unique (`file::validate` refuses a repeat), so the
         // name identifies the route. The miss below cannot happen: the matched
         // decision is one of `cfg.decisions`, which `new` walked.
-        match self
+        let pick = match self
             .decisions
             .iter()
             .find(|d| d.name == matched.decision.name)
@@ -176,7 +186,8 @@ impl RouterProvider {
                 target: route.target,
             },
             None => self.fallback(),
-        }
+        };
+        (pick, usage)
     }
 
     fn remember(&self, conversation: u64, sticky: Sticky) {
@@ -268,10 +279,10 @@ impl Provider for RouterProvider {
             .get(&conversation)
             .cloned();
 
-        let (pick, strip) = match &previous {
-            Some(sticky) if sticky.turn == turn => (sticky.pick.clone(), false),
+        let (pick, strip, usage) = match &previous {
+            Some(sticky) if sticky.turn == turn => (sticky.pick.clone(), false, None),
             _ => {
-                let pick = self.decide(last).await;
+                let (pick, usage) = self.decide(last).await;
                 // Thinking in the history was made by the previous target. With
                 // no record of which that was, it is treated as another model's:
                 // a signature from the wrong model is refused, a lost reasoning
@@ -287,10 +298,20 @@ impl Provider for RouterProvider {
                         pick: pick.clone(),
                     },
                 );
-                (pick, strip)
+                (pick, strip, usage)
             }
         };
-        self.send(req, pick, strip).await
+        let inner = self.send(req, pick, strip).await?;
+        if let Some((usage, cost)) = usage {
+            let event = ProviderEvent::AsideUsage {
+                usage,
+                pricing: self.decision_pricing,
+                cost,
+            };
+            Ok(Box::pin(stream::iter([Ok(event)]).chain(inner)))
+        } else {
+            Ok(inner)
+        }
     }
 }
 
@@ -380,6 +401,7 @@ fn virtual_model(name: &str, targets: &[Target], default: usize) -> Result<Model
         supports_effort: targets.iter().any(|t| t.info.supports_effort),
         supports_thinking: targets.iter().any(|t| t.info.supports_thinking),
         supports_images: targets.iter().any(|t| t.info.supports_images),
+        pricing_by_hand: false,
         by_hand: false,
     })
 }

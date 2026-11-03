@@ -22,6 +22,7 @@ const MAX_TOKENS: u32 = 256;
 ///
 /// Returns one entry per signal, always. With no signals there is nothing to
 /// ask, so the provider is not called at all.
+#[cfg(test)]
 pub async fn ask(
     provider: &dyn Provider,
     model: &str,
@@ -29,8 +30,20 @@ pub async fn ask(
     request_text: &str,
     timeout: Duration,
 ) -> Answers {
+    ask_with_usage(provider, model, signals, request_text, timeout)
+        .await
+        .0
+}
+
+pub async fn ask_with_usage(
+    provider: &dyn Provider,
+    model: &str,
+    signals: &[Signal],
+    request_text: &str,
+    timeout: Duration,
+) -> (Answers, Option<(crate::usage::TokenCounts, Option<f64>)>) {
     if signals.is_empty() {
-        return Answers::new();
+        return (Answers::new(), None);
     }
     let prompt = build_prompt(signals, request_text);
     let request = ProviderRequest {
@@ -45,14 +58,14 @@ pub async fn ask(
         thinking: false,
     };
     match tokio::time::timeout(timeout, collect_text(provider, request)).await {
-        Ok(Ok(reply)) => parse_answers(signals, &reply),
+        Ok(Ok((reply, usage, cost))) => (parse_answers(signals, &reply), Some((usage, cost))),
         Ok(Err(err)) => {
             tracing::debug!(error = %err, "decision model failed; signals unknown");
-            all_unknown(signals)
+            (all_unknown(signals), None)
         }
         Err(_) => {
             tracing::debug!(?timeout, "decision model timed out; signals unknown");
-            all_unknown(signals)
+            (all_unknown(signals), None)
         }
     }
 }
@@ -61,15 +74,21 @@ pub async fn ask(
 async fn collect_text(
     provider: &dyn Provider,
     request: ProviderRequest,
-) -> Result<String, ProviderError> {
+) -> Result<(String, crate::usage::TokenCounts, Option<f64>), ProviderError> {
     let mut stream = provider.stream(request).await?;
     let mut text = String::new();
+    let mut usage = crate::usage::TokenCounts::default();
+    let mut cost = None;
     while let Some(event) = stream.next().await {
-        if let ProviderEvent::TextDelta { text: delta, .. } = event? {
-            text.push_str(&delta);
+        match event? {
+            ProviderEvent::TextDelta { text: delta, .. } => text.push_str(&delta),
+            ProviderEvent::MessageStart { usage: counts, .. }
+            | ProviderEvent::MessageDelta { usage: counts, .. } => usage.add(counts),
+            ProviderEvent::Cost { usd } => cost = Some(usd),
+            _ => {}
         }
     }
-    Ok(text)
+    Ok((text, usage, cost))
 }
 
 fn all_unknown(signals: &[Signal]) -> Answers {

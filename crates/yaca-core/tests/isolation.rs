@@ -23,7 +23,11 @@ fn git(dir: &std::path::Path, args: &[&str]) -> String {
         .current_dir(dir)
         .output()
         .unwrap();
-    assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
@@ -54,12 +58,11 @@ fn isolated(dir: &TempProject, file: &str) -> SessionHandle {
 
 /// The turn is over for the human when the ring goes out, which is after the
 /// work has been put on the branch.
-async fn finish_turn(
-    rx: &mut tokio::sync::broadcast::Receiver<AgentEvent>,
-) -> Vec<AgentEvent> {
-    until(rx, |e| {
-        matches!(e, AgentEvent::StateChanged { state } if !state.busy)
-    })
+async fn finish_turn(rx: &mut tokio::sync::broadcast::Receiver<AgentEvent>) -> Vec<AgentEvent> {
+    until(
+        rx,
+        |e| matches!(e, AgentEvent::StateChanged { state } if !state.busy),
+    )
     .await
 }
 
@@ -119,8 +122,13 @@ async fn a_rollback_in_one_chat_leaves_the_other_alone() {
             _ => None,
         })
         .expect("a point before the message");
-    one.send(Command::RestoreCheckpoint { id: first }).await.unwrap();
-    until(&mut rx_one, |e| matches!(e, AgentEvent::CheckpointRestored { .. })).await;
+    one.send(Command::RestoreCheckpoint { id: first })
+        .await
+        .unwrap();
+    until(&mut rx_one, |e| {
+        matches!(e, AgentEvent::CheckpointRestored { .. })
+    })
+    .await;
 
     let a = PathBuf::from(one.state().isolation.unwrap().path);
     let b = PathBuf::from(two.state().isolation.unwrap().path);
@@ -135,7 +143,10 @@ fn a_project_outside_git_is_refused_at_start() {
     cfg.journal = None;
     cfg.isolate = true;
     let provider = Arc::new(MockProvider::new(vec![]));
-    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
     let result = rt.block_on(async { yaca_core::spawn(cfg, provider) });
     assert!(result.is_err(), "no silent fallback to the shared tree");
 }

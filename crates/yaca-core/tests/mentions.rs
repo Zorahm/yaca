@@ -27,7 +27,10 @@ async fn search(handle: &SessionHandle, query: &str) -> Vec<String> {
         .unwrap();
     let events = until(&mut rx, |e| matches!(e, AgentEvent::FilesFound { .. })).await;
     match events.last() {
-        Some(AgentEvent::FilesFound { query: echoed, paths }) => {
+        Some(AgentEvent::FilesFound {
+            query: echoed,
+            paths,
+        }) => {
             assert_eq!(echoed, query, "the answer names the query it answers");
             paths.clone()
         }
@@ -66,7 +69,9 @@ async fn an_empty_query_offers_the_project_files_and_no_more_than_the_limit() {
 
     let all = search(&handle, "").await;
     assert_eq!(all.len(), yaca_core::mention::LIMIT);
-    assert!(all.iter().all(|p| !p.starts_with("target/") && !p.starts_with('.')));
+    assert!(all
+        .iter()
+        .all(|p| !p.starts_with("target/") && !p.starts_with('.')));
 }
 
 #[tokio::test]

@@ -151,6 +151,9 @@ pub struct ModelInfo {
     pub context_max: u32,
     pub max_output: u32,
     pub pricing: Pricing,
+    /// User-provided price, retained when the model list is refreshed.
+    #[serde(default)]
+    pub pricing_by_hand: bool,
     /// Whether it supports `output_config.effort`. Older models do not.
     pub supports_effort: bool,
     /// Whether it supports adaptive reasoning — the only form Yaca knows how to
@@ -251,6 +254,7 @@ pub fn catalog() -> Vec<ModelInfo> {
         // Written down, not answered — but a stated constant, not a guess.
         context_source: ContextSource::ProviderReported,
         supports_images: true,
+        pricing_by_hand: false,
         by_hand: false,
     };
     vec![
@@ -291,6 +295,7 @@ pub fn unknown_model(id: &str) -> ModelInfo {
         supports_thinking: false,
         context_source: ContextSource::DefaultGuess,
         supports_images: true,
+        pricing_by_hand: false,
         by_hand: false,
     }
 }
@@ -350,6 +355,13 @@ impl UsageMeter {
     pub fn record_aside(&mut self, counts: TokenCounts, pricing: Pricing) {
         self.total.add(counts);
         self.cost_usd += pricing.cost(counts);
+    }
+
+    /// Replace an estimate with the amount reported by the provider.
+    pub fn reconcile_cost(&mut self, counts: TokenCounts, pricing: Pricing, reported: Option<f64>) {
+        if let Some(cost) = reported {
+            self.cost_usd += cost - pricing.cost(counts);
+        }
     }
 
     pub fn snapshot(&self, context_max: u32) -> UsageSnapshot {

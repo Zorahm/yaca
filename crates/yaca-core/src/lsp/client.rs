@@ -181,9 +181,9 @@ impl Client {
         let (tx, rx) = oneshot::channel();
         self.waiting.lock().unwrap().insert(id, tx);
 
-        let sent = self.wire.send(
-            &json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }),
-        );
+        let sent = self
+            .wire
+            .send(&json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }));
         if let Err(e) = sent {
             self.waiting.lock().unwrap().remove(&id);
             return Err(e);
@@ -369,7 +369,9 @@ async fn read(
             // Logs, progress, other notifications: nothing here keeps them.
             (Some(_), _) => {}
             (None, Some(id)) => {
-                let Some(waiter) = id.as_u64().and_then(|id| waiting.lock().unwrap().remove(&id))
+                let Some(waiter) = id
+                    .as_u64()
+                    .and_then(|id| waiting.lock().unwrap().remove(&id))
                 else {
                     continue;
                 };
@@ -444,8 +446,12 @@ mod tests {
 
     #[test]
     fn an_error_answer_keeps_the_servers_words() {
-        let err = answer_of(&json!({ "id": 1, "error": { "code": -32801, "message": "content modified" } }))
-            .unwrap_err();
-        assert!(matches!(err, LspError::Rpc { code: -32801, ref message } if message == "content modified"));
+        let err = answer_of(
+            &json!({ "id": 1, "error": { "code": -32801, "message": "content modified" } }),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, LspError::Rpc { code: -32801, ref message } if message == "content modified")
+        );
     }
 }

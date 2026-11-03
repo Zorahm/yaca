@@ -16,7 +16,9 @@ use common::{ask, is_turn_over, session, until, TempProject};
 
 fn replying(turns: usize) -> Arc<MockProvider> {
     Arc::new(MockProvider::new(
-        (0..turns).map(|_| Turn::Events(script_text("ok"))).collect(),
+        (0..turns)
+            .map(|_| Turn::Events(script_text("ok")))
+            .collect(),
     ))
 }
 
@@ -37,7 +39,10 @@ async fn agents_md_is_in_the_system_prompt_in_every_mode() {
     // is a plan for some other project.
     for mode in [Mode::Plan, Mode::Manual] {
         let dir = TempProject::new();
-        dir.write("AGENTS.md", "Commit messages follow Conventional Commits.\n");
+        dir.write(
+            "AGENTS.md",
+            "Commit messages follow Conventional Commits.\n",
+        );
 
         let provider = replying(1);
         let handle = session(&dir, provider.clone(), mode);

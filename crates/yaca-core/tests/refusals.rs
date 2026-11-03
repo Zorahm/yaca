@@ -83,7 +83,11 @@ async fn a_standing_refusal_answers_later_calls_without_asking() {
         .filter(|e| matches!(e, AgentEvent::PermissionRequested { .. }))
         .count();
     assert_eq!(asked_again, 0, "the refusal should have covered src/b.rs");
-    assert_eq!(refusals(&rest), 2, "each refused call still gets its own row (§5.5)");
+    assert_eq!(
+        refusals(&rest),
+        2,
+        "each refused call still gets its own row (§5.5)"
+    );
     assert!(a.exists() && b.exists());
 
     // Not a stop: refusing one action is no reason to end a turn that may
@@ -116,5 +120,8 @@ async fn a_standing_refusal_holds_under_bypass() {
 
     let rest = until(&mut rx, is_turn_over).await;
     assert_eq!(refusals(&rest), 2);
-    assert!(b.exists(), "bypass waved through a call the human had refused");
+    assert!(
+        b.exists(),
+        "bypass waved through a call the human had refused"
+    );
 }

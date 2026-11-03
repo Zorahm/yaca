@@ -263,7 +263,9 @@ mod tests {
         assert!(!has_images(&shown));
         // Still two blocks: the model is told something was there.
         assert_eq!(shown[0].content.len(), 2);
-        assert!(matches!(&shown[0].content[1], ContentBlock::Text { text } if text.contains("image")));
+        assert!(
+            matches!(&shown[0].content[1], ContentBlock::Text { text } if text.contains("image"))
+        );
         // And the history keeps it for a model that can see.
         assert!(has_images(&history));
     }
@@ -272,7 +274,10 @@ mod tests {
     fn an_image_block_survives_the_journal() {
         let line = serde_json::to_string(&image()).unwrap();
         assert!(line.contains(r#""kind":"image""#), "{line}");
-        assert_eq!(serde_json::from_str::<ContentBlock>(&line).unwrap(), image());
+        assert_eq!(
+            serde_json::from_str::<ContentBlock>(&line).unwrap(),
+            image()
+        );
     }
 
     #[test]
@@ -347,7 +352,9 @@ mod tests {
         assert_eq!(history.len(), 3, "no message added, none reordered");
         assert_eq!(answered(&history[2]), ["a", "b"]);
         // The results come first in the message, the human's words after.
-        assert!(matches!(&history[2].content[2], ContentBlock::Text { text } if text == "are you there?"));
+        assert!(
+            matches!(&history[2].content[2], ContentBlock::Text { text } if text == "are you there?")
+        );
         assert!(matches!(
             &history[2].content[0],
             ContentBlock::ToolResult { is_error: true, .. }

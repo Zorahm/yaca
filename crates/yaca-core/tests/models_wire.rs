@@ -76,7 +76,11 @@ async fn list_arrives_in_pages_and_is_joined() {
     let seen = seen.await.unwrap();
     assert_eq!(seen.len(), 2, "the second page is asked for separately");
     // We ask for JSON, not a stream: the protocol's `accept` is for `/v1/messages`.
-    assert!(seen[0].has_header("accept", "application/json"), "{}", seen[0].headers);
+    assert!(
+        seen[0].has_header("accept", "application/json"),
+        "{}",
+        seen[0].headers
+    );
     assert!(seen[0].headers.contains("GET /v1/models?limit="));
     // The second page starts after the last one of the first.
     assert!(
@@ -205,9 +209,15 @@ async fn lm_studio_window_is_detected_for_the_whole_list_with_one_probe() {
     // The list is ordered by id; the allocation, not the maximum, is what a
     // live session has to fit into.
     assert_eq!(models[1].context_max, 65_536);
-    assert_eq!(models[1].context_source, yaca_core::usage::ContextSource::DetectedAllocated);
+    assert_eq!(
+        models[1].context_source,
+        yaca_core::usage::ContextSource::DetectedAllocated
+    );
     // No fields of its own: the guess stays a guess, visibly.
-    assert_eq!(models[0].context_source, yaca_core::usage::ContextSource::DefaultGuess);
+    assert_eq!(
+        models[0].context_source,
+        yaca_core::usage::ContextSource::DefaultGuess
+    );
     assert_eq!(models[0].context_max, 1_000_000);
 
     let seen = seen.await.unwrap();
@@ -230,7 +240,10 @@ async fn an_idle_lm_studio_answers_with_the_architectural_maximum() {
     .await;
     let models = discover(&spec(base, Protocol::OpenAi), None).await.unwrap();
     assert_eq!(models[0].context_max, 131_072);
-    assert_eq!(models[0].context_source, yaca_core::usage::ContextSource::DetectedMaximum);
+    assert_eq!(
+        models[0].context_source,
+        yaca_core::usage::ContextSource::DetectedMaximum
+    );
 }
 
 #[tokio::test]
@@ -241,18 +254,22 @@ async fn ollama_answers_with_what_it_loaded_and_what_it_is_built_of() {
     let (base, seen) = serve_all(vec![
         json(r#"{"object":"list","data":[{"id":"qwen3-coder:30b"},{"id":"llama3.3:70b"}]}"#),
         json_response("404 Not Found", r#"{"error":{"message":"no such path"}}"#),
-        json(
-            r#"{"models":[{"name":"qwen3-coder:30b","context_length":65536}]}"#,
-        ),
+        json(r#"{"models":[{"name":"qwen3-coder:30b","context_length":65536}]}"#),
         json(r#"{"model_info":{"llama.context_length":131072}}"#),
     ])
     .await;
     let models = discover(&spec(base, Protocol::OpenAi), None).await.unwrap();
 
     assert_eq!(models[0].context_max, 131_072, "architectural maximum");
-    assert_eq!(models[0].context_source, yaca_core::usage::ContextSource::DetectedMaximum);
+    assert_eq!(
+        models[0].context_source,
+        yaca_core::usage::ContextSource::DetectedMaximum
+    );
     assert_eq!(models[1].context_max, 65_536, "allocated wins over maximum");
-    assert_eq!(models[1].context_source, yaca_core::usage::ContextSource::DetectedAllocated);
+    assert_eq!(
+        models[1].context_source,
+        yaca_core::usage::ContextSource::DetectedAllocated
+    );
 
     let seen = seen.await.unwrap();
     assert!(seen[2].headers.contains("GET /api/ps"));
@@ -272,11 +289,12 @@ async fn a_local_server_that_says_nothing_keeps_the_openai_default() {
         json_response("404 Not Found", r#"{"error":{"message":"no such path"}}"#),
     ])
     .await;
-    let models = discover(&spec(base, Protocol::OpenAi), None)
-        .await
-        .unwrap();
+    let models = discover(&spec(base, Protocol::OpenAi), None).await.unwrap();
     let m = &models[0];
-    assert_eq!(m.context_source, yaca_core::usage::ContextSource::DefaultGuess);
+    assert_eq!(
+        m.context_source,
+        yaca_core::usage::ContextSource::DefaultGuess
+    );
     assert_eq!(m.context_max, 1_000_000);
 
     let seen = seen.await.unwrap();
@@ -298,7 +316,10 @@ fn keyless(base: impl Into<String>) -> ProviderSpec {
 #[tokio::test]
 async fn a_refresh_writes_the_answer_into_the_file() {
     // A versioned address, so the request also shows the `/v1` left out.
-    let (base, seen) = serve(json(r#"{"data":[{"id":"glm-4.6","context_length":200000}]}"#)).await;
+    let (base, seen) = serve(json(
+        r#"{"data":[{"id":"glm-4.6","context_length":200000}]}"#,
+    ))
+    .await;
     let dir = TempProject::new();
     let mut providers = Providers::default();
     providers.put(keyless(format!("{base}/api/paas/v4")));
@@ -309,7 +330,11 @@ async fn a_refresh_writes_the_answer_into_the_file() {
     let saved = Providers::load(dir.path()).unwrap();
     assert_eq!(returned, saved);
     assert_eq!(saved.get("gateway").unwrap().models[0].id, "glm-4.6");
-    assert!(seen.await.unwrap().headers.contains("GET /api/paas/v4/models"));
+    assert!(seen
+        .await
+        .unwrap()
+        .headers
+        .contains("GET /api/paas/v4/models"));
 }
 
 #[tokio::test]
@@ -326,7 +351,10 @@ async fn a_refused_refresh_leaves_the_saved_list_alone() {
     providers.put(spec);
     providers.save(dir.path()).unwrap();
 
-    let err = refresh(dir.path(), "gateway").await.unwrap_err().to_string();
+    let err = refresh(dir.path(), "gateway")
+        .await
+        .unwrap_err()
+        .to_string();
 
     assert!(err.contains("no such key"), "{err}");
     let saved = Providers::load(dir.path()).unwrap();

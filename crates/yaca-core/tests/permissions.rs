@@ -127,10 +127,7 @@ async fn denial_travels_to_the_agent_with_its_reason() {
     // the next request.
     let seen = provider.seen.lock().unwrap();
     let last = format!("{:?}", seen.last().unwrap().messages);
-    assert!(
-        last.contains("rebuild"),
-        "reason never reached the model"
-    );
+    assert!(last.contains("rebuild"), "reason never reached the model");
 }
 
 #[tokio::test]
@@ -366,7 +363,10 @@ async fn stopping_a_call_tells_the_model_to_wait_and_ends_the_turn() {
             )
         })
     });
-    assert!(told, "the model was not told that the human stopped the call");
+    assert!(
+        told,
+        "the model was not told that the human stopped the call"
+    );
 }
 
 /// The scripted turn behind both edit tests: read the file, then edit it.
@@ -998,7 +998,10 @@ async fn auto_asks_the_human_when_the_decision_model_calls_it_unsafe() {
     .await;
     let request = first_request(&asking).unwrap();
     assert_eq!(request.kind, PermissionKind::RunCommand);
-    assert!(!dir.path().join("made").exists(), "nothing runs before the answer");
+    assert!(
+        !dir.path().join("made").exists(),
+        "nothing runs before the answer"
+    );
 
     handle
         .send(Command::AnswerPermission {
@@ -1196,8 +1199,11 @@ async fn auto_lets_a_request_the_reviewer_calls_safe_go() {
 #[tokio::test]
 async fn auto_does_not_consult_the_reviewer_about_a_deletion() {
     let dir = TempProject::new();
-    let victim = dir.write("junk.rs", "dead code
-");
+    let victim = dir.write(
+        "junk.rs",
+        "dead code
+",
+    );
     let main = Arc::new(MockProvider::new(vec![
         Turn::Events(delete("t1", "junk.rs")),
         Turn::Events(script_text("Removed.")),

@@ -149,8 +149,9 @@ async fn an_own_answer_is_passed_on_in_the_users_words() {
     let seen = provider.seen.lock().unwrap();
     let results = tool_results(&seen[1].messages);
     assert!(
-        results.iter().any(|(text, _)| text
-            == "The user answered in their own words: \"only the parser\"."),
+        results
+            .iter()
+            .any(|(text, _)| text == "The user answered in their own words: \"only the parser\"."),
         "{results:?}"
     );
 }
@@ -277,13 +278,14 @@ async fn cancelling_the_turn_abandons_the_question() {
 
     let rest = until(&mut rx, is_turn_over).await;
     assert!(
-        rest.iter().any(|e| matches!(
-            e,
-            AgentEvent::QuestionResolved { reply: None, .. }
-        )),
+        rest.iter()
+            .any(|e| matches!(e, AgentEvent::QuestionResolved { reply: None, .. })),
         "the question stayed on screen after the turn was cancelled"
     );
-    assert!(matches!(rest.last(), Some(AgentEvent::TurnCancelled { .. })));
+    assert!(matches!(
+        rest.last(),
+        Some(AgentEvent::TurnCancelled { .. })
+    ));
     assert_eq!(provider.seen.lock().unwrap().len(), 1);
 }
 
@@ -363,7 +365,9 @@ async fn a_question_with_one_option_never_reaches_the_human() {
             .any(|e| matches!(e, AgentEvent::QuestionAsked { .. })),
         "a question of one option was put to the human"
     );
-    assert!(rest.iter().any(|e| matches!(e, AgentEvent::ToolCallFailed { .. })));
+    assert!(rest
+        .iter()
+        .any(|e| matches!(e, AgentEvent::ToolCallFailed { .. })));
 
     let seen = provider.seen.lock().unwrap();
     let results = tool_results(&seen[1].messages);
@@ -378,7 +382,9 @@ async fn a_question_with_one_option_never_reaches_the_human() {
 #[tokio::test]
 async fn seven_options_are_refused_as_well() {
     let dir = TempProject::new();
-    let options: Vec<_> = (0..7).map(|i| json!({ "label": format!("o{i}") })).collect();
+    let options: Vec<_> = (0..7)
+        .map(|i| json!({ "label": format!("o{i}") }))
+        .collect();
     let provider = Arc::new(MockProvider::new(vec![
         Turn::Events(calls(&[(
             "t1",

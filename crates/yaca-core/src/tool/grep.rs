@@ -179,10 +179,10 @@ impl Tool for Grep {
                 } else {
                     format!("**/{g}")
                 })
-                    .literal_separator(true)
-                    .build()
-                    .map_err(|e| ToolError::failed(format!("bad glob `{g}`: {e}")))?
-                    .compile_matcher(),
+                .literal_separator(true)
+                .build()
+                .map_err(|e| ToolError::failed(format!("bad glob `{g}`: {e}")))?
+                .compile_matcher(),
             ),
             None => None,
         };
@@ -384,7 +384,10 @@ fn hits_of(re: &regex::Regex, text: &str, lines: &[&str], multiline: bool) -> Ve
 /// found" but "unknown".
 fn overran(limit: Duration) -> ToolError {
     ToolError::failed_with(
-        format!("search timed out after {} s and was stopped", limit.as_secs()),
+        format!(
+            "search timed out after {} s and was stopped",
+            limit.as_secs()
+        ),
         "Full project traversal timed out. Search in a subdirectory or narrow down `glob`.",
     )
 }

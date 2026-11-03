@@ -19,7 +19,9 @@ use common::{ask, calls, is_turn_over, session_with_roots, tool_result_of, until
 /// How the model names a root: no verbatim prefix, forward slashes.
 fn model_root(root: &Path) -> String {
     let text = root.display().to_string();
-    text.strip_prefix(r"\\?\").unwrap_or(&text).replace('\\', "/")
+    text.strip_prefix(r"\\?\")
+        .unwrap_or(&text)
+        .replace('\\', "/")
 }
 
 /// How the model names a file under `root`.
@@ -60,14 +62,24 @@ async fn an_edit_in_the_second_root_asks_what_a_rollback_will_not_return() {
     let mut rx = handle.subscribe();
 
     ask(&handle, "fix the note").await;
-    let asking = until(&mut rx, |e| matches!(e, AgentEvent::PermissionRequested { .. })).await;
+    let asking = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
     let requests = permission_requests(&asking);
     assert_eq!(requests.len(), 1, "{requests:?}");
     let request = &requests[0];
     assert_eq!(request.kind, PermissionKind::EditFile);
-    let lost = request.unsaved.as_ref().expect("the edit is not covered by rollback");
+    let lost = request
+        .unsaved
+        .as_ref()
+        .expect("the edit is not covered by rollback");
     assert_eq!(lost.roots, vec![model_root(other.path())]);
-    assert_eq!(std::fs::read_to_string(&note).unwrap(), "one\n", "nothing happens before the answer");
+    assert_eq!(
+        std::fs::read_to_string(&note).unwrap(),
+        "one\n",
+        "nothing happens before the answer"
+    );
 
     handle
         .send(Command::AnswerPermission {
@@ -78,7 +90,11 @@ async fn an_edit_in_the_second_root_asks_what_a_rollback_will_not_return() {
         .unwrap();
     until(&mut rx, is_turn_over).await;
 
-    assert_eq!(std::fs::read_to_string(&note).unwrap(), "two\n", "the edit lands");
+    assert_eq!(
+        std::fs::read_to_string(&note).unwrap(),
+        "two\n",
+        "the edit lands"
+    );
 }
 
 #[tokio::test]
@@ -104,7 +120,10 @@ async fn an_edit_in_the_project_is_not_asked_about_in_auto_mode() {
 
     ask(&handle, "fix it").await;
     let events = until(&mut rx, is_turn_over).await;
-    assert!(permission_requests(&events).is_empty(), "no question for the project");
+    assert!(
+        permission_requests(&events).is_empty(),
+        "no question for the project"
+    );
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "two\n");
 }
 
@@ -116,7 +135,11 @@ async fn a_write_outside_both_roots_is_refused_and_writes_nothing() {
     let target = model_path(outside.path(), "stolen.txt");
 
     let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(calls(&[("w1", "Write", json!({ "path": target, "content": "x\n" }))])),
+        Turn::Events(calls(&[(
+            "w1",
+            "Write",
+            json!({ "path": target, "content": "x\n" }),
+        )])),
         Turn::Events(script_text("Could not write there.")),
     ]));
     let handle = session_with_roots(&project, &[&other], provider.clone(), Mode::Auto);
@@ -128,7 +151,10 @@ async fn a_write_outside_both_roots_is_refused_and_writes_nothing() {
     let (text, is_error) = tool_result_of(&provider, "w1");
     assert!(is_error, "{text}");
     assert!(text.contains("outside the project"), "{text}");
-    assert!(permission_requests(&events).is_empty(), "a refused path is not a question");
+    assert!(
+        permission_requests(&events).is_empty(),
+        "a refused path is not a question"
+    );
     assert!(!outside.path().join("stolen.txt").exists());
 }
 
@@ -141,7 +167,10 @@ async fn a_resumed_session_must_come_back_with_the_same_roots() {
     let mut first = SessionConfig::new(project.path());
     first.journal = Some(project.chats());
     first.additional_roots = vec![other.path().to_path_buf()];
-    let id = yaca_core::spawn(first, provider.clone()).unwrap().id().clone();
+    let id = yaca_core::spawn(first, provider.clone())
+        .unwrap()
+        .id()
+        .clone();
 
     let resume = |roots: Vec<std::path::PathBuf>| {
         let mut cfg = SessionConfig::new(project.path());
@@ -152,7 +181,10 @@ async fn a_resumed_session_must_come_back_with_the_same_roots() {
     };
 
     // Without the roots, or with a different set, the resume is refused.
-    assert!(resume(vec![]).is_err(), "a resume that drops the root must fail");
+    assert!(
+        resume(vec![]).is_err(),
+        "a resume that drops the root must fail"
+    );
     assert!(resume(vec![TempProject::new().path().to_path_buf()]).is_err());
     // The same set goes through.
     assert!(resume(vec![other.path().to_path_buf()]).is_ok());

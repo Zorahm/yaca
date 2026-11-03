@@ -11,8 +11,8 @@ use tokio::process::Child;
 use tokio::sync::mpsc;
 
 use super::bash::{head, MODEL_OUTPUT_MAX_BYTES};
-use super::ToolOutput;
 use super::ToolCtx;
+use super::ToolOutput;
 use crate::error::ToolError;
 use crate::process::output::{clamp, Lines, Ring, Utf8Stream};
 use crate::process::{display_cwd_in, shell, ProcessId, WeakProcesses};
@@ -167,7 +167,11 @@ pub(super) async fn drain_after_exit(
 }
 
 /// Starts the command and leaves it in the process panel (§6.5).
-pub(super) fn background(ctx: &ToolCtx, command: &str, cwd: &Path) -> Result<ToolOutput, ToolError> {
+pub(super) fn background(
+    ctx: &ToolCtx,
+    command: &str,
+    cwd: &Path,
+) -> Result<ToolOutput, ToolError> {
     let spawned = shell::spawn(ctx.shell, command, cwd)
         .map_err(|e| ToolError::failed(format!("failed to start «{}»: {e}", head(command))))?;
     let shell::Spawned { child, pid, output } = spawned;
@@ -268,4 +272,3 @@ async fn collect_from(
         processes.finished(id, code);
     }
 }
-

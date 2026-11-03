@@ -154,13 +154,19 @@ pub fn parse(text: &str, path: &Path, scope: AgentScope) -> Option<AgentDef> {
     let doc = YamlLoader::load_from_str(block).ok()?.into_iter().next()?;
     let stem = path.file_stem()?.to_string_lossy().into_owned();
     let name = scalar(&doc["name"]).unwrap_or(stem);
-    if !name.chars().all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.')) {
+    if !name
+        .chars()
+        .all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
         return None;
     }
     let description = scalar(&doc["description"])?;
     let description: String = description.split_whitespace().collect::<Vec<_>>().join(" ");
     let description = if description.chars().count() > MAX_DESCRIPTION_CHARS {
-        let cut: String = description.chars().take(MAX_DESCRIPTION_CHARS - 1).collect();
+        let cut: String = description
+            .chars()
+            .take(MAX_DESCRIPTION_CHARS - 1)
+            .collect();
         format!("{}…", cut.trim_end())
     } else {
         description
@@ -243,7 +249,12 @@ pub fn resolve_model(spec: &str, models: &[ModelInfo]) -> Result<Option<String>,
             ids.push(&model.id);
         }
     }
-    let listed = ids.iter().take(MAX_LISTED_MODELS).copied().collect::<Vec<_>>().join(", ");
+    let listed = ids
+        .iter()
+        .take(MAX_LISTED_MODELS)
+        .copied()
+        .collect::<Vec<_>>()
+        .join(", ");
     let more = ids.len().saturating_sub(MAX_LISTED_MODELS);
     Err(if more > 0 {
         format!("this chat's provider has no model `{spec}`; its models include {listed} and {more} more")
@@ -287,17 +298,30 @@ mod tests {
         let def = parse(REVIEWER, Path::new("reviewer.md"), AgentScope::Project).unwrap();
         assert_eq!(def.name, "reviewer");
         assert_eq!(def.description, "Reviews a diff for bugs.");
-        assert_eq!(def.tools, Some(vec!["Read".into(), "Grep".into(), "Glob".into()]));
+        assert_eq!(
+            def.tools,
+            Some(vec!["Read".into(), "Grep".into(), "Glob".into()])
+        );
         assert_eq!(def.model.as_deref(), Some("claude-haiku-4-5"));
         assert_eq!(def.prompt, "You review code. Be terse.");
     }
 
     #[test]
     fn the_name_defaults_to_the_file_and_a_description_is_required() {
-        let def = parse("---\ndescription: d\n---\nbody", Path::new("x/scout.md"), AgentScope::User).unwrap();
+        let def = parse(
+            "---\ndescription: d\n---\nbody",
+            Path::new("x/scout.md"),
+            AgentScope::User,
+        )
+        .unwrap();
         assert_eq!(def.name, "scout");
         assert!(def.tools.is_none());
-        assert!(parse("---\nname: x\n---\nbody", Path::new("x.md"), AgentScope::User).is_none());
+        assert!(parse(
+            "---\nname: x\n---\nbody",
+            Path::new("x.md"),
+            AgentScope::User
+        )
+        .is_none());
         assert!(parse("no header", Path::new("x.md"), AgentScope::User).is_none());
     }
 
@@ -314,7 +338,12 @@ mod tests {
         assert!(allows(&def, "mcp__tracker__create_task"));
         assert!(!allows(&def, "Write"));
         assert!(!allows(&def, "mcp__other__x"));
-        let all = parse("---\ndescription: d\n---\n", Path::new("b.md"), AgentScope::Project).unwrap();
+        let all = parse(
+            "---\ndescription: d\n---\n",
+            Path::new("b.md"),
+            AgentScope::Project,
+        )
+        .unwrap();
         assert!(allows(&all, "Write"));
     }
 
@@ -325,28 +354,46 @@ mod tests {
             .map(|id| crate::usage::unknown_model(id))
             .collect();
         assert_eq!(resolve_model("inherit", &models), Ok(None));
-        assert_eq!(resolve_model("gpt-5.1", &models), Ok(Some("gpt-5.1".into())));
-        assert_eq!(resolve_model(" Qwen/Qwen3-Coder ", &models), Ok(Some("qwen/qwen3-coder".into())));
+        assert_eq!(
+            resolve_model("gpt-5.1", &models),
+            Ok(Some("gpt-5.1".into()))
+        );
+        assert_eq!(
+            resolve_model(" Qwen/Qwen3-Coder ", &models),
+            Ok(Some("qwen/qwen3-coder".into()))
+        );
         // No family aliases: a name is an id or nothing.
         let err = resolve_model("sonnet", &models).unwrap_err();
         assert!(err.contains("`sonnet`") && err.contains("gpt-5.1"), "{err}");
         // With no list, the provider is the judge.
-        assert_eq!(resolve_model("anything-7b", &[]), Ok(Some("anything-7b".into())));
+        assert_eq!(
+            resolve_model("anything-7b", &[]),
+            Ok(Some("anything-7b".into()))
+        );
     }
 
     #[test]
     fn the_project_comes_first_and_plugins_are_prefixed() {
         let dir = TempDir::new();
         dir.write(".yaca/agents/reviewer.md", REVIEWER);
-        dir.write(".claude/agents/reviewer.md", "---\ndescription: shadowed\n---\n");
-        dir.write(".claude/agents/scout.md", "---\ndescription: Finds things\n---\nLook.");
+        dir.write(
+            ".claude/agents/reviewer.md",
+            "---\ndescription: shadowed\n---\n",
+        );
+        dir.write(
+            ".claude/agents/scout.md",
+            "---\ndescription: Finds things\n---\nLook.",
+        );
         let found = AgentRoots::new(dir.path(), Vec::new()).scan();
         let names: Vec<&str> = found.iter().map(|d| d.name.as_str()).collect();
         assert_eq!(names, ["reviewer", "scout"]);
         assert_eq!(found[0].description, "Reviews a diff for bugs.");
 
         let section = section(&found).unwrap();
-        assert!(section.contains("- reviewer: Reviews a diff for bugs."), "{section}");
+        assert!(
+            section.contains("- reviewer: Reviews a diff for bugs."),
+            "{section}"
+        );
         assert!(section.contains("`agent`"));
     }
 }

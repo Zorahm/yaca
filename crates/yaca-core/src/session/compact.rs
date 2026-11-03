@@ -287,9 +287,11 @@ fn transcript(messages: &[Message]) -> String {
 pub fn rebuilt(summary: &str, skills: &[String], tail: Vec<Message>) -> Vec<Message> {
     let mut out = Vec::with_capacity(tail.len() + 1);
     let mut first = Message::user_text(format!("{SUMMARY_HEADER}\n\n{}", summary.trim()));
-    first
-        .content
-        .extend(skills.iter().map(|text| ContentBlock::Text { text: text.clone() }));
+    first.content.extend(
+        skills
+            .iter()
+            .map(|text| ContentBlock::Text { text: text.clone() }),
+    );
     out.push(first);
     out.extend(tail);
     strip_thinking(&mut out);

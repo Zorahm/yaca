@@ -72,12 +72,16 @@ impl MarketplaceSource {
                 });
             }
         }
-        Err(format!("«{raw}» is neither a folder, nor owner/repo, nor a git address"))
+        Err(format!(
+            "«{raw}» is neither a folder, nor owner/repo, nor a git address"
+        ))
     }
 
     pub(super) fn url(&self) -> Option<String> {
         match self {
-            MarketplaceSource::Github { repo, .. } => Some(format!("https://github.com/{repo}.git")),
+            MarketplaceSource::Github { repo, .. } => {
+                Some(format!("https://github.com/{repo}.git"))
+            }
             MarketplaceSource::Git { url, .. } => Some(url.clone()),
             MarketplaceSource::Directory { .. } => None,
         }
@@ -85,9 +89,8 @@ impl MarketplaceSource {
 
     pub(super) fn reference(&self) -> Option<&str> {
         match self {
-            MarketplaceSource::Github { reference, .. } | MarketplaceSource::Git { reference, .. } => {
-                reference.as_deref()
-            }
+            MarketplaceSource::Github { reference, .. }
+            | MarketplaceSource::Git { reference, .. } => reference.as_deref(),
             MarketplaceSource::Directory { .. } => None,
         }
     }
@@ -160,7 +163,14 @@ pub fn known(config_dir: &Path, claude_home: Option<&Path>) -> Vec<Known> {
     let mut out: BTreeMap<String, Known> = BTreeMap::new();
     if let Some(home) = claude_home {
         for (name, source) in claude_known(home) {
-            out.insert(name.clone(), Known { name, source, origin: MarketplaceOrigin::ClaudeCode });
+            out.insert(
+                name.clone(),
+                Known {
+                    name,
+                    source,
+                    origin: MarketplaceOrigin::ClaudeCode,
+                },
+            );
         }
     }
     out.insert(
@@ -207,9 +217,17 @@ fn claude_known(home: &Path) -> Vec<(String, MarketplaceSource)> {
             let text = |key: &str| source.get(key).and_then(Value::as_str).map(str::to_string);
             let reference = text("ref");
             let parsed = match source.get("source").and_then(Value::as_str)? {
-                "github" => MarketplaceSource::Github { repo: text("repo")?, reference },
-                "git" => MarketplaceSource::Git { url: text("url")?, reference },
-                "directory" => MarketplaceSource::Directory { path: PathBuf::from(text("path")?) },
+                "github" => MarketplaceSource::Github {
+                    repo: text("repo")?,
+                    reference,
+                },
+                "git" => MarketplaceSource::Git {
+                    url: text("url")?,
+                    reference,
+                },
+                "directory" => MarketplaceSource::Directory {
+                    path: PathBuf::from(text("path")?),
+                },
                 _ => return None,
             };
             Some((name, parsed))
@@ -272,8 +290,11 @@ pub struct Manifest {
 
 pub fn read(dir: &Path) -> Result<Manifest, String> {
     let file = dir.join(MANIFEST);
-    let text = std::fs::read_to_string(&file).map_err(|_| format!("{} is missing", plain(&file)))?;
-    let Value::Object(doc) = serde_json::from_str::<Value>(&text).map_err(|e| format!("marketplace.json is not JSON: {e}"))? else {
+    let text =
+        std::fs::read_to_string(&file).map_err(|_| format!("{} is missing", plain(&file)))?;
+    let Value::Object(doc) = serde_json::from_str::<Value>(&text)
+        .map_err(|e| format!("marketplace.json is not JSON: {e}"))?
+    else {
         return Err("marketplace.json is not an object".into());
     };
     let name = match doc.get("name").and_then(Value::as_str) {
@@ -291,12 +312,20 @@ pub fn read(dir: &Path) -> Result<Manifest, String> {
         .and_then(Value::as_array)
         .map(|list| list.iter().filter_map(entry).collect())
         .unwrap_or_default();
-    Ok(Manifest { name, plugin_root, plugins })
+    Ok(Manifest {
+        name,
+        plugin_root,
+        plugins,
+    })
 }
 
 fn entry(value: &Value) -> Option<Entry> {
     let fields = value.as_object()?.clone();
-    let name = fields.get("name").and_then(Value::as_str).filter(|n| is_namespace(n))?.to_string();
+    let name = fields
+        .get("name")
+        .and_then(Value::as_str)
+        .filter(|n| is_namespace(n))?
+        .to_string();
     let text = |key: &str| fields.get(key).and_then(Value::as_str).map(str::to_string);
     let source = match fields.get("source") {
         Some(Value::String(path)) => EntrySource::Relative(path.clone()),
@@ -308,7 +337,10 @@ fn entry(value: &Value) -> Option<Entry> {
         version: text("version"),
         category: text("category"),
         homepage: text("homepage"),
-        strict: fields.get("strict").and_then(Value::as_bool).unwrap_or(true),
+        strict: fields
+            .get("strict")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
         name,
         source,
         fields,

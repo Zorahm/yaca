@@ -23,8 +23,14 @@ use super::Shared;
 /// true — there is no point to roll back to. Refusing to run the command
 /// instead would trade a missing safety net for a dead agent.
 pub(super) async fn create(shared: &Arc<Shared>, reason: CheckpointReason) {
+    if shared.state.lock().unwrap().profile == crate::profile::Profile::Chat {
+        return;
+    }
     let id = CheckpointId::new();
-    shared.emit(AgentEvent::CheckpointCreating { id: id.clone(), reason: reason.clone() });
+    shared.emit(AgentEvent::CheckpointCreating {
+        id: id.clone(),
+        reason: reason.clone(),
+    });
     let checkpoints = shared.checkpoints.clone();
     let outcome = tokio::task::spawn_blocking(move || checkpoints.create(reason)).await;
 

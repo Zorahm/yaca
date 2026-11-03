@@ -90,7 +90,11 @@ pub enum ElicitationReply {
 /// Reads `elicitation/create`'s params into a form. `Err` with the reason when
 /// there is nothing a person could fill in.
 pub(crate) fn parse(server: &str, params: &Value) -> Result<ElicitationRequest, String> {
-    let message = params["message"].as_str().unwrap_or_default().trim().to_string();
+    let message = params["message"]
+        .as_str()
+        .unwrap_or_default()
+        .trim()
+        .to_string();
     let schema = &params["requestedSchema"];
     let required: Vec<&str> = schema["required"]
         .as_array()
@@ -181,7 +185,10 @@ impl ElicitationRequest {
                 return Some(format!("\"{}\" does not take {value}", field.title));
             }
         }
-        if let Some(stray) = values.keys().find(|k| !self.fields.iter().any(|f| &f.name == *k)) {
+        if let Some(stray) = values
+            .keys()
+            .find(|k| !self.fields.iter().any(|f| &f.name == *k))
+        {
             return Some(format!("the form has no field \"{stray}\""));
         }
         None
@@ -250,7 +257,11 @@ mod tests {
         assert_eq!(by("copies").default, Some(json!(1)));
         assert_eq!(by("notify").kind, ElicitKind::Boolean);
         assert!(!by("notify").required);
-        assert_eq!(by("weird").kind, ElicitKind::Text, "a shape the protocol does not allow is text");
+        assert_eq!(
+            by("weird").kind,
+            ElicitKind::Text,
+            "a shape the protocol does not allow is text"
+        );
     }
 
     #[test]
@@ -259,11 +270,22 @@ mod tests {
         let accept = |values: Value| ElicitationReply::Accept {
             values: serde_json::from_value(values).unwrap(),
         };
-        assert!(form.refuses(&accept(json!({ "account": "a1", "copies": 2 }))).is_none());
-        assert!(form.refuses(&accept(json!({ "account": "a1" }))).unwrap().contains("copies"));
-        assert!(form.refuses(&accept(json!({ "account": "zz", "copies": 2 }))).is_some());
-        assert!(form.refuses(&accept(json!({ "account": "a1", "copies": 2.5 }))).is_some());
-        assert!(form.refuses(&accept(json!({ "account": "a1", "copies": 2, "x": 1 }))).is_some());
+        assert!(form
+            .refuses(&accept(json!({ "account": "a1", "copies": 2 })))
+            .is_none());
+        assert!(form
+            .refuses(&accept(json!({ "account": "a1" })))
+            .unwrap()
+            .contains("copies"));
+        assert!(form
+            .refuses(&accept(json!({ "account": "zz", "copies": 2 })))
+            .is_some());
+        assert!(form
+            .refuses(&accept(json!({ "account": "a1", "copies": 2.5 })))
+            .is_some());
+        assert!(form
+            .refuses(&accept(json!({ "account": "a1", "copies": 2, "x": 1 })))
+            .is_some());
         assert!(form.refuses(&ElicitationReply::Decline).is_none());
     }
 
@@ -272,14 +294,21 @@ mod tests {
         let p = params();
         let form = parse("billing", &p).unwrap();
         let reply = ElicitationReply::Accept {
-            values: serde_json::from_value(json!({ "account": "b2", "copies": 3, "note": "  " })).unwrap(),
+            values: serde_json::from_value(json!({ "account": "b2", "copies": 3, "note": "  " }))
+                .unwrap(),
         };
         assert_eq!(
             form.answer(&reply, &p["requestedSchema"]),
             json!({ "action": "accept", "content": { "account": "b2", "copies": 3 } })
         );
-        assert_eq!(form.answer(&ElicitationReply::Decline, &p), json!({ "action": "decline" }));
-        assert_eq!(form.answer(&ElicitationReply::Cancel, &p), json!({ "action": "cancel" }));
+        assert_eq!(
+            form.answer(&ElicitationReply::Decline, &p),
+            json!({ "action": "decline" })
+        );
+        assert_eq!(
+            form.answer(&ElicitationReply::Cancel, &p),
+            json!({ "action": "cancel" })
+        );
     }
 
     #[test]

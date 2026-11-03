@@ -33,7 +33,7 @@ pub enum ProviderError {
     Http {
         status: u16,
         message: String,
-    /// The `retry-after` header in seconds, if the provider sent one.
+        /// The `retry-after` header in seconds, if the provider sent one.
         retry_after_s: Option<u64>,
     },
 

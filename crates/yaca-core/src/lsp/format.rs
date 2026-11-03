@@ -42,7 +42,10 @@ pub(crate) fn locate(
 ) -> Result<(u32, u32), String> {
     let lines: Vec<&str> = text.lines().collect();
     if line == 0 || line > lines.len() {
-        return Err(format!("file has {} lines, line {line} was requested", lines.len()));
+        return Err(format!(
+            "file has {} lines, line {line} was requested",
+            lines.len()
+        ));
     }
     let content = lines[line - 1];
 
@@ -55,9 +58,15 @@ pub(crate) fn locate(
 }
 
 fn stand_on(content: &str, symbol: &str, line: usize) -> Result<usize, String> {
-    let hits: Vec<usize> = content.match_indices(symbol).map(|(byte, _)| byte).collect();
+    let hits: Vec<usize> = content
+        .match_indices(symbol)
+        .map(|(byte, _)| byte)
+        .collect();
     if hits.is_empty() {
-        return Err(format!("line {line} does not contain \"{symbol}\": {}", content.trim()));
+        return Err(format!(
+            "line {line} does not contain \"{symbol}\": {}",
+            content.trim()
+        ));
     }
     // A whole word is what is meant when the text is a name: `id` in
     // `valid(id)`, not the end of `valid`.
@@ -87,7 +96,11 @@ fn stand_on(content: &str, symbol: &str, line: usize) -> Result<usize, String> {
 }
 
 fn utf16_col(content: &str, chars: usize) -> u32 {
-    content.chars().take(chars).map(|c| c.len_utf16() as u32).sum()
+    content
+        .chars()
+        .take(chars)
+        .map(|c| c.len_utf16() as u32)
+        .sum()
 }
 
 /// The inverse, for showing a server's column to a human.
@@ -144,7 +157,9 @@ pub(crate) fn places(answer: &Value) -> Vec<Place> {
         let (uri, range) = match value.get("targetUri") {
             Some(uri) => (
                 uri.as_str()?,
-                value.get("targetSelectionRange").or_else(|| value.get("targetRange"))?,
+                value
+                    .get("targetSelectionRange")
+                    .or_else(|| value.get("targetRange"))?,
             ),
             None => (value.get("uri")?.as_str()?, value.get("range")?),
         };
@@ -204,10 +219,32 @@ pub(crate) fn hover_text(answer: &Value) -> Option<String> {
 }
 
 const KINDS: [&str; 26] = [
-    "file", "module", "namespace", "package", "class", "method", "property", "field",
-    "constructor", "enum", "interface", "function", "variable", "constant", "string",
-    "number", "boolean", "array", "object", "key", "null", "enum member", "struct",
-    "event", "operator", "type parameter",
+    "file",
+    "module",
+    "namespace",
+    "package",
+    "class",
+    "method",
+    "property",
+    "field",
+    "constructor",
+    "enum",
+    "interface",
+    "function",
+    "variable",
+    "constant",
+    "string",
+    "number",
+    "boolean",
+    "array",
+    "object",
+    "key",
+    "null",
+    "enum member",
+    "struct",
+    "event",
+    "operator",
+    "type parameter",
 ];
 
 fn kind_name(symbol: &Value) -> &'static str {
@@ -222,7 +259,14 @@ fn kind_name(symbol: &Value) -> &'static str {
 /// The symbols of one file, as an outline: a tree when the server sends
 /// `DocumentSymbol`, flat when it sends `SymbolInformation`.
 pub(crate) fn render_outline(answer: &Value, cap: usize) -> (String, usize) {
-    fn walk(list: &[Value], depth: usize, out: &mut String, shown: &mut usize, cap: usize, total: &mut usize) {
+    fn walk(
+        list: &[Value],
+        depth: usize,
+        out: &mut String,
+        shown: &mut usize,
+        cap: usize,
+        total: &mut usize,
+    ) {
         for symbol in list {
             *total += 1;
             let line = symbol
@@ -269,7 +313,9 @@ pub(crate) fn render_found(
         let name = symbol.get("name").and_then(Value::as_str).unwrap_or("?");
         let place = symbol.get("location").and_then(|location| {
             let uri = location.get("uri")?.as_str()?;
-            let line = location.pointer("/range/start/line").and_then(Value::as_u64);
+            let line = location
+                .pointer("/range/start/line")
+                .and_then(Value::as_u64);
             Some((path_of(uri)?, line.map(|l| l + 1)))
         });
         let _ = write!(out, "{} {name}", kind_name(symbol));
@@ -297,7 +343,10 @@ pub(crate) fn render_found(
 /// How serious a diagnostic is. LSP numbers them 1 to 4; a server that says
 /// nothing means an error.
 fn severity(diagnostic: &Value) -> u64 {
-    diagnostic.get("severity").and_then(Value::as_u64).unwrap_or(1)
+    diagnostic
+        .get("severity")
+        .and_then(Value::as_u64)
+        .unwrap_or(1)
 }
 
 /// Diagnostics of `path`, worst first. Only those at or above `worst`
@@ -310,11 +359,16 @@ pub(crate) fn render_diagnostics(
     cap: usize,
     message_chars: usize,
 ) -> (String, usize) {
-    let mut kept: Vec<&Value> = diagnostics.iter().filter(|d| severity(d) <= worst).collect();
+    let mut kept: Vec<&Value> = diagnostics
+        .iter()
+        .filter(|d| severity(d) <= worst)
+        .collect();
     kept.sort_by_key(|d| {
         (
             severity(d),
-            d.pointer("/range/start/line").and_then(Value::as_u64).unwrap_or(0),
+            d.pointer("/range/start/line")
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
         )
     });
     let mut sources = Sources::default();
@@ -322,7 +376,10 @@ pub(crate) fn render_diagnostics(
     for diagnostic in kept.iter().take(cap) {
         let place = Place {
             path: source.to_path_buf(),
-            line: diagnostic.pointer("/range/start/line").and_then(Value::as_u64).unwrap_or(0) as u32,
+            line: diagnostic
+                .pointer("/range/start/line")
+                .and_then(Value::as_u64)
+                .unwrap_or(0) as u32,
             character: diagnostic
                 .pointer("/range/start/character")
                 .and_then(Value::as_u64)
@@ -335,10 +392,17 @@ pub(crate) fn render_diagnostics(
             3 => "info",
             _ => "hint",
         };
-        let message = diagnostic.get("message").and_then(Value::as_str).unwrap_or("");
+        let message = diagnostic
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         let message = message.trim();
         let cut: String = message.chars().take(message_chars).collect();
-        let ellipsis = if message.chars().count() > message_chars { "…" } else { "" };
+        let ellipsis = if message.chars().count() > message_chars {
+            "…"
+        } else {
+            ""
+        };
         let code = match diagnostic.get("code") {
             Some(Value::String(code)) => Some(code.clone()),
             Some(Value::Number(code)) => Some(code.to_string()),
@@ -351,7 +415,11 @@ pub(crate) fn render_diagnostics(
             (None, Some(code)) => format!(" [{code}]"),
             (None, None) => String::new(),
         };
-        let _ = writeln!(out, "{label} {path}:{}:{column} {cut}{ellipsis}{tag}", place.line + 1);
+        let _ = writeln!(
+            out,
+            "{label} {path}:{}:{column} {cut}{ellipsis}{tag}",
+            place.line + 1
+        );
     }
     (out, kept.len().saturating_sub(cap))
 }
@@ -405,7 +473,8 @@ mod tests {
 
     #[test]
     fn locations_come_in_all_three_shapes() {
-        let range = json!({ "start": { "line": 4, "character": 2 }, "end": { "line": 4, "character": 5 } });
+        let range =
+            json!({ "start": { "line": 4, "character": 2 }, "end": { "line": 4, "character": 5 } });
         let one = json!({ "uri": "file:///p/a.rs", "range": range });
         let link = json!({ "targetUri": "file:///p/b.rs", "targetRange": range, "targetSelectionRange": range });
         assert_eq!(places(&one).len(), 1);
@@ -416,14 +485,20 @@ mod tests {
 
     #[test]
     fn hover_comes_as_a_string_markup_or_a_list() {
-        assert_eq!(hover_text(&json!({ "contents": "fn x()" })).as_deref(), Some("fn x()"));
         assert_eq!(
-            hover_text(&json!({ "contents": { "kind": "markdown", "value": "```rust\nfn x()\n```" } }))
-                .as_deref(),
+            hover_text(&json!({ "contents": "fn x()" })).as_deref(),
+            Some("fn x()")
+        );
+        assert_eq!(
+            hover_text(
+                &json!({ "contents": { "kind": "markdown", "value": "```rust\nfn x()\n```" } })
+            )
+            .as_deref(),
             Some("```rust\nfn x()\n```")
         );
         assert_eq!(
-            hover_text(&json!({ "contents": [{ "language": "rust", "value": "a" }, "b"] })).as_deref(),
+            hover_text(&json!({ "contents": [{ "language": "rust", "value": "a" }, "b"] }))
+                .as_deref(),
             Some("a\n\nb")
         );
         assert_eq!(hover_text(&json!({ "contents": "  " })), None);
@@ -441,7 +516,10 @@ mod tests {
         }]);
         let (text, total) = render_outline(&answer, 2);
         assert_eq!(total, 3);
-        assert!(text.starts_with("struct Foo  :1\n  method bar  :3\n"), "{text}");
+        assert!(
+            text.starts_with("struct Foo  :1\n  method bar  :3\n"),
+            "{text}"
+        );
         assert!(text.contains("showing first 2 of 3"));
     }
 
@@ -463,7 +541,9 @@ mod tests {
 
     #[test]
     fn a_long_message_is_cut_with_a_mark() {
-        let list = vec![json!({ "message": "x".repeat(50), "range": { "start": { "line": 0, "character": 0 } } })];
+        let list = vec![
+            json!({ "message": "x".repeat(50), "range": { "start": { "line": 0, "character": 0 } } }),
+        ];
         let (text, _) = render_diagnostics(&list, "a", Path::new("/nope"), 4, 10, 10);
         assert!(text.contains("xxxxxxxxxx…"), "{text}");
     }

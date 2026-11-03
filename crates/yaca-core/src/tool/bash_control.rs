@@ -215,7 +215,10 @@ mod tests {
 
         let out = BashKill.run(&ctx, json!({ "id": id.0 })).await.unwrap();
         assert!(out.text.contains("stopped"), "{}", out.text);
-        assert_eq!(ctx.processes.summary(id).unwrap().state, ProcessState::Stopped);
+        assert_eq!(
+            ctx.processes.summary(id).unwrap().state,
+            ProcessState::Stopped
+        );
 
         // It was the model's own act: reading the row afterwards is not an
         // interruption, and it is not news either.
@@ -229,7 +232,9 @@ mod tests {
     async fn killing_a_finished_command_says_so() {
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
-        let id = ctx.processes.register("cargo test".into(), ".".into(), None);
+        let id = ctx
+            .processes
+            .register("cargo test".into(), ".".into(), None);
         ctx.processes.finished(id, Some(0));
 
         let out = BashKill.run(&ctx, json!({ "id": id.0 })).await.unwrap();
@@ -303,7 +308,10 @@ mod tests {
             .register("git -C . push origin main".into(), ".".into(), None);
         ctx.processes.finished(id, Some(0));
 
-        let err = BashRestart.run(&ctx, json!({ "id": id.0 })).await.unwrap_err();
+        let err = BashRestart
+            .run(&ctx, json!({ "id": id.0 }))
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("cannot be restarted"), "{err}");
         // Nothing was started: the row is still the finished one.
         assert_eq!(

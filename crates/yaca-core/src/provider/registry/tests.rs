@@ -32,7 +32,11 @@ fn loading_updates_old_guesses_but_preserves_reported_and_manual_windows() {
     use crate::usage::ContextSource;
     let dir = TempDir::new();
     let mut provider = spec(Protocol::OpenAi);
-    provider.models = vec![unknown_model("guess"), unknown_model("reported"), unknown_model("manual")];
+    provider.models = vec![
+        unknown_model("guess"),
+        unknown_model("reported"),
+        unknown_model("manual"),
+    ];
     for model in &mut provider.models {
         model.context_max = 128_000;
     }
@@ -110,8 +114,7 @@ fn the_key_goes_into_the_header_and_not_into_the_file() {
 #[test]
 fn an_own_header_overrides_the_protocol_default() {
     let mut s = spec(Protocol::Anthropic);
-    s.headers
-        .insert("x-api-key".into(), "static-token".into());
+    s.headers.insert("x-api-key".into(), "static-token".into());
     let headers = s.headers_for(None);
 
     assert!(headers.contains(&("x-api-key".into(), "static-token".into())));
@@ -158,6 +161,7 @@ fn a_model_not_in_the_list_is_an_error() {
         supports_thinking: false,
         context_source: crate::usage::ContextSource::DefaultGuess,
         supports_images: true,
+        pricing_by_hand: false,
         by_hand: false,
     }];
 
@@ -237,10 +241,22 @@ fn a_preset_comes_without_models() {
 
 #[test]
 fn presets_are_all_there_by_id() {
-    let ids: Vec<_> = Providers::default().list.into_iter().map(|p| p.id).collect();
+    let ids: Vec<_> = Providers::default()
+        .list
+        .into_iter()
+        .map(|p| p.id)
+        .collect();
     assert_eq!(
         ids,
-        ["openai", "anthropic", "google", "openrouter", "deepseek", "zai", "decision"]
+        [
+            "openai",
+            "anthropic",
+            "google",
+            "openrouter",
+            "deepseek",
+            "zai",
+            "decision"
+        ]
     );
     assert!(ids.iter().all(|id| is_preset(id)));
     assert!(!is_preset("gateway"));
@@ -267,7 +283,15 @@ fn a_file_from_before_a_preset_existed_gains_it_at_the_end() {
     let ids: Vec<_> = providers.list.iter().map(|p| p.id.as_str()).collect();
     assert_eq!(
         ids,
-        ["anthropic", "openai", "google", "openrouter", "deepseek", "zai", "decision"]
+        [
+            "anthropic",
+            "openai",
+            "google",
+            "openrouter",
+            "deepseek",
+            "zai",
+            "decision"
+        ]
     );
     assert_eq!(
         providers.get(ANTHROPIC_ID).unwrap().base_url,
@@ -302,11 +326,17 @@ fn an_address_that_names_its_version_is_not_given_another() {
             "https://api.z.ai/api/coding/paas/v4/models",
         ),
         // The base URL pasted with its `/v1` on.
-        ("https://api.openai.com/v1", "https://api.openai.com/v1/models"),
+        (
+            "https://api.openai.com/v1",
+            "https://api.openai.com/v1/models",
+        ),
         // A version in the host is not a version of the path.
         ("https://v2.example.com", "https://v2.example.com/v1/models"),
         // Nor is a word that only starts like one.
-        ("https://example.com/vendor", "https://example.com/vendor/v1/models"),
+        (
+            "https://example.com/vendor",
+            "https://example.com/vendor/v1/models",
+        ),
     ] {
         s.base_url = base.into();
         assert_eq!(s.api("/models"), expected);
@@ -333,4 +363,22 @@ fn the_decision_preset_is_a_keyless_openai_shaped_slot() {
     // The preset cannot be deleted: the next load would put it back.
     let mut providers = providers;
     assert!(providers.remove(DECISION_ID).is_err());
+}
+
+#[test]
+fn manual_price_survives_discovery_without_freezing_capabilities() {
+    let mut saved = unknown_model("model");
+    saved.pricing = crate::usage::Pricing {
+        input: 3.0,
+        output: 12.0,
+    };
+    saved.pricing_by_hand = true;
+    let mut refreshed = unknown_model("model");
+    refreshed.context_max = 42_000;
+    let mut models = vec![refreshed];
+    crate::provider::models::keep_hand_edits(&[saved], &mut models);
+    assert_eq!(models[0].pricing.input, 3.0);
+    assert_eq!(models[0].pricing.output, 12.0);
+    assert_eq!(models[0].context_max, 42_000);
+    assert!(models[0].pricing_by_hand);
 }

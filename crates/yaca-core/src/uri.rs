@@ -68,15 +68,24 @@ mod tests {
 
     #[test]
     fn a_path_becomes_an_address_a_server_can_parse() {
-        assert_eq!(file_uri(Path::new("/home/me/my project")), "file:///home/me/my%20project");
+        assert_eq!(
+            file_uri(Path::new("/home/me/my project")),
+            "file:///home/me/my%20project"
+        );
         assert_eq!(file_uri(Path::new(r"C:\Kod\yaca")), "file:///C:/Kod/yaca");
         assert_eq!(file_uri(Path::new(r"\\?\C:\Kod")), "file:///C:/Kod");
     }
 
     #[test]
     fn an_address_comes_back_to_the_path_it_was_made_from() {
-        assert_eq!(path_of("file:///home/me/my%20project"), Some("/home/me/my project".into()));
-        assert_eq!(path_of("file:///c%3A/Kod/%C3%A9.rs"), Some("C:/Kod/é.rs".into()));
+        assert_eq!(
+            path_of("file:///home/me/my%20project"),
+            Some("/home/me/my project".into())
+        );
+        assert_eq!(
+            path_of("file:///c%3A/Kod/%C3%A9.rs"),
+            Some("C:/Kod/é.rs".into())
+        );
         assert_eq!(path_of("file:///C:/Kod"), Some("C:/Kod".into()));
         assert_eq!(path_of("https://example.test/a"), None);
     }

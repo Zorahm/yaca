@@ -68,7 +68,8 @@ pub fn with_checkpoints(
             }
 
             AgentEvent::TurnStarted { turn_id, .. } => open_turn = Some(turn_id.clone()),
-            AgentEvent::TurnFinished { turn_id, .. } | AgentEvent::TurnCancelled { turn_id, .. }
+            AgentEvent::TurnFinished { turn_id, .. }
+            | AgentEvent::TurnCancelled { turn_id, .. }
                 if open_turn.as_ref() == Some(turn_id) =>
             {
                 open_turn = None;

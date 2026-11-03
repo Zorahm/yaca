@@ -145,7 +145,10 @@ fn parse(input: &Value) -> Result<Question, ToolError> {
     })?;
     if !(MIN_OPTIONS..=MAX_OPTIONS).contains(&raw.len()) {
         return Err(ToolError::failed_with(
-            format!("{count} options provided, expected between {MIN_OPTIONS} and {MAX_OPTIONS}", count = raw.len()),
+            format!(
+                "{count} options provided, expected between {MIN_OPTIONS} and {MAX_OPTIONS}",
+                count = raw.len()
+            ),
             format!(
                 "AskUser takes between {MIN_OPTIONS} and {MAX_OPTIONS} options, and this \
                  call gave {}. Make the call again with options in that range: a choice \
@@ -197,7 +200,9 @@ fn for_human(options: &[QuestionOption], reply: &QuestionReply) -> String {
             let picked = labels(options, selected);
             match (picked.is_empty(), other) {
                 (false, None) => format!("Answer: {}", picked.join(", ")),
-                (false, Some(text)) => format!("Answer: {} · custom text: \"{text}\"", picked.join(", ")),
+                (false, Some(text)) => {
+                    format!("Answer: {} · custom text: \"{text}\"", picked.join(", "))
+                }
                 (true, Some(text)) => format!("Answer in custom text: \"{text}\""),
                 (true, None) => "No answer".to_string(),
             }

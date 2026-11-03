@@ -41,14 +41,22 @@ pub(crate) struct PdfText {
 
 /// Parses `pages` as the model writes it: `"5"`, `"3-7"`, `"3-"`.
 pub(crate) fn parse_pages(raw: &str) -> Result<RangeInclusive<u32>, ToolError> {
-    let bad = || ToolError::failed(format!("pages must look like \"3\" or \"3-7\", got \"{raw}\""));
+    let bad = || {
+        ToolError::failed(format!(
+            "pages must look like \"3\" or \"3-7\", got \"{raw}\""
+        ))
+    };
     let raw = raw.trim();
     let (from, to) = match raw.split_once('-') {
         Some((from, to)) => (from.trim(), to.trim()),
         None => (raw, raw),
     };
     let from: u32 = from.parse().map_err(|_| bad())?;
-    let to: u32 = if to.is_empty() { u32::MAX } else { to.parse().map_err(|_| bad())? };
+    let to: u32 = if to.is_empty() {
+        u32::MAX
+    } else {
+        to.parse().map_err(|_| bad())?
+    };
     if from == 0 || to < from {
         return Err(bad());
     }
@@ -119,7 +127,9 @@ pub(crate) fn read(
     for number in range.clone() {
         // `get_pages` numbers from one in document order; the key is what
         // `output_doc_page` looks the page up by.
-        let Some(&key) = numbers.get(number as usize - 1) else { break };
+        let Some(&key) = numbers.get(number as usize - 1) else {
+            break;
+        };
         let page = page_text(&doc, key);
         text.push_str(&format!("--- page {number} of {total} ---\n"));
         match page {
@@ -181,7 +191,10 @@ pub(crate) mod tests {
         let mut objects: Vec<String> = Vec::new();
         objects.push("<< /Type /Catalog /Pages 2 0 R >>".into());
         let kids: Vec<String> = (0..n).map(|i| format!("{} 0 R", 4 + i * 2)).collect();
-        objects.push(format!("<< /Type /Pages /Kids [{}] /Count {n} >>", kids.join(" ")));
+        objects.push(format!(
+            "<< /Type /Pages /Kids [{}] /Count {n} >>",
+            kids.join(" ")
+        ));
         objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into());
         for (i, line) in pages.iter().enumerate() {
             let content = format!("BT /F1 12 Tf 72 720 Td ({line}) Tj ET");
@@ -203,7 +216,9 @@ pub(crate) mod tests {
             out.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", i + 1).as_bytes());
         }
         let xref = out.len();
-        out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+        out.extend_from_slice(
+            format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes(),
+        );
         for offset in offsets {
             out.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
         }
@@ -241,7 +256,11 @@ pub(crate) mod tests {
 
     #[test]
     fn a_range_reads_only_its_pages() {
-        let bytes = pdf(&["Alpha page text here", "Bravo page text here", "Charlie page text here"]);
+        let bytes = pdf(&[
+            "Alpha page text here",
+            "Bravo page text here",
+            "Charlie page text here",
+        ]);
         let read = read(&bytes, "a.pdf", Some(2..=2)).unwrap();
         assert!(read.text.contains("Bravo"));
         assert!(!read.text.contains("Alpha") && !read.text.contains("Charlie"));
@@ -250,7 +269,9 @@ pub(crate) mod tests {
 
     #[test]
     fn a_long_document_asks_for_a_range() {
-        let texts: Vec<String> = (1..=12).map(|i| format!("Text on page number {i}")).collect();
+        let texts: Vec<String> = (1..=12)
+            .map(|i| format!("Text on page number {i}"))
+            .collect();
         let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
         let err = read(&pdf(&refs), "big.pdf", None).unwrap_err();
         assert!(err.for_model().contains("pages"), "{}", err.for_model());

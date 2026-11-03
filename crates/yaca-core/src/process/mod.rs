@@ -820,8 +820,10 @@ mod tests {
         assert_eq!(summary.state, ProcessState::Running);
         assert!(summary.finished_at.is_none());
         assert!(procs.take_notices().is_empty());
-        assert!(procs.read(id, 100).unwrap().text.starts_with("old
-"));
+        assert!(procs.read(id, 100).unwrap().text.starts_with(
+            "old
+"
+        ));
 
         // A running row cannot be restarted out from under itself.
         assert!(!procs.restart(id, None));

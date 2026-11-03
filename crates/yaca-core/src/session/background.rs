@@ -43,10 +43,7 @@ pub(super) struct Report {
 impl Report {
     fn for_model(self) -> ContentBlock {
         let text = match self.outcome {
-            Ok(report) => format!(
-                "[background subagent {} has reported]\n{report}",
-                self.row
-            ),
+            Ok(report) => format!("[background subagent {} has reported]\n{report}", self.row),
             Err(why) => format!(
                 "[background subagent {} failed and wrote no report]\n{why}\nWhat it \
                  changed before failing is in the working tree: look before going on.",

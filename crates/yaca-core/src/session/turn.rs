@@ -24,8 +24,8 @@ use crate::workspace::Workspace;
 use crate::checkpoint::CheckpointReason;
 
 use super::accumulator::{Accumulator, RouteDecision};
-use super::calls::{Caller, ModelPick};
 use super::binding::{self, Fingerprint};
+use super::calls::{Caller, ModelPick};
 use super::guard::{self, Flow, RepeatGuard};
 use super::inbox::Inbox;
 use super::questions::Questions;
@@ -106,11 +106,23 @@ impl Worker {
             };
             let token = CancellationToken::new();
             let Some(job) = job else {
-                let Some(note) = self.process_note() else { continue };
+                let Some(note) = self.process_note() else {
+                    continue;
+                };
                 self.start(token.clone());
-                self.run_turn(String::new(), Vec::new(), token, &mut inbox,
-                    Some(Message { role: Role::User, content: vec![note] })).await;
-                self.save_isolated_work("Background command results".into()).await;
+                self.run_turn(
+                    String::new(),
+                    Vec::new(),
+                    token,
+                    &mut inbox,
+                    Some(Message {
+                        role: Role::User,
+                        content: vec![note],
+                    }),
+                )
+                .await;
+                self.save_isolated_work("Background command results".into())
+                    .await;
                 self.set_busy(false);
                 continue;
             };
@@ -308,6 +320,7 @@ impl Worker {
             rescued = false;
 
             let mut acc = Accumulator::new(turn_id.clone());
+            let caller = self.caller();
             loop {
                 tokio::select! {
                     biased;
@@ -316,7 +329,7 @@ impl Worker {
                         None => break,
                         Some(Ok(event)) => {
                             for out in acc.push(event) {
-                                self.emit(out);
+                                caller.emit_stream(out);
                             }
                             // Before the text that follows it in the stream: the
                             // human sees which model answered before what it said.
@@ -332,6 +345,11 @@ impl Worker {
 
             let pricing = self.pricing_of(done.routed.as_ref());
             self.usage.record(done.usage, pricing);
+            self.usage.reconcile_cost(done.usage, pricing, done.cost);
+            for &(counts, price, cost) in &done.aside_usage {
+                self.usage.record_aside(counts, price);
+                self.usage.reconcile_cost(counts, price, cost);
+            }
 
             let spoke = done
                 .blocks
@@ -357,7 +375,13 @@ impl Worker {
             // with an error rather than run (`calls::garbled`).
             if done.calls.is_empty() {
                 if let Some(note) = self.process_note() {
-                    self.remember(turn_id, Message { role: Role::User, content: vec![note] });
+                    self.remember(
+                        turn_id,
+                        Message {
+                            role: Role::User,
+                            content: vec![note],
+                        },
+                    );
                     continue;
                 }
                 // Nothing left to do is not the end while subagents are still
@@ -381,10 +405,7 @@ impl Worker {
                 continue;
             }
 
-            let results = self
-                .caller()
-                .run_batch(turn_id, &done.calls, cancel)
-                .await;
+            let results = self.caller().run_batch(turn_id, &done.calls, cancel).await;
             self.settle_subagents();
             // All results in one message: splitting them across several —
             // would quietly teach the model not to call tools in parallel.
@@ -470,8 +491,10 @@ impl Worker {
         if notices.is_empty() {
             return None;
         }
-        let mut text = String::from("[background commands ended]
-");
+        let mut text = String::from(
+            "[background commands ended]
+",
+        );
         for n in notices {
             let how = match n.code {
                 Some(0) => "exited successfully".to_string(),
@@ -485,7 +508,10 @@ impl Worker {
             ));
             if let Some(output) = self.shared.processes.read(n.id, 16 * 1024) {
                 if output.missed > 0 {
-                    text.push_str(&format!("  {} earlier output lines were dropped.\n", output.missed));
+                    text.push_str(&format!(
+                        "  {} earlier output lines were dropped.\n",
+                        output.missed
+                    ));
                 }
                 text.push_str(&output.text);
                 text.push('\n');
@@ -510,7 +536,12 @@ impl Worker {
     /// The same whether it opens a turn or joins a running one (§7.4): each
     /// message gets its own point, and `Esc Esc` means "back to before the
     /// last thing I said" either way.
-    pub(super) async fn hear(&self, turn_id: &TurnId, text: String, attachments: Vec<String>) -> Message {
+    pub(super) async fn hear(
+        &self,
+        turn_id: &TurnId,
+        text: String,
+        attachments: Vec<String>,
+    ) -> Message {
         // §13, `Esc Esc`: "roll back to the previous message". The point has
         // to exist before the turn touches anything, and §5.1 hangs its
         // "roll back to before this message" on the same one. It follows the
@@ -552,9 +583,11 @@ impl Worker {
                     message: why.clone(),
                     retryable: false,
                 });
-                format!("{text}
+                format!(
+                    "{text}
 
-[The MCP prompt this names could not be fetched: {why}]")
+[The MCP prompt this names could not be fetched: {why}]"
+                )
             }
             None => slash::expand(self.ws.home(), &text)
                 .or_else(|| slash::expand_in(&self.shared.plugins.commands, &text))
@@ -610,11 +643,19 @@ impl Worker {
     /// in a temp folder, and the human pointing at it is the permission. The
     /// boundary is still held for what the agent reads on its own —
     /// `ReadImage` stays inside the project.
-    fn attached(&self, raw: &str) -> Option<PathBuf> {
+    pub(super) fn attached(&self, raw: &str) -> Option<PathBuf> {
         if let Ok(path) = self.ws.resolve_existing(raw) {
             return Some(path);
         }
         let path = Path::new(raw);
+        if self.ws.is_chat() {
+            let source = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                self.ws.home().join(path)
+            };
+            return super::chat_files::copy(&source, self.ws.root()).ok();
+        }
         (path.is_absolute() && picture::is_picture(path)).then(|| path.to_path_buf())
     }
 
@@ -647,7 +688,7 @@ impl Worker {
         let state = self.shared.state.lock().unwrap().clone();
         let info = self.shared.model_info(&state.model);
         let intent = state.mode.intent();
-        let (system, tools) = self.head(intent);
+        let (system, tools) = self.head(intent, state.profile);
         // Before the history is copied: a prefix that moved takes the
         // reasoning bound to the old one with it.
         self.rebind(turn_id, binding::fingerprint(&system, &tools));
@@ -676,7 +717,10 @@ impl Worker {
     /// window has to keep this much free for it (`compaction`).
     pub(super) fn answer_room(&self) -> u32 {
         let model = self.shared.state.lock().unwrap().model.clone();
-        self.shared.model_info(&model).max_output.min(MAX_OUTPUT_TOKENS)
+        self.shared
+            .model_info(&model)
+            .max_output
+            .min(MAX_OUTPUT_TOKENS)
     }
 
     pub(super) async fn open_stream(
@@ -684,7 +728,9 @@ impl Worker {
         request: ProviderRequest,
         cancel: &CancellationToken,
     ) -> Result<ProviderStream, ProviderError> {
-        self.shared.open(self.provider.as_ref(), request, cancel).await
+        self.shared
+            .open(self.provider.as_ref(), request, cancel)
+            .await
     }
 
     /// The agent as the one making calls (`calls`).
@@ -714,8 +760,9 @@ impl Worker {
         if spent.is_empty() {
             return;
         }
-        for (counts, pricing) in spent {
+        for (counts, pricing, cost) in spent {
             self.usage.record_aside(counts, pricing);
+            self.usage.reconcile_cost(counts, pricing, cost);
         }
         self.emit(AgentEvent::UsageUpdated {
             usage: self.usage_snapshot(),

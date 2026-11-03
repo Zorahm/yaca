@@ -115,7 +115,9 @@ impl TokenStore {
 }
 
 fn now() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs())
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
 }
 
 fn client() -> reqwest::Client {
@@ -133,7 +135,9 @@ fn client() -> reqwest::Client {
 /// refreshed: the server will answer 401 and ask for one.
 pub async fn bearer(store: &TokenStore, url: &str) -> Option<String> {
     let grant = store.load(url)?;
-    let fresh = grant.expires_at.is_none_or(|at| now() + EXPIRY_MARGIN_SECS < at);
+    let fresh = grant
+        .expires_at
+        .is_none_or(|at| now() + EXPIRY_MARGIN_SECS < at);
     if fresh {
         return Some(grant.access_token);
     }
@@ -178,7 +182,11 @@ async fn token_request(endpoint: &str, form: &[(&str, String)]) -> Result<TokenA
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(format!("token endpoint answered {}: {}", status.as_u16(), body.trim()));
+        return Err(format!(
+            "token endpoint answered {}: {}",
+            status.as_u16(),
+            body.trim()
+        ));
     }
     serde_json::from_str(&body).map_err(|e| format!("token endpoint answer does not parse: {e}"))
 }
@@ -290,15 +298,21 @@ pub(crate) async fn discover(server: &Url, challenge: Option<&str>) -> Result<En
         }
     }
     let issuer = match issuer {
-        Some(issuer) => Url::parse(&issuer).map_err(|e| format!("authorization server address: {e}"))?,
+        Some(issuer) => {
+            Url::parse(&issuer).map_err(|e| format!("authorization server address: {e}"))?
+        }
         None => origin(server),
     };
 
     for kind in ["oauth-authorization-server", "openid-configuration"] {
-        let Some(address) = well_known(&issuer, kind) else { continue };
+        let Some(address) = well_known(&issuer, kind) else {
+            continue;
+        };
         if let Some(doc) = get_json(&http, &address).await {
             let field = |key: &str| doc[key].as_str().map(str::to_string);
-            if let (Some(authorize), Some(token)) = (field("authorization_endpoint"), field("token_endpoint")) {
+            if let (Some(authorize), Some(token)) =
+                (field("authorization_endpoint"), field("token_endpoint"))
+            {
                 return Ok(Endpoints {
                     authorize,
                     token,
@@ -334,14 +348,22 @@ fn well_known(url: &Url, kind: &str) -> Option<String> {
 }
 
 async fn get_json(http: &reqwest::Client, url: &str) -> Option<Value> {
-    let response = http.get(url).header("Accept", "application/json").send().await.ok()?;
+    let response = http
+        .get(url)
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .ok()?;
     if !response.status().is_success() {
         return None;
     }
     response.json().await.ok()
 }
 
-async fn register_client(endpoint: &str, redirect: &str) -> Result<(String, Option<String>), String> {
+async fn register_client(
+    endpoint: &str,
+    redirect: &str,
+) -> Result<(String, Option<String>), String> {
     let response = client()
         .post(endpoint)
         .json(&json!({
@@ -357,7 +379,10 @@ async fn register_client(endpoint: &str, redirect: &str) -> Result<(String, Opti
     let status = response.status();
     let body: Value = response.json().await.unwrap_or(Value::Null);
     if !status.is_success() {
-        return Err(format!("client registration answered {}: {body}", status.as_u16()));
+        return Err(format!(
+            "client registration answered {}: {body}",
+            status.as_u16()
+        ));
     }
     let id = body["client_id"]
         .as_str()
@@ -423,17 +448,29 @@ async fn wait_for_code(listener: &TcpListener, state: &str) -> Result<String, St
         let read = socket.read(&mut buffer).await.unwrap_or(0);
         let request = String::from_utf8_lossy(&buffer[..read]);
         let target = request.split_whitespace().nth(1).unwrap_or("/").to_string();
-        let Ok(url) = Url::parse(&format!("http://127.0.0.1{target}")) else { continue };
+        let Ok(url) = Url::parse(&format!("http://127.0.0.1{target}")) else {
+            continue;
+        };
         if url.path() != "/callback" {
-            let _ = socket.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await;
+            let _ = socket
+                .write_all(
+                    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .await;
             continue;
         }
-        let param = |key: &str| url.query_pairs().find(|(k, _)| k == key).map(|(_, v)| v.into_owned());
+        let param = |key: &str| {
+            url.query_pairs()
+                .find(|(k, _)| k == key)
+                .map(|(_, v)| v.into_owned())
+        };
         let outcome = if param("state").as_deref() != Some(state) {
             Err("the login's answer came back with a different state".to_string())
         } else if let Some(error) = param("error") {
             let about = param("error_description").unwrap_or_default();
-            Err(format!("the login was refused: {error} {about}").trim().to_string())
+            Err(format!("the login was refused: {error} {about}")
+                .trim()
+                .to_string())
         } else {
             param("code").ok_or_else(|| "the login's answer has no code".to_string())
         };
@@ -505,9 +542,17 @@ mod tests {
         )
         .unwrap();
         let parsed = Url::parse(&url).unwrap();
-        let get = |k: &str| parsed.query_pairs().find(|(key, _)| key == k).map(|(_, v)| v.into_owned());
+        let get = |k: &str| {
+            parsed
+                .query_pairs()
+                .find(|(key, _)| key == k)
+                .map(|(_, v)| v.into_owned())
+        };
         assert_eq!(get("code_challenge_method").as_deref(), Some("S256"));
-        assert_eq!(get("redirect_uri").as_deref(), Some("http://127.0.0.1:5000/callback"));
+        assert_eq!(
+            get("redirect_uri").as_deref(),
+            Some("http://127.0.0.1:5000/callback")
+        );
         assert_eq!(get("resource").as_deref(), Some("https://mcp.test/mcp"));
         assert_eq!(get("scope").as_deref(), Some("read"));
     }
@@ -526,7 +571,10 @@ mod tests {
             resource: "https://mcp.test/mcp".into(),
         };
         store.save("https://mcp.test/mcp", &grant).unwrap();
-        assert_eq!(bearer(&store, "https://mcp.test/mcp").await.as_deref(), Some("a1"));
+        assert_eq!(
+            bearer(&store, "https://mcp.test/mcp").await.as_deref(),
+            Some("a1")
+        );
         store.forget("https://mcp.test/mcp");
         assert_eq!(bearer(&store, "https://mcp.test/mcp").await, None);
     }

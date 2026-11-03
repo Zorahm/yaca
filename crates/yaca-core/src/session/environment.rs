@@ -193,7 +193,12 @@ mod tests {
 
     #[test]
     fn a_clean_tree_is_said_to_be_clean() {
-        let s = render(Some("2026-10-11".into()), Some("## master...origin/master\n"), None, &[]);
+        let s = render(
+            Some("2026-10-11".into()),
+            Some("## master...origin/master\n"),
+            None,
+            &[],
+        );
         assert!(s.contains("Today's date: 2026-10-11"));
         assert!(s.contains("Git branch: master...origin/master"));
         assert!(s.contains("clean"));
@@ -210,14 +215,28 @@ mod tests {
 
     #[test]
     fn the_session_folder_is_not_reported_as_a_change() {
-        let s = render(None, Some("## main
+        let s = render(
+            None,
+            Some(
+                "## main
 ?? .yaca/
-"), None, &[]);
+",
+            ),
+            None,
+            &[],
+        );
         assert!(s.contains("clean"), "{s}");
-        let s = render(None, Some("## main
+        let s = render(
+            None,
+            Some(
+                "## main
 ?? .yaca/
  M a.rs
-"), None, &[]);
+",
+            ),
+            None,
+            &[],
+        );
         assert!(!s.contains(".yaca"), "{s}");
     }
 

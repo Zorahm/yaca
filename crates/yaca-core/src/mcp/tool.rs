@@ -37,7 +37,13 @@ pub(crate) const RESULT_MAX_BYTES: usize = 100_000;
 pub(crate) fn name_for(server: &str, tool: &str) -> String {
     let clean = |text: &str| -> String {
         text.chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect()
     };
     let name = format!("{PREFIX}{}__{}", clean(server), clean(tool));
@@ -177,7 +183,12 @@ impl Tool for McpTool {
 /// A call's result as the session's tools return theirs.
 ///
 /// `home` is the project, where the images are kept for the feed.
-fn output(server: &str, result: CallResult, vision: bool, home: &Path) -> Result<ToolOutput, ToolError> {
+fn output(
+    server: &str,
+    result: CallResult,
+    vision: bool,
+    home: &Path,
+) -> Result<ToolOutput, ToolError> {
     let mut text = String::new();
     let mut pictures: Vec<Picture> = Vec::new();
     let mut kept: Vec<String> = Vec::new();
@@ -224,8 +235,15 @@ fn output(server: &str, result: CallResult, vision: bool, home: &Path) -> Result
 
     let (text, truncated) = capped(text, RESULT_MAX_BYTES);
     if result.is_error {
-        let detail = if text.is_empty() { "The server gave no details.".to_string() } else { text };
-        return Err(ToolError::failed_with(format!("{server}: the tool returned an error"), detail));
+        let detail = if text.is_empty() {
+            "The server gave no details.".to_string()
+        } else {
+            text
+        };
+        return Err(ToolError::failed_with(
+            format!("{server}: the tool returned an error"),
+            detail,
+        ));
     }
 
     let mut out = ToolOutput::new(text).truncated(truncated);
@@ -281,7 +299,10 @@ pub(crate) fn capped(mut text: String, max: usize) -> (String, bool) {
         return (text, false);
     }
     let total = text.len();
-    let cut = (0..=max).rev().find(|i| text.is_char_boundary(*i)).unwrap_or(0);
+    let cut = (0..=max)
+        .rev()
+        .find(|i| text.is_char_boundary(*i))
+        .unwrap_or(0);
     text.truncate(cut);
     text.push_str(&format!(
         "\n[truncated: the first {cut} of {total} bytes are shown. Ask the server for less at a time.]"
@@ -300,7 +321,10 @@ mod tests {
     #[test]
     fn a_name_is_made_of_what_providers_accept() {
         assert_eq!(name_for("files", "read"), "mcp__files__read");
-        assert_eq!(name_for("my server", "do.it/now"), "mcp__my_server__do_it_now");
+        assert_eq!(
+            name_for("my server", "do.it/now"),
+            "mcp__my_server__do_it_now"
+        );
         assert_eq!(name_for("s", &"x".repeat(100)).chars().count(), 64);
     }
 
@@ -315,7 +339,10 @@ mod tests {
         assert_eq!(schema["required"], json!(["q"]));
         assert!(schema.get("$schema").is_none());
         // A server that sent no schema at all still gets a callable tool.
-        assert_eq!(normalized(&Value::Null), json!({ "type": "object", "properties": {} }));
+        assert_eq!(
+            normalized(&Value::Null),
+            json!({ "type": "object", "properties": {} })
+        );
     }
 
     #[test]
@@ -337,8 +364,13 @@ mod tests {
 
     #[test]
     fn structured_output_without_text_is_still_an_answer() {
-        let out = output("s", result(json!({ "structuredContent": { "n": 1 } })), true, Path::new("."))
-            .unwrap();
+        let out = output(
+            "s",
+            result(json!({ "structuredContent": { "n": 1 } })),
+            true,
+            Path::new("."),
+        )
+        .unwrap();
         assert!(out.text.contains("\"n\": 1"));
     }
 
@@ -346,7 +378,9 @@ mod tests {
     fn an_error_result_is_a_failed_call_with_the_servers_words() {
         let err = output(
             "tracker",
-            result(json!({ "isError": true, "content": [{ "type": "text", "text": "no such task" }] })),
+            result(
+                json!({ "isError": true, "content": [{ "type": "text", "text": "no such task" }] }),
+            ),
             true,
             Path::new("."),
         )

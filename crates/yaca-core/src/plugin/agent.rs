@@ -42,8 +42,10 @@ const TOP_LEVEL: [&str; 10] = [
 pub fn load(root: &Path) -> Result<Contents, String> {
     let manifest = contained(root, &root.join(MANIFEST))
         .ok_or_else(|| "plugin.json points outside the plugin".to_string())?;
-    let text = std::fs::read_to_string(&manifest).map_err(|e| format!("cannot read plugin.json: {e}"))?;
-    let value: Value = serde_json::from_str(&text).map_err(|e| format!("plugin.json is not JSON: {e}"))?;
+    let text =
+        std::fs::read_to_string(&manifest).map_err(|e| format!("cannot read plugin.json: {e}"))?;
+    let value: Value =
+        serde_json::from_str(&text).map_err(|e| format!("plugin.json is not JSON: {e}"))?;
     let Value::Object(fields) = value else {
         return Err("plugin.json is not an object".into());
     };
@@ -56,17 +58,29 @@ pub fn load(root: &Path) -> Result<Contents, String> {
     }
     let name = match fields.get("name") {
         Some(Value::String(n)) if is_plugin_name(n) => n.clone(),
-        Some(Value::String(n)) => return Err(format!("name «{n}» does not follow the Agent Plugins rules")),
+        Some(Value::String(n)) => {
+            return Err(format!(
+                "name «{n}» does not follow the Agent Plugins rules"
+            ))
+        }
         _ => return Err("plugin.json has no name".into()),
     };
-    for key in ["version", "description", "homepage", "repository", "license"] {
+    for key in [
+        "version",
+        "description",
+        "homepage",
+        "repository",
+        "license",
+    ] {
         if fields.get(key).is_some_and(|v| !v.is_string()) {
             return Err(format!("field {key} must be a string"));
         }
     }
     check_author(fields.get("author"))?;
     if let Some(keywords) = fields.get("keywords") {
-        let ok = keywords.as_array().is_some_and(|a| a.iter().all(Value::is_string));
+        let ok = keywords
+            .as_array()
+            .is_some_and(|a| a.iter().all(Value::is_string));
         if !ok {
             return Err("keywords must be a list of strings".into());
         }
@@ -78,15 +92,23 @@ pub fn load(root: &Path) -> Result<Contents, String> {
         notes.push(format!("unknown plugin.json field «{key}» was skipped"));
     }
 
-    let mut contents = Contents::named(name, string(&fields, "version"), string(&fields, "description"));
+    let mut contents = Contents::named(
+        name,
+        string(&fields, "version"),
+        string(&fields, "description"),
+    );
     contents.notes = notes;
 
     let skills = root.join(SKILLS_DIR);
     if skills.exists() {
         match contained(root, &skills) {
             Some(dir) if dir.is_dir() => contents.skill_dirs.push(dir),
-            Some(_) => contents.notes.push("skills is not a directory, its skills were not loaded".into()),
-            None => contents.notes.push("skills points outside the plugin, its skills were not loaded".into()),
+            Some(_) => contents
+                .notes
+                .push("skills is not a directory, its skills were not loaded".into()),
+            None => contents
+                .notes
+                .push("skills points outside the plugin, its skills were not loaded".into()),
         }
     }
 
@@ -97,7 +119,9 @@ pub fn load(root: &Path) -> Result<Contents, String> {
                 contents.mcp_servers = servers;
                 contents.notes.extend(notes);
             }
-            Err(why) => contents.notes.push(format!("mcp.json: {why}; the plugin's servers are turned off")),
+            Err(why) => contents.notes.push(format!(
+                "mcp.json: {why}; the plugin's servers are turned off"
+            )),
         }
     }
     Ok(contents)
@@ -139,7 +163,9 @@ type Servers = BTreeMap<String, McpServerSettings>;
 fn load_mcp(root: &Path, path: &Path) -> Result<(Servers, Vec<String>), String> {
     let path = contained(root, path).ok_or("file points outside the plugin")?;
     let text = std::fs::read_to_string(&path).map_err(|e| format!("cannot be read: {e}"))?;
-    let Value::Object(fields) = serde_json::from_str::<Value>(&text).map_err(|e| format!("not JSON: {e}"))? else {
+    let Value::Object(fields) =
+        serde_json::from_str::<Value>(&text).map_err(|e| format!("not JSON: {e}"))?
+    else {
         return Err("not an object".into());
     };
     match fields.get("$schema") {
@@ -147,7 +173,10 @@ fn load_mcp(root: &Path, path: &Path) -> Result<(Servers, Vec<String>), String> 
         Some(Value::String(s)) => return Err(format!("version {s} does not match plugin.json")),
         _ => return Err("no $schema".into()),
     }
-    if let Some(key) = fields.keys().find(|k| *k != "$schema" && *k != "mcpServers") {
+    if let Some(key) = fields
+        .keys()
+        .find(|k| *k != "$schema" && *k != "mcpServers")
+    {
         return Err(format!("extra field «{key}»"));
     }
     let Some(Value::Object(servers)) = fields.get("mcpServers") else {
@@ -161,7 +190,9 @@ fn load_mcp(root: &Path, path: &Path) -> Result<(Servers, Vec<String>), String> 
             Ok(Some(settings)) => {
                 out.insert(name.clone(), settings);
             }
-            Ok(None) => notes.push(format!("server «{name}»: the sse transport is not supported in Yaca")),
+            Ok(None) => notes.push(format!(
+                "server «{name}»: the sse transport is not supported in Yaca"
+            )),
             Err(why) => notes.push(format!("server «{name}» was skipped: {why}")),
         }
     }
@@ -176,7 +207,10 @@ fn server(root: &Path, entry: &Value) -> Result<Option<McpServerSettings>, Strin
     let Value::Object(fields) = entry else {
         return Err("not an object".into());
     };
-    let kind = fields.get("type").and_then(Value::as_str).ok_or("no type")?;
+    let kind = fields
+        .get("type")
+        .and_then(Value::as_str)
+        .ok_or("no type")?;
     let allowed: &[&str] = match kind {
         "stdio" => &["type", "command", "args", "env", "cwd"],
         "streamable-http" | "sse" => &["type", "url", "headers"],
@@ -204,13 +238,20 @@ fn server(root: &Path, entry: &Value) -> Result<Option<McpServerSettings>, Strin
         }));
     }
 
-    let command = fields.get("command").and_then(Value::as_str).ok_or("no command")?;
+    let command = fields
+        .get("command")
+        .and_then(Value::as_str)
+        .ok_or("no command")?;
     let program = program(root, command)?;
     let args = match fields.get("args") {
         None => Vec::new(),
         Some(Value::Array(items)) => items
             .iter()
-            .map(|v| v.as_str().map(str::to_string).ok_or("args must be a list of strings"))
+            .map(|v| {
+                v.as_str()
+                    .map(str::to_string)
+                    .ok_or("args must be a list of strings")
+            })
             .collect::<Result<_, _>>()?,
         Some(_) => return Err("args must be a list of strings".into()),
     };
@@ -238,7 +279,11 @@ fn strings(value: Option<&Value>, what: &str) -> Result<BTreeMap<String, String>
         None => Ok(BTreeMap::new()),
         Some(Value::Object(map)) => map
             .iter()
-            .map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string())).ok_or(format!("{what}.{k} is not a string")))
+            .map(|(k, v)| {
+                v.as_str()
+                    .map(|v| (k.clone(), v.to_string()))
+                    .ok_or(format!("{what}.{k} is not a string"))
+            })
             .collect(),
         Some(_) => Err(format!("{what} must be an object of strings")),
     }
@@ -279,11 +324,16 @@ fn cwd(root: &Path, raw: &str) -> Result<String, String> {
         // A directory that does not exist yet cannot be checked through links;
         // the lexical check still stops `..`.
         let path = root.join(rest);
-        if rest.split('/').any(|p| p == "..") || (path.exists() && contained(root, &path).is_none()) {
+        if rest.split('/').any(|p| p == "..") || (path.exists() && contained(root, &path).is_none())
+        {
             return Err("cwd points outside the plugin".into());
         }
     }
-    Ok(if rest.is_empty() { var.to_string() } else { format!("{var}/{rest}") })
+    Ok(if rest.is_empty() {
+        var.to_string()
+    } else {
+        format!("{var}/{rest}")
+    })
 }
 
 fn check_url(url: &str) -> Result<(), String> {

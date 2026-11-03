@@ -18,10 +18,10 @@
 pub mod app;
 mod approval;
 mod client;
-pub mod elicit;
-pub mod oauth;
 pub mod config;
+pub mod elicit;
 mod hub;
+pub mod oauth;
 mod protocol;
 mod resources;
 mod tool;

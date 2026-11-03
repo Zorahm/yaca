@@ -51,7 +51,13 @@ pub async fn run(
         Ok(cmd) => cmd,
         Err(why) => return Ran::Broken(why),
     };
-    let unix_style = matches!(hook.run, HookRun::Shell { powershell: false, .. });
+    let unix_style = matches!(
+        hook.run,
+        HookRun::Shell {
+            powershell: false,
+            ..
+        }
+    );
     let root = path_for(&owner.root, unix_style);
     let data = path_for(&owner.data, unix_style);
     let _ = std::fs::create_dir_all(&owner.data);
@@ -134,14 +140,24 @@ fn command(run: &HookRun, owner: &HookOwner) -> Result<tokio::process::Command, 
             cmd.args(args.iter().map(|a| fill(a)));
             cmd
         }
-        HookRun::Shell { command, powershell: true } => {
-            let mut cmd = std::process::Command::new(if cfg!(windows) { "powershell.exe" } else { "pwsh" });
+        HookRun::Shell {
+            command,
+            powershell: true,
+        } => {
+            let mut cmd = std::process::Command::new(if cfg!(windows) {
+                "powershell.exe"
+            } else {
+                "pwsh"
+            });
             // PowerShell reads `${NAME}` as one of its own variables, not the
             // environment's, so the plugin's paths go in as text.
             cmd.args(["-NoProfile", "-NonInteractive", "-Command", &fill(command)]);
             cmd
         }
-        HookRun::Shell { command, powershell: false } => {
+        HookRun::Shell {
+            command,
+            powershell: false,
+        } => {
             let bash = bash().ok_or("bash was not found (on Windows, Git Bash is needed)")?;
             let mut cmd = std::process::Command::new(bash);
             cmd.arg("-c").arg(command);
@@ -177,7 +193,9 @@ fn path_for(path: &Path, unix_style: bool) -> String {
 }
 
 async fn read_all(pipe: Option<impl tokio::io::AsyncRead + Unpin>) -> String {
-    let Some(mut pipe) = pipe else { return String::new() };
+    let Some(mut pipe) = pipe else {
+        return String::new();
+    };
     let mut kept = Vec::new();
     let mut buf = [0u8; 8192];
     loop {
@@ -189,7 +207,10 @@ async fn read_all(pipe: Option<impl tokio::io::AsyncRead + Unpin>) -> String {
             }
         }
     }
-    String::from_utf8_lossy(&kept).replace("\r\n", "\n").trim_end().to_string()
+    String::from_utf8_lossy(&kept)
+        .replace("\r\n", "\n")
+        .trim_end()
+        .to_string()
 }
 
 /// Where bash is, looked for once per process.
@@ -217,10 +238,18 @@ fn find_bash() -> Option<PathBuf> {
         .map(|base| base.join("Git").join("bin").join("bash.exe"));
     let local = std::env::var_os("LOCALAPPDATA")
         .map(PathBuf::from)
-        .map(|base| base.join("Programs").join("Git").join("bin").join("bash.exe"));
+        .map(|base| {
+            base.join("Programs")
+                .join("Git")
+                .join("bin")
+                .join("bash.exe")
+        });
     // `git.exe` lives in `<Git>\cmd`; bash is beside it in `<Git>\bin`.
-    let beside_git = on_path("git.exe")
-        .and_then(|git| git.parent()?.parent().map(|g| g.join("bin").join("bash.exe")));
+    let beside_git = on_path("git.exe").and_then(|git| {
+        git.parent()?
+            .parent()
+            .map(|g| g.join("bin").join("bash.exe"))
+    });
     program_files
         .chain(local)
         .chain(beside_git)

@@ -47,7 +47,13 @@ impl ChangeSet {
     /// Notes a write Yaca has just made. `before` is the file before the call,
     /// `after` is the file now. A file already tracked keeps its baseline: the
     /// view is "this session's changes", not "this call's".
-    pub fn record(&self, path: String, abs: PathBuf, before: Option<String>, after: Option<String>) {
+    pub fn record(
+        &self,
+        path: String,
+        abs: PathBuf,
+        before: Option<String>,
+        after: Option<String>,
+    ) {
         let mut files = self.files.lock().unwrap();
         match files.iter().position(|t| t.abs == abs) {
             Some(at) => files[at].after = after,
@@ -114,8 +120,18 @@ mod tests {
     #[test]
     fn a_second_write_keeps_the_first_baseline() {
         let set = ChangeSet::new();
-        set.record("a.txt".into(), abs("a.txt"), Some("one\n".into()), Some("two\n".into()));
-        set.record("a.txt".into(), abs("a.txt"), Some("two\n".into()), Some("three\n".into()));
+        set.record(
+            "a.txt".into(),
+            abs("a.txt"),
+            Some("one\n".into()),
+            Some("two\n".into()),
+        );
+        set.record(
+            "a.txt".into(),
+            abs("a.txt"),
+            Some("two\n".into()),
+            Some("three\n".into()),
+        );
 
         let fact = set.view("a.txt").unwrap().fact.unwrap();
         assert_eq!(fact.kind, ChangeKind::Modified);
@@ -127,14 +143,27 @@ mod tests {
         let set = ChangeSet::new();
         set.record("a.txt".into(), abs("a.txt"), None, Some("first\n".into()));
 
-        assert_eq!(set.view("a.txt").unwrap().fact.unwrap().kind, ChangeKind::Created);
+        assert_eq!(
+            set.view("a.txt").unwrap().fact.unwrap().kind,
+            ChangeKind::Created
+        );
     }
 
     #[test]
     fn writing_back_the_baseline_leaves_nothing_to_show() {
         let set = ChangeSet::new();
-        set.record("a.txt".into(), abs("a.txt"), Some("x\n".into()), Some("y\n".into()));
-        set.record("a.txt".into(), abs("a.txt"), Some("y\n".into()), Some("x\n".into()));
+        set.record(
+            "a.txt".into(),
+            abs("a.txt"),
+            Some("x\n".into()),
+            Some("y\n".into()),
+        );
+        set.record(
+            "a.txt".into(),
+            abs("a.txt"),
+            Some("y\n".into()),
+            Some("x\n".into()),
+        );
 
         assert!(set.view("a.txt").is_none());
     }
@@ -142,7 +171,12 @@ mod tests {
     #[test]
     fn a_file_changed_by_a_rollback_is_forgotten() {
         let set = ChangeSet::new();
-        set.record("a.txt".into(), abs("a.txt"), Some("x\n".into()), Some("y\n".into()));
+        set.record(
+            "a.txt".into(),
+            abs("a.txt"),
+            Some("x\n".into()),
+            Some("y\n".into()),
+        );
         set.forget("a.txt");
 
         assert!(set.view("a.txt").is_none());

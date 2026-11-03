@@ -39,7 +39,9 @@ fn search(id: &str, input: serde_json::Value) -> [Turn; 2] {
 #[tokio::test]
 async fn a_phrase_is_found_on_both_sides_with_the_number_of_each_message() {
     let dir = TempProject::new();
-    let mut script = vec![Turn::Events(script_text("Remembered: password for the stand is Pineapple."))];
+    let mut script = vec![Turn::Events(script_text(
+        "Remembered: password for the stand is Pineapple.",
+    ))];
     script.extend(search("s1", json!({ "query": "pineapple" })));
     let provider = Arc::new(MockProvider::new(script));
     let handle = recorded(&dir, provider.clone());
@@ -61,7 +63,10 @@ async fn a_phrase_is_found_on_both_sides_with_the_number_of_each_message() {
 async fn a_role_narrows_the_search_to_one_side() {
     let dir = TempProject::new();
     let mut script = vec![Turn::Events(script_text("Recorded about pineapple."))];
-    script.extend(search("s1", json!({ "query": "pineapple", "role": "assistant" })));
+    script.extend(search(
+        "s1",
+        json!({ "query": "pineapple", "role": "assistant" }),
+    ));
     let provider = Arc::new(MockProvider::new(script));
     let handle = recorded(&dir, provider.clone());
 
@@ -121,7 +126,10 @@ async fn a_message_compaction_took_out_of_the_window_is_still_found() {
 
     let mut rx = handle.subscribe();
     handle.send(Command::Compact).await.unwrap();
-    until(&mut rx, |e| matches!(e, AgentEvent::ContextCompacted { .. })).await;
+    until(&mut rx, |e| {
+        matches!(e, AgentEvent::ContextCompacted { .. })
+    })
+    .await;
 
     say(&handle, "what was the code word?").await;
     // The window no longer holds the first message: that is the premise.
@@ -129,7 +137,10 @@ async fn a_message_compaction_took_out_of_the_window_is_still_found() {
     // search was made from, before its result put the word back.
     let sent = provider.seen.lock().unwrap()[5].clone();
     let window = serde_json::to_string(&sent.messages).unwrap();
-    assert!(!window.contains("pomegranate"), "the summary was supposed to replace it");
+    assert!(
+        !window.contains("pomegranate"),
+        "the summary was supposed to replace it"
+    );
 
     let (result, _) = tool_result_of(&provider, "s1");
     let lines: Vec<&str> = result.lines().filter(|l| l.starts_with('#')).collect();
@@ -165,7 +176,10 @@ async fn messages_kept_through_a_compaction_keep_their_numbers() {
 
     let mut rx = handle.subscribe();
     handle.send(Command::Compact).await.unwrap();
-    until(&mut rx, |e| matches!(e, AgentEvent::ContextCompacted { .. })).await;
+    until(&mut rx, |e| {
+        matches!(e, AgentEvent::ContextCompacted { .. })
+    })
+    .await;
     say(&handle, "find").await;
 
     // Compaction writes the turns it keeps into the journal a second time.

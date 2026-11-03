@@ -39,7 +39,7 @@ notifications: boolean,
  * effort. The core stays headless — it is handed a flag, not a settings
  * file it has no business reading.
  */
-respectRobots: boolean, 
+respectRobots: boolean, summarizeWebFetch: boolean, 
 /**
  * Which shell the agent's commands run through (§10). Windows only:
  * elsewhere there is one shell and nothing to choose.

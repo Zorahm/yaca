@@ -35,6 +35,7 @@ fn info(id: &str, ctx: u32, out: u32, effort: bool, thinking: bool) -> ModelInfo
         supports_thinking: thinking,
         context_source: ContextSource::ProviderReported,
         supports_images: true,
+        pricing_by_hand: false,
         by_hand: false,
     }
 }
@@ -175,7 +176,13 @@ fn thought_then(text: &str) -> Message {
 
 async fn collect(router: &RouterProvider, req: ProviderRequest) -> Vec<ProviderEvent> {
     let stream = router.stream(req).await.unwrap();
-    stream.map(|event| event.unwrap()).collect().await
+    stream
+        .map(|event| event.unwrap())
+        .filter(|event| {
+            futures_util::future::ready(!matches!(event, ProviderEvent::AsideUsage { .. }))
+        })
+        .collect()
+        .await
 }
 
 fn seen(mock: &MockProvider) -> Vec<ProviderRequest> {
@@ -189,6 +196,37 @@ fn routed(route: Option<&str>, provider: &str, model: &str, matched: &[&str]) ->
         model: model.into(),
         matched: matched.iter().map(|s| s.to_string()).collect(),
     }
+}
+
+#[tokio::test]
+async fn classification_usage_is_reported_once_per_turn() {
+    let rig = Rig::new(
+        vec![judge(CODE_YES)],
+        vec![],
+        vec![
+            Turn::Events(script_text("one")),
+            Turn::Events(script_text("two")),
+        ],
+    );
+    let (router, _) = rig.router();
+    let first: Vec<_> = router
+        .stream(request(vec![user("write a parser")]))
+        .await
+        .unwrap()
+        .map(|e| e.unwrap())
+        .collect()
+        .await;
+    assert!(first.iter().any(|e| matches!(e, ProviderEvent::AsideUsage { usage, .. } if usage.input == 100 && usage.output == 20)));
+    let second: Vec<_> = router
+        .stream(request(vec![user("write a parser")]))
+        .await
+        .unwrap()
+        .map(|e| e.unwrap())
+        .collect()
+        .await;
+    assert!(!second
+        .iter()
+        .any(|e| matches!(e, ProviderEvent::AsideUsage { .. })));
 }
 
 #[tokio::test]

@@ -161,7 +161,11 @@ async fn the_agent_goes_on_and_the_turn_waits_for_the_report() {
         // The subagent, while the agent's own write waits for the human.
         write("w1", "b.txt"),
         // The agent, while the subagent's write waits in its turn.
-        Turn::Events(script_tool_call("r1", "Read", json!({ "path": "dates.rs" }))),
+        Turn::Events(script_tool_call(
+            "r1",
+            "Read",
+            json!({ "path": "dates.rs" }),
+        )),
         text("waiting for the report"),
         // The subagent, once it was allowed to write.
         text("Created b.txt."),
@@ -182,8 +186,14 @@ async fn the_agent_goes_on_and_the_turn_waits_for_the_report() {
     while let Ok(event) = rx.try_recv() {
         seen.push(event);
     }
-    assert!(!seen.iter().any(is_turn_over), "the turn ended without the report");
-    assert!(!seen.iter().any(finished("t1")), "the row closed with the subagent at work");
+    assert!(
+        !seen.iter().any(is_turn_over),
+        "the turn ended without the report"
+    );
+    assert!(
+        !seen.iter().any(finished("t1")),
+        "the row closed with the subagent at work"
+    );
 
     allow(&handle, &seen, "w1").await;
     seen.extend(until(&mut rx, is_turn_over).await);
@@ -197,7 +207,10 @@ async fn the_agent_goes_on_and_the_turn_waits_for_the_report() {
     // The report woke the agent as a message of its own.
     let woken = said_last(&sent[5]);
     assert_eq!(woken.len(), 1);
-    assert!(woken[0].contains("t1") && woken[0].contains("Created b.txt."), "{woken:?}");
+    assert!(
+        woken[0].contains("t1") && woken[0].contains("Created b.txt."),
+        "{woken:?}"
+    );
 
     // The row of the subagent closes when it reports, after the agent's own
     // later rows, and ahead of the turn.
@@ -255,7 +268,10 @@ async fn a_report_that_is_in_joins_the_results_of_the_batch() {
 async fn esc_stops_a_background_subagent_with_the_turn() {
     let dir = TempProject::new();
 
-    let provider = Arc::new(MockProvider::new(vec![send_and_write(), write("w1", "b.txt")]));
+    let provider = Arc::new(MockProvider::new(vec![
+        send_and_write(),
+        write("w1", "b.txt"),
+    ]));
     let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
@@ -264,7 +280,10 @@ async fn esc_stops_a_background_subagent_with_the_turn() {
     handle.send(Command::Cancel).await.unwrap();
     let seen = until(&mut rx, is_turn_over).await;
 
-    assert!(matches!(seen.last(), Some(AgentEvent::TurnCancelled { .. })));
+    assert!(matches!(
+        seen.last(),
+        Some(AgentEvent::TurnCancelled { .. })
+    ));
     // Its row is closed as stopped, and before the turn's own last event.
     assert!(seen.iter().any(|event| matches!(
         event,

@@ -119,8 +119,15 @@ const PART_CHARS: usize = 1000;
 /// the rest are `account#1`, `account#2`…
 pub(crate) fn store_secret(account: &str, value: &str) -> Result<(), CoreError> {
     let chars: Vec<char> = value.chars().collect();
-    let parts: Vec<String> = chars.chunks(PART_CHARS).map(|c| c.iter().collect()).collect();
-    let parts = if parts.is_empty() { vec![String::new()] } else { parts };
+    let parts: Vec<String> = chars
+        .chunks(PART_CHARS)
+        .map(|c| c.iter().collect())
+        .collect();
+    let parts = if parts.is_empty() {
+        vec![String::new()]
+    } else {
+        parts
+    };
     forget_secret(account);
     let _serial = serial();
     let set = |name: &str, text: &str| {
@@ -161,7 +168,11 @@ pub(crate) fn forget_secret(account: &str) {
     let count = keyring::Entry::new(SERVICE, account)
         .ok()
         .and_then(|e| e.get_password().ok())
-        .and_then(|first| first.split_once('|').and_then(|(n, _)| n.parse::<usize>().ok()))
+        .and_then(|first| {
+            first
+                .split_once('|')
+                .and_then(|(n, _)| n.parse::<usize>().ok())
+        })
         .unwrap_or(1);
     delete(account);
     for at in 1..count {

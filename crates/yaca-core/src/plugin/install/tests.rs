@@ -14,11 +14,22 @@ use crate::testutil::TempDir;
 fn sh_git(dir: &Path, args: &[&str]) -> String {
     let out = Command::new("git")
         .current_dir(dir)
-        .args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"])
+        .args([
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+        ])
         .args(args)
         .output()
         .expect("git runs");
-    assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
@@ -51,7 +62,10 @@ fn file_url(path: &Path) -> String {
 }
 
 fn skill(dir: &TempDir, at: &str, name: &str, body: &str) {
-    dir.write(&format!("{at}/skills/{name}/SKILL.md"), &format!("---\nname: {name}\ndescription: d\n---\n{body}"));
+    dir.write(
+        &format!("{at}/skills/{name}/SKILL.md"),
+        &format!("---\nname: {name}\ndescription: d\n---\n{body}"),
+    );
 }
 
 /// A marketplace named `market` offering `plugins`, committed.
@@ -76,7 +90,11 @@ fn no_leftovers(config: &TempDir) {
     let cache = config.path().join(CACHE_DIR);
     if let Ok(read) = std::fs::read_dir(&cache) {
         for e in read.flatten() {
-            assert!(!e.file_name().to_string_lossy().starts_with('.'), "left behind: {:?}", e.path());
+            assert!(
+                !e.file_name().to_string_lossy().starts_with('.'),
+                "left behind: {:?}",
+                e.path()
+            );
         }
     }
 }
@@ -86,30 +104,46 @@ fn a_git_marketplace_is_cloned_under_the_name_it_gives_itself() {
     let (config, mkt) = (TempDir::new(), TempDir::new());
     let path = market(&mkt, json!([{ "name": "a", "source": "./a" }]));
 
-    let summary = installer(&config).add_marketplace(&file_url(&path)).unwrap();
+    let summary = installer(&config)
+        .add_marketplace(&file_url(&path))
+        .unwrap();
     assert_eq!(summary.name, "market");
     assert_eq!(summary.origin, MarketplaceOrigin::Own);
     assert!(summary.fetched);
     assert_eq!(summary.plugins, Some(1));
-    assert!(config.path().join("marketplaces/market/.claude-plugin/marketplace.json").is_file());
+    assert!(config
+        .path()
+        .join("marketplaces/market/.claude-plugin/marketplace.json")
+        .is_file());
     no_leftovers(&config);
 }
 
 #[test]
 fn a_folder_marketplace_is_read_where_it_is() {
     let (config, mkt) = (TempDir::new(), TempDir::new());
-    mkt.write(".claude-plugin/marketplace.json", r#"{ "name": "local", "plugins": [] }"#);
-    let summary = installer(&config).add_marketplace(&mkt.path().display().to_string()).unwrap();
+    mkt.write(
+        ".claude-plugin/marketplace.json",
+        r#"{ "name": "local", "plugins": [] }"#,
+    );
+    let summary = installer(&config)
+        .add_marketplace(&mkt.path().display().to_string())
+        .unwrap();
     assert_eq!(summary.name, "local");
     assert!(summary.fetched);
-    assert!(!config.path().join("marketplaces/local").exists(), "nothing is copied");
+    assert!(
+        !config.path().join("marketplaces/local").exists(),
+        "nothing is copied"
+    );
 }
 
 #[test]
 fn the_official_marketplace_is_listed_and_not_fetched_until_asked() {
     let config = TempDir::new();
     let list = installer(&config).marketplaces();
-    let official = list.iter().find(|m| m.name == marketplace::OFFICIAL).expect("built in");
+    let official = list
+        .iter()
+        .find(|m| m.name == marketplace::OFFICIAL)
+        .expect("built in");
     assert_eq!(official.origin, MarketplaceOrigin::Builtin);
     assert!(!official.fetched);
     assert_eq!(official.source, "anthropics/claude-plugins-official");
@@ -118,21 +152,34 @@ fn the_official_marketplace_is_listed_and_not_fetched_until_asked() {
 #[test]
 fn claude_codes_marketplaces_are_listed_without_touching_its_files() {
     let (config, home, mkt) = (TempDir::new(), TempDir::new(), TempDir::new());
-    mkt.write(".claude-plugin/marketplace.json", r#"{ "name": "theirs", "plugins": [] }"#);
+    mkt.write(
+        ".claude-plugin/marketplace.json",
+        r#"{ "name": "theirs", "plugins": [] }"#,
+    );
     home.write(
         "plugins/known_marketplaces.json",
-        &json!({ "theirs": { "source": { "source": "directory", "path": mkt.path() } } }).to_string(),
+        &json!({ "theirs": { "source": { "source": "directory", "path": mkt.path() } } })
+            .to_string(),
     );
-    let before = std::fs::read_to_string(home.path().join("plugins/known_marketplaces.json")).unwrap();
+    let before =
+        std::fs::read_to_string(home.path().join("plugins/known_marketplaces.json")).unwrap();
 
     let installer = Installer::new(config.path(), Some(home.path().to_path_buf()));
-    let theirs = installer.marketplaces().into_iter().find(|m| m.name == "theirs").unwrap();
+    let theirs = installer
+        .marketplaces()
+        .into_iter()
+        .find(|m| m.name == "theirs")
+        .unwrap();
     assert_eq!(theirs.origin, MarketplaceOrigin::ClaudeCode);
     assert!(theirs.fetched);
 
     installer.remove_marketplace("theirs").unwrap();
-    assert!(installer.marketplaces().iter().all(|m| m.name != "theirs"), "hidden");
-    let after = std::fs::read_to_string(home.path().join("plugins/known_marketplaces.json")).unwrap();
+    assert!(
+        installer.marketplaces().iter().all(|m| m.name != "theirs"),
+        "hidden"
+    );
+    let after =
+        std::fs::read_to_string(home.path().join("plugins/known_marketplaces.json")).unwrap();
     assert_eq!(before, after);
 }
 
@@ -141,11 +188,22 @@ fn removing_a_built_in_marketplace_hides_it_and_adding_it_back_shows_it() {
     let (config, mkt) = (TempDir::new(), TempDir::new());
     let i = installer(&config);
     i.remove_marketplace(marketplace::OFFICIAL).unwrap();
-    assert!(i.marketplaces().iter().all(|m| m.name != marketplace::OFFICIAL));
+    assert!(i
+        .marketplaces()
+        .iter()
+        .all(|m| m.name != marketplace::OFFICIAL));
 
-    mkt.write(".claude-plugin/marketplace.json", r#"{ "name": "claude-plugins-official", "plugins": [] }"#);
-    i.add_marketplace(&mkt.path().display().to_string()).unwrap();
-    let back = i.marketplaces().into_iter().find(|m| m.name == marketplace::OFFICIAL).unwrap();
+    mkt.write(
+        ".claude-plugin/marketplace.json",
+        r#"{ "name": "claude-plugins-official", "plugins": [] }"#,
+    );
+    i.add_marketplace(&mkt.path().display().to_string())
+        .unwrap();
+    let back = i
+        .marketplaces()
+        .into_iter()
+        .find(|m| m.name == marketplace::OFFICIAL)
+        .unwrap();
     assert_eq!(back.origin, MarketplaceOrigin::Own);
 }
 
@@ -170,13 +228,19 @@ fn the_catalog_says_what_cannot_be_installed_and_what_is() {
     assert!(i.install("b@market").is_err());
 
     i.install("a@market").unwrap();
-    assert_eq!(i.catalog("market").unwrap()[0].installed.as_deref(), Some("1.0.0"));
+    assert_eq!(
+        i.catalog("market").unwrap()[0].installed.as_deref(),
+        Some("1.0.0")
+    );
 }
 
 #[test]
 fn a_plugin_inside_the_marketplace_installs_enabled_and_loads() {
     let (config, mkt) = (TempDir::new(), TempDir::new());
-    mkt.write("plugins/a/.claude-plugin/plugin.json", r#"{ "name": "a", "version": "2.0.0" }"#);
+    mkt.write(
+        "plugins/a/.claude-plugin/plugin.json",
+        r#"{ "name": "a", "version": "2.0.0" }"#,
+    );
     skill(&mkt, "plugins/a", "review", "review it");
     let path = market(&mkt, json!([{ "name": "a", "source": "./plugins/a" }]));
     let i = installer(&config);
@@ -223,7 +287,10 @@ fn a_plugin_in_its_own_repository_is_fetched_at_the_pinned_commit() {
 #[test]
 fn a_plugin_in_a_subdirectory_of_a_repository_is_taken_from_there() {
     let (config, mkt, mono) = (TempDir::new(), TempDir::new(), TempDir::new());
-    mono.write("packages/tool/.claude-plugin/plugin.json", r#"{ "name": "tool" }"#);
+    mono.write(
+        "packages/tool/.claude-plugin/plugin.json",
+        r#"{ "name": "tool" }"#,
+    );
     mono.write("README.md", "the rest of the repository");
     let mono_path = repo(&mono);
     let path = market(
@@ -242,7 +309,10 @@ fn a_plugin_in_a_subdirectory_of_a_repository_is_taken_from_there() {
 #[test]
 fn a_non_strict_entry_is_the_plugins_manifest() {
     let (config, mkt) = (TempDir::new(), TempDir::new());
-    mkt.write("bare/extra/s/SKILL.md", "---\nname: s\ndescription: d\n---\n");
+    mkt.write(
+        "bare/extra/s/SKILL.md",
+        "---\nname: s\ndescription: d\n---\n",
+    );
     let path = market(
         &mkt,
         json!([{
@@ -291,8 +361,12 @@ fn an_update_takes_new_files_and_says_when_there_were_none() {
     let newer = i.update("a@market").unwrap();
     assert!(newer.changed);
     let root = loaded(&config).get("a@market").unwrap().root.clone();
-    assert!(std::fs::read_to_string(root.join("skills/s/SKILL.md")).unwrap().ends_with("new"));
-    let versions = std::fs::read_dir(config.path().join("plugin-cache/market/a")).unwrap().count();
+    assert!(std::fs::read_to_string(root.join("skills/s/SKILL.md"))
+        .unwrap()
+        .ends_with("new"));
+    let versions = std::fs::read_dir(config.path().join("plugin-cache/market/a"))
+        .unwrap()
+        .count();
     assert_eq!(versions, 1, "the old version is gone");
     no_leftovers(&config);
 }
@@ -311,17 +385,28 @@ fn uninstalling_removes_the_files_and_keeps_the_plugins_data() {
     i.uninstall("a@market").unwrap();
     assert!(loaded(&config).get("a@market").is_none());
     assert!(!plugin.root.exists());
-    assert!(plugin.data.exists(), "what the plugin kept for the human stays");
+    assert!(
+        plugin.data.exists(),
+        "what the plugin kept for the human stays"
+    );
     assert!(i.uninstall("a@market").is_err());
 }
 
 #[test]
 fn a_plugin_installs_from_a_folder_by_address() {
     let (config, src) = (TempDir::new(), TempDir::new());
-    src.write(".claude-plugin/plugin.json", r#"{ "name": "handmade", "version": "0.0.1" }"#);
-    let summary = installer(&config).install_from(&src.path().display().to_string()).unwrap();
+    src.write(
+        ".claude-plugin/plugin.json",
+        r#"{ "name": "handmade", "version": "0.0.1" }"#,
+    );
+    let summary = installer(&config)
+        .install_from(&src.path().display().to_string())
+        .unwrap();
     assert_eq!(summary.id, "handmade@direct");
-    assert!(config.path().join("plugin-cache/direct/handmade/0.0.1").is_dir());
+    assert!(config
+        .path()
+        .join("plugin-cache/direct/handmade/0.0.1")
+        .is_dir());
 }
 
 #[test]
@@ -357,18 +442,33 @@ fn yacas_install_comes_before_the_same_plugin_installed_by_claude_code() {
     let catalog = PluginSources::new(config.path(), Some(home.path().to_path_buf())).load();
     let p = catalog.get("p@market").unwrap();
     assert_eq!(p.origin, PluginOrigin::Marketplace);
-    assert!(catalog.diagnostics().iter().any(|d| d.message.contains("already loaded")));
+    assert!(catalog
+        .diagnostics()
+        .iter()
+        .any(|d| d.message.contains("already loaded")));
 }
 
 #[test]
 fn a_marketplace_address_is_a_folder_a_github_repo_or_a_git_url() {
     let dir = TempDir::new();
-    assert!(matches!(MarketplaceSource::parse(&dir.path().display().to_string()), Ok(MarketplaceSource::Directory { .. })));
+    assert!(matches!(
+        MarketplaceSource::parse(&dir.path().display().to_string()),
+        Ok(MarketplaceSource::Directory { .. })
+    ));
     assert_eq!(
         MarketplaceSource::parse("anthropics/claude-plugins-official").unwrap(),
-        MarketplaceSource::Github { repo: "anthropics/claude-plugins-official".into(), reference: None }
+        MarketplaceSource::Github {
+            repo: "anthropics/claude-plugins-official".into(),
+            reference: None
+        }
     );
-    assert!(matches!(MarketplaceSource::parse("https://example.com/m.git"), Ok(MarketplaceSource::Git { .. })));
-    assert!(matches!(MarketplaceSource::parse("git@github.com:a/b.git"), Ok(MarketplaceSource::Git { .. })));
+    assert!(matches!(
+        MarketplaceSource::parse("https://example.com/m.git"),
+        Ok(MarketplaceSource::Git { .. })
+    ));
+    assert!(matches!(
+        MarketplaceSource::parse("git@github.com:a/b.git"),
+        Ok(MarketplaceSource::Git { .. })
+    ));
     assert!(MarketplaceSource::parse("just words").is_err());
 }

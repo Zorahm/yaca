@@ -26,6 +26,7 @@
 //! repository must not be able to pre-approve its own commands.
 
 pub mod activate;
+pub mod bundled;
 pub mod catalog;
 pub mod frontmatter;
 
@@ -132,5 +133,7 @@ pub fn user_dirs(config_dir: &Path) -> Vec<PathBuf> {
 
 fn home_dir() -> Option<PathBuf> {
     let var = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
-    std::env::var_os(var).filter(|v| !v.is_empty()).map(PathBuf::from)
+    std::env::var_os(var)
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
 }

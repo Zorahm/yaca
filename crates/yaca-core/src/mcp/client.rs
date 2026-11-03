@@ -24,8 +24,8 @@ use super::protocol::{
     VERSIONS,
 };
 use super::transport::{self, Incoming, Transport};
-use crate::uri::file_uri;
 use super::McpError;
+use crate::uri::file_uri;
 
 /// A server that pages forever is a server that is broken; stop asking.
 const MAX_PAGES: usize = 50;
@@ -166,7 +166,9 @@ impl Client {
         // Sending is inside the race: over HTTP the POST itself may last as
         // long as the server takes to answer.
         let answered = async {
-            self.transport.send(envelope(Some(id), method, params)).await?;
+            self.transport
+                .send(envelope(Some(id), method, params))
+                .await?;
             rx.await
                 .unwrap_or_else(|_| Err(McpError::Closed("connection closed".into())))
         };
@@ -210,7 +212,9 @@ impl Client {
         let mut cursor: Option<String> = None;
         for _ in 0..MAX_PAGES {
             let params = cursor.as_ref().map(|cursor| json!({ "cursor": cursor }));
-            let page: ToolsPage = self.ask("tools/list", params, LOOKUP_TIMEOUT, &never).await?;
+            let page: ToolsPage = self
+                .ask("tools/list", params, LOOKUP_TIMEOUT, &never)
+                .await?;
             all.extend(page.tools);
             cursor = page.next_cursor.filter(|next| !next.is_empty());
             if cursor.is_none() {
@@ -229,7 +233,9 @@ impl Client {
         let mut cursor: Option<String> = None;
         for _ in 0..MAX_PAGES {
             let params = cursor.as_ref().map(|cursor| json!({ "cursor": cursor }));
-            let page: PromptsPage = self.ask("prompts/list", params, LOOKUP_TIMEOUT, &never).await?;
+            let page: PromptsPage = self
+                .ask("prompts/list", params, LOOKUP_TIMEOUT, &never)
+                .await?;
             all.extend(page.prompts);
             cursor = page.next_cursor.filter(|next| !next.is_empty());
             if cursor.is_none() {
@@ -246,7 +252,8 @@ impl Client {
         cancel: &CancellationToken,
     ) -> Result<GetPromptResult, McpError> {
         let params = json!({ "name": name, "arguments": arguments });
-        self.ask("prompts/get", Some(params), LOOKUP_TIMEOUT, cancel).await
+        self.ask("prompts/get", Some(params), LOOKUP_TIMEOUT, cancel)
+            .await
     }
 
     pub(crate) async fn call_tool(
@@ -268,8 +275,9 @@ impl Client {
         let mut cursor: Option<String> = None;
         for _ in 0..MAX_PAGES {
             let params = cursor.as_ref().map(|cursor| json!({ "cursor": cursor }));
-            let page: ResourcesPage =
-                self.ask("resources/list", params, LOOKUP_TIMEOUT, cancel).await?;
+            let page: ResourcesPage = self
+                .ask("resources/list", params, LOOKUP_TIMEOUT, cancel)
+                .await?;
             all.extend(page.resources);
             cursor = page.next_cursor.filter(|next| !next.is_empty());
             if cursor.is_none() {
@@ -284,8 +292,13 @@ impl Client {
         uri: &str,
         cancel: &CancellationToken,
     ) -> Result<ReadResult, McpError> {
-        self.ask("resources/read", Some(json!({ "uri": uri })), LOOKUP_TIMEOUT, cancel)
-            .await
+        self.ask(
+            "resources/read",
+            Some(json!({ "uri": uri })),
+            LOOKUP_TIMEOUT,
+            cancel,
+        )
+        .await
     }
 }
 
@@ -368,7 +381,9 @@ async fn read(
             // Progress, log lines, changed resources: nothing here keeps them.
             (Some(_), _) => {}
             (None, Some(id)) => {
-                let Some(waiter) = id.as_u64().and_then(|id| waiting.lock().unwrap().remove(&id))
+                let Some(waiter) = id
+                    .as_u64()
+                    .and_then(|id| waiting.lock().unwrap().remove(&id))
                 else {
                     continue;
                 };
@@ -419,15 +434,21 @@ mod tests {
     #[test]
     fn a_request_without_params_carries_no_params_key() {
         let message = envelope(Some(3), "tools/list", None);
-        assert_eq!(message, json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/list" }));
+        assert_eq!(
+            message,
+            json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/list" })
+        );
         let note = envelope(None, "notifications/initialized", None);
         assert!(note.get("id").is_none());
     }
 
     #[test]
     fn an_error_answer_keeps_the_servers_words() {
-        let err = answer_of(&json!({ "id": 1, "error": { "code": -32602, "message": "no such tool" } }))
-            .unwrap_err();
-        assert!(matches!(err, McpError::Rpc { code: -32602, ref message } if message == "no such tool"));
+        let err =
+            answer_of(&json!({ "id": 1, "error": { "code": -32602, "message": "no such tool" } }))
+                .unwrap_err();
+        assert!(
+            matches!(err, McpError::Rpc { code: -32602, ref message } if message == "no such tool")
+        );
     }
 }

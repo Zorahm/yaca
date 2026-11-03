@@ -18,10 +18,14 @@ use common::{ask, calls, is_turn_over, tool_result_of, until, TempProject};
 
 fn agent_asking(question: &str) -> Arc<MockProvider> {
     Arc::new(MockProvider::new(vec![
-        Turn::Events(calls(&[("c1", "Decision", json!({
-            "question": question,
-            "description": "Choosing a skill",
-        }))])),
+        Turn::Events(calls(&[(
+            "c1",
+            "Decision",
+            json!({
+                "question": question,
+                "description": "Choosing a skill",
+            }),
+        )])),
         Turn::Events(script_text("Using code-review.")),
     ]))
 }

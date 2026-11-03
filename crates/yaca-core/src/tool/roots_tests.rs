@@ -100,7 +100,10 @@ async fn an_edit_in_the_additional_root_needs_a_read_first_like_anywhere_else() 
         )
         .await
         .unwrap_err();
-    assert!(err.to_string().contains("was not read in this session"), "{err}");
+    assert!(
+        err.to_string().contains("was not read in this session"),
+        "{err}"
+    );
 }
 
 #[tokio::test]
@@ -157,7 +160,10 @@ async fn a_glob_pattern_is_matched_inside_the_root_that_holds_the_file() {
         .unwrap()
         .text;
     assert!(found.contains("docs/readme.md"), "{found}");
-    assert!(found.contains(&model_path(extra.path(), "docs/guide.md")), "{found}");
+    assert!(
+        found.contains(&model_path(extra.path(), "docs/guide.md")),
+        "{found}"
+    );
 }
 
 #[tokio::test]
@@ -168,8 +174,14 @@ async fn delete_dir_refuses_the_additional_root_itself() {
     let input = json!({ "path": roots::plain(extra.path()) });
 
     let err = DeleteDir.run(&ctx, input.clone()).await.unwrap_err();
-    assert!(err.to_string().contains("additional workspace root"), "{err}");
-    assert!(extra.path().join("keep.txt").exists(), "the root and its files stay");
+    assert!(
+        err.to_string().contains("additional workspace root"),
+        "{err}"
+    );
+    assert!(
+        extra.path().join("keep.txt").exists(),
+        "the root and its files stay"
+    );
 
     // Refused before any question: there is nothing to ask about.
     assert!(DeleteDir.permission(&ctx.ws, &input).is_none());
@@ -182,9 +194,14 @@ async fn a_write_in_the_additional_root_is_reported_as_not_covered_by_rollback()
     extra.write("n.txt", "x\n");
 
     let elsewhere = WriteFile
-        .permission(&ws, &json!({ "path": model_path(extra.path(), "new.txt"), "content": "" }))
+        .permission(
+            &ws,
+            &json!({ "path": model_path(extra.path(), "new.txt"), "content": "" }),
+        )
         .expect("a write is a question");
-    let lost = elsewhere.unsaved.expect("the checkpoint never saw this root");
+    let lost = elsewhere
+        .unsaved
+        .expect("the checkpoint never saw this root");
     assert_eq!(lost.roots, vec![roots::plain(extra.path())]);
 
     let inside = WriteFile
@@ -199,7 +216,10 @@ async fn a_write_in_the_additional_root_is_reported_as_not_covered_by_rollback()
             &json!({ "path": model_path(extra.path(), "n.txt"), "old_string": "x", "new_string": "y" }),
         )
         .unwrap();
-    assert_eq!(edit.unsaved.unwrap().roots, vec![roots::plain(extra.path())]);
+    assert_eq!(
+        edit.unsaved.unwrap().roots,
+        vec![roots::plain(extra.path())]
+    );
 }
 
 #[tokio::test]
@@ -214,7 +234,10 @@ async fn a_rule_for_the_project_does_not_match_the_same_path_in_the_other_root()
         )
         .unwrap();
     let in_main = EditFile
-        .permission(&ws, &json!({ "path": "src/a.rs", "old_string": "x", "new_string": "y" }))
+        .permission(
+            &ws,
+            &json!({ "path": "src/a.rs", "old_string": "x", "new_string": "y" }),
+        )
         .unwrap();
 
     // The offered scopes for the other root are absolute; the project's are not.
@@ -276,5 +299,8 @@ async fn a_command_with_no_additional_root_is_not_reported_at_all() {
 fn roots_lists_the_primary_root_first_then_the_additional_ones() {
     let (main, extra, ws) = two_roots();
     let seen: Vec<PathBuf> = ws.roots().iter().map(|p| p.to_path_buf()).collect();
-    assert_eq!(seen, vec![main.path().to_path_buf(), extra.path().to_path_buf()]);
+    assert_eq!(
+        seen,
+        vec![main.path().to_path_buf(), extra.path().to_path_buf()]
+    );
 }

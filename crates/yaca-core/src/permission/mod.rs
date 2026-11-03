@@ -624,8 +624,12 @@ mod tests {
     #[test]
     fn an_mcp_call_offers_its_tool_and_then_its_server() {
         let call = |server: &str, tool: &str| {
-            PermissionNeed::new(PermissionKind::McpWrite, &format!("mcp__{server}__{tool}"), tool)
-                .server(server)
+            PermissionNeed::new(
+                PermissionKind::McpWrite,
+                &format!("mcp__{server}__{tool}"),
+                tool,
+            )
+            .server(server)
         };
         let scopes = call("tracker", "create_task").scopes(&root());
         assert_eq!(

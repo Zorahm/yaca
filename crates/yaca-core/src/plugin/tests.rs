@@ -19,7 +19,10 @@ fn own(config: &TempDir) -> PluginCatalog {
 }
 
 fn claude_plugin(config: &TempDir, dir: &str, manifest: &str) {
-    config.write(&format!("plugins/{dir}/.claude-plugin/plugin.json"), manifest);
+    config.write(
+        &format!("plugins/{dir}/.claude-plugin/plugin.json"),
+        manifest,
+    );
 }
 
 fn agent_plugin(config: &TempDir, dir: &str, manifest: &str) {
@@ -34,8 +37,15 @@ fn only(catalog: &PluginCatalog) -> &Plugin {
 #[test]
 fn a_claude_plugin_brings_its_skills_commands_servers_and_hooks() {
     let config = TempDir::new();
-    claude_plugin(&config, "tools", r#"{ "name": "tools", "version": "1.2.0" }"#);
-    config.write("plugins/tools/skills/review/SKILL.md", "---\nname: review\ndescription: d\n---\n");
+    claude_plugin(
+        &config,
+        "tools",
+        r#"{ "name": "tools", "version": "1.2.0" }"#,
+    );
+    config.write(
+        "plugins/tools/skills/review/SKILL.md",
+        "---\nname: review\ndescription: d\n---\n",
+    );
     config.write(
         "plugins/tools/commands/lint.md",
         "---\ndescription: Lint it\n---\nRun ${CLAUDE_PLUGIN_ROOT}/lint.sh on $ARGUMENTS",
@@ -59,7 +69,13 @@ fn a_claude_plugin_brings_its_skills_commands_servers_and_hooks() {
     assert_eq!(p.skill_dirs.len(), 1);
     assert_eq!(p.commands[0].name, "tools:lint");
     assert_eq!(p.commands[0].description, "Lint it");
-    assert!(p.commands[0].body.contains(&format!("{}/lint.sh", plain(&p.root))), "{}", p.commands[0].body);
+    assert!(
+        p.commands[0]
+            .body
+            .contains(&format!("{}/lint.sh", plain(&p.root))),
+        "{}",
+        p.commands[0].body
+    );
     assert!(p.mcp_servers.contains_key("files"));
     assert_eq!(p.hooks.len(), 1);
     assert!(p.notes.is_empty(), "{:?}", p.notes);
@@ -75,7 +91,10 @@ fn a_claude_manifest_adds_paths_and_inline_servers_without_losing_the_defaults()
     );
     config.write("plugins/x/skills/a/SKILL.md", "---\ndescription: d\n---\n");
     config.write("plugins/x/extra/b/SKILL.md", "---\ndescription: d\n---\n");
-    config.write("plugins/x/.mcp.json", r#"{ "mcpServers": { "file": { "command": "b" } } }"#);
+    config.write(
+        "plugins/x/.mcp.json",
+        r#"{ "mcpServers": { "file": { "command": "b" } } }"#,
+    );
 
     let catalog = own(&config);
     let p = only(&catalog);
@@ -94,7 +113,10 @@ fn what_yaca_cannot_load_is_a_note_and_the_rest_still_loads() {
         "plugins/x/hooks/hooks.json",
         r#"{ "hooks": { "Setup": [], "PreToolUse": [{ "hooks": [{ "type": "prompt", "prompt": "?" }] }] } }"#,
     );
-    config.write("plugins/x/.mcp.json", r#"{ "mcpServers": { "old": { "type": "sse", "url": "https://x" } } }"#);
+    config.write(
+        "plugins/x/.mcp.json",
+        r#"{ "mcpServers": { "old": { "type": "sse", "url": "https://x" } } }"#,
+    );
 
     let catalog = own(&config);
     let p = only(&catalog);
@@ -109,7 +131,11 @@ fn what_yaca_cannot_load_is_a_note_and_the_rest_still_loads() {
 #[test]
 fn a_component_path_that_leaves_the_plugin_is_not_followed() {
     let config = TempDir::new();
-    claude_plugin(&config, "x", r#"{ "name": "x", "skills": "../../outside" }"#);
+    claude_plugin(
+        &config,
+        "x",
+        r#"{ "name": "x", "skills": "../../outside" }"#,
+    );
     config.write("outside/s/SKILL.md", "---\ndescription: d\n---\n");
     let catalog = own(&config);
     let p = only(&catalog);
@@ -120,8 +146,15 @@ fn a_component_path_that_leaves_the_plugin_is_not_followed() {
 #[test]
 fn an_agent_plugin_loads_its_skills_and_servers() {
     let config = TempDir::new();
-    agent_plugin(&config, "dir", &format!(r#"{{ {SCHEMA}, "name": "portable" }}"#));
-    config.write("plugins/dir/skills/s/SKILL.md", "---\ndescription: d\n---\n");
+    agent_plugin(
+        &config,
+        "dir",
+        &format!(r#"{{ {SCHEMA}, "name": "portable" }}"#),
+    );
+    config.write(
+        "plugins/dir/skills/s/SKILL.md",
+        "---\ndescription: d\n---\n",
+    );
     config.write("plugins/dir/bin/server", "");
     config.write(
         "plugins/dir/mcp.json",
@@ -139,10 +172,20 @@ fn an_agent_plugin_loads_its_skills_and_servers() {
     assert_eq!(p.id, "portable", "the manifest names it, not the directory");
     assert_eq!(p.skill_dirs.len(), 1);
     let local = &p.mcp_servers["local"];
-    assert_eq!(Path::new(local.command.as_deref().unwrap()), p.root.join("bin").join("server"));
-    assert_eq!(local.args, ["${PLUGIN_DATA}/db"], "filled in at launch, not at load");
+    assert_eq!(
+        Path::new(local.command.as_deref().unwrap()),
+        p.root.join("bin").join("server")
+    );
+    assert_eq!(
+        local.args,
+        ["${PLUGIN_DATA}/db"],
+        "filled in at launch, not at load"
+    );
     assert_eq!(local.cwd.as_deref(), Some("${PLUGIN_ROOT}/bin"));
-    assert_eq!(p.mcp_servers["remote"].url.as_deref(), Some("https://example.com/mcp"));
+    assert_eq!(
+        p.mcp_servers["remote"].url.as_deref(),
+        Some("https://example.com/mcp")
+    );
     assert!(p.notes.is_empty(), "{:?}", p.notes);
 }
 
@@ -162,17 +205,28 @@ fn an_agent_manifest_that_breaks_the_schema_is_rejected_whole() {
         agent_plugin(&config, "p", &manifest);
         let catalog = own(&config);
         assert!(catalog.plugins().is_empty(), "{manifest}");
-        assert!(catalog.diagnostics()[0].message.contains(expected), "{manifest}: {:?}", catalog.diagnostics());
+        assert!(
+            catalog.diagnostics()[0].message.contains(expected),
+            "{manifest}: {:?}",
+            catalog.diagnostics()
+        );
     }
 }
 
 #[test]
 fn unknown_fields_and_a_bad_extensions_value_are_reported_and_ignored() {
     let config = TempDir::new();
-    agent_plugin(&config, "p", &format!(r#"{{ {SCHEMA}, "name": "a", "extensions": 3, "colour": "red" }}"#));
+    agent_plugin(
+        &config,
+        "p",
+        &format!(r#"{{ {SCHEMA}, "name": "a", "extensions": 3, "colour": "red" }}"#),
+    );
     let catalog = own(&config);
     let notes = only(&catalog).notes.join("\n");
-    assert!(notes.contains("extensions") && notes.contains("colour"), "{notes}");
+    assert!(
+        notes.contains("extensions") && notes.contains("colour"),
+        "{notes}"
+    );
 }
 
 #[test]
@@ -232,14 +286,20 @@ fn claude_home(home: &TempDir, installs: &[(&str, &Path, &str)], enabled: serde_
     let plugins: serde_json::Map<String, serde_json::Value> = installs
         .iter()
         .map(|(id, path, scope)| {
-            (id.to_string(), json!([{ "scope": scope, "installPath": path.display().to_string() }]))
+            (
+                id.to_string(),
+                json!([{ "scope": scope, "installPath": path.display().to_string() }]),
+            )
         })
         .collect();
     home.write(
         "plugins/installed_plugins.json",
         &json!({ "version": 2, "plugins": plugins }).to_string(),
     );
-    home.write("settings.json", &json!({ "enabledPlugins": enabled }).to_string());
+    home.write(
+        "settings.json",
+        &json!({ "enabledPlugins": enabled }).to_string(),
+    );
 }
 
 #[test]
@@ -247,8 +307,14 @@ fn claude_codes_installs_load_under_its_ids_and_take_its_switches() {
     let config = TempDir::new();
     let home = TempDir::new();
     let on = home.write("cache/on/.claude-plugin/plugin.json", r#"{ "name": "on" }"#);
-    let off = home.write("cache/off/.claude-plugin/plugin.json", r#"{ "name": "off" }"#);
-    let project = home.write("cache/proj/.claude-plugin/plugin.json", r#"{ "name": "proj" }"#);
+    let off = home.write(
+        "cache/off/.claude-plugin/plugin.json",
+        r#"{ "name": "off" }"#,
+    );
+    let project = home.write(
+        "cache/proj/.claude-plugin/plugin.json",
+        r#"{ "name": "proj" }"#,
+    );
     let root = |p: &Path| p.parent().unwrap().parent().unwrap().to_path_buf();
     claude_home(
         &home,
@@ -261,9 +327,20 @@ fn claude_codes_installs_load_under_its_ids_and_take_its_switches() {
     );
 
     let catalog = PluginSources::new(config.path(), Some(home.path().to_path_buf())).load();
-    let ids: Vec<_> = catalog.plugins().iter().map(|p| (p.id.as_str(), p.enabled)).collect();
-    assert_eq!(ids, [("off@market", false), ("on@market", true)], "project installs are left out");
-    assert!(catalog.plugins().iter().all(|p| p.origin == PluginOrigin::ClaudeCode));
+    let ids: Vec<_> = catalog
+        .plugins()
+        .iter()
+        .map(|p| (p.id.as_str(), p.enabled))
+        .collect();
+    assert_eq!(
+        ids,
+        [("off@market", false), ("on@market", true)],
+        "project installs are left out"
+    );
+    assert!(catalog
+        .plugins()
+        .iter()
+        .all(|p| p.origin == PluginOrigin::ClaudeCode));
     assert_eq!(catalog.enabled().len(), 1);
 }
 
@@ -282,7 +359,9 @@ fn yacas_own_switch_overrides_claude_codes() {
     assert!(!sources.load().get("p@m").unwrap().enabled);
     // Claude Code's files are read, never written.
     assert!(home.path().join("settings.json").exists());
-    assert!(std::fs::read_to_string(home.path().join("settings.json")).unwrap().contains("false"));
+    assert!(std::fs::read_to_string(home.path().join("settings.json"))
+        .unwrap()
+        .contains("false"));
 }
 
 #[test]
@@ -290,7 +369,14 @@ fn a_claude_install_without_a_manifest_takes_the_name_it_was_installed_under() {
     let config = TempDir::new();
     let home = TempDir::new();
     let skill = home.write("cache/bare/skills/s/SKILL.md", "---\ndescription: d\n---\n");
-    let root = skill.parent().unwrap().parent().unwrap().parent().unwrap().to_path_buf();
+    let root = skill
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf();
     claude_home(&home, &[("bare@m", &root, "user")], json!({}));
 
     let catalog = PluginSources::new(config.path(), Some(home.path().to_path_buf())).load();
@@ -318,11 +404,20 @@ fn a_plugin_server_is_named_after_its_plugin_and_started_from_its_root() {
     assert_eq!(spec.source, McpSource::Plugin);
 
     let none = |_: &str| None;
-    let Launch::Stdio { program, args, env, cwd } = spec.launch_with(Path::new("/project"), &none).unwrap() else {
+    let Launch::Stdio {
+        program,
+        args,
+        env,
+        cwd,
+    } = spec.launch_with(Path::new("/project"), &none).unwrap()
+    else {
         panic!("a stdio server");
     };
     assert_eq!(Path::new(&program), p.root.join("bin/srv"));
-    assert_eq!(args, [format!("{}/conf", p.root.display()), "fallback".to_string()]);
+    assert_eq!(
+        args,
+        [format!("{}/conf", p.root.display()), "fallback".to_string()]
+    );
     assert_eq!(cwd, p.root.join("work"));
     assert_eq!(env["CLAUDE_PLUGIN_ROOT"], p.root.display().to_string());
     assert_eq!(env["PLUGIN_DATA"], p.data.display().to_string());
@@ -343,8 +438,14 @@ fn an_agent_plugin_server_leaves_other_variables_as_written() {
     let Launch::Stdio { args, .. } = spec.launch_with(Path::new("/project"), &home).unwrap() else {
         panic!("a stdio server");
     };
-    assert_eq!(args[0], format!("{}/x", catalog.plugins()[0].root.display()));
-    assert_eq!(args[1], "${HOME}", "Agent Plugins §9 expands only the two plugin variables");
+    assert_eq!(
+        args[0],
+        format!("{}/x", catalog.plugins()[0].root.display())
+    );
+    assert_eq!(
+        args[1], "${HOME}",
+        "Agent Plugins §9 expands only the two plugin variables"
+    );
 }
 
 #[test]

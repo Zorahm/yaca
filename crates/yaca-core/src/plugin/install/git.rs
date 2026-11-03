@@ -70,17 +70,21 @@ pub(super) fn head(dir: &Path) -> Option<String> {
 /// about to be deleted.
 pub(super) fn copy_tree(from: &Path, to: &Path) -> Result<(), String> {
     std::fs::create_dir_all(to).map_err(|e| format!("cannot create {}: {e}", to.display()))?;
-    let read = std::fs::read_dir(from).map_err(|e| format!("cannot read {}: {e}", from.display()))?;
+    let read =
+        std::fs::read_dir(from).map_err(|e| format!("cannot read {}: {e}", from.display()))?;
     for entry in read.flatten() {
         if entry.file_name() == ".git" {
             continue;
         }
-        let Ok(kind) = entry.file_type() else { continue };
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
         let target = to.join(entry.file_name());
         if kind.is_dir() {
             copy_tree(&entry.path(), &target)?;
         } else if kind.is_file() {
-            std::fs::copy(entry.path(), &target).map_err(|e| format!("cannot copy {}: {e}", entry.path().display()))?;
+            std::fs::copy(entry.path(), &target)
+                .map_err(|e| format!("cannot copy {}: {e}", entry.path().display()))?;
         }
     }
     Ok(())
@@ -100,7 +104,9 @@ pub(super) fn remove_tree(dir: &Path) {
 }
 
 fn clear_read_only(dir: &Path) {
-    let Ok(read) = std::fs::read_dir(dir) else { return };
+    let Ok(read) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in read.flatten() {
         let path = entry.path();
         if let Ok(meta) = entry.metadata() {

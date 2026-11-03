@@ -224,12 +224,20 @@ mod tests {
 
     #[test]
     fn top_level_effort_maps_to_high() {
-        assert_eq!(build_body(&req(), MaxField::default())["reasoning_effort"], "high");
+        assert_eq!(
+            build_body(&req(), MaxField::default())["reasoning_effort"],
+            "high"
+        );
         let mut r = req();
         r.effort = Some(Effort::Low);
-        assert_eq!(build_body(&r, MaxField::default())["reasoning_effort"], "low");
+        assert_eq!(
+            build_body(&r, MaxField::default())["reasoning_effort"],
+            "low"
+        );
         r.effort = None;
-        assert!(build_body(&r, MaxField::default()).get("reasoning_effort").is_none());
+        assert!(build_body(&r, MaxField::default())
+            .get("reasoning_effort")
+            .is_none());
     }
 
     #[test]
@@ -353,7 +361,13 @@ mod tests {
             signature: None,
         }])];
         // Only the system prompt: there was nothing to send.
-        assert_eq!(build_body(&r, MaxField::default())["messages"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            build_body(&r, MaxField::default())["messages"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[test]

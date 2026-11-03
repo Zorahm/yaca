@@ -58,7 +58,10 @@ fn texts(message: &Message) -> Vec<&str> {
 /// What the human's message said, after the environment block the core puts
 /// in front of the first one.
 fn last_text(sent: &[yaca_core::provider::ProviderRequest]) -> String {
-    texts(sent[0].messages.last().unwrap()).last().unwrap().to_string()
+    texts(sent[0].messages.last().unwrap())
+        .last()
+        .unwrap()
+        .to_string()
 }
 
 #[tokio::test]
@@ -72,7 +75,10 @@ async fn the_catalog_is_in_the_prompt_the_model_is_sent() {
 
     let system = &provider.seen.lock().unwrap()[0].system;
     assert!(system.contains("<available_skills>"), "{system}");
-    assert!(system.contains("- release — Release a new version"), "{system}");
+    assert!(
+        system.contains("- release — Release a new version"),
+        "{system}"
+    );
 }
 
 #[tokio::test]
@@ -83,14 +89,22 @@ async fn a_project_without_skills_sends_no_skills_section() {
 
     one_turn(&handle, "hello").await;
 
-    assert!(!provider.seen.lock().unwrap()[0].system.contains("available_skills"));
+    assert!(!provider.seen.lock().unwrap()[0]
+        .system
+        .contains("available_skills"));
 }
 
 #[tokio::test]
 async fn skills_in_the_shared_directories_are_found_too() {
     let dir = TempProject::new();
-    dir.write(".agents/skills/audit/SKILL.md", "---\nname: audit\ndescription: Audit\n---\ntext");
-    dir.write(".claude/skills/docs/SKILL.md", "---\nname: docs\ndescription: Documentation\n---\ntext");
+    dir.write(
+        ".agents/skills/audit/SKILL.md",
+        "---\nname: audit\ndescription: Audit\n---\ntext",
+    );
+    dir.write(
+        ".claude/skills/docs/SKILL.md",
+        "---\nname: docs\ndescription: Documentation\n---\ntext",
+    );
     let provider = Arc::new(MockProvider::text("ok"));
     let handle = session(&dir, provider.clone(), Mode::Auto);
 
@@ -105,9 +119,18 @@ async fn skills_in_the_shared_directories_are_found_too() {
 async fn the_humans_own_skills_are_listed_and_the_projects_shadow_them() {
     let dir = TempProject::new();
     let user = TempProject::new();
-    dir.write(".yaca/skills/release/SKILL.md", "---\nname: release\ndescription: Project release\n---\nproject");
-    user.write("release/SKILL.md", "---\nname: release\ndescription: Own release\n---\nown");
-    user.write("notes/SKILL.md", "---\nname: notes\ndescription: Notes\n---\ntext");
+    dir.write(
+        ".yaca/skills/release/SKILL.md",
+        "---\nname: release\ndescription: Project release\n---\nproject",
+    );
+    user.write(
+        "release/SKILL.md",
+        "---\nname: release\ndescription: Own release\n---\nown",
+    );
+    user.write(
+        "notes/SKILL.md",
+        "---\nname: notes\ndescription: Notes\n---\ntext",
+    );
     let provider = Arc::new(MockProvider::text("ok"));
     let handle = session_with_user_skills(&dir, &user, provider.clone());
 
@@ -133,7 +156,10 @@ async fn the_model_pulls_a_skill_by_name_and_gets_it_wrapped() {
 
     let (text, is_error) = tool_result_of(&provider, "s1");
     assert!(!is_error, "{text}");
-    assert!(text.starts_with("<skill_content name=\"release\">\nFirst the tag"), "{text}");
+    assert!(
+        text.starts_with("<skill_content name=\"release\">\nFirst the tag"),
+        "{text}"
+    );
     assert!(text.contains("Skill directory:"), "{text}");
 }
 
@@ -141,7 +167,10 @@ async fn the_model_pulls_a_skill_by_name_and_gets_it_wrapped() {
 async fn a_skill_outside_the_project_reads_its_own_files() {
     let dir = TempProject::new();
     let user = TempProject::new();
-    user.write("release/SKILL.md", "---\nname: release\ndescription: d\n---\nsee references/steps.md");
+    user.write(
+        "release/SKILL.md",
+        "---\nname: release\ndescription: d\n---\nsee references/steps.md",
+    );
     user.write("release/references/steps.md", "1. tag");
     let provider = Arc::new(MockProvider::new(vec![
         Turn::Events(calls(&[(
@@ -195,7 +224,10 @@ async fn a_typed_slash_name_hands_the_skill_to_the_model_with_its_arguments() {
 
     let sent = provider.seen.lock().unwrap();
     let message = last_text(&sent);
-    assert!(message.starts_with("<skill_content name=\"release\">"), "{message}");
+    assert!(
+        message.starts_with("<skill_content name=\"release\">"),
+        "{message}"
+    );
     assert!(message.contains("the build for v2.0."), "{message}");
 }
 
@@ -251,12 +283,18 @@ async fn compaction_brings_an_activated_skill_back_after_the_summary() {
 
     let mut rx = handle.subscribe();
     handle.send(Command::Compact).await.unwrap();
-    until_within(&mut rx, LIMIT, |e| matches!(e, AgentEvent::ContextCompacted { .. })).await;
+    until_within(&mut rx, LIMIT, |e| {
+        matches!(e, AgentEvent::ContextCompacted { .. })
+    })
+    .await;
     one_turn(&handle, "continue").await;
 
     let sent = provider.seen.lock().unwrap();
     let head = texts(&sent.last().unwrap().messages[0]);
     assert!(head[0].starts_with(SUMMARY_HEADER), "{head:?}");
     assert_eq!(head[1], KEPT_SKILLS_HEADER);
-    assert!(head[2].starts_with("<skill_content name=\"release\">"), "{head:?}");
+    assert!(
+        head[2].starts_with("<skill_content name=\"release\">"),
+        "{head:?}"
+    );
 }

@@ -206,8 +206,14 @@ mod tests {
         save(&file, &[kept.clone(), lost.clone()]).unwrap();
 
         let hex = lost.manifest.to_hex();
-        std::fs::remove_file(store.dir().join("manifests").join(&hex[..2]).join(&hex[2..]))
-            .unwrap();
+        std::fs::remove_file(
+            store
+                .dir()
+                .join("manifests")
+                .join(&hex[..2])
+                .join(&hex[2..]),
+        )
+        .unwrap();
 
         let back = load(&file, &store);
         assert_eq!(back.len(), 1, "a rollback that cannot work is not a point");

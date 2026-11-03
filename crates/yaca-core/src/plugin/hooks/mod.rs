@@ -117,7 +117,10 @@ struct Condition {
 /// Reads a `hooks.json` document, or the same object inline in a manifest.
 /// What cannot be used is a note, and the rest is kept.
 pub fn parse(doc: &Value, notes: &mut Vec<String>) -> Vec<PluginHook> {
-    let events = doc.get("hooks").and_then(Value::as_object).or_else(|| doc.as_object());
+    let events = doc
+        .get("hooks")
+        .and_then(Value::as_object)
+        .or_else(|| doc.as_object());
     let Some(events) = events else {
         notes.push("hooks: an object of events was expected".into());
         return Vec::new();
@@ -137,12 +140,19 @@ pub fn parse(doc: &Value, notes: &mut Vec<String>) -> Vec<PluginHook> {
                 Some(m) => match Regex::new(&format!("^(?:{m})$")) {
                     Ok(re) => Some(re),
                     Err(_) => {
-                        notes.push(format!("hook {name}: matcher «{m}» cannot be parsed and was skipped"));
+                        notes.push(format!(
+                            "hook {name}: matcher «{m}» cannot be parsed and was skipped"
+                        ));
                         continue;
                     }
                 },
             };
-            for hook in group.get("hooks").and_then(Value::as_array).into_iter().flatten() {
+            for hook in group
+                .get("hooks")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
                 match one(event, matcher.clone(), hook) {
                     Ok(hook) => out.push(hook),
                     Err(why) => notes.push(format!("hook {name}: {why}")),
@@ -167,7 +177,11 @@ fn one(event: HookEvent, matcher: Option<Regex>, hook: &Value) -> Result<PluginH
     let run = match hook.get("args").and_then(Value::as_array) {
         Some(args) => HookRun::Exec {
             program: command.to_string(),
-            args: args.iter().filter_map(Value::as_str).map(str::to_string).collect(),
+            args: args
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect(),
         },
         None => HookRun::Shell {
             command: command.to_string(),
@@ -180,7 +194,9 @@ fn one(event: HookEvent, matcher: Option<Regex>, hook: &Value) -> Result<PluginH
         .unwrap_or(DEFAULT_TIMEOUT_SECS)
         .clamp(1, MAX_TIMEOUT_SECS);
     let condition = match hook.get("if").and_then(Value::as_str) {
-        Some(rule) => Some(condition(rule).ok_or(format!("if condition «{rule}» cannot be parsed"))?),
+        Some(rule) => {
+            Some(condition(rule).ok_or(format!("if condition «{rule}» cannot be parsed"))?)
+        }
         None => None,
     };
     Ok(PluginHook {
@@ -204,7 +220,10 @@ fn condition(rule: &str) -> Option<Condition> {
         });
     };
     let inner = rule[open + 1..].strip_suffix(')')?;
-    let inner = inner.strip_suffix(":*").map(|p| format!("{p}*")).unwrap_or(inner.to_string());
+    let inner = inner
+        .strip_suffix(":*")
+        .map(|p| format!("{p}*"))
+        .unwrap_or(inner.to_string());
     let glob = regex::escape(&inner).replace(r"\*", ".*");
     Some(Condition {
         tool: rule[..open].trim().to_string(),
@@ -237,7 +256,10 @@ fn names_of(tool: &str) -> Vec<&str> {
 
 /// What a hook is matched against.
 pub enum Subject<'a> {
-    Tool { name: &'a str, input: &'a Value },
+    Tool {
+        name: &'a str,
+        input: &'a Value,
+    },
     /// What the event's matcher is matched against: `SessionStart`'s
     /// `startup` or `resume`, `PreCompact`'s `manual` or `auto`, `SessionEnd`'s
     /// reason, `Notification`'s type.
@@ -259,12 +281,18 @@ impl PluginHook {
     }
 
     fn condition_holds(&self, subject: &Subject) -> bool {
-        let Some(cond) = &self.condition else { return true };
-        let Subject::Tool { name, input } = subject else { return true };
+        let Some(cond) = &self.condition else {
+            return true;
+        };
+        let Subject::Tool { name, input } = subject else {
+            return true;
+        };
         if !names_of(name).contains(&cond.tool.as_str()) {
             return false;
         }
-        let Some(pattern) = &cond.pattern else { return true };
+        let Some(pattern) = &cond.pattern else {
+            return true;
+        };
         let target = ["command", "file_path", "path", "url", "pattern"]
             .iter()
             .find_map(|key| input.get(key).and_then(Value::as_str))
@@ -345,7 +373,11 @@ impl Hooks {
         let stdin = stdin.to_string();
 
         let mut out = Vec::new();
-        for (owner, hook) in self.entries.iter().filter(|(_, h)| h.event == event && h.applies(&subject)) {
+        for (owner, hook) in self
+            .entries
+            .iter()
+            .filter(|(_, h)| h.event == event && h.applies(&subject))
+        {
             if cancel.is_cancelled() {
                 break;
             }
@@ -367,7 +399,11 @@ impl Hooks {
 pub fn claude_input(input: &Value, project: &Path) -> Value {
     let mut input = input.clone();
     if let Value::Object(fields) = &mut input {
-        if let Some(path) = fields.get("path").and_then(Value::as_str).map(str::to_string) {
+        if let Some(path) = fields
+            .get("path")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+        {
             if !fields.contains_key("file_path") {
                 let abs = project.join(&path);
                 fields.insert("file_path".into(), Value::String(plain(&abs)));

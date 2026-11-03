@@ -295,7 +295,15 @@ mod tests {
 
     #[test]
     fn only_changes_that_write_files_earn_a_check() {
-        for tool in ["Write", "Edit", "NotebookEdit", "Rename", "Delete", "DeleteDir", "Move"] {
+        for tool in [
+            "Write",
+            "Edit",
+            "NotebookEdit",
+            "Rename",
+            "Delete",
+            "DeleteDir",
+            "Move",
+        ] {
             assert!(changes_files(tool), "{tool}");
         }
         for tool in ["Read", "Bash", "Grep", "Glob", "TodoWrite"] {

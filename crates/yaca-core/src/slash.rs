@@ -100,9 +100,7 @@ pub fn expand_in(commands: &[SlashCommand], text: &str) -> Option<String> {
 /// command with a very strange name.
 pub fn split(text: &str) -> Option<(&str, &str)> {
     let line = text.strip_prefix('/')?;
-    let end = line
-        .find(|c: char| c.is_whitespace())
-        .unwrap_or(line.len());
+    let end = line.find(|c: char| c.is_whitespace()).unwrap_or(line.len());
     let (name, rest) = line.split_at(end);
     if name.is_empty() || !name.chars().all(is_name_char) {
         return None;
@@ -144,7 +142,10 @@ pub(crate) fn fill(body: &str, args: &str) -> String {
 /// promising a format nothing here can keep.
 pub(crate) fn parse(name: String, text: &str) -> SlashCommand {
     let (description, body) = match split_frontmatter(text) {
-        Some((header, body)) => (header_value(header, "description").unwrap_or_default(), body),
+        Some((header, body)) => (
+            header_value(header, "description").unwrap_or_default(),
+            body,
+        ),
         None => (String::new(), text),
     };
 
@@ -161,7 +162,9 @@ pub(crate) fn parse(name: String, text: &str) -> SlashCommand {
 /// Shared with skills (`skills::frontmatter`), whose files carry the same header.
 pub(crate) fn split_frontmatter(text: &str) -> Option<(&str, &str)> {
     let rest = text.strip_prefix("---")?;
-    let rest = rest.strip_prefix('\n').or_else(|| rest.strip_prefix("\r\n"))?;
+    let rest = rest
+        .strip_prefix('\n')
+        .or_else(|| rest.strip_prefix("\r\n"))?;
     let end = find_fence(rest)?;
     Some((&rest[..end.0], &rest[end.1..]))
 }
@@ -209,8 +212,14 @@ mod tests {
     #[test]
     fn a_command_splits_off_its_arguments() {
         assert_eq!(split("/review"), Some(("review", "")));
-        assert_eq!(split("/review  src/main.rs "), Some(("review", "src/main.rs")));
-        assert_eq!(split("/fix-tests\nand more"), Some(("fix-tests", "and more")));
+        assert_eq!(
+            split("/review  src/main.rs "),
+            Some(("review", "src/main.rs"))
+        );
+        assert_eq!(
+            split("/fix-tests\nand more"),
+            Some(("fix-tests", "and more"))
+        );
     }
 
     #[test]

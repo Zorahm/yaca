@@ -50,7 +50,9 @@ fn main() {
                 match name {
                     "grow" => {
                         grown = true;
-                        send(&json!({ "jsonrpc": "2.0", "method": "notifications/tools/list_changed" }));
+                        send(
+                            &json!({ "jsonrpc": "2.0", "method": "notifications/tools/list_changed" }),
+                        );
                         text("grown")
                     }
                     // Asks the client a question of its own and answers with
@@ -168,11 +170,16 @@ fn call(name: &str, args: &Value) -> Value {
         }
         "fail" => failure("the tracker has no such task"),
         "slow" => {
-            std::thread::sleep(std::time::Duration::from_millis(args["ms"].as_u64().unwrap_or(0)));
+            std::thread::sleep(std::time::Duration::from_millis(
+                args["ms"].as_u64().unwrap_or(0),
+            ));
             text("done")
         }
         // Has an argument called `description` of its own.
-        "describe" => text(&format!("described: {}", args["description"].as_str().unwrap_or("-"))),
+        "describe" => text(&format!(
+            "described: {}",
+            args["description"].as_str().unwrap_or("-")
+        )),
         "late" => text("late"),
         other => failure(&format!("unknown tool {other}")),
     }

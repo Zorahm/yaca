@@ -21,7 +21,10 @@ const LIMIT: Duration = Duration::from_secs(60);
 
 /// A configuration directory holding one Claude Code plugin, `tools`.
 fn tools_plugin(config: &TempProject) {
-    config.write("plugins/tools/.claude-plugin/plugin.json", r#"{ "name": "tools" }"#);
+    config.write(
+        "plugins/tools/.claude-plugin/plugin.json",
+        r#"{ "name": "tools" }"#,
+    );
 }
 
 fn hooks(config: &TempProject, doc: Value) {
@@ -46,7 +49,12 @@ fn on(event: &str, matcher: Option<&str>, hook: Value) -> Value {
     json!({ "hooks": { event: [group] } })
 }
 
-fn open(dir: &TempProject, config: &TempProject, provider: Arc<MockProvider>, mode: Mode) -> SessionHandle {
+fn open(
+    dir: &TempProject,
+    config: &TempProject,
+    provider: Arc<MockProvider>,
+    mode: Mode,
+) -> SessionHandle {
     let mut cfg = SessionConfig::new(dir.path());
     cfg.mode = mode;
     cfg.journal = None;
@@ -79,7 +87,10 @@ fn last_user_text(provider: &MockProvider, request: usize) -> String {
 async fn a_plugins_skills_are_in_the_catalog_under_its_name() {
     let (dir, config) = (TempProject::new(), TempProject::new());
     tools_plugin(&config);
-    config.write("plugins/tools/skills/review/SKILL.md", "---\nname: review\ndescription: Review a diff\n---\nRead ${CLAUDE_PLUGIN_ROOT}/guide.md");
+    config.write(
+        "plugins/tools/skills/review/SKILL.md",
+        "---\nname: review\ndescription: Review a diff\n---\nRead ${CLAUDE_PLUGIN_ROOT}/guide.md",
+    );
     let provider = Arc::new(MockProvider::new(vec![
         Turn::Events(calls(&[("s1", "Skill", json!({ "name": "tools:review" }))])),
         Turn::Events(script_text("ok")),
@@ -88,10 +99,15 @@ async fn a_plugins_skills_are_in_the_catalog_under_its_name() {
 
     one_turn(&handle, "review").await;
 
-    assert!(provider.seen.lock().unwrap()[0].system.contains("- tools:review — Review a diff"));
+    assert!(provider.seen.lock().unwrap()[0]
+        .system
+        .contains("- tools:review — Review a diff"));
     let (text, is_error) = tool_result_of(&provider, "s1");
     assert!(!is_error, "{text}");
-    assert!(!text.contains("${CLAUDE_PLUGIN_ROOT}"), "the root is filled in: {text}");
+    assert!(
+        !text.contains("${CLAUDE_PLUGIN_ROOT}"),
+        "the root is filled in: {text}"
+    );
     assert!(text.contains("/guide.md"), "{text}");
 }
 
@@ -99,7 +115,10 @@ async fn a_plugins_skills_are_in_the_catalog_under_its_name() {
 async fn a_plugins_command_answers_to_its_prefixed_name() {
     let (dir, config) = (TempProject::new(), TempProject::new());
     tools_plugin(&config);
-    config.write("plugins/tools/commands/lint.md", "Lint $ARGUMENTS carefully");
+    config.write(
+        "plugins/tools/commands/lint.md",
+        "Lint $ARGUMENTS carefully",
+    );
     let provider = Arc::new(MockProvider::text("ok"));
     let handle = open(&dir, &config, provider.clone(), Mode::Auto);
 
@@ -113,7 +132,11 @@ async fn session_start_context_goes_into_the_system_prompt() {
     let (dir, config) = (TempProject::new(), TempProject::new());
     tools_plugin(&config);
     config.write("plugins/tools/rules.txt", "Always answer in haiku.");
-    let script = if cfg!(windows) { "type %CLAUDE_PLUGIN_ROOT%\\rules.txt" } else { "cat \"$CLAUDE_PLUGIN_ROOT/rules.txt\"" };
+    let script = if cfg!(windows) {
+        "type %CLAUDE_PLUGIN_ROOT%\\rules.txt"
+    } else {
+        "cat \"$CLAUDE_PLUGIN_ROOT/rules.txt\""
+    };
     hooks(&config, on("SessionStart", Some("startup"), native(script)));
     let provider = Arc::new(MockProvider::text("ok"));
     let handle = open(&dir, &config, provider.clone(), Mode::Auto);
@@ -121,7 +144,10 @@ async fn session_start_context_goes_into_the_system_prompt() {
     one_turn(&handle, "hi").await;
 
     let system = &provider.seen.lock().unwrap()[0].system;
-    assert!(system.contains("<plugin_context plugin=\"tools\">\nAlways answer in haiku."), "{system}");
+    assert!(
+        system.contains("<plugin_context plugin=\"tools\">\nAlways answer in haiku."),
+        "{system}"
+    );
 }
 
 #[tokio::test]
@@ -129,7 +155,11 @@ async fn a_pre_tool_hook_that_exits_two_blocks_the_call() {
     let (dir, config) = (TempProject::new(), TempProject::new());
     tools_plugin(&config);
     dir.write("a.txt", "secret");
-    let script = if cfg!(windows) { "echo reading is off 1>&2 & exit 2" } else { "echo reading is off >&2; exit 2" };
+    let script = if cfg!(windows) {
+        "echo reading is off 1>&2 & exit 2"
+    } else {
+        "echo reading is off >&2; exit 2"
+    };
     hooks(&config, on("PreToolUse", Some("Read"), native(script)));
     let provider = Arc::new(MockProvider::new(vec![
         Turn::Events(calls(&[("r1", "Read", json!({ "path": "a.txt" }))])),
@@ -141,8 +171,13 @@ async fn a_pre_tool_hook_that_exits_two_blocks_the_call() {
 
     let (text, is_error) = tool_result_of(&provider, "r1");
     assert!(is_error);
-    assert!(text.contains("reading is off") && !text.contains("secret"), "{text}");
-    assert!(events.iter().any(|e| matches!(e, AgentEvent::ToolCallRejected { reason, .. } if reason.contains("tools"))));
+    assert!(
+        text.contains("reading is off") && !text.contains("secret"),
+        "{text}"
+    );
+    assert!(events.iter().any(
+        |e| matches!(e, AgentEvent::ToolCallRejected { reason, .. } if reason.contains("tools"))
+    ));
 }
 
 #[tokio::test]
@@ -173,8 +208,15 @@ async fn a_post_tool_hook_adds_its_context_to_the_result() {
         "plugins/tools/answer.json",
         r#"{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"run the linter next"}}"#,
     );
-    let script = if cfg!(windows) { "type %CLAUDE_PLUGIN_ROOT%\\answer.json" } else { "cat \"$CLAUDE_PLUGIN_ROOT/answer.json\"" };
-    hooks(&config, on("PostToolUse", Some("Read|Edit"), native(script)));
+    let script = if cfg!(windows) {
+        "type %CLAUDE_PLUGIN_ROOT%\\answer.json"
+    } else {
+        "cat \"$CLAUDE_PLUGIN_ROOT/answer.json\""
+    };
+    hooks(
+        &config,
+        on("PostToolUse", Some("Read|Edit"), native(script)),
+    );
     let provider = Arc::new(MockProvider::new(vec![
         Turn::Events(calls(&[("r1", "Read", json!({ "path": "a.txt" }))])),
         Turn::Events(script_text("ok")),
@@ -184,29 +226,50 @@ async fn a_post_tool_hook_adds_its_context_to_the_result() {
     one_turn(&handle, "read it").await;
 
     let (text, _) = tool_result_of(&provider, "r1");
-    assert!(text.contains("content") && text.contains("[hook] From the tools plugin:\nrun the linter next"), "{text}");
+    assert!(
+        text.contains("content")
+            && text.contains("[hook] From the tools plugin:\nrun the linter next"),
+        "{text}"
+    );
 }
 
 #[tokio::test]
 async fn a_prompt_hook_that_blocks_keeps_the_message_from_the_model() {
     let (dir, config) = (TempProject::new(), TempProject::new());
     tools_plugin(&config);
-    let script = if cfg!(windows) { "echo not today 1>&2 & exit 2" } else { "echo not today >&2; exit 2" };
+    let script = if cfg!(windows) {
+        "echo not today 1>&2 & exit 2"
+    } else {
+        "echo not today >&2; exit 2"
+    };
     hooks(&config, on("UserPromptSubmit", None, native(script)));
     let provider = Arc::new(MockProvider::text("never sent"));
     let handle = open(&dir, &config, provider.clone(), Mode::Auto);
 
     let events = one_turn(&handle, "do it").await;
 
-    assert!(provider.seen.lock().unwrap().is_empty(), "the model was asked nothing");
+    assert!(
+        provider.seen.lock().unwrap().is_empty(),
+        "the model was asked nothing"
+    );
     let reported = events.iter().find_map(|e| match e {
-        AgentEvent::HookReported { plugin, event, text, blocked } => Some((plugin, event, text, *blocked)),
+        AgentEvent::HookReported {
+            plugin,
+            event,
+            text,
+            blocked,
+        } => Some((plugin, event, text, *blocked)),
         _ => None,
     });
     let (plugin, event, text, blocked) = reported.expect("the block is in the feed");
-    assert_eq!((plugin.as_str(), event.as_str(), blocked), ("tools", "UserPromptSubmit", true));
+    assert_eq!(
+        (plugin.as_str(), event.as_str(), blocked),
+        ("tools", "UserPromptSubmit", true)
+    );
     assert_eq!(text, "not today");
-    assert!(events.iter().any(|e| matches!(e, AgentEvent::UserMessage { .. })));
+    assert!(events
+        .iter()
+        .any(|e| matches!(e, AgentEvent::UserMessage { .. })));
 }
 
 #[tokio::test]
@@ -231,9 +294,9 @@ async fn a_stop_hook_sends_the_turn_back_once_with_its_reason() {
 
     assert_eq!(provider.seen.lock().unwrap().len(), 2);
     assert!(last_user_text(&provider, 1).contains("write the tests too"));
-    assert!(events
-        .iter()
-        .any(|e| matches!(e, AgentEvent::HookReported { event, blocked: true, .. } if event == "Stop")));
+    assert!(events.iter().any(
+        |e| matches!(e, AgentEvent::HookReported { event, blocked: true, .. } if event == "Stop")
+    ));
 }
 
 #[tokio::test]
@@ -245,14 +308,22 @@ async fn a_plugins_mcp_server_starts_without_approval_under_its_prefixed_name() 
         &json!({ "mcpServers": { "fx": { "command": fixture("mcp_fixture") } } }).to_string(),
     );
     let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(calls(&[("m1", "mcp__plugin_tools_fx__echo", json!({ "text": "hi" }))])),
+        Turn::Events(calls(&[(
+            "m1",
+            "mcp__plugin_tools_fx__echo",
+            json!({ "text": "hi" }),
+        )])),
         Turn::Events(script_text("ok")),
     ]));
     let handle = open(&dir, &config, provider.clone(), Mode::Auto);
 
     one_turn(&handle, "echo").await;
 
-    let server = handle.mcp().into_iter().find(|s| s.name == "plugin:tools:fx").expect("declared");
+    let server = handle
+        .mcp()
+        .into_iter()
+        .find(|s| s.name == "plugin:tools:fx")
+        .expect("declared");
     assert_eq!(server.status, McpStatus::Ready);
     let (text, is_error) = tool_result_of(&provider, "m1");
     assert!(!is_error, "{text}");
@@ -267,10 +338,18 @@ async fn a_pre_tool_hook_can_ask_for_the_question_auto_would_skip() {
         "plugins/tools/ask.json",
         r#"{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask"}}"#,
     );
-    let script = if cfg!(windows) { r"type %CLAUDE_PLUGIN_ROOT%\ask.json" } else { "cat \"$CLAUDE_PLUGIN_ROOT/ask.json\"" };
+    let script = if cfg!(windows) {
+        r"type %CLAUDE_PLUGIN_ROOT%\ask.json"
+    } else {
+        "cat \"$CLAUDE_PLUGIN_ROOT/ask.json\""
+    };
     hooks(&config, on("PreToolUse", Some("Write"), native(script)));
     let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(calls(&[("w1", "Write", json!({ "path": "new.txt", "content": "x" }))])),
+        Turn::Events(calls(&[(
+            "w1",
+            "Write",
+            json!({ "path": "new.txt", "content": "x" }),
+        )])),
         Turn::Events(script_text("ok")),
     ]));
     let handle = open(&dir, &config, provider.clone(), Mode::Auto);

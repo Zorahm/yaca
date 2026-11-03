@@ -83,7 +83,9 @@ async fn the_panel_gets_the_whole_file_with_its_unchanged_lines() {
         .iter()
         .map(|s| match s {
             ViewSegment::Unchanged { lines } => lines.len(),
-            ViewSegment::Hunk { hunk } => hunk.lines.iter().filter(|l| l.new_line.is_some()).count(),
+            ViewSegment::Hunk { hunk } => {
+                hunk.lines.iter().filter(|l| l.new_line.is_some()).count()
+            }
         })
         .sum();
     assert_eq!(lines, 30);
@@ -102,7 +104,10 @@ async fn reading_the_view_writes_nothing() {
 
     view_of(&handle, PATH).await.unwrap();
 
-    assert_eq!(std::fs::read_to_string(dir.path().join(PATH)).unwrap(), edited());
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join(PATH)).unwrap(),
+        edited()
+    );
 }
 
 #[tokio::test]
@@ -134,7 +139,10 @@ async fn a_changed_file_is_found_by_another_spelling_of_its_path() {
     // A `Read` row carries the path as the model wrote it.
     let view = view_of(&handle, "./a.txt").await.unwrap();
 
-    assert!(view.fact.is_some(), "the change is shown, not the bare file");
+    assert!(
+        view.fact.is_some(),
+        "the change is shown, not the bare file"
+    );
 }
 
 #[tokio::test]

@@ -29,6 +29,7 @@ use crate::intent::Intent;
 use crate::lsp::format::locate;
 use crate::lsp::LspError;
 use crate::permission::{invariant, unsaved, PermissionNeed};
+use crate::profile::Profile;
 use crate::uri::path_of;
 use crate::workspace::Workspace;
 
@@ -85,6 +86,11 @@ impl Tool for Rename {
         &[Intent::Agent]
     }
 
+    /// A rename is a name in a codebase; a chat about documents has no symbols.
+    fn profiles(&self) -> &'static [Profile] {
+        &[Profile::Code]
+    }
+
     fn target(&self, input: &Value) -> Option<String> {
         input["path"].as_str().map(str::to_owned)
     }
@@ -97,10 +103,9 @@ impl Tool for Rename {
         let new_name = input["new_name"].as_str()?;
         let abs = ws.resolve_new(raw).ok()?;
         let what = input["symbol"].as_str().unwrap_or("the symbol");
-        Some(
-            files::edit_need(ws, self.name(), raw, abs)
-                .note(format!("Renames `{what}` to `{new_name}` in every file that uses it")),
-        )
+        Some(files::edit_need(ws, self.name(), raw, abs).note(format!(
+            "Renames `{what}` to `{new_name}` in every file that uses it"
+        )))
     }
 
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
@@ -122,7 +127,8 @@ impl Tool for Rename {
             .ok_or_else(|| ToolError::failed("new_name is required"))?;
 
         let abs = ctx.ws.resolve_existing(raw)?;
-        let text = read_text(&abs)?.ok_or_else(|| ToolError::failed(format!("not found: {raw}")))?;
+        let text =
+            read_text(&abs)?.ok_or_else(|| ToolError::failed(format!("not found: {raw}")))?;
         let server = lsp.server_for(&abs).ok_or_else(|| {
             ToolError::failed_with(
                 format!("no language server for {raw}"),
@@ -150,7 +156,12 @@ impl Tool for Rename {
         // `null` is saying there is nothing renameable here, which is worth
         // hearing before an answer of "no edits".
         match client
-            .request("textDocument/prepareRename", at.clone(), REQUEST_TIMEOUT, &ctx.cancel)
+            .request(
+                "textDocument/prepareRename",
+                at.clone(),
+                REQUEST_TIMEOUT,
+                &ctx.cancel,
+            )
             .await
         {
             Ok(Value::Null) => {
@@ -172,7 +183,9 @@ impl Tool for Rename {
             .map_err(mapped)?;
         let per_file = edits_of(&answer)?;
         if per_file.is_empty() {
-            return Err(ToolError::failed("the language server returned no edits for this rename"));
+            return Err(ToolError::failed(
+                "the language server returned no edits for this rename",
+            ));
         }
 
         // Everything is placed before anything is written.
@@ -256,7 +269,9 @@ fn edits_of(answer: &Value) -> Result<Vec<(PathBuf, Vec<TextEdit>)>, ToolError> 
     let mut out: Vec<(PathBuf, Vec<TextEdit>)> = Vec::new();
     let mut add = |uri: &str, edits: &Value| -> Result<(), ToolError> {
         let path = path_of(uri).ok_or_else(|| {
-            ToolError::failed(format!("the rename touches {uri}, which is not a local file"))
+            ToolError::failed(format!(
+                "the rename touches {uri}, which is not a local file"
+            ))
         })?;
         let edits = edits
             .as_array()
@@ -280,13 +295,16 @@ fn edits_of(answer: &Value) -> Result<Vec<(PathBuf, Vec<TextEdit>)>, ToolError> 
                         "The language server wants this rename to {kind} a file as well \
                          ({}). Rename does not move or create files. Rename the symbol \
                          with Edit, and the file with Move.",
-                        change["oldUri"].as_str().or(change["uri"].as_str()).unwrap_or("?")
+                        change["oldUri"]
+                            .as_str()
+                            .or(change["uri"].as_str())
+                            .unwrap_or("?")
                     ),
                 ));
             }
-            let uri = change["textDocument"]["uri"]
-                .as_str()
-                .ok_or_else(|| ToolError::failed("the language server sent an edit without a document"))?;
+            let uri = change["textDocument"]["uri"].as_str().ok_or_else(|| {
+                ToolError::failed("the language server sent an edit without a document")
+            })?;
             add(uri, &change["edits"])?;
         }
     } else if let Some(changes) = answer["changes"].as_object() {
@@ -322,7 +340,12 @@ struct Planned {
 }
 
 /// Checks one file of the rename and works out its new text.
-fn plan(ctx: &ToolCtx, asked: &Path, path: &Path, edits: &[TextEdit]) -> Result<Planned, ToolError> {
+fn plan(
+    ctx: &ToolCtx,
+    asked: &Path,
+    path: &Path,
+    edits: &[TextEdit],
+) -> Result<Planned, ToolError> {
     let ws = &ctx.ws;
     // A server names files its own way; the workspace's form is what the
     // boundary check and the read registry know them by.
@@ -343,10 +366,13 @@ fn plan(ctx: &ToolCtx, asked: &Path, path: &Path, edits: &[TextEdit]) -> Result<
              nothing was changed — rename there with Edit"
         )));
     }
-    let before = read_text(&abs)?
-        .ok_or_else(|| ToolError::failed(format!("the rename names {rel}, which does not exist")))?;
+    let before = read_text(&abs)?.ok_or_else(|| {
+        ToolError::failed(format!("the rename names {rel}, which does not exist"))
+    })?;
     let after = apply(&before, edits).map_err(|why| {
-        ToolError::failed(format!("the rename's edits do not fit {rel} ({why}); nothing was changed"))
+        ToolError::failed(format!(
+            "the rename's edits do not fit {rel} ({why}); nothing was changed"
+        ))
     })?;
     Ok(Planned {
         abs,
@@ -368,7 +394,10 @@ fn apply(text: &str, edits: &[TextEdit]) -> Result<String, String> {
             let from = offset(text, &starts, e.start)?;
             let to = offset(text, &starts, e.end)?;
             if to < from {
-                return Err(format!("range ends before it starts at line {}", e.start.0 + 1));
+                return Err(format!(
+                    "range ends before it starts at line {}",
+                    e.start.0 + 1
+                ));
             }
             Ok((from, to, e.text.as_str()))
         })
@@ -443,7 +472,11 @@ mod tests {
     use super::*;
 
     fn edit(start: (u32, u32), end: (u32, u32), text: &str) -> TextEdit {
-        TextEdit { start, end, text: text.into() }
+        TextEdit {
+            start,
+            end,
+            text: text.into(),
+        }
     }
 
     #[test]
@@ -452,7 +485,10 @@ mod tests {
         let text = "let é = parse(x);\nlet 𝔁 = parse(y);\n";
         let out = apply(
             text,
-            &[edit((0, 8), (0, 13), "parse_line"), edit((1, 9), (1, 14), "parse_line")],
+            &[
+                edit((0, 8), (0, 13), "parse_line"),
+                edit((1, 9), (1, 14), "parse_line"),
+            ],
         )
         .unwrap();
         assert_eq!(out, "let é = parse_line(x);\nlet 𝔁 = parse_line(y);\n");
@@ -461,23 +497,36 @@ mod tests {
     #[test]
     fn crlf_files_keep_their_line_endings() {
         let text = "fn a() {}\r\nfn b() { a() }\r\n";
-        let out = apply(text, &[edit((0, 3), (0, 4), "z"), edit((1, 9), (1, 10), "z")]).unwrap();
+        let out = apply(
+            text,
+            &[edit((0, 3), (0, 4), "z"), edit((1, 9), (1, 10), "z")],
+        )
+        .unwrap();
         assert_eq!(out, "fn z() {}\r\nfn b() { z() }\r\n");
     }
 
     #[test]
     fn overlapping_or_misplaced_edits_change_nothing() {
         let text = "abc\n";
-        assert!(apply(text, &[edit((0, 0), (0, 2), "x"), edit((0, 1), (0, 3), "y")]).is_err());
+        assert!(apply(
+            text,
+            &[edit((0, 0), (0, 2), "x"), edit((0, 1), (0, 3), "y")]
+        )
+        .is_err());
         assert!(apply(text, &[edit((5, 0), (5, 1), "x")]).is_err());
         // A column past the end clamps to the line's end.
-        assert_eq!(apply(text, &[edit((0, 3), (0, 99), "!")]).unwrap(), "abc!\n");
+        assert_eq!(
+            apply(text, &[edit((0, 3), (0, 99), "!")]).unwrap(),
+            "abc!\n"
+        );
     }
 
     #[test]
     fn both_forms_of_workspace_edit_are_read() {
-        let range = json!({ "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 1 } });
-        let older = json!({ "changes": { "file:///p/a.rs": [{ "range": range, "newText": "b" }] } });
+        let range =
+            json!({ "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 1 } });
+        let older =
+            json!({ "changes": { "file:///p/a.rs": [{ "range": range, "newText": "b" }] } });
         let edits = edits_of(&older).unwrap();
         assert_eq!(edits.len(), 1);
         assert_eq!(edits[0].1[0].text, "b");
@@ -507,7 +556,10 @@ mod tests {
         dir.write("a.rs", "fn a() {}\n");
         let (ctx, _ws) = crate::tool::tests_support::ctx_for(&dir);
         let err = Rename
-            .run(&ctx, json!({ "path": "a.rs", "line": 1, "symbol": "a", "new_name": "b" }))
+            .run(
+                &ctx,
+                json!({ "path": "a.rs", "line": 1, "symbol": "a", "new_name": "b" }),
+            )
             .await
             .unwrap_err();
         assert!(err.to_string().contains("no language servers"), "{err}");
@@ -539,6 +591,9 @@ mod tests {
         .unwrap();
         assert_eq!(planned.after, "fn run() {}\nfn b() { run() }\n");
         assert_eq!(planned.count, 2);
-        assert_eq!(std::fs::read_to_string(&file).unwrap(), "fn a() {}\nfn b() { a() }\n");
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            "fn a() {}\nfn b() { a() }\n"
+        );
     }
 }

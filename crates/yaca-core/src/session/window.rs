@@ -12,6 +12,7 @@
 
 use crate::intent::Intent;
 use crate::mcp::TOOL_PREFIX;
+use crate::profile::Profile;
 use crate::provider::ToolSchema;
 use crate::usage::{ContextBreakdown, UsageSnapshot};
 
@@ -33,10 +34,11 @@ struct Weights {
 
 impl Worker {
     /// The system prompt and the tools: the cached head of every request.
-    pub(super) fn head(&self, intent: Intent) -> (String, Vec<ToolSchema>) {
+    pub(super) fn head(&self, intent: Intent, profile: Profile) -> (String, Vec<ToolSchema>) {
         let system = prompt::build_with_memory(
             self.ws.root(),
             intent,
+            profile,
             self.instructions.as_deref(),
             self.shared.shell,
             self.memory.as_deref(),
@@ -47,7 +49,7 @@ impl Worker {
         // the human's setup speaking, not an external program.
         let system = prompt::with_mcp(system, self.plugin_context.as_deref());
         let system = prompt::with_mcp(system, self.mcp_notes.as_deref());
-        (system, self.registry.schemas(intent))
+        (system, self.registry.schemas(intent, profile))
     }
 
     /// The meter's snapshot with the window taken apart.
@@ -64,8 +66,11 @@ impl Worker {
     }
 
     fn weights(&self) -> Weights {
-        let intent = self.shared.state.lock().unwrap().mode.intent();
-        let (system, tools) = self.head(intent);
+        let (intent, profile) = {
+            let state = self.shared.state.lock().unwrap();
+            (state.mode.intent(), state.profile)
+        };
+        let (system, tools) = self.head(intent, profile);
 
         // Each section goes into the prompt after a newline of its own
         // (`prompt::build_with_memory`), and that newline is the section's.

@@ -494,10 +494,7 @@ mod tests {
             .unwrap();
 
         // The second edit must see the first, or the agent overwrites itself.
-        assert_eq!(
-            std::fs::read_to_string(&path).unwrap(),
-            "first\nsecond\n"
-        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "first\nsecond\n");
     }
 
     #[tokio::test]

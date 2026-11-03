@@ -164,7 +164,11 @@ mod tests {
     use crate::message::Message;
 
     fn session() -> (SessionMeta, Vec<Record>) {
-        let mut meta = SessionMeta::new(SessionId::from("ses_1"), "anthropic".into(), "claude-opus-5".into());
+        let mut meta = SessionMeta::new(
+            SessionId::from("ses_1"),
+            "anthropic".into(),
+            "claude-opus-5".into(),
+        );
         meta.title = "Date parsing".into();
         meta.messages = 1;
         meta.cost_usd = 0.31;

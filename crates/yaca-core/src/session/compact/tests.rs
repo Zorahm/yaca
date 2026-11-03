@@ -184,7 +184,11 @@ fn a_turn_too_short_to_cut_inside_is_left_alone() {
 #[test]
 fn heavy_recent_turns_are_cut_inside_rather_than_kept_whole() {
     let mut history = conversation();
-    history.extend(long_turn(6, &"build output ".repeat(500))[1..].iter().cloned());
+    history.extend(
+        long_turn(6, &"build output ".repeat(500))[1..]
+            .iter()
+            .cloned(),
+    );
     let at_turns = cut_by_turns(&history).unwrap();
 
     let plan = plan(&history).unwrap();
@@ -239,7 +243,12 @@ fn a_summary_longer_than_what_it_replaced_frees_nothing() {
 #[test]
 fn a_skill_loaded_in_the_dropped_part_is_kept_and_one_in_the_tail_is_not() {
     let skill = |name: &str| format!("<skill_content name=\"{name}\">x</skill_content>");
-    let mut history = vec![human("one"), agent(&skill("early")), human("two"), agent("b")];
+    let mut history = vec![
+        human("one"),
+        agent(&skill("early")),
+        human("two"),
+        agent("b"),
+    ];
     history.extend([human(&skill("late")), agent("c"), human("four"), agent("d")]);
     let plan = plan(&history).unwrap();
     assert_eq!(plan.skills, ["early"]);
@@ -247,7 +256,10 @@ fn a_skill_loaded_in_the_dropped_part_is_kept_and_one_in_the_tail_is_not() {
 
 #[test]
 fn an_edited_summary_keeps_the_skills_kept_with_it() {
-    let kept = vec![KEPT_SKILLS_HEADER.to_string(), "<skill_content name=\"a\">x</skill_content>".to_string()];
+    let kept = vec![
+        KEPT_SKILLS_HEADER.to_string(),
+        "<skill_content name=\"a\">x</skill_content>".to_string(),
+    ];
     let history = rebuilt("previous summary", &kept, vec![human("three")]);
     assert_eq!(kept_skills(&history), kept);
     assert!(kept_skills(&[human("not summary")]).is_empty());

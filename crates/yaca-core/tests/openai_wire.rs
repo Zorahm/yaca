@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use futures_util::StreamExt;
 use yaca_core::error::ProviderError;
 use yaca_core::event::StopReason;
 use yaca_core::intent::Effort;
@@ -15,7 +16,6 @@ use yaca_core::provider::openai::OpenAiProvider;
 use yaca_core::provider::registry::{Protocol, ProviderSpec};
 use yaca_core::provider::{BlockKind, Provider, ProviderEvent, ProviderRequest};
 use yaca_core::usage::TokenCounts;
-use futures_util::StreamExt;
 
 mod common;
 use common::wire::{refusal, serve, serve_all};
@@ -304,5 +304,9 @@ async fn another_refusal_is_not_repeated() {
         matches!(err, ProviderError::Http { status: 400, .. }),
         "{err:?}"
     );
-    assert_eq!(seen.await.unwrap().len(), 1, "there was nothing to ask again with");
+    assert_eq!(
+        seen.await.unwrap().len(),
+        1,
+        "there was nothing to ask again with"
+    );
 }

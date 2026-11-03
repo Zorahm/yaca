@@ -22,21 +22,33 @@ pub(super) struct Fetched {
 }
 
 /// The entry's files, under `staging/package`.
-pub(super) fn from_entry(market_dir: &Path, manifest: &Manifest, entry: &Entry, staging: &Path) -> Result<Fetched, String> {
+pub(super) fn from_entry(
+    market_dir: &Path,
+    manifest: &Manifest,
+    entry: &Entry,
+    staging: &Path,
+) -> Result<Fetched, String> {
     let package = staging.join("package");
     let revision = match &entry.source {
         EntrySource::Relative(rel) => {
-            let market = std::fs::canonicalize(market_dir).map_err(|e| format!("the marketplace cannot be opened: {e}"))?;
+            let market = std::fs::canonicalize(market_dir)
+                .map_err(|e| format!("the marketplace cannot be opened: {e}"))?;
             let base = match &manifest.plugin_root {
                 Some(root) => market.join(trim(root)),
                 None => market.clone(),
             };
-            let from = contained(&market, &base.join(trim(rel)))
-                .ok_or_else(|| format!("plugin path «{rel}» was not found inside the marketplace"))?;
+            let from = contained(&market, &base.join(trim(rel))).ok_or_else(|| {
+                format!("plugin path «{rel}» was not found inside the marketplace")
+            })?;
             git::copy_tree(&from, &package)?;
             git::head(&market)
         }
-        EntrySource::Git { url, reference, sha, path } => {
+        EntrySource::Git {
+            url,
+            reference,
+            sha,
+            path,
+        } => {
             let download = staging.join("download");
             let revision = sha.as_deref().or(reference.as_deref());
             let commit = git::fetch(url, revision, &download)?;
@@ -49,7 +61,9 @@ pub(super) fn from_entry(market_dir: &Path, manifest: &Manifest, entry: &Entry, 
             git::copy_tree(&from, &package)?;
             Some(commit)
         }
-        EntrySource::Unsupported(kind) => return Err(format!("source «{kind}» is not supported in Yaca")),
+        EntrySource::Unsupported(kind) => {
+            return Err(format!("source «{kind}» is not supported in Yaca"))
+        }
     };
     apply_entry(&package, entry)?;
     Ok(Fetched { package, revision })
@@ -68,11 +82,16 @@ pub(super) fn from_address(raw: &str, staging: &Path) -> Result<Fetched, String>
         });
     }
     let url = match super::marketplace::MarketplaceSource::parse(raw)? {
-        super::marketplace::MarketplaceSource::Github { repo, .. } => format!("https://github.com/{repo}.git"),
+        super::marketplace::MarketplaceSource::Github { repo, .. } => {
+            format!("https://github.com/{repo}.git")
+        }
         super::marketplace::MarketplaceSource::Git { url, .. } => url,
         super::marketplace::MarketplaceSource::Directory { path } => {
             git::copy_tree(&path, &package)?;
-            return Ok(Fetched { package, revision: git::head(&path) });
+            return Ok(Fetched {
+                package,
+                revision: git::head(&path),
+            });
         }
     };
     let download = staging.join("download");

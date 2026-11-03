@@ -81,7 +81,10 @@ pub(crate) fn adopt_key(old_service: &str, new_service: &str, provider: &str) {
                 return;
             }
             if new.get_password().ok().as_deref() != Some(key.as_str()) {
-                tracing::warn!(provider, "key under new name cannot be read, keeping old key");
+                tracing::warn!(
+                    provider,
+                    "key under new name cannot be read, keeping old key"
+                );
                 return;
             }
         }

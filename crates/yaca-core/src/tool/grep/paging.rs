@@ -26,7 +26,8 @@ async fn a_page_says_where_the_next_one_starts() {
     assert!(out.text.contains("a.rs:4: hit 4"), "{}", out.text);
     assert!(!out.text.contains("hit 5"), "{}", out.text);
     assert!(
-        out.text.contains("showing 1–4 of 10 matches in 1 files; continue: offset=4"),
+        out.text
+            .contains("showing 1–4 of 10 matches in 1 files; continue: offset=4"),
         "{}",
         out.text
     );
@@ -39,7 +40,11 @@ async fn the_offset_from_the_footer_continues_without_a_gap_or_a_repeat() {
     let dir = TempDir::new();
     dir.write("a.rs", &numbered(10));
 
-    let out = search(&dir, json!({ "pattern": "hit", "head_limit": 4, "offset": 4 })).await;
+    let out = search(
+        &dir,
+        json!({ "pattern": "hit", "head_limit": 4, "offset": 4 }),
+    )
+    .await;
 
     assert!(out.text.starts_with("a.rs:5: hit 5\n"), "{}", out.text);
     assert!(out.text.contains("a.rs:8: hit 8"), "{}", out.text);
@@ -53,7 +58,11 @@ async fn the_last_page_has_no_continuation() {
     let dir = TempDir::new();
     dir.write("a.rs", &numbered(10));
 
-    let out = search(&dir, json!({ "pattern": "hit", "head_limit": 4, "offset": 8 })).await;
+    let out = search(
+        &dir,
+        json!({ "pattern": "hit", "head_limit": 4, "offset": 8 }),
+    )
+    .await;
 
     assert!(out.text.contains("hit 10"), "{}", out.text);
     assert!(out.text.contains("showing 9–10 of 10"), "{}", out.text);
@@ -71,7 +80,11 @@ async fn pages_run_across_files_in_path_order() {
     assert!(first.text.contains("a.rs:1:") && first.text.contains("a.rs:2:"));
     assert!(!first.text.contains("a3"));
 
-    let second = search(&dir, json!({ "pattern": "hit", "head_limit": 2, "offset": 2 })).await;
+    let second = search(
+        &dir,
+        json!({ "pattern": "hit", "head_limit": 2, "offset": 2 }),
+    )
+    .await;
     assert!(second.text.contains("a.rs:3: hit a3"), "{}", second.text);
     assert!(second.text.contains("b.rs:1: hit b1"), "{}", second.text);
     assert!(!second.text.contains("b2"), "{}", second.text);
@@ -85,7 +98,11 @@ async fn an_offset_past_the_end_says_how_many_there_are() {
 
     let out = search(&dir, json!({ "pattern": "hit", "offset": 50 })).await;
 
-    assert!(out.text.contains("is out of range: 3 matches total"), "{}", out.text);
+    assert!(
+        out.text.contains("is out of range: 3 matches total"),
+        "{}",
+        out.text
+    );
     assert!(!out.text.contains("a.rs:"), "{}", out.text);
 }
 
@@ -101,7 +118,12 @@ async fn context_pages_do_not_repeat_a_match_as_context() {
     .await;
 
     // Match 2 sits in the context of match 3 and keeps its mark.
-    assert!(out.text.starts_with("a.rs:2: hit 2\na.rs:3: hit 3\na.rs:4: hit 4\n"), "{}", out.text);
+    assert!(
+        out.text
+            .starts_with("a.rs:2: hit 2\na.rs:3: hit 3\na.rs:4: hit 4\n"),
+        "{}",
+        out.text
+    );
 }
 
 #[tokio::test]
@@ -111,9 +133,20 @@ async fn files_mode_pages_too() {
         dir.write(&format!("{name}.rs"), "hit\n");
     }
 
-    let first = search(&dir, json!({ "pattern": "hit", "mode": "files", "head_limit": 3 })).await;
-    assert_eq!(first.text.lines().take(3).collect::<Vec<_>>(), ["a.rs", "b.rs", "c.rs"]);
-    assert!(first.text.contains("of 4 files; continue: offset=3"), "{}", first.text);
+    let first = search(
+        &dir,
+        json!({ "pattern": "hit", "mode": "files", "head_limit": 3 }),
+    )
+    .await;
+    assert_eq!(
+        first.text.lines().take(3).collect::<Vec<_>>(),
+        ["a.rs", "b.rs", "c.rs"]
+    );
+    assert!(
+        first.text.contains("of 4 files; continue: offset=3"),
+        "{}",
+        first.text
+    );
 
     let rest = search(
         &dir,
@@ -144,7 +177,10 @@ async fn multiline_matches_across_lines_and_shows_every_line_of_the_match() {
     )
     .await;
 
-    assert_eq!(out.text, "a.rs:1: fn main() {\na.rs:2:     run();\na.rs:3: }\n");
+    assert_eq!(
+        out.text,
+        "a.rs:1: fn main() {\na.rs:2:     run();\na.rs:3: }\n"
+    );
     assert_eq!(out.meta.items, Some(1), "one match, however many lines");
 }
 
@@ -199,7 +235,11 @@ async fn multiline_matches_are_paged_by_match() {
     assert_eq!(out.text.lines().next(), Some("a.rs:4: <a>"), "{}", out.text);
     assert!(out.text.contains("a.rs:6: </a>"), "{}", out.text);
     assert!(!out.text.contains("a.rs:7:"), "{}", out.text);
-    assert!(out.text.contains("showing 2–2 of 3 matches"), "{}", out.text);
+    assert!(
+        out.text.contains("showing 2–2 of 3 matches"),
+        "{}",
+        out.text
+    );
     assert!(out.text.contains("offset=2"), "{}", out.text);
 }
 

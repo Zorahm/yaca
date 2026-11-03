@@ -69,12 +69,20 @@ pub async fn review(
     need: &PermissionNeed,
     timeout: Duration,
 ) -> bool {
+    review_recording(systemone, provider, model, need, timeout, None).await
+}
+
+pub(crate) async fn review_recording(
+    systemone: Option<&SystemOne>,
+    provider: &dyn Provider,
+    model: &str,
+    need: &PermissionNeed,
+    timeout: Duration,
+    ledger: Option<(&crate::session::subagent::Ledger, crate::usage::Pricing)>,
+) -> bool {
     if let Some(client) = systemone.filter(|c| !c.is_absent()) {
-        let asked = tokio::time::timeout(
-            timeout,
-            client.noul(model, &describe(need), STATEMENT),
-        )
-        .await;
+        let asked =
+            tokio::time::timeout(timeout, client.noul(model, &describe(need), STATEMENT)).await;
         match asked {
             Ok(Outcome::Probability(p)) => {
                 tracing::debug!(probability = p, "auto reviewer scored the call");
@@ -92,7 +100,7 @@ pub async fn review(
             Ok(Outcome::Absent) => {}
         }
     }
-    is_safe(provider, model, need, timeout).await
+    is_safe_recording(provider, model, need, timeout, ledger).await
 }
 
 /// The chat reviewer: a model that answers `SAFE` or `UNSAFE` in words.
@@ -101,6 +109,16 @@ pub async fn is_safe(
     model: &str,
     need: &PermissionNeed,
     timeout: Duration,
+) -> bool {
+    is_safe_recording(provider, model, need, timeout, None).await
+}
+
+async fn is_safe_recording(
+    provider: &dyn Provider,
+    model: &str,
+    need: &PermissionNeed,
+    timeout: Duration,
+    ledger: Option<(&crate::session::subagent::Ledger, crate::usage::Pricing)>,
 ) -> bool {
     let request = ProviderRequest {
         model: model.to_string(),
@@ -112,7 +130,15 @@ pub async fn is_safe(
         thinking: false,
     };
     match tokio::time::timeout(timeout, collect_text(provider, request)).await {
-        Ok(Ok(reply)) => says_safe(&reply),
+        Ok(Ok((reply, usage, cost, aside))) => {
+            if let Some((ledger, pricing)) = ledger {
+                ledger.add(usage, pricing, cost);
+                for (counts, price, amount) in aside {
+                    ledger.add(counts, price, amount);
+                }
+            }
+            says_safe(&reply)
+        }
         Ok(Err(err)) => {
             tracing::debug!(error = %err, "auto reviewer failed; asking the human");
             false
@@ -158,15 +184,39 @@ fn says_safe(reply: &str) -> bool {
 async fn collect_text(
     provider: &dyn Provider,
     request: ProviderRequest,
-) -> Result<String, ProviderError> {
+) -> Result<
+    (
+        String,
+        crate::usage::TokenCounts,
+        Option<f64>,
+        Vec<(
+            crate::usage::TokenCounts,
+            crate::usage::Pricing,
+            Option<f64>,
+        )>,
+    ),
+    ProviderError,
+> {
     let mut stream = provider.stream(request).await?;
     let mut text = String::new();
+    let mut usage = crate::usage::TokenCounts::default();
+    let mut cost = None;
+    let mut aside = Vec::new();
     while let Some(event) = stream.next().await {
-        if let ProviderEvent::TextDelta { text: delta, .. } = event? {
-            text.push_str(&delta);
+        match event? {
+            ProviderEvent::TextDelta { text: delta, .. } => text.push_str(&delta),
+            ProviderEvent::MessageStart { usage: counts, .. }
+            | ProviderEvent::MessageDelta { usage: counts, .. } => usage.add(counts),
+            ProviderEvent::Cost { usd } => cost = Some(usd),
+            ProviderEvent::AsideUsage {
+                usage,
+                pricing,
+                cost,
+            } => aside.push((usage, pricing, cost)),
+            _ => {}
         }
     }
-    Ok(text)
+    Ok((text, usage, cost, aside))
 }
 
 #[cfg(test)]
@@ -181,6 +231,31 @@ mod tests {
         PermissionNeed::new(PermissionKind::RunCommand, "Bash", "cargo")
             .detail("cargo build --release")
             .note("/project")
+    }
+
+    #[tokio::test]
+    async fn chat_review_records_usage_without_changing_the_decision() {
+        let mock = MockProvider::text("SAFE");
+        let ledger = crate::session::subagent::Ledger::default();
+        let pricing = crate::usage::Pricing {
+            input: 1.0,
+            output: 2.0,
+        };
+        assert!(
+            review_recording(
+                None,
+                &mock,
+                "small",
+                &need(),
+                TIMEOUT,
+                Some((&ledger, pricing))
+            )
+            .await
+        );
+        let entries = ledger.take();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].0.input, 100);
+        assert_eq!(entries[0].0.output, 20);
     }
 
     #[tokio::test]
@@ -199,9 +274,19 @@ mod tests {
 
     #[tokio::test]
     async fn anything_but_safe_goes_to_the_human() {
-        for reply in ["UNSAFE", "unsafe", "I think this is safe", "", "SAFEGUARD", "maybe"] {
+        for reply in [
+            "UNSAFE",
+            "unsafe",
+            "I think this is safe",
+            "",
+            "SAFEGUARD",
+            "maybe",
+        ] {
             let mock = MockProvider::text(reply);
-            assert!(!is_safe(&mock, "small", &need(), TIMEOUT).await, "{reply:?}");
+            assert!(
+                !is_safe(&mock, "small", &need(), TIMEOUT).await,
+                "{reply:?}"
+            );
         }
     }
 
@@ -239,12 +324,15 @@ mod tests {
 
     use std::sync::Arc;
 
-    use crate::provider::registry::{ProviderSpec, Protocol};
+    use crate::provider::registry::{Protocol, ProviderSpec};
 
     /// A server that answers every request with `status` and `body`, and keeps
     /// the request lines it saw. One connection per request, which is all the
     /// client makes.
-    async fn serve(status: u16, body: &'static str) -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
+    async fn serve(
+        status: u16,
+        body: &'static str,
+    ) -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();

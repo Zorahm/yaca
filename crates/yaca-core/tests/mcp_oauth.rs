@@ -46,11 +46,17 @@ async fn read(socket: &mut TcpStream) -> Option<Request> {
         }
         raw.extend_from_slice(&buf[..n]);
         let text = String::from_utf8_lossy(&raw).into_owned();
-        let Some(end) = text.find("\r\n\r\n") else { continue };
+        let Some(end) = text.find("\r\n\r\n") else {
+            continue;
+        };
         let head = &text[..end];
         let length: usize = head
             .lines()
-            .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse().unwrap_or(0)))
+            .find_map(|l| {
+                l.to_ascii_lowercase()
+                    .strip_prefix("content-length:")
+                    .map(|v| v.trim().parse().unwrap_or(0))
+            })
             .unwrap_or(0);
         if raw.len() - (end + 4) < length {
             continue;
@@ -73,14 +79,21 @@ fn json_answer(status: &str, body: &Value, extra: &str) -> String {
 }
 
 fn answer(base: &str, request: &Request, seen: &Mutex<Seen>) -> String {
-    let path = request.line.split_whitespace().nth(1).unwrap_or("/").to_string();
+    let path = request
+        .line
+        .split_whitespace()
+        .nth(1)
+        .unwrap_or("/")
+        .to_string();
     seen.lock().unwrap().lines.push(request.line.clone());
     match path.as_str() {
-        "/.well-known/oauth-protected-resource/mcp" | "/.well-known/oauth-protected-resource" => json_answer(
-            "200 OK",
-            &json!({ "resource": format!("{base}/mcp"), "authorization_servers": [base] }),
-            "",
-        ),
+        "/.well-known/oauth-protected-resource/mcp" | "/.well-known/oauth-protected-resource" => {
+            json_answer(
+                "200 OK",
+                &json!({ "resource": format!("{base}/mcp"), "authorization_servers": [base] }),
+                "",
+            )
+        }
         "/.well-known/oauth-authorization-server" => json_answer(
             "200 OK",
             &json!({
@@ -131,7 +144,9 @@ fn answer(base: &str, request: &Request, seen: &Mutex<Seen>) -> String {
                     "",
                 ),
                 "tools/list" => json_answer("200 OK", &result(json!({ "tools": [] })), ""),
-                _ => "HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into(),
+                _ => {
+                    "HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into()
+                }
             }
         }
         _ => "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into(),
@@ -145,10 +160,14 @@ async fn serve() -> (String, Arc<Mutex<Seen>>) {
     let (base_task, seen_task) = (base.clone(), seen.clone());
     tokio::spawn(async move {
         loop {
-            let Ok((mut socket, _)) = listener.accept().await else { return };
+            let Ok((mut socket, _)) = listener.accept().await else {
+                return;
+            };
             let (base, seen) = (base_task.clone(), seen_task.clone());
             tokio::spawn(async move {
-                let Some(request) = read(&mut socket).await else { return };
+                let Some(request) = read(&mut socket).await else {
+                    return;
+                };
                 let reply = answer(&base, &request, &seen);
                 let _ = socket.write_all(reply.as_bytes()).await;
                 let _ = socket.flush().await;
@@ -205,27 +224,54 @@ async fn a_server_that_asks_for_a_login_gets_one_and_connects() {
     let waiting = until(&handle, |s| s.status == McpStatus::NeedsLogin).await;
     assert!(!waiting.logged_in);
 
-    handle.send(Command::LoginMcpServer { server: "guarded".into() }).await.unwrap();
-    let page = until(&handle, |s| s.login_url.is_some()).await.login_url.unwrap();
+    handle
+        .send(Command::LoginMcpServer {
+            server: "guarded".into(),
+        })
+        .await
+        .unwrap();
+    let page = until(&handle, |s| s.login_url.is_some())
+        .await
+        .login_url
+        .unwrap();
     assert!(page.starts_with(&format!("{base}/authorize?")), "{page}");
     assert_eq!(param(&page, "client_id"), "yaca-test");
     assert_eq!(param(&page, "code_challenge_method"), "S256");
     assert_eq!(param(&page, "resource"), url);
 
     // The browser, after the person said yes.
-    let back = format!("{}?code=good&state={}", param(&page, "redirect_uri"), param(&page, "state"));
+    let back = format!(
+        "{}?code=good&state={}",
+        param(&page, "redirect_uri"),
+        param(&page, "state")
+    );
     let landing = reqwest::get(&back).await.unwrap().text().await.unwrap();
     assert!(landing.contains("logged in"), "{landing}");
 
     let ready = until(&handle, |s| s.status == McpStatus::Ready).await;
     assert!(ready.logged_in);
     let form = seen.lock().unwrap().token_forms[0].clone();
-    assert!(form.contains("grant_type=authorization_code") && form.contains("redirect_uri="), "{form}");
-    assert!(std::fs::read_dir(tokens.path()).unwrap().count() == 1, "the login was kept");
+    assert!(
+        form.contains("grant_type=authorization_code") && form.contains("redirect_uri="),
+        "{form}"
+    );
+    assert!(
+        std::fs::read_dir(tokens.path()).unwrap().count() == 1,
+        "the login was kept"
+    );
 
-    handle.send(Command::LogoutMcpServer { server: "guarded".into() }).await.unwrap();
+    handle
+        .send(Command::LogoutMcpServer {
+            server: "guarded".into(),
+        })
+        .await
+        .unwrap();
     until(&handle, |s| s.status == McpStatus::NeedsLogin).await;
-    assert_eq!(std::fs::read_dir(tokens.path()).unwrap().count(), 0, "the login was forgotten");
+    assert_eq!(
+        std::fs::read_dir(tokens.path()).unwrap().count(),
+        0,
+        "the login was forgotten"
+    );
 }
 
 #[tokio::test]
@@ -236,8 +282,16 @@ async fn a_refused_login_leaves_the_server_waiting_with_the_reason() {
     let handle = open(&dir, &tokens, &format!("{base}/mcp"));
     until(&handle, |s| s.status == McpStatus::NeedsLogin).await;
 
-    handle.send(Command::LoginMcpServer { server: "guarded".into() }).await.unwrap();
-    let page = until(&handle, |s| s.login_url.is_some()).await.login_url.unwrap();
+    handle
+        .send(Command::LoginMcpServer {
+            server: "guarded".into(),
+        })
+        .await
+        .unwrap();
+    let page = until(&handle, |s| s.login_url.is_some())
+        .await
+        .login_url
+        .unwrap();
     let back = format!(
         "{}?error=access_denied&state={}",
         param(&page, "redirect_uri"),
@@ -245,6 +299,12 @@ async fn a_refused_login_leaves_the_server_waiting_with_the_reason() {
     );
     let _ = reqwest::get(&back).await.unwrap().text().await;
 
-    let failed = until(&handle, |s| s.status == McpStatus::NeedsLogin && s.reason.as_deref().is_some_and(|r| r.contains("access_denied"))).await;
+    let failed = until(&handle, |s| {
+        s.status == McpStatus::NeedsLogin
+            && s.reason
+                .as_deref()
+                .is_some_and(|r| r.contains("access_denied"))
+    })
+    .await;
     assert!(!failed.logged_in);
 }

@@ -16,7 +16,7 @@ use std::path::Path;
 
 use crate::error::CoreError;
 use crate::provider::registry::Providers;
-use crate::router::config::{Condition, ModelRef, Question, Rule, RoutingConfig, Signal};
+use crate::router::config::{Condition, ModelRef, Question, RoutingConfig, Rule, Signal};
 use crate::router::ROUTER_ID;
 
 pub const FILE: &str = "routing.json";
@@ -66,11 +66,18 @@ fn check(cfg: &RoutingConfig, providers: &Providers) -> Result<(), String> {
         return Err("the router has no name".into());
     }
     if cfg.decision_model.timeout_ms == 0 {
-        return Err("decision model response time is 0 ms: questions would not get an answer in time".into());
+        return Err(
+            "decision model response time is 0 ms: questions would not get an answer in time"
+                .into(),
+        );
     }
 
     let signals = signals_by_name(&cfg.signals)?;
-    check_model_ref(&cfg.decision_model.model, providers, "model that answers questions")?;
+    check_model_ref(
+        &cfg.decision_model.model,
+        providers,
+        "model that answers questions",
+    )?;
     check_model_ref(&cfg.default, providers, "default route")?;
 
     let mut names = BTreeSet::new();
@@ -120,9 +127,9 @@ fn check_signal(signal: &Signal) -> Result<(), String> {
 
 fn check_rule(rule: &Rule, signals: &BTreeMap<&str, &Signal>) -> Result<(), String> {
     match rule {
-        Rule::All(rules) | Rule::Any(rules) => rules
-            .iter()
-            .try_for_each(|rule| check_rule(rule, signals)),
+        Rule::All(rules) | Rule::Any(rules) => {
+            rules.iter().try_for_each(|rule| check_rule(rule, signals))
+        }
         Rule::Not(inner) => check_rule(inner, signals),
         Rule::Signal(condition) => check_condition(condition, signals),
     }
@@ -130,9 +137,9 @@ fn check_rule(rule: &Rule, signals: &BTreeMap<&str, &Signal>) -> Result<(), Stri
 
 fn check_condition(condition: &Condition, signals: &BTreeMap<&str, &Signal>) -> Result<(), String> {
     let name = condition.name.as_str();
-    let signal = signals.get(name).ok_or_else(|| {
-        format!("rule refers to signal «{name}», which is not in signals")
-    })?;
+    let signal = signals
+        .get(name)
+        .ok_or_else(|| format!("rule refers to signal «{name}», which is not in signals"))?;
     match (&signal.question, condition.label.as_deref()) {
         (Question::Noul { .. }, None) => Ok(()),
         (Question::Noul { .. }, Some(_)) => Err(format!(
@@ -191,10 +198,8 @@ mod tests {
     impl TempDir {
         fn new(test: &str) -> Self {
             let n = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir().join(format!(
-                "yaca-routing-{}-{n}-{test}",
-                std::process::id()
-            ));
+            let path = std::env::temp_dir()
+                .join(format!("yaca-routing-{}-{n}-{test}", std::process::id()));
             fs::create_dir_all(&path).unwrap();
             TempDir(path)
         }

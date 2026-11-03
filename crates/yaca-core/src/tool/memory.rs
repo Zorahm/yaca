@@ -125,6 +125,7 @@ impl Tool for Memory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::profile::Profile;
     use crate::testutil::TempDir;
     use crate::tool::tests_support::ctx_for;
     use crate::tool::ToolRegistry;
@@ -166,14 +167,20 @@ mod tests {
         let (ctx, _ws) = ctx_for(&dir);
 
         let out = Memory
-            .run(&ctx, json!({ "op": "write", "name": "a.md", "hook": "h", "content": "b" }))
+            .run(
+                &ctx,
+                json!({ "op": "write", "name": "a.md", "hook": "h", "content": "b" }),
+            )
             .await
             .unwrap();
         // Not in the change bar: the tool reports no file change at all.
         assert!(out.changed.is_none());
 
         let out = Memory
-            .run(&ctx, json!({ "op": "write", "name": "a.md", "hook": "h", "content": "c" }))
+            .run(
+                &ctx,
+                json!({ "op": "write", "name": "a.md", "hook": "h", "content": "c" }),
+            )
             .await
             .unwrap();
         assert_eq!(out.text, "Replaced note a.md\n");
@@ -203,7 +210,10 @@ mod tests {
         let (ctx, _ws) = ctx_for(&dir);
         for name in ["../escape.md", "/tmp/x.md", "sub/x.md"] {
             let err = Memory
-                .run(&ctx, json!({ "op": "write", "name": name, "hook": "h", "content": "x" }))
+                .run(
+                    &ctx,
+                    json!({ "op": "write", "name": name, "hook": "h", "content": "x" }),
+                )
                 .await
                 .unwrap_err();
             assert!(matches!(err, ToolError::Rejected(_)), "{name}: {err:?}");
@@ -214,14 +224,18 @@ mod tests {
     #[test]
     fn the_tool_exists_only_in_agent_mode() {
         let registry = ToolRegistry::standard();
-        assert!(registry.get("Memory", Intent::Agent).is_some());
-        assert!(registry.get("Memory", Intent::Plan).is_none());
+        assert!(registry
+            .get("Memory", Intent::Agent, Profile::Code)
+            .is_some());
+        assert!(registry
+            .get("Memory", Intent::Plan, Profile::Code)
+            .is_none());
     }
 
     #[test]
     fn the_caption_field_is_required_because_the_result_is_not_a_fact() {
         let schema = ToolRegistry::standard()
-            .schemas(Intent::Agent)
+            .schemas(Intent::Agent, Profile::Code)
             .into_iter()
             .find(|s| s.name == "Memory")
             .unwrap();

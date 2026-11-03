@@ -215,7 +215,11 @@ mod tests {
     use crate::testutil::TempDir;
 
     fn meta() -> SessionMeta {
-        SessionMeta::new(SessionId::from("ses_test"), "anthropic".into(), "claude-opus-5".into())
+        SessionMeta::new(
+            SessionId::from("ses_test"),
+            "anthropic".into(),
+            "claude-opus-5".into(),
+        )
     }
 
     #[test]

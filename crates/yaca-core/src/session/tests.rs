@@ -111,6 +111,135 @@ async fn text_response_yields_exact_expected_stream() {
 }
 
 #[tokio::test]
+async fn chat_profile_does_not_create_message_checkpoints() {
+    let dir = TempDir::new();
+    let mut cfg = SessionConfig::new(dir.path());
+    cfg.profile = Profile::Chat;
+    let handle = spawn(cfg, Arc::new(MockProvider::text("Hello"))).unwrap();
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "hello").await;
+    let events = collect(&mut rx).await;
+    assert!(!events.iter().any(|event| matches!(
+        event,
+        AgentEvent::CheckpointCreating { .. } | AgentEvent::CheckpointCreated { .. }
+    )));
+}
+
+#[tokio::test]
+async fn chat_workspace_survives_resume_and_is_removed_on_delete() {
+    let project = TempDir::new();
+    let journals = TempDir::new();
+    let mut cfg = SessionConfig::new(project.path());
+    cfg.journal = Some(journals.path().to_path_buf());
+    cfg.profile = Profile::Chat;
+    let handle = spawn(cfg, Arc::new(MockProvider::text("Hello"))).unwrap();
+    let id = handle.id().clone();
+    let store = SessionStore::open(journals.path(), project.path());
+    let workspace = store.chat_workspace(&id);
+    assert!(workspace.is_dir());
+    assert!(handle
+        .shared
+        .ws
+        .resolve_new(".yaca/drafts/test.md")
+        .unwrap()
+        .starts_with(&workspace));
+    std::fs::write(workspace.join("document.txt"), "kept").unwrap();
+    let duplicate = store.duplicate(&id, None).unwrap();
+    let duplicate_workspace = store.chat_workspace(&duplicate.id);
+    assert_eq!(
+        std::fs::read_to_string(duplicate_workspace.join("document.txt")).unwrap(),
+        "kept"
+    );
+    store.delete(&duplicate.id).unwrap();
+    drop(handle);
+
+    let mut cfg = SessionConfig::new(project.path());
+    cfg.journal = Some(journals.path().to_path_buf());
+    cfg.resume_session(id.clone());
+    let resumed = spawn(cfg, Arc::new(MockProvider::text("Hello"))).unwrap();
+    assert_eq!(resumed.state().profile, Profile::Chat);
+    assert_eq!(
+        std::fs::read_to_string(workspace.join("document.txt")).unwrap(),
+        "kept"
+    );
+    drop(resumed);
+    store.delete(&id).unwrap();
+    assert!(!workspace.exists());
+}
+
+#[tokio::test]
+async fn chat_copies_external_file_before_reading_it() {
+    let project = TempDir::new();
+    let journals = TempDir::new();
+    let external = TempDir::new();
+    let file = external.write("outside.txt", "original content");
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(script_tool_call(
+            "tool1",
+            "Read",
+            json!({"path": file.to_string_lossy()}),
+        )),
+        Turn::Events(script_text("Done")),
+    ]));
+    let mut cfg = SessionConfig::new(project.path());
+    cfg.journal = Some(journals.path().to_path_buf());
+    cfg.profile = Profile::Chat;
+    let handle = spawn(cfg, provider.clone()).unwrap();
+    let mut rx = handle.subscribe();
+    ask(&handle, "Read the file").await;
+    let events = collect(&mut rx).await;
+    assert!(events.iter().any(|event| matches!(event, AgentEvent::ToolCallProgress { chunk, .. } if chunk.contains("original content"))));
+    let workspace = SessionStore::open(journals.path(), project.path()).chat_workspace(handle.id());
+    assert_eq!(
+        std::fs::read_to_string(workspace.join("attachments/outside.txt")).unwrap(),
+        "original content"
+    );
+    assert_eq!(std::fs::read_to_string(file).unwrap(), "original content");
+    assert!(format!("{:?}", provider.seen.lock().unwrap().last()).contains("outside the chat"));
+}
+
+#[tokio::test]
+async fn chat_copies_user_attachments() {
+    let project = TempDir::new();
+    let journals = TempDir::new();
+    let external = TempDir::new();
+    let file = external.write("report.txt", "report");
+    let mut cfg = SessionConfig::new(project.path());
+    cfg.journal = Some(journals.path().to_path_buf());
+    cfg.profile = Profile::Chat;
+    let handle = spawn(cfg, Arc::new(MockProvider::text("Done"))).unwrap();
+    let mut rx = handle.subscribe();
+    handle
+        .send(Command::SendMessage {
+            text: "Review this".into(),
+            attachments: vec![file.to_string_lossy().into_owned()],
+        })
+        .await
+        .unwrap();
+    let events = collect(&mut rx).await;
+    let store = SessionStore::open(journals.path(), project.path());
+    let workspace = store.chat_workspace(handle.id());
+    assert_eq!(
+        std::fs::read_to_string(workspace.join("attachments/report.txt")).unwrap(),
+        "report"
+    );
+    assert!(events.iter().any(
+        |event| matches!(event, AgentEvent::UserMessage { attachments, .. }
+        if attachments.iter().any(|path| std::path::Path::new(path).starts_with(&workspace)))
+    ));
+    assert!(file.exists());
+    let duplicate = store.duplicate(handle.id(), None).unwrap();
+    let duplicate_workspace = store.chat_workspace(&duplicate.id);
+    assert!(store
+        .events(&duplicate.id)
+        .iter()
+        .any(|event| matches!(event,
+        AgentEvent::UserMessage { attachments, .. } if attachments.iter().any(|path|
+            std::path::Path::new(path).starts_with(&duplicate_workspace)))));
+}
+
+#[tokio::test]
 async fn tool_call_completes_roundtrip_and_caption_does_not_go_to_model() {
     let dir = TempDir::new();
     dir.write("src/main.rs", "fn main() {}\n");
@@ -139,6 +268,9 @@ async fn tool_call_completes_roundtrip_and_caption_does_not_go_to_model() {
             "checkpointCreated",
             "checkpointsUpdated",
             "turnStarted",
+            "toolCallPreparing",
+            "toolCallPreparing",
+            "toolCallPreparing",
             "usageUpdated",
             "toolCallStarted",
             "toolCallProgress",
@@ -149,7 +281,7 @@ async fn tool_call_completes_roundtrip_and_caption_does_not_go_to_model() {
         ]
     );
 
-    match &events[8] {
+    match &events[11] {
         AgentEvent::ToolCallStarted {
             tool,
             description,
@@ -169,7 +301,7 @@ async fn tool_call_completes_roundtrip_and_caption_does_not_go_to_model() {
         other => panic!("not a tool start: {other:?}"),
     }
 
-    match &events[9] {
+    match &events[12] {
         AgentEvent::ToolCallProgress { chunk, .. } => assert!(chunk.contains("fn main")),
         other => panic!("not tool output: {other:?}"),
     }
@@ -208,6 +340,74 @@ async fn usage_accumulates_on_each_model_response() {
         vec![30, 50],
         "session counter must accumulate"
     );
+}
+
+#[tokio::test]
+async fn provider_reported_cost_replaces_estimate() {
+    let dir = TempDir::new();
+    let mut events = script_text("Answer");
+    events.insert(
+        events.len() - 1,
+        crate::provider::ProviderEvent::Cost { usd: 0.0123 },
+    );
+    let handle = session(
+        &dir,
+        MockProvider::new(vec![Turn::Events(events)]),
+        Mode::Plan,
+    );
+    let mut rx = handle.subscribe();
+    ask(&handle, "hello").await;
+    let events = collect(&mut rx).await;
+    let usage = events
+        .iter()
+        .find_map(|event| match event {
+            AgentEvent::UsageUpdated { usage } => Some(usage),
+            _ => None,
+        })
+        .unwrap();
+    assert!((usage.cost_usd - 0.0123).abs() < 1e-12);
+    assert_eq!(usage.total.input, 100);
+    assert_eq!(usage.total.output, 20);
+}
+
+#[tokio::test]
+async fn routing_usage_adds_to_cost_without_inflating_context() {
+    let dir = TempDir::new();
+    let mut events = script_text("Answer");
+    events.insert(
+        0,
+        crate::provider::ProviderEvent::AsideUsage {
+            usage: crate::usage::TokenCounts {
+                input: 10,
+                output: 5,
+                ..Default::default()
+            },
+            pricing: crate::usage::Pricing {
+                input: 1.0,
+                output: 2.0,
+            },
+            cost: Some(0.01),
+        },
+    );
+    let handle = session(
+        &dir,
+        MockProvider::new(vec![Turn::Events(events)]),
+        Mode::Plan,
+    );
+    let mut rx = handle.subscribe();
+    ask(&handle, "hello").await;
+    let events = collect(&mut rx).await;
+    let usage = events
+        .iter()
+        .find_map(|event| match event {
+            AgentEvent::UsageUpdated { usage } => Some(usage),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(usage.total.input, 110);
+    assert_eq!(usage.total.output, 25);
+    assert_eq!(usage.context_used, 120);
+    assert!((usage.cost_usd - 0.011).abs() < 1e-10);
 }
 
 #[tokio::test]
@@ -474,7 +674,10 @@ async fn attached_file_is_considered_read() {
     // §7.2: the human attached the file themselves; making the agent reread it would be silly.
     let seen = provider.seen.lock().unwrap();
     let first = format!("{:?}", seen[0].messages[0]);
-    assert!(first.contains("notes.md"), "attachment did not reach message");
+    assert!(
+        first.contains("notes.md"),
+        "attachment did not reach message"
+    );
 }
 
 #[tokio::test]
@@ -539,7 +742,10 @@ async fn edit_persists_to_tree_and_provides_diff_to_feed() {
     let events = collect(&mut rx).await;
 
     let names_list = names(&events);
-    assert!(names_list.contains(&"fileChanged"), "received {names_list:?}");
+    assert!(
+        names_list.contains(&"fileChanged"),
+        "received {names_list:?}"
+    );
 
     let (fact, diff) = events
         .iter()
@@ -604,7 +810,10 @@ async fn edit_to_unread_file_is_rejected_not_crashed() {
 
     // §5.9: a tripped guard is not a failure, and it is painted differently.
     let names_list = names(&events);
-    assert!(names_list.contains(&"toolCallRejected"), "received {names_list:?}");
+    assert!(
+        names_list.contains(&"toolCallRejected"),
+        "received {names_list:?}"
+    );
     assert!(!names_list.contains(&"fileChanged"));
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "someone's work\n");
 }

@@ -156,9 +156,7 @@ fn unchanged(before_lines: &[&str], old: std::ops::Range<usize>, new_at: usize) 
             kind: LineKind::Context,
             old_line: Some(i as u32 + 1),
             new_line: Some((new_at + k) as u32 + 1),
-            text: before_lines[i]
-                .trim_end_matches(['\n', '\r'])
-                .to_owned(),
+            text: before_lines[i].trim_end_matches(['\n', '\r']).to_owned(),
             spans: Vec::new(),
         })
         .collect()

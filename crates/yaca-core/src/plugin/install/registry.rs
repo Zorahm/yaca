@@ -37,9 +37,14 @@ pub(super) struct Install {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub(super) enum From {
-    Marketplace { marketplace: String, entry: String },
+    Marketplace {
+        marketplace: String,
+        entry: String,
+    },
     /// `yaca plugins install <address>`: what was typed, to fetch again.
-    Address { address: String },
+    Address {
+        address: String,
+    },
 }
 
 impl Registry {
@@ -83,14 +88,22 @@ pub(super) fn content_hash(dir: &Path) -> String {
 }
 
 fn collect(base: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) {
-    let Ok(read) = std::fs::read_dir(dir) else { return };
+    let Ok(read) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in read.flatten() {
         let path = entry.path();
-        let Ok(kind) = entry.file_type() else { continue };
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
         if kind.is_dir() {
             collect(base, &path, out);
         } else if kind.is_file() {
-            let rel = path.strip_prefix(base).unwrap_or(&path).to_string_lossy().replace('\\', "/");
+            let rel = path
+                .strip_prefix(base)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/");
             out.push((rel, path));
         }
     }

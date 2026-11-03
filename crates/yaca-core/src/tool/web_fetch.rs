@@ -27,6 +27,7 @@ use crate::workspace::Workspace;
 const MAX_REDIRECTS: usize = 5;
 
 pub struct WebFetch;
+pub struct SummarizingWebFetch;
 
 /// Host of a URL that [`parse`] has already vetted.
 ///
@@ -51,29 +52,37 @@ fn parse(input: &Value) -> Result<Url, ToolError> {
     }
 }
 
+macro_rules! web_fetch {
+($kind:ty, $summarize:expr) => {
 #[async_trait]
-impl Tool for WebFetch {
+impl Tool for $kind {
     fn name(&self) -> &'static str {
         "WebFetch"
     }
 
     fn description(&self) -> &'static str {
-        "Fetch a page from the web and read it as text. HTML comes back as \
-         Markdown; JSON, plain text and XML come back as they are. GET only, \
-         http and https only. Binary responses are refused."
+        if $summarize {
+            "Fetch a web page and return a summary guided by your short prompt. GET only; http and https only. Binary responses are refused."
+        } else {
+            "Fetch a page from the web and read it as text. HTML comes back as \
+             Markdown; JSON, plain text and XML come back as they are. GET only, \
+             http and https only. Binary responses are refused."
+        }
     }
 
     fn properties(&self) -> Value {
-        json!({
+        let mut properties = json!({
             "url": {
                 "type": "string",
                 "description": "Absolute http or https URL of the page to fetch.",
             },
-        })
+        });
+        if $summarize { properties["prompt"] = json!({"type":"string", "description":"A short, direct instruction describing what to extract or summarize from the page."}); }
+        properties
     }
 
     fn required(&self) -> &'static [&'static str] {
-        &["url"]
+        if $summarize { &["url", "prompt"] } else { &["url"] }
     }
 
     fn narration(&self) -> Narration {
@@ -101,6 +110,7 @@ impl Tool for WebFetch {
     }
 
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
+        let prompt = if $summarize { Some(input["prompt"].as_str().map(str::trim).filter(|p| !p.is_empty()).ok_or_else(|| ToolError::failed("missing prompt"))?) } else { None };
         let start = parse(&input)?;
 
         // Before the first request for the page: robots.txt tells where
@@ -143,12 +153,30 @@ impl Tool for WebFetch {
         let lines = rendered.text.lines().count() as u32;
 
         let untrusted = net::UNTRUSTED;
+        let content = if let Some(prompt) = prompt {
+            let setup = ctx.web_fetch_model.as_ref().ok_or_else(|| ToolError::failed("summary model is unavailable"))?;
+            let request = crate::provider::ProviderRequest {
+                model: setup.model.clone(), system: String::new(),
+                messages: vec![crate::message::Message::user_text(format!("{prompt}\n\n{}\n\n{}", net::UNTRUSTED, rendered.text))],
+                tools: Vec::new(), max_tokens: 2048, effort: None, thinking: false,
+            };
+            let result = tokio::select! {
+                _ = ctx.cancel.cancelled() => return Err(ToolError::Cancelled),
+                result = tokio::time::timeout(std::time::Duration::from_secs(60), super::decision::collect_text(setup.provider.as_ref(), request, ctx, ctx.web_fetch_pricing)) => result,
+            };
+            match result {
+                Ok(Ok(text)) if !text.trim().is_empty() => text,
+                Ok(Ok(_)) => return Err(ToolError::failed("summary model returned an empty answer")),
+                Ok(Err(e)) => return Err(ToolError::failed(format!("summary failed: {e}"))),
+                Err(_) => return Err(ToolError::failed("summary timed out")),
+            }
+        } else { rendered.text };
         let text = format!(
             "{url} · {} · {} · {} chars\n{untrusted}\n\n{}",
             status.as_u16(),
             mime,
             rendered.chars,
-            rendered.text
+            content
         );
 
         Ok(ToolOutput::new(text)
@@ -156,6 +184,10 @@ impl Tool for WebFetch {
             .truncated(rendered.truncated))
     }
 }
+};
+}
+web_fetch!(WebFetch, false);
+web_fetch!(SummarizingWebFetch, true);
 
 /// Walks the redirect chain by hand and returns the response that ends it,
 /// together with the URL it actually came from.
@@ -170,10 +202,11 @@ async fn follow(ctx: &ToolCtx, start: Url) -> Result<(Url, reqwest::Response), T
     for _ in 0..=MAX_REDIRECTS {
         ctx.check_cancelled()?;
 
-        let response =
-            net::client().get(url.clone()).send().await.map_err(|e| {
-                ToolError::failed(format!("failed to fetch {}: {e}", host(&url)))
-            })?;
+        let response = net::client()
+            .get(url.clone())
+            .send()
+            .await
+            .map_err(|e| ToolError::failed(format!("failed to fetch {}: {e}", host(&url))))?;
 
         if !response.status().is_redirection() {
             return Ok((url, response));
@@ -185,7 +218,10 @@ async fn follow(ctx: &ToolCtx, start: Url) -> Result<(Url, reqwest::Response), T
             .and_then(|v| v.to_str().ok())
             .and_then(|v| url.join(v).ok())
             .ok_or_else(|| {
-                ToolError::failed(format!("HTTP {} without Location", response.status().as_u16()))
+                ToolError::failed(format!(
+                    "HTTP {} without Location",
+                    response.status().as_u16()
+                ))
             })?;
 
         // An internal redirect leads to another path, and rules are written
@@ -217,8 +253,8 @@ mod tests {
     use crate::event::AgentEvent;
     use crate::permission::ScopeKey;
     use crate::testutil::TempDir;
-    use crate::tool::tests_support::{ctx_for, ctx_with_events};
     use crate::tool::net::MAX_BODY_BYTES;
+    use crate::tool::tests_support::{ctx_for, ctx_with_events};
     use std::sync::{Arc, Mutex};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
@@ -308,6 +344,53 @@ mod tests {
         response("200 OK", &[("Content-Type", "text/plain")], body)
     }
 
+    #[tokio::test]
+    async fn summarizes_the_page_using_the_callers_instruction() {
+        let base = serve(vec![html("<p>Original page facts.</p>")]).await;
+        let dir = TempDir::new();
+        let (mut ctx, _ws) = ctx_for(&dir);
+        ctx.respect_robots = false;
+        let ledger = std::sync::Arc::new(crate::session::subagent::Ledger::default());
+        ctx.aside_ledger = Some(ledger.clone());
+        ctx.web_fetch_pricing = crate::usage::Pricing {
+            input: 5.0,
+            output: 10.0,
+        };
+        let mock = std::sync::Arc::new(crate::provider::mock::MockProvider::text(
+            "A short summary.",
+        ));
+        ctx.web_fetch_model = Some(crate::tool::decision::DecisionSetup {
+            provider: mock.clone(),
+            model: "small".into(),
+            systemone: None,
+        });
+        let out = SummarizingWebFetch
+            .run(&ctx, json!({"url": base, "prompt": "Find the facts"}))
+            .await
+            .unwrap();
+        let recorded = ledger.take();
+        assert_eq!(recorded.len(), 1);
+        assert_eq!(recorded[0].0.input, 100);
+        assert_eq!(recorded[0].0.output, 20);
+        assert!(recorded[0].1.cost(recorded[0].0) > 0.0);
+        assert!(out.text.contains("A short summary."));
+        assert!(!out.text.contains("Original page facts."));
+        let seen = mock.seen.lock().unwrap();
+        assert_eq!(seen[0].model, "small");
+        assert!(seen[0].system.is_empty());
+        assert!(seen[0].tools.is_empty());
+        let message = format!("{:?}", seen[0].messages[0].content);
+        assert!(message.contains("Find the facts"));
+        assert!(message.contains("Original page facts."));
+    }
+
+    #[test]
+    fn summary_schema_requires_a_prompt_only_when_enabled() {
+        assert_eq!(WebFetch.required(), &["url"]);
+        assert_eq!(SummarizingWebFetch.required(), &["url", "prompt"]);
+        assert!(SummarizingWebFetch.properties().get("prompt").is_some());
+    }
+
     /// A restriction from `robots.txt` is not a failure, but a tripped boundary: `Rejected`,
     /// just like a redirect to a foreign host. And the page is not touched.
     #[tokio::test]
@@ -370,7 +453,11 @@ mod tests {
         // Not a single extra request: disabled means robots.txt is not even requested.
         let requests = seen.lock().unwrap();
         assert_eq!(requests.len(), 1);
-        assert!(requests[0].contains("GET /private/page"), "{:?}", requests[0]);
+        assert!(
+            requests[0].contains("GET /private/page"),
+            "{:?}",
+            requests[0]
+        );
     }
 
     /// An unreachable `robots.txt` allows rather than blocks: the user just
@@ -573,10 +660,7 @@ mod tests {
 
         for bad in ["ftp://example.com/x", "file:///etc/passwd"] {
             let err = WebFetch.run(&ctx, json!({ "url": bad })).await.unwrap_err();
-            assert!(
-                err.to_string().contains("not supported"),
-                "{bad}: {err}"
-            );
+            assert!(err.to_string().contains("not supported"), "{bad}: {err}");
         }
 
         let err = WebFetch

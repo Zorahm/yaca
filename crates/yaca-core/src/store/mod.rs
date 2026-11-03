@@ -46,6 +46,26 @@ pub use meta::SessionMeta;
 pub use recorder::Recorder;
 pub use search::{Match, MatchKind, SearchHit};
 
+pub(crate) fn copy_workspace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(destination)?;
+    for entry in std::fs::read_dir(source)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        let target = destination.join(entry.file_name());
+        if kind.is_dir() {
+            copy_workspace(&entry.path(), &target)?;
+        } else if kind.is_file() {
+            std::fs::copy(entry.path(), target)?;
+        } else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "chat workspace contains a link or special file",
+            ));
+        }
+    }
+    Ok(())
+}
+
 pub struct SessionStore {
     /// The project's own folder under the chats folder, where its journals
     /// are — not the project.
@@ -56,6 +76,13 @@ pub struct SessionStore {
 }
 
 impl SessionStore {
+    /// Private working directory for a document chat. The hash keeps an id
+    /// supplied by a client from being interpreted as a filesystem path.
+    pub fn chat_workspace(&self, id: &SessionId) -> PathBuf {
+        self.root
+            .join("workspaces")
+            .join(blake3::hash(id.to_string().as_bytes()).to_hex().as_str())
+    }
     /// The sessions `project` has under the chats folder `chats`
     /// ([`chats_dir`] in the applications, a temporary folder in tests).
     pub fn open(chats: &Path, project: &Path) -> Self {
@@ -139,6 +166,12 @@ impl SessionStore {
     /// The saved checkpoint list goes with them, which is what frees its
     /// snapshots: the next sweep no longer finds anything that names them.
     pub fn delete(&self, id: &SessionId) -> Result<(), CoreError> {
+        let workspace = self.chat_workspace(id);
+        match std::fs::remove_dir_all(workspace) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(CoreError::Io(e)),
+        }
         for path in [
             events_path(&self.root, id),
             history::MessageLog::path(&self.root, id),
@@ -168,8 +201,12 @@ impl SessionStore {
     /// drafts went with them, or deleted from another copy of the app.
     /// A folder that does not look like a session's is left alone.
     pub fn sweep_drafts(&self) {
-        let Some(drafts) = self.drafts_dir() else { return };
-        let Ok(entries) = std::fs::read_dir(&drafts) else { return };
+        let Some(drafts) = self.drafts_dir() else {
+            return;
+        };
+        let Ok(entries) = std::fs::read_dir(&drafts) else {
+            return;
+        };
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
             if !name.starts_with("ses_") {
@@ -205,6 +242,22 @@ impl SessionStore {
         }
 
         let copy = SessionId::new();
+        let workspace = self.chat_workspace(id);
+        if workspace.is_dir() {
+            let destination = self.chat_workspace(&copy);
+            copy_workspace(&workspace, &destination)?;
+            let source = std::fs::canonicalize(&workspace)?;
+            let destination = std::fs::canonicalize(&destination)?;
+            for event in &mut events {
+                if let AgentEvent::UserMessage { attachments, .. } = event {
+                    for attachment in attachments {
+                        if let Ok(relative) = Path::new(attachment.as_str()).strip_prefix(&source) {
+                            *attachment = destination.join(relative).to_string_lossy().into_owned();
+                        }
+                    }
+                }
+            }
+        }
         write_lines(
             &events_path(&self.root, &copy),
             events.iter().filter_map(|e| serde_json::to_string(e).ok()),

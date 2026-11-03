@@ -409,7 +409,10 @@ mod guard_tests {
     #[test]
     fn a_directory_the_project_excludes_is_unsaved_when_settings_say_so() {
         let dir = TempDir::new();
-        dir.write(".yaca/settings.json", r#"{ "shadow": { "exclude": ["fixtures"] } }"#);
+        dir.write(
+            ".yaca/settings.json",
+            r#"{ "shadow": { "exclude": ["fixtures"] } }"#,
+        );
         dir.write("suite/fixtures/a.json", "{}\n");
         let settings = crate::settings::Settings::load(dir.path()).unwrap();
         let ws = Workspace::open(dir.path())
@@ -430,7 +433,9 @@ mod guard_tests {
         let ws = Workspace::open(dir.path()).unwrap();
 
         // The repository itself is refused outright; its hooks are a question.
-        assert!(DeleteDir.permission(&ws, &json!({ "path": ".git" })).is_none());
+        assert!(DeleteDir
+            .permission(&ws, &json!({ "path": ".git" }))
+            .is_none());
         let need = DeleteDir
             .permission(&ws, &json!({ "path": ".git/hooks" }))
             .unwrap();
@@ -442,7 +447,9 @@ mod guard_tests {
         let dir = TempDir::new();
         dir.write("docs/a.md", "text\n");
         let ws = Workspace::open(dir.path()).unwrap();
-        let need = DeleteDir.permission(&ws, &json!({ "path": "docs" })).unwrap();
+        let need = DeleteDir
+            .permission(&ws, &json!({ "path": "docs" }))
+            .unwrap();
         assert_eq!(need.invariant, None);
         assert_eq!(need.unsaved, None);
     }

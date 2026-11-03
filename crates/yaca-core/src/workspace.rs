@@ -34,6 +34,7 @@ pub struct Workspace {
     /// isolated: settings, journals, memory and the shadow store belong to the
     /// project, not to one chat's checkout.
     home: PathBuf,
+    chat: bool,
     read: Mutex<HashMap<PathBuf, ReadRecord>>,
     /// Directory names the project added to the snapshot's skip list (§10).
     /// Set once at session start from `.yaca/settings.json`: the permission
@@ -45,8 +46,9 @@ pub struct Workspace {
 impl Workspace {
     pub fn open(root: impl AsRef<Path>) -> Result<Self, CoreError> {
         let root = root.as_ref();
-        let canon = std::fs::canonicalize(root)
-            .map_err(|e| CoreError::Config(format!("could not open project {}: {e}", root.display())))?;
+        let canon = std::fs::canonicalize(root).map_err(|e| {
+            CoreError::Config(format!("could not open project {}: {e}", root.display()))
+        })?;
         if !canon.is_dir() {
             return Err(CoreError::Config(format!(
                 "{} is not a directory",
@@ -55,6 +57,7 @@ impl Workspace {
         }
         Ok(Self {
             home: canon.clone(),
+            chat: false,
             root: canon,
             extra: Vec::new(),
             read: Mutex::new(HashMap::new()),
@@ -71,13 +74,29 @@ impl Workspace {
     pub fn in_tree(mut self, tree: impl AsRef<Path>) -> Result<Self, CoreError> {
         let tree = tree.as_ref();
         let canon = std::fs::canonicalize(tree).map_err(|e| {
-            CoreError::Config(format!("could not open working tree {}: {e}", tree.display()))
+            CoreError::Config(format!(
+                "could not open working tree {}: {e}",
+                tree.display()
+            ))
         })?;
         if !canon.is_dir() {
-            return Err(CoreError::Config(format!("{} is not a directory", canon.display())));
+            return Err(CoreError::Config(format!(
+                "{} is not a directory",
+                canon.display()
+            )));
         }
         self.root = canon;
         Ok(self)
+    }
+
+    /// Marks a private conversation directory, whose files belong to the chat.
+    pub fn for_chat(mut self) -> Self {
+        self.chat = true;
+        self
+    }
+
+    pub fn is_chat(&self) -> bool {
+        self.chat
     }
 
     /// Adds the session's further folders, replacing any set given before.
@@ -119,6 +138,7 @@ impl Workspace {
             root: self.root.clone(),
             extra: self.extra.clone(),
             home: self.home.clone(),
+            chat: self.chat,
             read: Mutex::new(HashMap::new()),
             shadow_exclude: self.shadow_exclude.clone(),
         }
@@ -190,7 +210,7 @@ impl Workspace {
     }
 
     fn is_isolated(&self) -> bool {
-        self.root != self.home
+        self.root != self.home && !self.chat
     }
 
     /// The path relative to the root — what the human sees in the feed.
@@ -351,7 +371,10 @@ impl Workspace {
 
     /// Forget everything read under a directory that is gone.
     pub fn forget_under(&self, dir: &Path) {
-        self.read.lock().unwrap().retain(|path, _| !path.starts_with(dir));
+        self.read
+            .lock()
+            .unwrap()
+            .retain(|path, _| !path.starts_with(dir));
     }
 
     pub fn read_record(&self, path: &Path) -> Option<ReadRecord> {
@@ -372,7 +395,9 @@ fn normalize(path: &Path) -> PathBuf {
     let mut components = path.components().peekable();
     let mut out = match components.peek() {
         Some(Component::Prefix(..)) => {
-            let first = components.next().expect("the prefix has just been peeked at");
+            let first = components
+                .next()
+                .expect("the prefix has just been peeked at");
             PathBuf::from(first.as_os_str())
         }
         _ => PathBuf::new(),
@@ -479,12 +504,18 @@ mod tests {
     #[test]
     fn extra_root_file_opens_by_absolute_path() {
         let (_m, extra, _o, ws) = two_roots();
-        let by_abs = ws.resolve_existing(&extra.path().join("b.txt").to_string_lossy()).unwrap();
+        let by_abs = ws
+            .resolve_existing(&extra.path().join("b.txt").to_string_lossy())
+            .unwrap();
         assert!(by_abs.starts_with(extra.path()));
         // The same file — the same key: the registry of what was read does not diverge.
-        let by_model = ws.resolve_existing(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
+        let by_model = ws
+            .resolve_existing(&as_model_sees(&extra.path().join("b.txt")))
+            .unwrap();
         assert_eq!(by_abs, by_model);
-        assert!(ws.resolve_new(&as_model_sees(&extra.path().join("new.txt"))).is_ok());
+        assert!(ws
+            .resolve_new(&as_model_sees(&extra.path().join("new.txt")))
+            .is_ok());
     }
 
     #[test]
@@ -528,7 +559,9 @@ mod tests {
         let main_file = ws.resolve_existing("a.txt").unwrap();
         assert_eq!(ws.display(&main_file), "a.txt");
 
-        let extra_file = ws.resolve_existing(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
+        let extra_file = ws
+            .resolve_existing(&as_model_sees(&extra.path().join("b.txt")))
+            .unwrap();
         let shown = ws.display(&extra_file);
         assert_eq!(shown, as_model_sees(&extra_file));
         assert!(!shown.contains(r"\\?\") && !shown.contains('\\'), "{shown}");
@@ -540,7 +573,9 @@ mod tests {
     #[test]
     fn file_root_and_path_for_pattern_matching() {
         let (_m, extra, _o, ws) = two_roots();
-        let extra_file = ws.resolve_existing(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
+        let extra_file = ws
+            .resolve_existing(&as_model_sees(&extra.path().join("b.txt")))
+            .unwrap();
         assert_eq!(ws.root_for(&extra_file), ws.additional()[0].as_path());
         assert_eq!(ws.within_root(&extra_file), "b.txt");
 
@@ -556,10 +591,14 @@ mod tests {
     #[test]
     fn edit_and_read_in_an_extra_root_share_one_key() {
         let (_m, extra, _o, ws) = two_roots();
-        let path = ws.resolve_existing(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
+        let path = ws
+            .resolve_existing(&as_model_sees(&extra.path().join("b.txt")))
+            .unwrap();
         ws.mark_read(&path);
         // By the same path the edit gives it, it is recognised as read.
-        let edit_path = ws.resolve_new(&as_model_sees(&extra.path().join("b.txt"))).unwrap();
+        let edit_path = ws
+            .resolve_new(&as_model_sees(&extra.path().join("b.txt")))
+            .unwrap();
         assert!(ws.was_read(&edit_path));
     }
 
@@ -599,9 +638,7 @@ mod tests {
         let parent = TempDir::new();
         let project = parent.mkdir("project");
         let ws = Workspace::open(&project).unwrap();
-        let err = ws
-            .with_roots(&[parent.path().to_path_buf()])
-            .unwrap_err();
+        let err = ws.with_roots(&[parent.path().to_path_buf()]).unwrap_err();
         assert!(matches!(err, CoreError::Config(_)), "{err:?}");
     }
 
@@ -625,7 +662,9 @@ mod tests {
         let (_m, extra, _o, ws) = two_roots();
         let forked = ws.fork();
         assert_eq!(forked.additional(), ws.additional());
-        assert!(forked.resolve_existing(&as_model_sees(&extra.path().join("b.txt"))).is_ok());
+        assert!(forked
+            .resolve_existing(&as_model_sees(&extra.path().join("b.txt")))
+            .is_ok());
     }
 
     /// Make a file link, or report that the host cannot (then the caller skips).

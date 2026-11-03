@@ -11,8 +11,7 @@ use crate::tool::tests_support::ctx_for;
 async fn a_search_that_overruns_is_stopped_and_says_so() {
     let dir = TempDir::new();
     dir.write(
-        "a.rs",
-        "find me
+        "a.rs", "find me
 ",
     );
     let (ctx, _ws) = ctx_for(&dir);
@@ -120,8 +119,7 @@ node_modules
 ",
     );
     dir.write(
-        "src/a.rs",
-        "needle
+        "src/a.rs", "needle
 ",
     );
     let (ctx, _ws) = ctx_for(&dir);
@@ -181,10 +179,7 @@ async fn overlapping_windows_merge_and_distant_ones_are_split() {
 
     // Matches on 2, 4 and 10: the first two windows share line 3.
     let out = Grep::new()
-        .run(
-            &ctx,
-            json!({ "pattern": "^line (2|4|10)$", "context": 1 }),
-        )
+        .run(&ctx, json!({ "pattern": "^line (2|4|10)$", "context": 1 }))
         .await
         .unwrap();
 
@@ -209,7 +204,10 @@ async fn groups_in_different_files_are_split_too() {
         .await
         .unwrap();
 
-    assert_eq!(out.text, "a.rs-1- x\na.rs:2: found\n--\nb.rs:1: found\nb.rs-2- y\n");
+    assert_eq!(
+        out.text,
+        "a.rs-1- x\na.rs:2: found\n--\nb.rs:1: found\nb.rs-2- y\n"
+    );
 }
 
 #[tokio::test]
@@ -217,7 +215,13 @@ async fn wide_context_is_cut_to_a_budget_and_counted_in_matches() {
     let dir = TempDir::new();
     let wide = "w".repeat(300);
     let text: String = (0..2_000)
-        .map(|i| if i % 10 == 0 { "hit\n".to_string() } else { format!("{wide}\n") })
+        .map(|i| {
+            if i % 10 == 0 {
+                "hit\n".to_string()
+            } else {
+                format!("{wide}\n")
+            }
+        })
         .collect();
     dir.write("a.rs", &text);
     let (ctx, _ws) = ctx_for(&dir);

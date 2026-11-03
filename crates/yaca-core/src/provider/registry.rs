@@ -129,12 +129,11 @@ impl ProviderSpec {
     /// error: the model carries its provider, so there is no mismatch fallback.
     pub fn resolve_model(&self, wanted: &str) -> Result<String, CoreError> {
         if wanted.is_empty() {
-            return self.models.first().map(|m| m.id.clone()).ok_or_else(|| {
-                CoreError::Config(format!(
-                    "provider «{}» has no models",
-                    self.id
-                ))
-            });
+            return self
+                .models
+                .first()
+                .map(|m| m.id.clone())
+                .ok_or_else(|| CoreError::Config(format!("provider «{}» has no models", self.id)));
         }
         if self.model(wanted).is_some() {
             return Ok(wanted.to_string());
@@ -209,7 +208,9 @@ impl ProviderSpec {
 ///
 /// The host is skipped, so `v2.example.com` is not one.
 fn names_a_version(base_url: &str) -> bool {
-    let after_scheme = base_url.split_once("://").map_or(base_url, |(_, rest)| rest);
+    let after_scheme = base_url
+        .split_once("://")
+        .map_or(base_url, |(_, rest)| rest);
     after_scheme.split('/').skip(1).any(|segment| {
         let mut chars = segment.chars();
         chars.next() == Some('v')
@@ -268,8 +269,9 @@ impl Providers {
             Err(e) => return Err(CoreError::Io(e)),
         };
 
-        let mut providers: Providers = serde_json::from_str(&text)
-            .map_err(|e| CoreError::Config(format!("{} could not be parsed: {e}", path.display())))?;
+        let mut providers: Providers = serde_json::from_str(&text).map_err(|e| {
+            CoreError::Config(format!("{} could not be parsed: {e}", path.display()))
+        })?;
         providers.ensure_presets();
         providers.forget_shipped_catalog();
         // A cached guess is not a provider limit; keep it aligned with the
@@ -317,14 +319,19 @@ impl Providers {
     /// A provider that is named and missing is an error, not a search by model:
     /// another provider serving the same id would get a conversation the human
     /// sent somewhere else.
-    pub fn resolve(&self, provider: &str, model: &str) -> Result<(&ProviderSpec, String), CoreError> {
+    pub fn resolve(
+        &self,
+        provider: &str,
+        model: &str,
+    ) -> Result<(&ProviderSpec, String), CoreError> {
         let spec = if !provider.is_empty() {
-            self.get(provider)
-                .ok_or_else(|| CoreError::Config(format!("provider «{provider}» is not in the list")))?
-        } else if !model.is_empty() {
-            self.find_by_model(model).map(|(spec, _)| spec).ok_or_else(|| {
-                CoreError::Config(format!("no provider has the model «{model}»"))
+            self.get(provider).ok_or_else(|| {
+                CoreError::Config(format!("provider «{provider}» is not in the list"))
             })?
+        } else if !model.is_empty() {
+            self.find_by_model(model)
+                .map(|(spec, _)| spec)
+                .ok_or_else(|| CoreError::Config(format!("no provider has the model «{model}»")))?
         } else {
             self.list.iter().find(|p| !p.models.is_empty()).ok_or_else(|| {
                 CoreError::Config(
@@ -447,7 +454,10 @@ pub fn config_dir() -> Result<PathBuf, CoreError> {
     let missing = || CoreError::Config("the user's settings directory was not found".into());
     let base = base.ok_or_else(missing)?;
     let old_base = old_base.unwrap_or_else(|| base.clone());
-    Ok(legacy::adopt_dir(&old_base.join(legacy::NAME), &base.join(CONFIG_DIR)))
+    Ok(legacy::adopt_dir(
+        &old_base.join(legacy::NAME),
+        &base.join(CONFIG_DIR),
+    ))
 }
 
 #[cfg(test)]

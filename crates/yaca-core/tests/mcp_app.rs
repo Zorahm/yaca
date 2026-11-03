@@ -12,8 +12,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::json;
-use yaca_core::mcp::{AppServer, AppServerSpec, McpSource, McpStatus, McpTransport, ServerEnd};
 use yaca_core::event::AgentEvent;
+use yaca_core::mcp::{AppServer, AppServerSpec, McpSource, McpStatus, McpTransport, ServerEnd};
 use yaca_core::provider::mock::{script_text, MockProvider, Turn};
 use yaca_core::{Mode, SessionConfig, SessionHandle};
 
@@ -99,7 +99,11 @@ fn session(dir: &TempProject, provider: Arc<MockProvider>, server: Arc<Echo>) ->
 
 async fn ready(handle: &SessionHandle) {
     tokio::time::timeout(ROPE, async {
-        while handle.mcp().iter().any(|s| s.status == McpStatus::Connecting) {
+        while handle
+            .mcp()
+            .iter()
+            .any(|s| s.status == McpStatus::Connecting)
+        {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
     })
@@ -136,7 +140,10 @@ async fn an_application_server_is_a_server_like_any_other() {
     let events = until_within(&mut rx, ROPE, is_turn_over).await;
     let kinds: Vec<_> = events.iter().map(|e| e.kind()).collect();
     assert!(!kinds.contains(&"permissionRequested"), "{kinds:?}");
-    assert_eq!(tool_result_of(&provider, "t1"), ("hello".to_string(), false));
+    assert_eq!(
+        tool_result_of(&provider, "t1"),
+        ("hello".to_string(), false)
+    );
     let system = provider.seen.lock().unwrap()[0].system.clone();
     assert!(system.contains("Use echo to hear a text back."), "{system}");
     assert_eq!(server.opened.load(Ordering::SeqCst), 1);
@@ -184,7 +191,11 @@ async fn a_picture_the_server_returns_is_kept_for_the_feed() {
     let dir = TempProject::new();
     let server = Arc::new(Echo::default());
     let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(calls(&[("t1", "mcp__app__shot", json!({ "description": "Snapshot" }))])),
+        Turn::Events(calls(&[(
+            "t1",
+            "mcp__app__shot",
+            json!({ "description": "Snapshot" }),
+        )])),
         Turn::Events(script_text("Done.")),
     ]));
     let handle = session(&dir, provider, server);

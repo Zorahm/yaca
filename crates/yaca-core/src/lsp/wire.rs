@@ -80,7 +80,9 @@ impl Wire {
         let (Some(stdin), Some(stdout), Some(stderr)) =
             (child.stdin.take(), child.stdout.take(), child.stderr.take())
         else {
-            return Err(LspError::Transport(format!("\"{program}\" has no standard streams")));
+            return Err(LspError::Transport(format!(
+                "\"{program}\" has no standard streams"
+            )));
         };
 
         let tail = Tail::default();
@@ -211,7 +213,13 @@ async fn read_frames(mut child: Child, stdout: ChildStdout, tail: Tail, inbox: I
         .ok()
         .and_then(Result::ok)
         .and_then(|status| status.code());
-    let said = tail.lock().unwrap().iter().cloned().collect::<Vec<_>>().join("\n");
+    let said = tail
+        .lock()
+        .unwrap()
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n");
 
     let mut reason = match (broken, code) {
         (Some(why), _) => format!("server violated protocol: {why}"),
@@ -268,7 +276,8 @@ mod tests {
 
     #[tokio::test]
     async fn a_message_survives_the_trip() {
-        let message = json!({ "jsonrpc": "2.0", "id": 1, "method": "test", "params": { "x": "日本" } });
+        let message =
+            json!({ "jsonrpc": "2.0", "id": 1, "method": "test", "params": { "x": "日本" } });
         let got = read_all(&encode(&message)).await;
         assert_eq!(got[0], Ok(Some(message)));
         assert_eq!(got[1], Ok(None));

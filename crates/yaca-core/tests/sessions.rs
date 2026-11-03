@@ -195,16 +195,22 @@ async fn a_reopened_session_gets_its_feed_back() {
         )),
         "{feed:#?}"
     );
-    assert!(feed.iter().any(|e| matches!(e, AgentEvent::TextDelta { .. })));
+    assert!(feed
+        .iter()
+        .any(|e| matches!(e, AgentEvent::TextDelta { .. })));
 
     // The journal writes down everything; the replay leaves behind what was
     // and no longer is — see `store::replay`.
     assert!(
-        journal.iter().any(|e| matches!(e, AgentEvent::StateChanged { .. })),
+        journal
+            .iter()
+            .any(|e| matches!(e, AgentEvent::StateChanged { .. })),
         "the journal writes the state too"
     );
     assert!(
-        journal.iter().any(|e| matches!(e, AgentEvent::CheckpointCreated { .. })),
+        journal
+            .iter()
+            .any(|e| matches!(e, AgentEvent::CheckpointCreated { .. })),
         "and the taken checkpoints"
     );
     assert!(!feed.iter().any(|e| matches!(
@@ -242,10 +248,12 @@ async fn a_reopened_session_gets_its_feed_back() {
         .count();
     let ended = feed
         .iter()
-        .filter(|e| matches!(
-            e,
-            AgentEvent::TurnFinished { .. } | AgentEvent::TurnCancelled { .. }
-        ))
+        .filter(|e| {
+            matches!(
+                e,
+                AgentEvent::TurnFinished { .. } | AgentEvent::TurnCancelled { .. }
+            )
+        })
         .count();
     assert_eq!(started, 1);
     assert_eq!(ended, 1);
@@ -342,7 +350,9 @@ async fn four_exchanges(dir: &TempProject) -> (SessionHandle, Arc<MockProvider>)
         Turn::Events(script_text("answer1")),
         Turn::Events(script_text("answer2")),
         Turn::Events(script_text("answer3")),
-        Turn::Events(script_text("We fixed the date parser; the parser is already patched.")),
+        Turn::Events(script_text(
+            "We fixed the date parser; the parser is already patched.",
+        )),
     ]));
     let handle = recorded(dir, provider.clone(), None);
     let mut rx = handle.subscribe();
@@ -373,7 +383,10 @@ async fn compacting_replaces_the_history_with_a_summary() {
     let AgentEvent::ContextCompacted { summary, freed } = seen.last().unwrap() else {
         unreachable!("until() only returns on a match");
     };
-    assert_eq!(summary, "We fixed the date parser; the parser is already patched.");
+    assert_eq!(
+        summary,
+        "We fixed the date parser; the parser is already patched."
+    );
     assert!(*freed > 0, "§5.11 shows what was freed");
 
     // The summarizer is asked about a transcript, with no tools in the way.

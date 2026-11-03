@@ -12,6 +12,8 @@ use super::{files, notebook, pdf};
 use super::{Narration, Tool, ToolCtx, ToolOutput};
 use crate::error::ToolError;
 use crate::intent::Intent;
+use crate::office::{self, Kind};
+use crate::picture;
 
 /// Cap for a single call. More only with explicit `offset`/`limit`:
 /// otherwise a single `read_file` consumes the context window.
@@ -40,7 +42,12 @@ impl Tool for ReadFile {
          For large files, use offset and limit. \
          A PDF comes back as its text, page by page: one of up to 10 pages is read \
          whole, a longer one needs `pages` (at most 20 per call). A scanned page has \
-         no text to return. A Jupyter notebook (.ipynb) comes back as its cells, each \
+         no text to return. \
+         A .docx, .xlsx or .pptx comes back as its text: paragraphs, headings and tables \
+         for Word, a sheet at a time for Excel, a slide at a time with the speaker notes \
+         for PowerPoint. The pictures inside are shown to you after the text; \
+         ExtractImages writes them out as files. \
+         A Jupyter notebook (.ipynb) comes back as its cells, each \
          with its number, id and outputs; offset and limit then count cells."
     }
 
@@ -95,7 +102,11 @@ impl Tool for ReadFile {
 
         // An image read as text is two megabytes of noise in the window, and
         // "binary file" would leave the model with nowhere to go next.
-        if ctx.ws.resolve_new(raw_path).is_ok_and(|abs| crate::picture::is_picture(&abs)) {
+        if ctx
+            .ws
+            .resolve_new(raw_path)
+            .is_ok_and(|abs| crate::picture::is_picture(&abs))
+        {
             return Err(ToolError::failed_with(
                 format!("{raw_path} is an image, not text"),
                 "This file is an image. Look at it with ReadImage.",
@@ -103,6 +114,9 @@ impl Tool for ReadFile {
         }
 
         if let Ok(abs) = ctx.ws.resolve_new(raw_path) {
+            if let Some(kind) = crate::office::Kind::of(&abs) {
+                return read_office(ctx, abs, kind).await;
+            }
             if is_pdf(&abs) {
                 return read_pdf(ctx, abs, &input).await;
             }
@@ -119,7 +133,9 @@ impl Tool for ReadFile {
             .map_err(|_| ToolError::failed("reading file did not complete"))??;
 
         if target.abs.is_dir() {
-            return Err(ToolError::failed(format!("{raw_path} is a directory, not a file")));
+            return Err(ToolError::failed(format!(
+                "{raw_path} is a directory, not a file"
+            )));
         }
         let Some(text) = target.current else {
             return Err(ToolError::failed(format!("not found: {raw_path}")));
@@ -207,7 +223,8 @@ fn remember(ctx: &ToolCtx, abs: &Path) {
 }
 
 fn is_pdf(path: &Path) -> bool {
-    path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf"))
+    path.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("pdf"))
 }
 
 /// A PDF's text, by page. Not marked as read: there is no text in the file
@@ -216,7 +233,9 @@ async fn read_pdf(ctx: &ToolCtx, abs: PathBuf, input: &Value) -> Result<ToolOutp
     let shown = ctx.ws.display(&abs);
     let pages = input["pages"].as_str().map(pdf::parse_pages).transpose()?;
     if abs.is_dir() {
-        return Err(ToolError::failed(format!("{shown} is a directory, not a file")));
+        return Err(ToolError::failed(format!(
+            "{shown} is a directory, not a file"
+        )));
     }
     let name = shown.clone();
     let read = tokio::task::spawn_blocking(move || {
@@ -249,6 +268,81 @@ async fn read_pdf(ctx: &ToolCtx, abs: PathBuf, input: &Value) -> Result<ToolOutp
         text.push_str("\n[text cut: ask for fewer pages]\n");
     }
     Ok(ToolOutput::new(text).items(read.total).truncated(partial))
+}
+
+/// The text of a Word, Excel or PowerPoint file, with the pictures it embeds.
+///
+/// Not marked as read: there is no text in the file itself that an edit could
+/// anchor on, and a document is changed by a script, not by `Edit`.
+async fn read_office(ctx: &ToolCtx, abs: PathBuf, kind: Kind) -> Result<ToolOutput, ToolError> {
+    let shown = ctx.ws.display(&abs);
+    if abs.is_dir() {
+        return Err(ToolError::failed(format!(
+            "{shown} is a directory, not a file"
+        )));
+    }
+    let name = shown.clone();
+    let extracted = tokio::task::spawn_blocking(move || {
+        let bytes = std::fs::read(&abs).map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => ToolError::failed(format!("not found: {name}")),
+            _ => ToolError::failed(e.to_string()),
+        })?;
+        office::read(kind, &bytes, &name)
+    })
+    .await
+    .map_err(|_| ToolError::failed("reading the document did not complete"))??;
+    ctx.check_cancelled()?;
+
+    let mut text = format!("{shown}: {}\n", kind.label());
+    if extracted.text.trim().is_empty() {
+        text.push_str("[the file has no text of its own]\n");
+    } else {
+        text.push('\n');
+        text.push_str(&extracted.text);
+        text.push('\n');
+    }
+
+    // A deck of screenshots, or a scan pasted into Word, is nothing but
+    // pictures; showing them is the difference between "empty file" and the
+    // document itself.
+    let (shown_pictures, media) = if extracted.media.is_empty() {
+        (Vec::new(), 0)
+    } else {
+        let total = extracted.media.len();
+        let vision = ctx.vision;
+        let label = shown.clone();
+        let media = extracted.media;
+        let pictures = tokio::task::spawn_blocking(move || {
+            if !vision {
+                return Vec::new();
+            }
+            media
+                .iter()
+                .take(office::MAX_PICTURES)
+                .filter_map(|media| {
+                    picture::prepare(media.bytes.clone())
+                        .ok()
+                        .map(|picture| (format!("{label} · {}", media.name), picture))
+                })
+                .collect::<Vec<_>>()
+        })
+        .await
+        .map_err(|_| ToolError::failed("reading the pictures did not complete"))?;
+        (pictures, total)
+    };
+
+    if media > 0 {
+        text.push_str(&format!(
+            "[{media} picture(s) embedded in the file; {} shown to you. Other formats are not \
+             ones you can see. ExtractImages writes all of them out as files.]\n",
+            shown_pictures.len()
+        ));
+    }
+
+    let truncated = extracted.truncated;
+    Ok(ToolOutput::new(text)
+        .truncated(truncated)
+        .pictures(shown_pictures))
 }
 
 #[cfg(test)]
@@ -296,15 +390,26 @@ mod tests {
         dir.write("wide.csv", &format!("{line}\n").repeat(2_000));
         let (ctx, _ws) = ctx_for(&dir);
 
-        let out = ReadFile.run(&ctx, json!({ "path": "wide.csv" })).await.unwrap();
+        let out = ReadFile
+            .run(&ctx, json!({ "path": "wide.csv" }))
+            .await
+            .unwrap();
 
         // Two thousand lines of a thousand characters is two megabytes — more
         // than a whole context window, from one call.
-        assert!(out.text.len() <= MAX_OUTPUT_BYTES + 100, "{} bytes", out.text.len());
+        assert!(
+            out.text.len() <= MAX_OUTPUT_BYTES + 100,
+            "{} bytes",
+            out.text.len()
+        );
         assert!(out.meta.truncated);
         assert!(!out.text.contains("  2000\t"));
         // The footer is how the model finds out where to go on from.
-        assert!(out.text.contains("of 2000]"), "{:?}", out.text.lines().last());
+        assert!(
+            out.text.contains("of 2000]"),
+            "{:?}",
+            out.text.lines().last()
+        );
     }
 
     #[tokio::test]
@@ -349,7 +454,11 @@ mod tests {
     #[tokio::test]
     async fn an_image_is_sent_to_the_tool_that_can_show_it() {
         let dir = TempDir::new();
-        std::fs::write(dir.path().join("shot.png"), crate::picture::tests::png(8, 8)).unwrap();
+        std::fs::write(
+            dir.path().join("shot.png"),
+            crate::picture::tests::png(8, 8),
+        )
+        .unwrap();
         let (ctx, _ws) = ctx_for(&dir);
 
         let err = ReadFile
@@ -381,7 +490,10 @@ mod tests {
         .unwrap();
         let (ctx, _ws) = ctx_for(&dir);
 
-        let out = ReadFile.run(&ctx, json!({ "path": "spec.pdf" })).await.unwrap();
+        let out = ReadFile
+            .run(&ctx, json!({ "path": "spec.pdf" }))
+            .await
+            .unwrap();
         assert!(out.text.contains("--- page 1 of 2 ---"), "{}", out.text);
         assert!(out.text.contains("says bye"), "{}", out.text);
         assert_eq!(out.meta.items, Some(2));
@@ -396,6 +508,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_word_document_comes_back_as_its_text_and_its_pictures() {
+        let dir = TempDir::new();
+        let picture = crate::picture::tests::png(8, 8);
+        let document = crate::office::tests::package_binary(&[
+            (
+                "word/document.xml",
+                br#"<w:document><w:body><w:p><w:r><w:t>Quarterly report</w:t></w:r></w:p></w:body></w:document>"#,
+            ),
+            ("word/media/image1.png", &picture),
+        ]);
+        std::fs::write(dir.path().join("report.docx"), document).unwrap();
+        let (ctx, _ws) = ctx_for(&dir);
+
+        let out = ReadFile
+            .run(&ctx, json!({ "path": "report.docx" }))
+            .await
+            .unwrap();
+        assert!(out.text.contains("Word document"), "{}", out.text);
+        assert!(out.text.contains("Quarterly report"), "{}", out.text);
+        assert!(out.text.contains("1 picture(s) embedded"), "{}", out.text);
+        assert_eq!(out.pictures.len(), 1);
+        assert_eq!(out.pictures[0].0, "report.docx · image1.png");
+    }
+
+    #[tokio::test]
     async fn a_notebook_is_read_as_cells_and_can_then_be_edited() {
         let dir = TempDir::new();
         let path = dir.write(
@@ -404,8 +541,15 @@ mod tests {
         );
         let (ctx, ws) = ctx_for(&dir);
 
-        let out = ReadFile.run(&ctx, json!({ "path": "a.ipynb" })).await.unwrap();
-        assert!(out.text.starts_with("[cell 1 · code · id c1]\nx = 1\n"), "{}", out.text);
+        let out = ReadFile
+            .run(&ctx, json!({ "path": "a.ipynb" }))
+            .await
+            .unwrap();
+        assert!(
+            out.text.starts_with("[cell 1 · code · id c1]\nx = 1\n"),
+            "{}",
+            out.text
+        );
         assert_eq!(out.meta.items, Some(1));
         assert!(ws.was_read(&path));
     }

@@ -6,8 +6,8 @@
 //! a dropped connection.
 
 use futures_util::StreamExt;
-use std::error::Error;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use std::error::Error;
 use tokio_stream::wrappers::ReceiverStream;
 
 use super::registry::ProviderSpec;

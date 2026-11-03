@@ -19,6 +19,7 @@ use crate::change::ChangeKind;
 use crate::error::ToolError;
 use crate::intent::Intent;
 use crate::permission::PermissionNeed;
+use crate::profile::Profile;
 use crate::workspace::Workspace;
 
 /// How much of one cell's outputs the model is shown. A training loop that
@@ -40,9 +41,8 @@ pub(crate) fn is_notebook(path: &std::path::Path) -> bool {
 }
 
 fn parse(text: &str, shown: &str) -> Result<Value, ToolError> {
-    let notebook: Value = serde_json::from_str(text).map_err(|e| {
-        ToolError::failed(format!("{shown} is not a valid notebook: {e}"))
-    })?;
+    let notebook: Value = serde_json::from_str(text)
+        .map_err(|e| ToolError::failed(format!("{shown} is not a valid notebook: {e}")))?;
     if !notebook["cells"].is_array() {
         return Err(ToolError::failed(format!(
             "{shown} is not a valid notebook: no cells array"
@@ -91,7 +91,11 @@ pub(crate) fn render(
         }
         end = i + 1;
     }
-    Ok(Rendered { text: out, total, end })
+    Ok(Rendered {
+        text: out,
+        total,
+        end,
+    })
 }
 
 fn render_cell(number: usize, cell: &Value) -> String {
@@ -314,6 +318,11 @@ impl Tool for NotebookEdit {
         &[Intent::Agent]
     }
 
+    /// A notebook is a programmer's file, and a chat about documents has none.
+    fn profiles(&self) -> &'static [Profile] {
+        &[Profile::Code]
+    }
+
     fn target(&self, input: &Value) -> Option<String> {
         input["path"].as_str().map(str::to_owned)
     }
@@ -388,7 +397,9 @@ fn apply(notebook: &mut Value, op: &str, input: &Value) -> Result<String, ToolEr
     let source = input["source"].as_str();
     let kind = input["cell_type"].as_str();
     if let Some(kind) = kind.filter(|k| !matches!(*k, "code" | "markdown")) {
-        return Err(ToolError::failed(format!("cell_type must be code or markdown, got {kind}")));
+        return Err(ToolError::failed(format!(
+            "cell_type must be code or markdown, got {kind}"
+        )));
     }
 
     match op {
@@ -399,7 +410,11 @@ fn apply(notebook: &mut Value, op: &str, input: &Value) -> Result<String, ToolEr
             let cell = cells[at]
                 .as_object_mut()
                 .ok_or_else(|| ToolError::failed(format!("cell {} is not an object", at + 1)))?;
-            let kind = kind.unwrap_or_else(|| cell.get("cell_type").and_then(Value::as_str).unwrap_or("code"));
+            let kind = kind.unwrap_or_else(|| {
+                cell.get("cell_type")
+                    .and_then(Value::as_str)
+                    .unwrap_or("code")
+            });
             let kind = kind.to_string();
             cell.insert("source".into(), as_lines(source));
             shape(cell, &kind);
@@ -505,9 +520,18 @@ mod tests {
         assert_eq!(shown.total, 2);
         assert_eq!(shown.end, 2);
         let text = shown.text;
-        assert!(text.contains("[cell 1 · markdown · id aaaa0001]\n# Title\n"), "{text}");
-        assert!(text.contains("[cell 2 · code · id aaaa0002 · ran [3]]\nx = 1\nprint('hello')\n"), "{text}");
-        assert!(text.contains("[output]\nhello\n<Figure>\n[image/png output omitted]\n"), "{text}");
+        assert!(
+            text.contains("[cell 1 · markdown · id aaaa0001]\n# Title\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("[cell 2 · code · id aaaa0002 · ran [3]]\nx = 1\nprint('hello')\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("[output]\nhello\n<Figure>\n[image/png output omitted]\n"),
+            "{text}"
+        );
     }
 
     #[test]
@@ -529,7 +553,12 @@ mod tests {
     #[test]
     fn replacing_a_code_cell_clears_its_outputs_and_keeps_the_rest() {
         let mut nb: Value = serde_json::from_str(NOTEBOOK).unwrap();
-        let done = apply(&mut nb, "replace", &json!({ "cell_id": "aaaa0002", "source": "y = 2\nprint(y)" })).unwrap();
+        let done = apply(
+            &mut nb,
+            "replace",
+            &json!({ "cell_id": "aaaa0002", "source": "y = 2\nprint(y)" }),
+        )
+        .unwrap();
         assert_eq!(done, "replaced cell 2");
         let cell = &nb["cells"][1];
         assert_eq!(cell["source"], json!(["y = 2\n", "print(y)"]));
@@ -541,7 +570,12 @@ mod tests {
     #[test]
     fn a_cell_can_change_type() {
         let mut nb: Value = serde_json::from_str(NOTEBOOK).unwrap();
-        apply(&mut nb, "replace", &json!({ "cell": 2, "source": "Now prose", "cell_type": "markdown" })).unwrap();
+        apply(
+            &mut nb,
+            "replace",
+            &json!({ "cell": 2, "source": "Now prose", "cell_type": "markdown" }),
+        )
+        .unwrap();
         let cell = &nb["cells"][1];
         assert_eq!(cell["cell_type"], "markdown");
         assert!(cell.get("outputs").is_none() && cell.get("execution_count").is_none());
@@ -550,13 +584,23 @@ mod tests {
     #[test]
     fn insert_goes_after_the_named_cell_or_first() {
         let mut nb: Value = serde_json::from_str(NOTEBOOK).unwrap();
-        apply(&mut nb, "insert", &json!({ "cell_id": "aaaa0001", "source": "z = 3", "cell_type": "code" })).unwrap();
+        apply(
+            &mut nb,
+            "insert",
+            &json!({ "cell_id": "aaaa0001", "source": "z = 3", "cell_type": "code" }),
+        )
+        .unwrap();
         assert_eq!(nb["cells"][1]["source"], json!(["z = 3"]));
         let id = nb["cells"][1]["id"].as_str().unwrap();
         assert_eq!(id.len(), 8);
         assert_ne!(id, "aaaa0001");
 
-        apply(&mut nb, "insert", &json!({ "source": "# Top", "cell_type": "markdown" })).unwrap();
+        apply(
+            &mut nb,
+            "insert",
+            &json!({ "source": "# Top", "cell_type": "markdown" }),
+        )
+        .unwrap();
         assert_eq!(nb["cells"][0]["source"], json!(["# Top"]));
         assert_eq!(nb["cells"].as_array().unwrap().len(), 4);
     }
@@ -564,7 +608,12 @@ mod tests {
     #[test]
     fn an_old_notebook_gets_no_ids() {
         let mut nb = json!({ "cells": [], "nbformat": 4, "nbformat_minor": 2 });
-        apply(&mut nb, "insert", &json!({ "source": "x", "cell_type": "code" })).unwrap();
+        apply(
+            &mut nb,
+            "insert",
+            &json!({ "source": "x", "cell_type": "code" }),
+        )
+        .unwrap();
         assert!(nb["cells"][0].get("id").is_none());
     }
 
@@ -595,19 +644,26 @@ mod tests {
         let (ctx, ws) = ctx_for(&dir);
 
         let err = NotebookEdit
-            .run(&ctx, json!({ "path": "a.ipynb", "op": "delete", "cell": 1 }))
+            .run(
+                &ctx,
+                json!({ "path": "a.ipynb", "op": "delete", "cell": 1 }),
+            )
             .await
             .unwrap_err();
         assert!(err.to_string().contains("was not read"), "{err}");
 
         ws.mark_read(&path);
         let out = NotebookEdit
-            .run(&ctx, json!({ "path": "a.ipynb", "op": "replace", "cell": 1, "source": "# New title" }))
+            .run(
+                &ctx,
+                json!({ "path": "a.ipynb", "op": "replace", "cell": 1, "source": "# New title" }),
+            )
             .await
             .unwrap();
         assert!(out.text.contains("replaced cell 1"), "{}", out.text);
         assert!(out.changed.is_some());
-        let written: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let written: Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(written["cells"][0]["source"], json!(["# New title"]));
     }
 

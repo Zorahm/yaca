@@ -56,7 +56,11 @@ impl ServerSpec {
     pub fn handles(&self, extension: &str) -> bool {
         self.invalid.is_none()
             && !self.settings.disabled
-            && self.settings.extensions.iter().any(|e| e.eq_ignore_ascii_case(extension))
+            && self
+                .settings
+                .extensions
+                .iter()
+                .any(|e| e.eq_ignore_ascii_case(extension))
     }
 }
 
@@ -69,20 +73,26 @@ const BUILTIN: &[(&str, &str, &[&str], &[&str])] = &[
         &["--stdio"],
         &["ts", "tsx", "js", "jsx", "mjs", "cjs"],
     ),
-    ("pyright", "pyright-langserver", &["--stdio"], &["py", "pyi"]),
+    (
+        "pyright",
+        "pyright-langserver",
+        &["--stdio"],
+        &["py", "pyi"],
+    ),
     ("gopls", "gopls", &[], &["go"]),
 ];
 
 fn builtin(name: &str) -> Option<LspServerSettings> {
-    BUILTIN.iter().find(|(n, ..)| *n == name).map(|(_, program, args, extensions)| {
-        LspServerSettings {
+    BUILTIN
+        .iter()
+        .find(|(n, ..)| *n == name)
+        .map(|(_, program, args, extensions)| LspServerSettings {
             command: (*program).to_string(),
             args: args.iter().map(|a| (*a).to_string()).collect(),
             env: BTreeMap::new(),
             extensions: extensions.iter().map(|e| (*e).to_string()).collect(),
             disabled: false,
-        }
-    })
+        })
 }
 
 /// The human's servers.
@@ -91,7 +101,12 @@ pub fn load_global(config_dir: &Path) -> Result<BTreeMap<String, LspServerSettin
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
-        Err(e) => return Err(CoreError::Config(format!("failed to read {}: {e}", path.display()))),
+        Err(e) => {
+            return Err(CoreError::Config(format!(
+                "failed to read {}: {e}",
+                path.display()
+            )))
+        }
     };
     if text.trim().is_empty() {
         return Ok(BTreeMap::new());
@@ -232,7 +247,8 @@ mod tests {
 
     #[test]
     fn the_humans_server_replaces_a_builtin_of_the_same_name_whole() {
-        let global = BTreeMap::from([("gopls".to_string(), declared("/opt/gopls", &["go", "mod"]))]);
+        let global =
+            BTreeMap::from([("gopls".to_string(), declared("/opt/gopls", &["go", "mod"]))]);
         let specs = resolve(&global, |_| true);
         let gopls: Vec<_> = specs.iter().filter(|s| s.name == "gopls").collect();
         assert_eq!(gopls.len(), 1);
@@ -244,7 +260,10 @@ mod tests {
     fn a_builtin_name_with_only_disabled_set_keeps_the_builtins_answer_list() {
         let global = BTreeMap::from([(
             "gopls".to_string(),
-            LspServerSettings { disabled: true, ..Default::default() },
+            LspServerSettings {
+                disabled: true,
+                ..Default::default()
+            },
         )]);
         let specs = resolve(&global, |_| false);
         assert_eq!(specs.len(), 1);

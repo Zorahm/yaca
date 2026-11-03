@@ -36,15 +36,27 @@ pub struct Verdict {
 pub fn verdict(event: HookEvent, ran: &Ran) -> Verdict {
     let mut v = Verdict::default();
     match ran {
-        Ran::Exited { code: Some(0), stdout, .. } => match serde_json::from_str::<Value>(stdout.trim()) {
+        Ran::Exited {
+            code: Some(0),
+            stdout,
+            ..
+        } => match serde_json::from_str::<Value>(stdout.trim()) {
             Ok(Value::Object(fields)) => structured(&fields, &mut v),
             _ if !stdout.trim().is_empty() && takes_plain_context(event) => {
                 v.context.push(stdout.trim().to_string());
             }
             _ => {}
         },
-        Ran::Exited { code: Some(2), stdout, stderr } => {
-            let reason = if stderr.trim().is_empty() { stdout.trim() } else { stderr.trim() };
+        Ran::Exited {
+            code: Some(2),
+            stdout,
+            stderr,
+        } => {
+            let reason = if stderr.trim().is_empty() {
+                stdout.trim()
+            } else {
+                stderr.trim()
+            };
             v.block = Some(if reason.is_empty() {
                 "the hook refused without an explanation".to_string()
             } else {
@@ -69,7 +81,10 @@ pub fn verdict(event: HookEvent, ran: &Ran) -> Verdict {
 
 /// A field's text, when it has any.
 fn text(value: Option<&Value>) -> Option<&str> {
-    value.and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty())
+    value
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
 }
 
 fn takes_plain_context(event: HookEvent) -> bool {
@@ -80,17 +95,26 @@ fn structured(fields: &serde_json::Map<String, Value>, v: &mut Verdict) {
     let specific = fields.get("hookSpecificOutput").and_then(Value::as_object);
 
     if fields.get("continue").and_then(Value::as_bool) == Some(false) {
-        v.block = Some(text(fields.get("stopReason")).unwrap_or("the hook stopped the work").to_string());
+        v.block = Some(
+            text(fields.get("stopReason"))
+                .unwrap_or("the hook stopped the work")
+                .to_string(),
+        );
     }
     // `approve` is the older spelling Claude Code still reads; it grants, and
     // so is ignored like `allow`.
     if fields.get("decision").and_then(Value::as_str) == Some("block") {
-        v.block = Some(text(fields.get("reason")).unwrap_or("the hook refused without an explanation").to_string());
+        v.block = Some(
+            text(fields.get("reason"))
+                .unwrap_or("the hook refused without an explanation")
+                .to_string(),
+        );
     }
     if let Some(specific) = specific {
         match specific.get("permissionDecision").and_then(Value::as_str) {
             Some("deny") => {
-                let reason = text(specific.get("permissionDecisionReason")).unwrap_or("the hook refused without an explanation");
+                let reason = text(specific.get("permissionDecisionReason"))
+                    .unwrap_or("the hook refused without an explanation");
                 v.block = Some(reason.to_string());
             }
             Some("ask") => v.ask = true,
@@ -143,7 +167,10 @@ mod tests {
     #[test]
     fn additional_context_comes_out_of_the_json() {
         let json = r#"{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"be careful"}}"#;
-        assert_eq!(verdict(HookEvent::SessionStart, &exited(0, json, "")).context, ["be careful"]);
+        assert_eq!(
+            verdict(HookEvent::SessionStart, &exited(0, json, "")).context,
+            ["be careful"]
+        );
     }
 
     #[test]
@@ -155,24 +182,46 @@ mod tests {
     #[test]
     fn deny_blocks_ask_asks_and_allow_grants_nothing() {
         let deny = r#"{"hookSpecificOutput":{"permissionDecision":"deny","permissionDecisionReason":"nope"}}"#;
-        assert_eq!(verdict(HookEvent::PreToolUse, &exited(0, deny, "")).block.as_deref(), Some("nope"));
+        assert_eq!(
+            verdict(HookEvent::PreToolUse, &exited(0, deny, ""))
+                .block
+                .as_deref(),
+            Some("nope")
+        );
         let ask = r#"{"hookSpecificOutput":{"permissionDecision":"ask"}}"#;
         assert!(verdict(HookEvent::PreToolUse, &exited(0, ask, "")).ask);
         let allow = r#"{"hookSpecificOutput":{"permissionDecision":"allow"}}"#;
-        assert_eq!(verdict(HookEvent::PreToolUse, &exited(0, allow, "")), Verdict::default());
+        assert_eq!(
+            verdict(HookEvent::PreToolUse, &exited(0, allow, "")),
+            Verdict::default()
+        );
     }
 
     #[test]
     fn decision_block_and_continue_false_block() {
         let block = r#"{"decision":"block","reason":"keep going"}"#;
-        assert_eq!(verdict(HookEvent::Stop, &exited(0, block, "")).block.as_deref(), Some("keep going"));
+        assert_eq!(
+            verdict(HookEvent::Stop, &exited(0, block, ""))
+                .block
+                .as_deref(),
+            Some("keep going")
+        );
         let stop = r#"{"continue":false,"stopReason":"halt"}"#;
-        assert_eq!(verdict(HookEvent::UserPromptSubmit, &exited(0, stop, "")).block.as_deref(), Some("halt"));
+        assert_eq!(
+            verdict(HookEvent::UserPromptSubmit, &exited(0, stop, ""))
+                .block
+                .as_deref(),
+            Some("halt")
+        );
     }
 
     #[test]
     fn failures_are_notes_and_never_blocks() {
-        for ran in [exited(1, "", "boom"), Ran::TimedOut(5), Ran::Broken("no bash".into())] {
+        for ran in [
+            exited(1, "", "boom"),
+            Ran::TimedOut(5),
+            Ran::Broken("no bash".into()),
+        ] {
             let v = verdict(HookEvent::PreToolUse, &ran);
             assert_eq!(v.block, None);
             assert_eq!(v.notices.len(), 1);
@@ -183,15 +232,24 @@ mod tests {
     #[test]
     fn a_quiet_success_says_nothing() {
         let quiet = r#"{"continue":true,"suppressOutput":true}"#;
-        assert_eq!(verdict(HookEvent::SessionStart, &exited(0, quiet, "")), Verdict::default());
+        assert_eq!(
+            verdict(HookEvent::SessionStart, &exited(0, quiet, "")),
+            Verdict::default()
+        );
     }
 
     #[test]
     fn updated_input_is_taken_only_as_an_object() {
         let json = r#"{"hookSpecificOutput":{"hookEventName":"PreToolUse","updatedInput":{"command":"ls -la"}}}"#;
         let v = verdict(HookEvent::PreToolUse, &exited(0, json, ""));
-        assert_eq!(v.updated_input, Some(serde_json::json!({ "command": "ls -la" })));
+        assert_eq!(
+            v.updated_input,
+            Some(serde_json::json!({ "command": "ls -la" }))
+        );
         let bad = r#"{"hookSpecificOutput":{"updatedInput":"rm -rf /"}}"#;
-        assert_eq!(verdict(HookEvent::PreToolUse, &exited(0, bad, "")).updated_input, None);
+        assert_eq!(
+            verdict(HookEvent::PreToolUse, &exited(0, bad, "")).updated_input,
+            None
+        );
     }
 }

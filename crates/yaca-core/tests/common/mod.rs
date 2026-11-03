@@ -228,7 +228,10 @@ pub fn tool_result_of(
 /// beside `target/<profile>/deps`, where this binary is.
 pub fn fixture(name: &str) -> PathBuf {
     let me = std::env::current_exe().unwrap();
-    let profile = me.parent().and_then(Path::parent).expect("a test binary lives in deps/");
+    let profile = me
+        .parent()
+        .and_then(Path::parent)
+        .expect("a test binary lives in deps/");
     let path = profile
         .join("examples")
         .join(format!("{name}{}", std::env::consts::EXE_SUFFIX));

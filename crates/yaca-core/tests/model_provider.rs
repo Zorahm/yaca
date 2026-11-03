@@ -174,7 +174,10 @@ fn the_catalog_the_anthropic_preset_used_to_ship_is_not_an_answer() {
 fn a_model_nobody_serves_is_not_blamed_on_anthropic() {
     let (_dir, providers) = local();
 
-    let err = providers.resolve("", "qwen3-coder").unwrap_err().to_string();
+    let err = providers
+        .resolve("", "qwen3-coder")
+        .unwrap_err()
+        .to_string();
 
     // Anthropic was never asked, and the message must not say it was.
     assert!(!err.contains("anthropic"), "{err}");
@@ -187,7 +190,10 @@ fn a_named_provider_that_is_gone_is_not_swapped_for_another() {
 
     // Anthropic serves this model, but the session asked for someone else:
     // quietly sending the conversation there is the thing not to do.
-    let err = providers.resolve("ollama", "claude-opus-5").unwrap_err().to_string();
+    let err = providers
+        .resolve("ollama", "claude-opus-5")
+        .unwrap_err()
+        .to_string();
 
     assert!(err.contains("ollama"), "{err}");
 }

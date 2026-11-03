@@ -32,7 +32,7 @@ export type AgentEvent = { "type": "userMessage", turnId: TurnId, text: string,
 /**
  * Files attached via `@` (§7.2) — chips above the text.
  */
-attachments: Array<string>, } | { "type": "turnStarted", turnId: TurnId, at: TsMillis, } | { "type": "textDelta", turnId: TurnId, blockId: BlockId, text: string, } | { "type": "thinkingDelta", turnId: TurnId, blockId: BlockId, text: string, } | { "type": "toolCallStarted", turnId: TurnId, callId: CallId, 
+attachments: Array<string>, } | { "type": "turnStarted", turnId: TurnId, at: TsMillis, } | { "type": "textDelta", turnId: TurnId, blockId: BlockId, text: string, } | { "type": "thinkingDelta", turnId: TurnId, blockId: BlockId, text: string, } | { "type": "toolCallPreparing", turnId: TurnId, callId: CallId, tool: string, description: string | null, target: string | null, input: unknown, parent: CallId | null, } | { "type": "toolCallStarted", turnId: TurnId, callId: CallId, 
 /**
  * Tool name. Not shown in the feed (§16.6); needed for the icon and debugging.
  */

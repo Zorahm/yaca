@@ -161,7 +161,9 @@ impl Lsp {
                 _ => {}
             }
             if server.spec.settings.disabled {
-                return Err(LspError::Transport(format!("server \"{name}\" is disabled")));
+                return Err(LspError::Transport(format!(
+                    "server \"{name}\" is disabled"
+                )));
             }
             server.attempt += 1;
             server.state = State::Starting;
@@ -226,7 +228,9 @@ impl Lsp {
     pub fn restart(&self, name: &str) {
         {
             let mut servers = self.0.servers.lock().unwrap();
-            let Some(server) = servers.get_mut(name) else { return };
+            let Some(server) = servers.get_mut(name) else {
+                return;
+            };
             if server.spec.settings.disabled || matches!(server.state, State::Starting) {
                 return;
             }

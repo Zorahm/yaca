@@ -133,6 +133,10 @@
 //! the two carry different things, and the feed log is the one that has to
 //! be replayable on its own.
 //!
+//! [`AgentEvent::ToolCallPreparing`] previews a call while its arguments arrive.
+//! It carries only caption/target fields, never a streaming edit or file body.
+//! `ToolCallStarted` replaces that preview when execution begins.
+//!
 //! The model router adds [`AgentEvent::RouteDecided`] beyond §15: which model
 //! answered a request, which decision matched it (`None` for the default), and
 //! the signals that were read. §15 has no event naming the model, and a router
@@ -151,6 +155,7 @@ use crate::intent::{Effort, Mode};
 use crate::mcp::McpServerSummary;
 use crate::permission::PermissionRequest;
 use crate::process::{ProcessId, ProcessSummary};
+use crate::profile::Profile;
 use crate::question::{QuestionReply, QuestionRequest};
 use crate::usage::{TokenCounts, UsageSnapshot};
 
@@ -188,6 +193,20 @@ pub enum AgentEvent {
         turn_id: TurnId,
         block_id: BlockId,
         text: String,
+    },
+
+    /// A call being composed, before execution or permission checks. Each event
+    /// replaces the same call's preview; input contains only display fields.
+    #[serde(rename_all = "camelCase")]
+    ToolCallPreparing {
+        turn_id: TurnId,
+        call_id: CallId,
+        tool: String,
+        description: Option<String>,
+        target: Option<String>,
+        #[ts(type = "unknown")]
+        input: serde_json::Value,
+        parent: Option<CallId>,
     },
 
     /// A row in the action group with a `●` dot, the label in the present tense.
@@ -361,7 +380,9 @@ pub enum AgentEvent {
     /// becomes ready or fails. Like `McpUpdated`: the list the interface
     /// draws is the last such event.
     #[serde(rename_all = "camelCase")]
-    LspUpdated { servers: Vec<crate::lsp::LspServerSummary> },
+    LspUpdated {
+        servers: Vec<crate::lsp::LspServerSummary>,
+    },
 
     /// The human picked a row in the panel: show its output in full (§6.5).
     #[serde(rename_all = "camelCase")]
@@ -384,7 +405,10 @@ pub enum AgentEvent {
 
     /// A snapshot has started. The id pairs it with its completion.
     #[serde(rename_all = "camelCase")]
-    CheckpointCreating { id: CheckpointId, reason: CheckpointReason },
+    CheckpointCreating {
+        id: CheckpointId,
+        reason: CheckpointReason,
+    },
 
     /// A snapshot task has finished, whether it created a point or not.
     #[serde(rename_all = "camelCase")]
@@ -441,7 +465,10 @@ pub enum AgentEvent {
     /// the last step, so the newest event for a `Task` row is the whole
     /// figure. Sent after each answer the subagent gets from the model.
     #[serde(rename_all = "camelCase")]
-    SubagentUsage { call_id: CallId, tokens: TokenCounts },
+    SubagentUsage {
+        call_id: CallId,
+        tokens: TokenCounts,
+    },
 
     /// Which model a routing provider chose for this request, and why (see the
     /// module head). `route` is the matched decision, `None` for the default;
@@ -521,7 +548,8 @@ impl AgentEvent {
     /// stream whole: one place that knows every event a call can produce.
     pub fn call_id(&self) -> Option<&CallId> {
         match self {
-            AgentEvent::ToolCallStarted { call_id, .. }
+            AgentEvent::ToolCallPreparing { call_id, .. }
+            | AgentEvent::ToolCallStarted { call_id, .. }
             | AgentEvent::ToolCallProgress { call_id, .. }
             | AgentEvent::ToolCallFinished { call_id, .. }
             | AgentEvent::ToolCallFailed { call_id, .. }
@@ -541,6 +569,7 @@ impl AgentEvent {
             AgentEvent::TurnStarted { .. } => "turnStarted",
             AgentEvent::TextDelta { .. } => "textDelta",
             AgentEvent::ThinkingDelta { .. } => "thinkingDelta",
+            AgentEvent::ToolCallPreparing { .. } => "toolCallPreparing",
             AgentEvent::ToolCallStarted { .. } => "toolCallStarted",
             AgentEvent::ToolCallProgress { .. } => "toolCallProgress",
             AgentEvent::ToolCallFinished { .. } => "toolCallFinished",
@@ -648,7 +677,10 @@ impl EventSink {
     /// no event is being written or sent, and returns where the journal ends
     /// (what [`Recorder::journal_len`](crate::store::Recorder::journal_len)
     /// says); the receiver gets every event after it.
-    pub fn attach<T>(&self, at: impl FnOnce() -> T) -> (tokio::sync::broadcast::Receiver<AgentEvent>, T) {
+    pub fn attach<T>(
+        &self,
+        at: impl FnOnce() -> T,
+    ) -> (tokio::sync::broadcast::Receiver<AgentEvent>, T) {
         let _held = self.gate.lock().unwrap_or_else(|e| e.into_inner());
         let mark = at();
         (self.tx.subscribe(), mark)
@@ -753,6 +785,11 @@ pub struct SessionState {
     pub provider: String,
     pub model: String,
     pub mode: Mode,
+    /// What the chat is about: code, or documents (`profile`). Independent of
+    /// the mode, which is about trust. Absent from journals written before the
+    /// field existed, and reads as code.
+    #[serde(default)]
+    pub profile: Profile,
     pub effort: Effort,
     pub busy: bool,
     /// Permission bypass (§8). Not a fifth mode but a flag on top of the current one:
@@ -839,4 +876,3 @@ mod tests {
         }
     }
 }
-

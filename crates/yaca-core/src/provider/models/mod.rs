@@ -78,10 +78,14 @@ pub fn keep_hand_edits(saved: &[ModelInfo], models: &mut Vec<ModelInfo>) {
             } else {
                 models.push(previous.clone());
             }
-        } else if previous.context_source == ContextSource::Hand {
-            if let Some(model) = models.iter_mut().find(|m| m.id == previous.id) {
+        } else if let Some(model) = models.iter_mut().find(|m| m.id == previous.id) {
+            if previous.context_source == ContextSource::Hand {
                 model.context_max = previous.context_max;
                 model.context_source = ContextSource::Hand;
+            }
+            if previous.pricing_by_hand {
+                model.pricing = previous.pricing;
+                model.pricing_by_hand = true;
             }
         }
     }

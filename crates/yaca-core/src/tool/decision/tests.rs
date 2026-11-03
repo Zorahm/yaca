@@ -5,9 +5,9 @@ use serde_json::json;
 
 use super::*;
 use crate::provider::mock::{script_text, MockProvider, Turn};
+use crate::testutil::TempDir;
 use crate::tool::tests_support::ctx_for;
 use crate::tool::ToolRegistry;
-use crate::testutil::TempDir;
 
 fn tool(mock: Arc<MockProvider>) -> Decision {
     Decision::new(DecisionSetup {
@@ -24,7 +24,10 @@ async fn the_question_goes_to_the_small_model_as_written() {
     let (ctx, _ws) = ctx_for(&dir);
 
     let out = tool(mock.clone())
-        .run(&ctx, json!({ "question": "Which skill: code-review or debugging?" }))
+        .run(
+            &ctx,
+            json!({ "question": "Which skill: code-review or debugging?" }),
+        )
         .await
         .unwrap();
 
@@ -39,7 +42,10 @@ async fn the_question_goes_to_the_small_model_as_written() {
     assert_eq!(req.effort, None);
     assert_eq!(req.messages.len(), 1);
     let text = format!("{:?}", req.messages[0].content);
-    assert!(text.contains("Which skill: code-review or debugging?"), "{text}");
+    assert!(
+        text.contains("Which skill: code-review or debugging?"),
+        "{text}"
+    );
 }
 
 #[tokio::test]
@@ -70,7 +76,10 @@ async fn a_refusing_model_tells_the_agent_to_carry_on() {
     // What the model reads says what to do next; what the feed shows is Russian.
     let for_model = err.for_model();
     assert!(for_model.contains("Decide it yourself"), "{for_model}");
-    assert!(err.to_string().contains("Decision model did not answer"), "{err}");
+    assert!(
+        err.to_string().contains("Decision model did not answer"),
+        "{err}"
+    );
 }
 
 #[tokio::test]
@@ -105,7 +114,10 @@ fn a_huge_question_is_cut_and_says_so() {
     let big = "я".repeat(MAX_QUESTION_CHARS + 50);
     let cut = capped(&big);
     assert!(cut.ends_with("[question truncated]"));
-    assert_eq!(cut.chars().filter(|c| *c == 'я').count(), MAX_QUESTION_CHARS);
+    assert_eq!(
+        cut.chars().filter(|c| *c == 'я').count(),
+        MAX_QUESTION_CHARS
+    );
 }
 
 #[test]
@@ -118,7 +130,7 @@ fn it_is_offered_only_where_it_was_added() {
     assert!(with.names().any(|n| n == "Decision"));
     // Read-only: offered in Plan as well as Agent.
     assert!(with
-        .schemas(crate::intent::Intent::Plan)
+        .schemas(crate::intent::Intent::Plan, crate::profile::Profile::Code)
         .iter()
         .any(|s| s.name == "Decision"));
 }

@@ -64,7 +64,9 @@ impl Isolation {
 
 /// Where the worktree of `id` is.
 fn worktree_of(home: &Path, id: &SessionId) -> PathBuf {
-    crate::project::dir(home).join("worktrees").join(id.as_str())
+    crate::project::dir(home)
+        .join("worktrees")
+        .join(id.as_str())
 }
 
 fn branch_of(id: &SessionId) -> String {
@@ -96,13 +98,17 @@ pub fn open(home: &Path, id: &SessionId, create: bool) -> Result<Option<Isolatio
         let target = format!("{}/worktrees/{id}", crate::project::DIR);
         let branch = branch_of(id);
 
-        git(home, &["rev-parse", "--verify", "--quiet", "HEAD"]).map_err(|_| {
-            CoreError::Config("project has no commits: cannot isolate chat".into())
-        })?;
+        git(home, &["rev-parse", "--verify", "--quiet", "HEAD"])
+            .map_err(|_| CoreError::Config("project has no commits: cannot isolate chat".into()))?;
 
         let branch_exists = git(
             home,
-            &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{branch}")],
+            &[
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                &format!("refs/heads/{branch}"),
+            ],
         )
         .is_ok();
         let made = if branch_exists {
@@ -110,7 +116,10 @@ pub fn open(home: &Path, id: &SessionId, create: bool) -> Result<Option<Isolatio
             let _ = git(home, &["worktree", "prune"]);
             git(home, &["worktree", "add", "--quiet", &target, &branch])
         } else {
-            git(home, &["worktree", "add", "--quiet", "-b", &branch, &target, "HEAD"])
+            git(
+                home,
+                &["worktree", "add", "--quiet", "-b", &branch, &target, "HEAD"],
+            )
         };
         made.map_err(|e| CoreError::Config(format!("cannot create chat worktree: {e}")))?;
     }
@@ -144,8 +153,12 @@ pub fn commit_all(tree: &Path, subject: &str) -> Result<bool, String> {
     } else {
         format!("yaca: {line}")
     };
-    let out = run(tree, &["commit", "--quiet", "--no-verify", "-m", &message], true)
-        .map_err(|e| e.to_string())?;
+    let out = run(
+        tree,
+        &["commit", "--quiet", "--no-verify", "-m", &message],
+        true,
+    )
+    .map_err(|e| e.to_string())?;
     if out.status.success() {
         Ok(true)
     } else {
@@ -170,7 +183,11 @@ fn first_line(out: &Output) -> String {
     } else {
         text
     };
-    text.lines().next().unwrap_or("git failed").trim().to_string()
+    text.lines()
+        .next()
+        .unwrap_or("git failed")
+        .trim()
+        .to_string()
 }
 
 fn run(dir: &Path, args: &[&str], as_yaca: bool) -> std::io::Result<Output> {
@@ -205,7 +222,16 @@ mod tests {
         for args in [
             vec!["init", "-q"],
             vec!["add", "-A"],
-            vec!["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init"],
+            vec![
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "commit",
+                "-q",
+                "-m",
+                "init",
+            ],
         ] {
             let ok = run(dir.path(), &args, false).unwrap().status.success();
             assert!(ok, "git {args:?}");
@@ -295,7 +321,10 @@ mod tests {
     #[test]
     fn a_repository_without_a_commit_is_refused() {
         let dir = TempDir::new();
-        assert!(run(dir.path(), &["init", "-q"], false).unwrap().status.success());
+        assert!(run(dir.path(), &["init", "-q"], false)
+            .unwrap()
+            .status
+            .success());
         let err = open(dir.path(), &SessionId::new(), true).unwrap_err();
         assert!(err.to_string().contains("commit"), "{err}");
     }
@@ -307,7 +336,16 @@ mod tests {
         for args in [
             vec!["init", "-q"],
             vec!["add", "-A"],
-            vec!["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init"],
+            vec![
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "commit",
+                "-q",
+                "-m",
+                "init",
+            ],
         ] {
             assert!(run(dir.path(), &args, false).unwrap().status.success());
         }

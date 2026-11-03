@@ -81,7 +81,9 @@ impl Tool for ReadImage {
 
         let abs = ctx.ws.resolve_existing(raw)?;
         if abs.is_dir() {
-            return Err(ToolError::failed(format!("{raw} is a directory, not a file")));
+            return Err(ToolError::failed(format!(
+                "{raw} is a directory, not a file"
+            )));
         }
         let name = ctx.ws.display(&abs);
 

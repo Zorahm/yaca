@@ -154,10 +154,17 @@ async fn a_remote_servers_tool_is_called_over_http() {
 
     ask(&handle, "add them").await;
     let events = until_within(&mut rx, Duration::from_secs(30), is_turn_over).await;
-    assert!(events.iter().any(|e| matches!(e, AgentEvent::TurnFinished { .. })));
+    assert!(events
+        .iter()
+        .any(|e| matches!(e, AgentEvent::TurnFinished { .. })));
 
     let servers = handle.mcp();
-    assert_eq!(servers[0].status, McpStatus::Ready, "{:?}", servers[0].reason);
+    assert_eq!(
+        servers[0].status,
+        McpStatus::Ready,
+        "{:?}",
+        servers[0].reason
+    );
     assert_eq!(servers[0].label.as_deref(), Some("web 2.0"));
     assert_eq!(servers[0].target, url);
 
@@ -185,7 +192,10 @@ async fn a_remote_servers_tool_is_called_over_http() {
         .find(|seen| seen.body["method"] == "tools/call")
         .map(|seen| seen.body["params"].clone())
         .unwrap();
-    assert_eq!(body, json!({ "name": "sum", "arguments": { "a": 2, "b": 3 } }));
+    assert_eq!(
+        body,
+        json!({ "name": "sum", "arguments": { "a": 2, "b": 3 } })
+    );
 }
 
 #[tokio::test]
@@ -209,7 +219,11 @@ async fn an_address_nobody_answers_at_is_a_failed_server() {
 
     let servers = handle.mcp();
     assert_eq!(servers[0].status, McpStatus::Failed);
-    assert!(servers[0].reason.as_deref().unwrap_or_default().contains("network"));
+    assert!(servers[0]
+        .reason
+        .as_deref()
+        .unwrap_or_default()
+        .contains("network"));
     let offered = provider.seen.lock().unwrap()[0].tools.clone();
     assert!(offered.iter().all(|tool| !tool.name.starts_with("mcp__")));
 }

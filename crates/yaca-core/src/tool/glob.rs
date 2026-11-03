@@ -167,9 +167,12 @@ mod tests {
     #[tokio::test]
     async fn ignore_applies_outside_git_repository_too() {
         let dir = TempDir::new();
-        dir.write(".gitignore", "node_modules
+        dir.write(
+            ".gitignore",
+            "node_modules
 target
-");
+",
+        );
         dir.write("src/a.rs", "");
         dir.write("node_modules/pkg/b.rs", "");
         dir.write("target/debug/c.rs", "");

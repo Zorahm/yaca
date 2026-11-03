@@ -396,7 +396,13 @@ mod tests {
 
         let dirs: Vec<_> = nested_of(&dir).into_iter().map(|n| n.dir).collect();
         assert_eq!(dirs, ["a", "a/inner", "b"]);
-        assert_eq!(dirs, nested_of(&dir).into_iter().map(|n| n.dir).collect::<Vec<_>>());
+        assert_eq!(
+            dirs,
+            nested_of(&dir)
+                .into_iter()
+                .map(|n| n.dir)
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -464,10 +470,7 @@ mod tests {
         // Five full-size files outrun the total of four; zero-padded names
         // keep the order the test relies on.
         for n in 0..5 {
-            dir.write(
-                &format!("p{n}/AGENTS.md"),
-                &"x".repeat(NESTED_FILE_BYTES),
-            );
+            dir.write(&format!("p{n}/AGENTS.md"), &"x".repeat(NESTED_FILE_BYTES));
         }
 
         let found = nested_of(&dir);

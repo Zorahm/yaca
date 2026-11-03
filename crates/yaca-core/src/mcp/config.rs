@@ -84,7 +84,10 @@ impl McpServerSettings {
     pub const MAX_TOOL_SECS: u64 = 3_600;
 
     pub fn startup_timeout(&self) -> Duration {
-        Duration::from_secs(self.startup_timeout_secs.unwrap_or(Self::DEFAULT_STARTUP_SECS))
+        Duration::from_secs(
+            self.startup_timeout_secs
+                .unwrap_or(Self::DEFAULT_STARTUP_SECS),
+        )
     }
 
     pub fn tool_timeout(&self) -> Duration {
@@ -105,7 +108,9 @@ impl McpServerSettings {
         let url = self.url.as_deref().map(str::trim).unwrap_or("");
         match (command.is_empty(), url.is_empty()) {
             (true, true) => return Err("neither command nor url is set".into()),
-            (false, false) => return Err("both command and url are set: exactly one is needed".into()),
+            (false, false) => {
+                return Err("both command and url are set: exactly one is needed".into())
+            }
             _ => {}
         }
         match self.kind.as_deref() {
@@ -125,10 +130,20 @@ impl McpServerSettings {
         }
         let web = url.starts_with("http://") || url.starts_with("https://");
         if !url.is_empty() && !web {
-            return Err(format!("url must start with http:// or https://, not «{url}»"));
+            return Err(format!(
+                "url must start with http:// or https://, not «{url}»"
+            ));
         }
-        check_range("startupTimeoutSecs", self.startup_timeout_secs, Self::MAX_STARTUP_SECS)?;
-        check_range("toolTimeoutSecs", self.tool_timeout_secs, Self::MAX_TOOL_SECS)
+        check_range(
+            "startupTimeoutSecs",
+            self.startup_timeout_secs,
+            Self::MAX_STARTUP_SECS,
+        )?;
+        check_range(
+            "toolTimeoutSecs",
+            self.tool_timeout_secs,
+            Self::MAX_TOOL_SECS,
+        )
     }
 
     /// What identifies this declaration for an approval: any change to what
@@ -210,14 +225,16 @@ fn read(path: &Path) -> Result<BTreeMap<String, McpServerSettings>, CoreError> {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
         Err(e) => {
-            return Err(CoreError::Config(format!("cannot read {}: {e}", path.display())))
+            return Err(CoreError::Config(format!(
+                "cannot read {}: {e}",
+                path.display()
+            )))
         }
     };
     // Stops the session, like a broken `settings.json`: skipping the file
     // would leave a human waiting for tools that were quietly dropped.
-    let file: McpFile = serde_json::from_str(&text).map_err(|e| {
-        CoreError::Config(format!("{} could not be parsed: {e}", path.display()))
-    })?;
+    let file: McpFile = serde_json::from_str(&text)
+        .map_err(|e| CoreError::Config(format!("{} could not be parsed: {e}", path.display())))?;
     Ok(file.servers)
 }
 
@@ -287,7 +304,10 @@ impl PluginLaunch {
     }
 
     fn vars(&self) -> [(String, String); 4] {
-        let (root, data) = (self.root.display().to_string(), self.data.display().to_string());
+        let (root, data) = (
+            self.root.display().to_string(),
+            self.data.display().to_string(),
+        );
         [
             ("PLUGIN_ROOT".into(), root.clone()),
             ("CLAUDE_PLUGIN_ROOT".into(), root),
@@ -409,7 +429,12 @@ impl ServerSpec {
                 headers: fill_map(&s.headers)?,
             });
         }
-        let cwd = match s.cwd.as_deref().map(str::trim).filter(|cwd| !cwd.is_empty()) {
+        let cwd = match s
+            .cwd
+            .as_deref()
+            .map(str::trim)
+            .filter(|cwd| !cwd.is_empty())
+        {
             // Joining an absolute path replaces the base, which is what an
             // absolute `cwd` means.
             Some(cwd) => root.join(fill(cwd)?),
@@ -429,7 +454,11 @@ impl ServerSpec {
         }
         Ok(Launch::Stdio {
             program,
-            args: s.args.iter().map(|arg| fill(arg)).collect::<Result<_, _>>()?,
+            args: s
+                .args
+                .iter()
+                .map(|arg| fill(arg))
+                .collect::<Result<_, _>>()?,
             env,
             cwd,
         })
@@ -439,7 +468,9 @@ impl ServerSpec {
 /// [`expand_with`] over the environment alone.
 #[cfg(test)]
 fn expand(text: &str, var: &dyn Fn(&str) -> Option<String>) -> Result<String, String> {
-    expand_with(text, &|name| var(name).map_or(Lookup::Missing, Lookup::Value))
+    expand_with(text, &|name| {
+        var(name).map_or(Lookup::Missing, Lookup::Value)
+    })
 }
 
 /// What a `${NAME}` stands for.
@@ -538,7 +569,10 @@ mod tests {
     fn a_broken_file_is_an_error_rather_than_no_servers() {
         let dir = TempDir::new();
         dir.write(".mcp.json", "{ mcpServers: ");
-        assert!(matches!(load_project_file(dir.path()), Err(CoreError::Config(_))));
+        assert!(matches!(
+            load_project_file(dir.path()),
+            Err(CoreError::Config(_))
+        ));
     }
 
     #[test]
@@ -606,7 +640,10 @@ mod tests {
     fn references_to_the_environment_are_filled_in() {
         let var = |name: &str| (name == "TOKEN").then(|| "s3cret".to_string());
         assert_eq!(expand("Bearer ${TOKEN}", &var).unwrap(), "Bearer s3cret");
-        assert_eq!(expand("${HOST:-localhost}:80", &var).unwrap(), "localhost:80");
+        assert_eq!(
+            expand("${HOST:-localhost}:80", &var).unwrap(),
+            "localhost:80"
+        );
         assert_eq!(expand("plain $HOME ${", &var).unwrap(), "plain $HOME ${");
         assert!(expand("${MISSING}", &var).unwrap_err().contains("MISSING"));
     }

@@ -31,8 +31,8 @@ pub(crate) fn edit_need(ws: &Workspace, tool: &str, raw: &str, abs: PathBuf) -> 
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| raw.to_string());
-    let mut need = PermissionNeed::new(PermissionKind::EditFile, tool, name)
-        .detail(ws.display(&abs));
+    let mut need =
+        PermissionNeed::new(PermissionKind::EditFile, tool, name).detail(ws.display(&abs));
     if let Some(lost) = unsaved::outside_checkpoint(ws, [abs.as_path()]) {
         need = need.unsaved(lost);
     }

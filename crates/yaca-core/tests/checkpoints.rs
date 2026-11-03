@@ -11,14 +11,14 @@ mod common;
 use std::sync::Arc;
 use std::time::Duration;
 
+use serde_json::json;
+use tokio::sync::broadcast::Receiver;
 use yaca_core::checkpoint::{CheckpointReason, CheckpointSummary};
 use yaca_core::event::AgentEvent;
 use yaca_core::id::{CheckpointId, SessionId};
 use yaca_core::provider::mock::{script_text, MockProvider, Turn};
 use yaca_core::provider::ProviderEvent;
 use yaca_core::{Command, Mode, PermissionAnswer, SessionConfig, SessionHandle};
-use serde_json::json;
-use tokio::sync::broadcast::Receiver;
 
 use common::{ask, calls, is_turn_over, session, until, until_within, TempProject};
 
@@ -45,11 +45,7 @@ fn runs(id: &str, command: &str) -> Vec<ProviderEvent> {
 }
 
 fn writes(id: &str, path: &str, content: &str) -> Vec<ProviderEvent> {
-    calls(&[(
-        id,
-        "Write",
-        json!({ "path": path, "content": content }),
-    )])
+    calls(&[(id, "Write", json!({ "path": path, "content": content }))])
 }
 
 fn edits(id: &str, path: &str, from: &str, to: &str) -> Vec<ProviderEvent> {
@@ -351,8 +347,12 @@ fn recorded(
 async fn a_point_outlives_the_session_that_took_it() {
     let dir = TempProject::new();
     let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(writes("t1", "src/new.rs", "fn one() {}
-")),
+        Turn::Events(writes(
+            "t1",
+            "src/new.rs",
+            "fn one() {}
+",
+        )),
         Turn::Events(script_text("Written.")),
     ]));
     let first = recorded(&dir, provider, None);
@@ -386,7 +386,10 @@ async fn a_point_outlives_the_session_that_took_it() {
     let mut rx = again.subscribe();
     let files = roll_back_to(&again, &mut rx, &point.id).await;
     assert_eq!(files, 1);
-    assert!(!created.exists(), "the file the first session wrote is gone");
+    assert!(
+        !created.exists(),
+        "the file the first session wrote is gone"
+    );
 }
 
 /// The list belongs to its session: deleting the chat takes its points with it,
@@ -395,8 +398,12 @@ async fn a_point_outlives_the_session_that_took_it() {
 async fn a_deleted_or_copied_chat_has_no_points_to_offer() {
     let dir = TempProject::new();
     let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(writes("t1", "src/new.rs", "fn one() {}
-")),
+        Turn::Events(writes(
+            "t1",
+            "src/new.rs",
+            "fn one() {}
+",
+        )),
         Turn::Events(script_text("Written.")),
     ]));
     let first = recorded(&dir, provider, None);

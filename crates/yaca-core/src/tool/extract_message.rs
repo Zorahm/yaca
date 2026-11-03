@@ -26,7 +26,7 @@ pub struct ExtractMessage;
 
 /// Where the draft of message `number` is kept.
 fn draft_path(ws: &Workspace, transcript: &Transcript, number: usize) -> PathBuf {
-    crate::project::dir(ws.home())
+    crate::project::dir(if ws.is_chat() { ws.root() } else { ws.home() })
         .join("drafts")
         .join(transcript.session().to_string())
         .join(format!("{number}.md"))

@@ -241,10 +241,7 @@ mod tests {
     fn newline_does_not_go_into_text() {
         let d = compute("a\n", "b\n");
         for line in &d.hunks[0].lines {
-            assert!(
-                !line.text.contains('\n'),
-                "newline in line text: {line:?}"
-            );
+            assert!(!line.text.contains('\n'), "newline in line text: {line:?}");
         }
     }
 

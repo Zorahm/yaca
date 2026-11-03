@@ -76,7 +76,10 @@ fn a_file_naming_a_model_nobody_serves_is_broken_and_says_which() {
 fn an_unparsable_file_is_broken_and_not_absent() {
     let dir = TempDir::new();
     dir.write(file::FILE, "{ not json");
-    assert!(matches!(status(dir.path(), &providers()), Status::Broken(_)));
+    assert!(matches!(
+        status(dir.path(), &providers()),
+        Status::Broken(_)
+    ));
 }
 
 #[test]
@@ -147,8 +150,12 @@ fn nothing_to_ask_means_no_decision_tool() {
 #[test]
 fn the_decision_provider_is_asked_when_it_has_answered() {
     let dir = TempDir::new();
-    let setup = decision_setup_with(dir.path(), &with_decision(&["qwen3:1.7b", "other"]), offline)
-        .expect("a model to ask");
+    let setup = decision_setup_with(
+        dir.path(),
+        &with_decision(&["qwen3:1.7b", "other"]),
+        offline,
+    )
+    .expect("a model to ask");
     assert_eq!(setup.model, "qwen3:1.7b");
 }
 

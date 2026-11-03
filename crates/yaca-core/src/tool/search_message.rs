@@ -141,7 +141,11 @@ fn found(entries: &[Entry], needle: &Needle, role: Option<Role>) -> ToolOutput {
         .filter(|entry| role.is_none_or(|role| entry.role == role))
         .filter_map(|entry| {
             let excerpt = needle.excerpt(&entry.text)?;
-            Some(format!("#{} · {} · {excerpt}\n", entry.number, who(entry.role)))
+            Some(format!(
+                "#{} · {} · {excerpt}\n",
+                entry.number,
+                who(entry.role)
+            ))
         })
         .collect();
 
@@ -182,10 +186,16 @@ fn whole(entries: &[Entry], number: usize, offset: usize) -> Result<ToolOutput, 
     let end = (offset + DEFAULT_LIMIT).min(total);
     let body: String = chars[offset..end].iter().collect();
 
-    let mut text = format!("#{number} · {} · {total} chars\n\n{body}\n", who(entry.role));
+    let mut text = format!(
+        "#{number} · {} · {total} chars\n\n{body}\n",
+        who(entry.role)
+    );
     let truncated = end < total;
     if offset > 0 || truncated {
-        text.push_str(&format!("\n[showing characters {}–{end} of {total}", offset + 1));
+        text.push_str(&format!(
+            "\n[showing characters {}–{end} of {total}",
+            offset + 1
+        ));
         if truncated {
             text.push_str(&format!("; next — offset {end}"));
         }
@@ -230,7 +240,11 @@ mod tests {
 
         let first = whole(&entries, 1, 0).unwrap();
         assert!(first.meta.truncated);
-        assert!(first.text.contains(&format!("offset {DEFAULT_LIMIT}")), "{}", &first.text[first.text.len() - 120..]);
+        assert!(
+            first.text.contains(&format!("offset {DEFAULT_LIMIT}")),
+            "{}",
+            &first.text[first.text.len() - 120..]
+        );
 
         let rest = whole(&entries, 1, DEFAULT_LIMIT).unwrap();
         assert!(!rest.meta.truncated);

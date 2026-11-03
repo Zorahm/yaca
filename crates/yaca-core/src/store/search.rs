@@ -176,7 +176,11 @@ mod tests {
     use crate::message::Message;
 
     fn meta() -> SessionMeta {
-        let mut m = SessionMeta::new(SessionId::from("ses_1"), "anthropic".into(), "claude-opus-5".into());
+        let mut m = SessionMeta::new(
+            SessionId::from("ses_1"),
+            "anthropic".into(),
+            "claude-opus-5".into(),
+        );
         m.title = "Date parsing in logs".into();
         m.files = vec!["src/segments.ts".into(), "src/app.rs".into()];
         m

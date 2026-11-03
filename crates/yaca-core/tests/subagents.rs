@@ -469,7 +469,10 @@ async fn a_model_id_the_provider_lacks_is_named_back_with_the_ones_there_are() {
     assert_eq!(sent.len(), 2);
     let (text, is_error) = result_of(&sent[1], "t1");
     assert!(is_error, "{text}");
-    assert!(text.contains("`sonnet`") && text.contains("claude-haiku-4-5"), "{text}");
+    assert!(
+        text.contains("`sonnet`") && text.contains("claude-haiku-4-5"),
+        "{text}"
+    );
 }
 
 #[tokio::test]
@@ -650,8 +653,11 @@ async fn a_subagent_is_given_the_memory_index_the_agent_has() {
 #[tokio::test]
 async fn each_subagent_reports_what_it_has_spent_so_far() {
     let dir = TempProject::new();
-    dir.write("dates.rs", "fn parse_date() {}
-");
+    dir.write(
+        "dates.rs",
+        "fn parse_date() {}
+",
+    );
 
     let provider = Arc::new(MockProvider::new(vec![
         task("t1", "Find where dates are parsed."),
@@ -707,13 +713,27 @@ async fn a_named_agent_brings_its_instructions_and_only_its_tools() {
     let sent = requests(&provider);
 
     // The agent's own prompt lists the agents.
-    assert!(sent[0].system.contains("- reviewer: Reviews code for bugs"), "{}", sent[0].system);
+    assert!(
+        sent[0].system.contains("- reviewer: Reviews code for bugs"),
+        "{}",
+        sent[0].system
+    );
     // The subagent's request carries the agent's instructions and its tools.
     let sub = &sent[1];
-    assert!(sub.system.contains("You are a terse reviewer"), "{}", sub.system);
+    assert!(
+        sub.system.contains("You are a terse reviewer"),
+        "{}",
+        sub.system
+    );
     let tools: Vec<&str> = sub.tools.iter().map(|t| t.name.as_str()).collect();
-    assert!(tools.contains(&"Read") && tools.contains(&"Grep"), "{tools:?}");
-    assert!(!tools.contains(&"Write") && !tools.contains(&"Bash"), "{tools:?}");
+    assert!(
+        tools.contains(&"Read") && tools.contains(&"Grep"),
+        "{tools:?}"
+    );
+    assert!(
+        !tools.contains(&"Write") && !tools.contains(&"Bash"),
+        "{tools:?}"
+    );
     let (report, is_error) = result_of(&sent[2], "t1");
     assert!(!is_error && report.contains("No bugs."), "{report}");
 }
@@ -764,9 +784,15 @@ async fn a_forked_skill_runs_in_a_subagent_and_reports() {
     let sent = requests(&provider);
 
     let sub = &sent[1];
-    assert!(sub.system.contains("terse reviewer"), "runs as the skill's agent");
+    assert!(
+        sub.system.contains("terse reviewer"),
+        "runs as the skill's agent"
+    );
     let task = format!("{:?}", sub.messages[0]);
-    assert!(task.contains("Check every file for unsafe code") && task.contains("src/"), "{task}");
+    assert!(
+        task.contains("Check every file for unsafe code") && task.contains("src/"),
+        "{task}"
+    );
     let (report, is_error) = result_of(&sent[2], "s1");
     assert!(!is_error && report.contains("Nothing unsafe."), "{report}");
 }

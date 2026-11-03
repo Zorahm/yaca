@@ -50,6 +50,7 @@ pub(super) struct Decoder {
     next_index: u32,
     stop: Option<StopReason>,
     usage: TokenCounts,
+    cost: Option<f64>,
 }
 
 impl StreamDecoder for Decoder {
@@ -77,6 +78,7 @@ impl StreamDecoder for Decoder {
 
         // Counters arrive in a separate chunk, already without `choices`.
         if let Some(usage) = chunk.usage {
+            self.cost = usage.cost.filter(|v| v.is_finite() && *v >= 0.0);
             self.usage = usage.into();
         }
 
@@ -127,6 +129,9 @@ impl StreamDecoder for Decoder {
             stop_reason: self.stop,
             usage: self.usage,
         });
+        if let Some(usd) = self.cost {
+            out.push(ProviderEvent::Cost { usd });
+        }
         out.push(ProviderEvent::MessageStop);
         out
     }
@@ -289,6 +294,8 @@ struct WireError {
 
 #[derive(Debug, Default, Deserialize)]
 struct WireUsage {
+    #[serde(default)]
+    cost: Option<f64>,
     #[serde(default)]
     prompt_tokens: u32,
     #[serde(default)]
@@ -457,6 +464,18 @@ mod tests {
     }
 
     #[test]
+    fn reports_provider_cost_without_losing_token_counts() {
+        let mut d = Decoder::default();
+        decode(
+            &mut d,
+            r#"{"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":7,"cost":0.0023}}"#,
+        );
+        let tail = decode(&mut d, "[DONE]");
+        assert!(tail.contains(&ProviderEvent::Cost { usd: 0.0023 }));
+        assert!(tail.iter().any(|e| matches!(e, ProviderEvent::MessageDelta { usage, .. } if usage.input == 100 && usage.output == 7)));
+    }
+
+    #[test]
     fn the_end_of_the_stream_closes_blocks_and_the_message() {
         let mut d = Decoder::default();
         decode(&mut d, r#"{"choices":[{"delta":{"content":"answer"}}]}"#);
@@ -503,10 +522,16 @@ mod tests {
     #[test]
     fn a_stream_with_no_reason_for_stopping_is_cut_off() {
         let mut d = Decoder::default();
-        decode(&mut d, r#"{"choices":[{"delta":{"reasoning_content":"hm"}}]}"#);
+        decode(
+            &mut d,
+            r#"{"choices":[{"delta":{"reasoning_content":"hm"}}]}"#,
+        );
         assert!(d.cut_off());
 
-        decode(&mut d, r#"{"choices":[{"delta":{},"finish_reason":"eos"}]}"#);
+        decode(
+            &mut d,
+            r#"{"choices":[{"delta":{},"finish_reason":"eos"}]}"#,
+        );
         assert!(!d.cut_off(), "an unknown reason is still a reason");
     }
 

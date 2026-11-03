@@ -60,9 +60,13 @@ async fn an_empty_or_whitespace_answer_is_reported_as_failed() {
         assert_eq!(code, "empty_answer");
         assert!(!message.contains("reasoning"), "{message}");
         assert!(retryable);
-        assert!(matches!(events.last(), Some(AgentEvent::TurnFinished {
-            stop_reason: StopReason::Failed, ..
-        })));
+        assert!(matches!(
+            events.last(),
+            Some(AgentEvent::TurnFinished {
+                stop_reason: StopReason::Failed,
+                ..
+            })
+        ));
     }
 }
 

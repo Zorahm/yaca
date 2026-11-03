@@ -69,7 +69,9 @@ impl Stdio {
         let (Some(stdin), Some(stdout), Some(stderr)) =
             (child.stdin.take(), child.stdout.take(), child.stderr.take())
         else {
-            return Err(McpError::Transport(format!("«{program}» has no standard streams")));
+            return Err(McpError::Transport(format!(
+                "«{program}» has no standard streams"
+            )));
         };
 
         let tail = Tail::default();
@@ -156,7 +158,13 @@ async fn read_lines(mut child: Child, stdout: ChildStdout, tail: Tail, inbox: In
         .ok()
         .and_then(Result::ok)
         .and_then(|status| status.code());
-    let said = tail.lock().unwrap().iter().cloned().collect::<Vec<_>>().join("\n");
+    let said = tail
+        .lock()
+        .unwrap()
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n");
 
     let mut reason = match code {
         Some(code) => format!("the server process exited with code {code}"),

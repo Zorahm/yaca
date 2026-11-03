@@ -336,7 +336,8 @@ mod tests {
     /// Our own group replaces `*` entirely rather than augmenting it.
     #[test]
     fn our_own_group_replaces_the_star_group() {
-        let r = rules("User-agent: *\nDisallow: /\n\nUser-agent: YacaTraveler\nDisallow: /secret\n");
+        let r =
+            rules("User-agent: *\nDisallow: /\n\nUser-agent: YacaTraveler\nDisallow: /secret\n");
         assert!(allows(&r, "/anything"), "rules from `*` do not apply to us");
         assert!(!allows(&r, "/secret"));
     }
@@ -357,7 +358,9 @@ mod tests {
     /// A rule after a group closes it: next `User-agent` starts a new group.
     #[test]
     fn a_new_group_starts_after_the_rules_of_the_previous_one() {
-        let r = rules("User-agent: YacaTraveler\nDisallow: /mine\nUser-agent: Other\nDisallow: /theirs\n");
+        let r = rules(
+            "User-agent: YacaTraveler\nDisallow: /mine\nUser-agent: Other\nDisallow: /theirs\n",
+        );
         assert!(!allows(&r, "/mine"));
         assert!(allows(&r, "/theirs"));
     }

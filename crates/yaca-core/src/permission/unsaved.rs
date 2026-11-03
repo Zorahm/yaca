@@ -292,7 +292,9 @@ mod tests {
     #[test]
     fn a_file_in_an_additional_root_is_unsaved_as_a_whole() {
         let (_m, extra, ws) = with_extra();
-        let file = ws.resolve_existing(&roots::plain(&extra.path().join("sub/b.txt"))).unwrap();
+        let file = ws
+            .resolve_existing(&roots::plain(&extra.path().join("sub/b.txt")))
+            .unwrap();
         let lost = of_file(&ws, &file).expect("the checkpoint never saw this root");
         assert_eq!(lost.roots, vec![roots::plain(extra.path())]);
         assert_eq!(lost.files, 0);
@@ -302,7 +304,9 @@ mod tests {
     #[test]
     fn a_directory_in_an_additional_root_is_unsaved_as_a_whole() {
         let (_m, extra, ws) = with_extra();
-        let dir = ws.resolve_existing(&roots::plain(&extra.path().join("sub"))).unwrap();
+        let dir = ws
+            .resolve_existing(&roots::plain(&extra.path().join("sub")))
+            .unwrap();
         let lost = of_dir(&ws, &dir).unwrap().expect("unsaved");
         assert_eq!(lost.roots, vec![roots::plain(extra.path())]);
     }
@@ -318,7 +322,9 @@ mod tests {
     fn a_move_across_roots_names_each_root_once() {
         let (_m, extra, ws) = with_extra();
         let from = ws.resolve_new("a.txt").unwrap();
-        let to = ws.resolve_new(&roots::plain(&extra.path().join("moved.txt"))).unwrap();
+        let to = ws
+            .resolve_new(&roots::plain(&extra.path().join("moved.txt")))
+            .unwrap();
         let both = outside_checkpoint(&ws, [from.as_path(), to.as_path()]).unwrap();
         assert_eq!(both.roots, vec![roots::plain(extra.path())]);
         let twice = outside_checkpoint(&ws, [to.as_path(), to.as_path()]).unwrap();
@@ -328,7 +334,10 @@ mod tests {
     #[test]
     fn a_command_is_reported_with_every_additional_root_only_when_there_are_some() {
         let (_m, extra, ws) = with_extra();
-        assert_eq!(command_reach(&ws).unwrap().roots, vec![roots::plain(extra.path())]);
+        assert_eq!(
+            command_reach(&ws).unwrap().roots,
+            vec![roots::plain(extra.path())]
+        );
 
         let plain = TempDir::new();
         let alone = Workspace::open(plain.path()).unwrap();

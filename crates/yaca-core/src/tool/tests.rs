@@ -5,7 +5,7 @@ use super::*;
 #[test]
 fn description_is_only_required_for_model_tools() {
     let reg = ToolRegistry::standard();
-    let schemas = reg.schemas(Intent::Agent);
+    let schemas = reg.schemas(Intent::Agent, Profile::Code);
 
     let read = schemas.iter().find(|s| s.name == "Read").unwrap();
     assert!(read.input_schema["properties"]["description"].is_object());
@@ -22,14 +22,7 @@ fn description_is_only_required_for_model_tools() {
     let bash = schemas.iter().find(|s| s.name == "Bash").unwrap();
     assert!(bash.input_schema["properties"]["description"].is_object());
 
-    for name in [
-        "TodoWrite",
-        "Write",
-        "Edit",
-        "Delete",
-        "DeleteDir",
-        "Move",
-    ] {
+    for name in ["TodoWrite", "Write", "Edit", "Delete", "DeleteDir", "Move"] {
         let t = schemas.iter().find(|s| s.name == name).unwrap();
         assert!(
             t.input_schema["properties"]["description"].is_null(),
@@ -42,7 +35,7 @@ fn description_is_only_required_for_model_tools() {
 fn plan_mode_reads_and_plans_but_does_not_write() {
     let reg = ToolRegistry::standard();
     let names: Vec<_> = reg
-        .schemas(Intent::Plan)
+        .schemas(Intent::Plan, Profile::Code)
         .into_iter()
         .map(|s| s.name)
         .collect();
@@ -55,14 +48,7 @@ fn plan_mode_reads_and_plans_but_does_not_write() {
     // §7.1: writing tools are not given to the model at all, rather than
     // forbidden via prompt text — a weaker model would ignore the prohibition. Command
     // is treated the same: the plan promises not to change anything, while a command could do anything.
-    for writing in [
-        "Write",
-        "Edit",
-        "Delete",
-        "DeleteDir",
-        "Move",
-        "BashOutput",
-    ] {
+    for writing in ["Write", "Edit", "Delete", "DeleteDir", "Move", "BashOutput"] {
         assert!(
             !names.contains(&writing.to_string()),
             "{writing} leaked into plan"
@@ -77,7 +63,7 @@ fn plan_mode_reads_and_plans_but_does_not_write() {
 fn writing_tools_are_only_present_in_agent_mode() {
     let reg = ToolRegistry::standard();
     let names: Vec<_> = reg
-        .schemas(Intent::Agent)
+        .schemas(Intent::Agent, Profile::Code)
         .into_iter()
         .map(|s| s.name)
         .collect();
@@ -97,7 +83,10 @@ fn writing_tools_are_only_present_in_agent_mode() {
 #[test]
 fn a_subagent_has_the_agents_tools_less_the_agents_own() {
     let names = |reg: &ToolRegistry, intent| -> Vec<String> {
-        reg.schemas(intent).into_iter().map(|s| s.name).collect()
+        reg.schemas(intent, Profile::Code)
+            .into_iter()
+            .map(|s| s.name)
+            .collect()
     };
     let (all, given) = (
         ToolRegistry::of_session(true),
@@ -130,12 +119,12 @@ fn a_subagent_has_the_agents_tools_less_the_agents_own() {
 fn schema_order_is_stable_otherwise_prompt_cache_is_invalidated() {
     let reg = ToolRegistry::standard();
     let a: Vec<_> = reg
-        .schemas(Intent::Agent)
+        .schemas(Intent::Agent, Profile::Code)
         .into_iter()
         .map(|s| s.name)
         .collect();
     let b: Vec<_> = reg
-        .schemas(Intent::Agent)
+        .schemas(Intent::Agent, Profile::Code)
         .into_iter()
         .map(|s| s.name)
         .collect();
@@ -175,15 +164,64 @@ fn description_is_sanitized_according_to_spec() {
 }
 
 #[test]
+fn a_chat_about_documents_keeps_the_files_and_drops_the_code_only_tools() {
+    let reg = ToolRegistry::standard();
+    let names = |profile| -> Vec<String> {
+        reg.schemas(Intent::Agent, profile)
+            .into_iter()
+            .map(|s| s.name)
+            .collect()
+    };
+    let (code, chat) = (names(Profile::Code), names(Profile::Chat));
+
+    // The same tools that make a document: read, search, write, run a script.
+    for tool in [
+        "Read",
+        "ReadImage",
+        "Grep",
+        "Glob",
+        "Write",
+        "Edit",
+        "Bash",
+        "Skill",
+    ] {
+        assert!(chat.contains(&tool.to_string()), "{tool} missing in chat");
+        assert!(code.contains(&tool.to_string()), "{tool} missing in code");
+    }
+    // A notebook and the language server's two ways in mean nothing about a
+    // report, and a call to one in a chat is answered with "unknown tool".
+    for tool in ["NotebookEdit", "Lsp", "Rename"] {
+        assert!(!chat.contains(&tool.to_string()), "{tool} in chat");
+    }
+    assert!(code.contains(&"NotebookEdit".to_string()));
+    assert!(reg
+        .get("NotebookEdit", Intent::Agent, Profile::Chat)
+        .is_none());
+    assert!(reg.get("Read", Intent::Agent, Profile::Chat).is_some());
+}
+
+#[test]
 fn the_tools_that_read_the_journal_come_with_one() {
     let names = |reg: &ToolRegistry, intent| -> Vec<String> {
-        reg.schemas(intent).into_iter().map(|s| s.name).collect()
+        reg.schemas(intent, Profile::Code)
+            .into_iter()
+            .map(|s| s.name)
+            .collect()
     };
-    let (without, with) = (ToolRegistry::of_session(false), ToolRegistry::of_session(true));
+    let (without, with) = (
+        ToolRegistry::of_session(false),
+        ToolRegistry::of_session(true),
+    );
 
     for tool in ["SearchMessage", "ExtractMessage"] {
-        assert!(!names(&without, Intent::Agent).contains(&tool.to_string()), "{tool}");
-        assert!(names(&with, Intent::Agent).contains(&tool.to_string()), "{tool}");
+        assert!(
+            !names(&without, Intent::Agent).contains(&tool.to_string()),
+            "{tool}"
+        );
+        assert!(
+            names(&with, Intent::Agent).contains(&tool.to_string()),
+            "{tool}"
+        );
     }
     // Looking back changes nothing; a draft is a file, and plan writes none.
     assert!(names(&with, Intent::Plan).contains(&"SearchMessage".to_string()));

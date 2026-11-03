@@ -21,18 +21,20 @@ mod background;
 pub mod binding;
 mod calls;
 mod changeset;
+mod chat_files;
 mod checkpoints;
 pub mod compact;
 mod compaction;
-mod plugin_hooks;
 mod environment;
 mod guard;
 mod inbox;
 pub mod log;
 mod mentions;
+mod plugin_hooks;
+mod preview;
 pub mod prompt;
-mod queue;
 pub mod questions;
+mod queue;
 pub(crate) mod retry;
 pub mod subagent;
 mod turn;
@@ -59,17 +61,18 @@ use crate::pending::Pending;
 use crate::permission::broker::Broker;
 use crate::permission::policy::Policy;
 use crate::permission::PermissionAnswer;
-use crate::question::{QuestionReply, QuestionRequest};
 use crate::process::shell::{Shell, ShellChoice};
 use crate::process::Processes;
+use crate::profile::Profile;
 use crate::provider::registry::ANTHROPIC_ID;
 use crate::provider::Provider;
+use crate::question::{QuestionReply, QuestionRequest};
 use crate::settings::Settings;
 use crate::store::{Recorder, SessionMeta, SessionStore};
-use subagent::Ledger;
 use crate::tool::ToolRegistry;
 use crate::usage::{catalog, ModelInfo, Pricing, UsageMeter, DEFAULT_MODEL};
 use crate::workspace::Workspace;
+use subagent::Ledger;
 
 /// What the worker is asked to do. More than "another message" since §5.11:
 /// compaction owns the history, and the history belongs to the worker alone.
@@ -99,6 +102,9 @@ pub struct SessionConfig {
     /// counts as unknown — free, with a conservative window.
     pub models: Vec<ModelInfo>,
     pub mode: Mode,
+    /// What the chat is for: code, or documents (`profile`). Independent of the
+    /// mode, and chosen before the first word like the mode is.
+    pub profile: Profile,
     pub effort: Effort,
     /// The chats folder the session is journaled into (`store::chats_dir` in
     /// the applications). `None`: nothing is written down. Application-level,
@@ -119,10 +125,18 @@ pub struct SessionConfig {
     /// The default is to respect it; `yaca-cli` gets it without knowing about
     /// window settings.
     pub respect_robots: bool,
+    /// Summarize fetched pages.
+    pub summarize_web_fetch: bool,
+    /// Router model used for page summaries.
+    pub web_fetch_model: Option<crate::tool::decision::DecisionSetup>,
+    /// Pricing for the configured router summary model.
+    pub web_fetch_pricing: Option<Pricing>,
     /// The small model the `Decision` tool asks. `None`: the tool is not
     /// offered, because one that could only refuse is a line in every request
     /// for nothing. Application-level, like the providers it is built from.
     pub decision: Option<crate::tool::decision::DecisionSetup>,
+    /// Pricing of the Decision model.
+    pub decision_pricing: Option<Pricing>,
     /// Which shell commands run through (§10). The human's choice about the
     /// application, like the flag above, and settled for the whole session
     /// when it opens ([`Shell`]).
@@ -191,11 +205,16 @@ impl SessionConfig {
             model: DEFAULT_MODEL.to_string(),
             models: catalog(),
             mode: Mode::default(),
+            profile: Profile::default(),
             effort: Effort::default(),
             journal: None,
             resume: None,
             respect_robots: true,
+            summarize_web_fetch: false,
+            web_fetch_model: None,
+            web_fetch_pricing: None,
             decision: None,
+            decision_pricing: None,
             shell: ShellChoice::default(),
             isolate: false,
             additional_roots: Vec::new(),
@@ -228,6 +247,9 @@ impl SessionConfig {
         let settings = Settings::load(&config.root)?;
         if let Some(mode) = settings.mode {
             config.mode = mode;
+        }
+        if let Some(profile) = settings.profile {
+            config.profile = profile;
         }
         config.choose_model(
             settings.provider.unwrap_or_default(),
@@ -327,9 +349,10 @@ impl SessionHandle {
     /// into the file (`SessionStore::rename`), where the next turn would
     /// write the old one back.
     pub fn rename(&self, title: &str) -> Result<(), CoreError> {
-        let recorder = self.shared.recorder.as_ref().ok_or_else(|| {
-            CoreError::Config(format!("session {} is not recorded", self.id()))
-        })?;
+        let recorder =
+            self.shared.recorder.as_ref().ok_or_else(|| {
+                CoreError::Config(format!("session {} is not recorded", self.id()))
+            })?;
         recorder.rename(title)?;
         Ok(())
     }
@@ -374,14 +397,20 @@ impl SessionHandle {
             (Some(recorder), Some(len)) => recorder.events_to(len),
             _ => Vec::new(),
         };
-        events.push(AgentEvent::StateChanged { state: self.state() });
-        events.push(AgentEvent::McpUpdated { servers: self.mcp() });
+        events.push(AgentEvent::StateChanged {
+            state: self.state(),
+        });
+        events.push(AgentEvent::McpUpdated {
+            servers: self.mcp(),
+        });
         // A server's form still waiting: the journal does not hold it, and
         // the window must be able to answer it again.
         for request in self.shared.mcp.open_elicitations() {
             events.push(AgentEvent::ElicitationRequested { request });
         }
-        events.push(AgentEvent::LspUpdated { servers: self.lsp() });
+        events.push(AgentEvent::LspUpdated {
+            servers: self.lsp(),
+        });
         events.push(AgentEvent::ProcessesUpdated {
             processes: self.shared.processes.summaries(),
         });
@@ -455,8 +484,12 @@ struct Shared {
     /// Whether to respect `robots.txt` (§10). From [`SessionConfig`], not from the
     /// project file: an application setting.
     respect_robots: bool,
+    summarize_web_fetch: bool,
+    web_fetch_model: Option<crate::tool::decision::DecisionSetup>,
+    web_fetch_pricing: Option<Pricing>,
     /// What `Decision` asks, when there is something to ask.
     decision: Option<crate::tool::decision::DecisionSetup>,
+    decision_pricing: Option<Pricing>,
     /// The shell of this session's commands, named in its system prompt.
     shell: Shell,
     /// The MCP servers of this session (`mcp`). Shared: reconnecting is a
@@ -511,9 +544,16 @@ impl Shared {
     /// the one rebuilt per turn, or a turn would quietly lose the tool.
     fn tools(&self, mut more: Vec<Arc<dyn crate::tool::Tool>>) -> ToolRegistry {
         if let Some(setup) = &self.decision {
-            more.push(Arc::new(crate::tool::decision::Decision::new(setup.clone())));
+            more.push(Arc::new(crate::tool::decision::Decision::new(
+                setup.clone(),
+            )));
         }
-        ToolRegistry::of_session(self.recorder.is_some()).with(more)
+        let registry = ToolRegistry::of_session(self.recorder.is_some()).with(more);
+        if self.summarize_web_fetch {
+            registry.with_web_fetch_summary()
+        } else {
+            registry
+        }
     }
 
     fn emit(&self, event: AgentEvent) {
@@ -561,7 +601,6 @@ impl Shared {
             bypass: state.bypass,
         }
     }
-
 }
 
 /// A resumed session comes back with the folders it was started with, and no
@@ -575,7 +614,10 @@ fn check_resumed_roots(
     id: &SessionId,
     ws: &Workspace,
 ) -> Result<(), CoreError> {
-    let recorded = store.meta(id).map(|meta| meta.additional_roots).unwrap_or_default();
+    let recorded = store
+        .meta(id)
+        .map(|meta| meta.additional_roots)
+        .unwrap_or_default();
     let given = ws.additional_text();
     if recorded == given {
         return Ok(());
@@ -596,7 +638,7 @@ fn check_resumed_roots(
 
 /// Starts the session and returns a handle to it.
 pub fn spawn(
-    config: SessionConfig,
+    mut config: SessionConfig,
     provider: Arc<dyn Provider>,
 ) -> Result<SessionHandle, CoreError> {
     // Settings first: the workspace needs the project's snapshot exclusions
@@ -630,13 +672,33 @@ pub fn spawn(
 
     // After the id, which names the worktree. The tools and the snapshots
     // work in it from here on; the journals stay keyed to the project.
-    let isolation = crate::isolation::open(root.home(), &id, config.isolate)?;
+    let chat_workspace = store.as_ref().map(|store| store.chat_workspace(&id));
+    let is_chat_workspace = chat_workspace.as_ref().is_some_and(|path| path.is_dir());
+    if is_chat_workspace {
+        config.profile = Profile::Chat;
+    }
+    let chat_workspace = if is_chat_workspace
+        || (chat_workspace.is_some() && config.resume.is_none() && config.profile == Profile::Chat)
+    {
+        let path = chat_workspace
+            .ok_or_else(|| CoreError::Config("chat workspace is unavailable".into()))?;
+        std::fs::create_dir_all(&path)?;
+        Some(path)
+    } else {
+        None
+    };
+    let isolation = if chat_workspace.is_some() {
+        None
+    } else {
+        crate::isolation::open(root.home(), &id, config.isolate)?
+    };
     // The additional roots are checked against the tree the session works in,
     // so after `in_tree`: a folder inside the worktree is redundant there.
     let ws = Arc::new(
-        match &isolation {
-            Some(isolation) => root.in_tree(&isolation.path)?,
-            None => root,
+        match (&chat_workspace, &isolation) {
+            (Some(path), _) => root.in_tree(path)?.for_chat(),
+            (None, Some(isolation)) => root.in_tree(&isolation.path)?,
+            (None, None) => root,
         }
         .with_roots(&config.additional_roots)?,
     );
@@ -650,9 +712,9 @@ pub fn spawn(
 
     let recorder = match (&config.journal, &store) {
         (Some(chats), Some(store)) => {
-            let mut meta = store
-                .meta(&id)
-                .unwrap_or_else(|| SessionMeta::new(id.clone(), config.provider.clone(), config.model.clone()));
+            let mut meta = store.meta(&id).unwrap_or_else(|| {
+                SessionMeta::new(id.clone(), config.provider.clone(), config.model.clone())
+            });
             meta.additional_roots = ws.additional_text();
             crate::store::location::claim(chats, ws.home())
                 .ok()
@@ -751,7 +813,11 @@ pub fn spawn(
         broker,
         questions: Pending::default(),
         respect_robots: config.respect_robots,
+        summarize_web_fetch: config.summarize_web_fetch,
+        web_fetch_model: config.web_fetch_model.clone(),
+        web_fetch_pricing: config.web_fetch_pricing,
         decision: config.decision.clone(),
+        decision_pricing: config.decision_pricing,
         shell: Shell::resolve(config.shell),
         mcp,
         lsp,
@@ -787,6 +853,7 @@ pub fn spawn(
             provider: config.provider.clone(),
             model: config.model.clone(),
             mode: config.mode,
+            profile: config.profile,
             effort: config.effort,
             busy: false,
             bypass: false,
@@ -805,7 +872,10 @@ pub fn spawn(
     let weak = Arc::downgrade(&shared);
     shared.mcp.on_waiting(Arc::new(move |server: &str| {
         if let Some(shared) = weak.upgrade() {
-            shared.notify("elicitation", format!("The MCP server {server} needs your input"));
+            shared.notify(
+                "elicitation",
+                format!("The MCP server {server} needs your input"),
+            );
         }
     }));
 
@@ -883,6 +953,15 @@ async fn dispatch(mut rx: mpsc::Receiver<Command>, work: mpsc::Sender<Job>, shar
             Command::SetMode { mode } => {
                 shared.state.lock().unwrap().mode = mode;
                 shared.emit_state();
+            }
+            Command::SetProfile { profile } => {
+                if shared.state.lock().unwrap().profile != profile {
+                    shared.emit(AgentEvent::Error {
+                        code: "profile_fixed".into(),
+                        message: "The profile is fixed when a session starts. Start a new session to change it.".into(),
+                        retryable: false,
+                    });
+                }
             }
             Command::SetModel { model } => {
                 shared.state.lock().unwrap().model = model;

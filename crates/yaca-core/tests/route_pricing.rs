@@ -29,6 +29,7 @@ fn priced(id: &str, provider: &str, input: f64, output: f64) -> ModelInfo {
         supports_thinking: false,
         context_source: ContextSource::ProviderReported,
         supports_images: true,
+        pricing_by_hand: false,
         by_hand: false,
     }
 }

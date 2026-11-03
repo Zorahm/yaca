@@ -33,10 +33,7 @@ fn asked(events: &[AgentEvent]) -> RequestId {
 }
 
 fn position(events: &[AgentEvent], hit: impl Fn(&AgentEvent) -> bool) -> usize {
-    events
-        .iter()
-        .position(hit)
-        .expect("the event never came")
+    events.iter().position(hit).expect("the event never came")
 }
 
 fn texts(message: &Message) -> Vec<&str> {
@@ -54,12 +51,19 @@ fn texts(message: &Message) -> Vec<&str> {
 async fn message_while_asked(
     provider: Arc<MockProvider>,
     dir: &TempProject,
-) -> (yaca_core::SessionHandle, tokio::sync::broadcast::Receiver<AgentEvent>, Vec<AgentEvent>) {
+) -> (
+    yaca_core::SessionHandle,
+    tokio::sync::broadcast::Receiver<AgentEvent>,
+    Vec<AgentEvent>,
+) {
     let handle = session(dir, provider, Mode::Manual);
     let mut rx = handle.subscribe();
 
     ask(&handle, "create notes.txt").await;
-    let seen = until(&mut rx, |e| matches!(e, AgentEvent::PermissionRequested { .. })).await;
+    let seen = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
     // Sent before the answer, so it is queued while the batch is still
     // running: the dispatcher takes commands in order.
     ask(&handle, LATER).await;
@@ -95,7 +99,9 @@ async fn a_message_sent_mid_turn_joins_after_the_current_batch() {
 
     // One turn, and the human's words land between the batch and the model's
     // next step.
-    let started = seen.iter().filter(|e| matches!(e, AgentEvent::TurnStarted { .. }));
+    let started = seen
+        .iter()
+        .filter(|e| matches!(e, AgentEvent::TurnStarted { .. }));
     assert_eq!(started.count(), 1);
     let batch_done = position(&seen, |e| matches!(e, AgentEvent::ToolCallFinished { .. }));
     let heard = position(
@@ -103,7 +109,10 @@ async fn a_message_sent_mid_turn_joins_after_the_current_batch() {
         |e| matches!(e, AgentEvent::UserMessage { text, .. } if text == LATER),
     );
     let answered = position(&seen, |e| matches!(e, AgentEvent::TextDelta { .. }));
-    assert!(batch_done < heard && heard < answered, "{batch_done} {heard} {answered}");
+    assert!(
+        batch_done < heard && heard < answered,
+        "{batch_done} {heard} {answered}"
+    );
 
     // The model reads it right after the results of the batch it followed.
     {
@@ -197,9 +206,10 @@ async fn until_queued(
     rx: &mut tokio::sync::broadcast::Receiver<AgentEvent>,
     len: usize,
 ) -> Vec<AgentEvent> {
-    until(rx, move |e| {
-        matches!(e, AgentEvent::QueueUpdated { queued } if queued.len() == len)
-    })
+    until(
+        rx,
+        move |e| matches!(e, AgentEvent::QueueUpdated { queued } if queued.len() == len),
+    )
     .await
 }
 
@@ -261,8 +271,11 @@ async fn a_cancel_after_the_message_was_taken_in_changes_nothing() {
         .unwrap();
     // Taken in after the batch, before the model's next step.
     seen.extend(
-        until(&mut rx, |e| matches!(e, AgentEvent::UserMessage { text, .. } if text == LATER))
-            .await,
+        until(
+            &mut rx,
+            |e| matches!(e, AgentEvent::UserMessage { text, .. } if text == LATER),
+        )
+        .await,
     );
 
     // Too late: the message is in the conversation. The cancel is a no-op, and
@@ -337,10 +350,7 @@ async fn a_cancelled_message_never_starts_a_turn_of_its_own() {
     seen.extend(until_queued(&mut rx, 1).await);
     let id = queue_of(&seen)[0].id.clone();
 
-    handle
-        .send(Command::CancelQueued { id })
-        .await
-        .unwrap();
+    handle.send(Command::CancelQueued { id }).await.unwrap();
     seen.extend(until_queued(&mut rx, 0).await);
 
     // Stop the turn with the message gone. Its job is still in the channel,

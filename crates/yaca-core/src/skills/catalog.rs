@@ -274,7 +274,11 @@ impl Scan {
             Err(why) => return self.report(&shown, why, true),
         };
         let Some(description) = header.description else {
-            return self.report(&shown, "missing description: model has no basis to select skill".into(), true);
+            return self.report(
+                &shown,
+                "missing description: model has no basis to select skill".into(),
+                true,
+            );
         };
         let name = header.name.unwrap_or_else(|| dir_name.to_string());
         if !is_usable_name(&name) {
@@ -304,7 +308,11 @@ impl Scan {
         };
         if let Some(first) = self.by_name.get(&name) {
             let first = plain(first);
-            return self.report(&shown, format!("shadowed by skill of same name {first}"), true);
+            return self.report(
+                &shown,
+                format!("shadowed by skill of same name {first}"),
+                true,
+            );
         }
 
         let description = one_line(&description);
@@ -314,7 +322,10 @@ impl Scan {
                 format!("description exceeds {MAX_DESCRIPTION_CHARS} characters and was truncated"),
                 false,
             );
-            let cut: String = description.chars().take(MAX_DESCRIPTION_CHARS - 1).collect();
+            let cut: String = description
+                .chars()
+                .take(MAX_DESCRIPTION_CHARS - 1)
+                .collect();
             format!("{}…", cut.trim_end())
         } else {
             description
@@ -378,7 +389,16 @@ mod tests {
     fn the_standard_name_rule() {
         assert!(is_standard_name("pdf-processing"));
         assert!(is_standard_name("a1"));
-        for bad in ["", "PDF", "-pdf", "pdf-", "pdf--x", "a_b", "a.b", &"a".repeat(65)] {
+        for bad in [
+            "",
+            "PDF",
+            "-pdf",
+            "pdf-",
+            "pdf--x",
+            "a_b",
+            "a.b",
+            &"a".repeat(65),
+        ] {
             assert!(!is_standard_name(bad), "{bad:?}");
         }
     }

@@ -162,7 +162,9 @@ mod tests {
 
     #[test]
     fn an_unquoted_colon_in_a_value_is_forgiven() {
-        let h = header("---\nname: pdf\ndescription: Use this skill when: the user asks about PDFs\n---\n");
+        let h = header(
+            "---\nname: pdf\ndescription: Use this skill when: the user asks about PDFs\n---\n",
+        );
         assert_eq!(
             h.description.as_deref(),
             Some("Use this skill when: the user asks about PDFs")

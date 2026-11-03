@@ -81,7 +81,11 @@ impl Worker {
     /// `turn` is the turn it happens inside, if any. The replaced history is
     /// written down under it, so that a copy made up to that turn (§9) keeps
     /// the rest of the turn too; between turns it gets a name of its own.
-    pub(super) async fn compact(&mut self, cancel: &CancellationToken, turn: Option<&TurnId>) -> bool {
+    pub(super) async fn compact(
+        &mut self,
+        cancel: &CancellationToken,
+        turn: Option<&TurnId>,
+    ) -> bool {
         // Inside a turn it was the window filling up; between turns the human
         // asked for it.
         let trigger = if turn.is_some() { "auto" } else { "manual" };
@@ -237,6 +241,8 @@ impl Worker {
         // A routing provider says which model it chose before anything else of
         // the reply, so the usage events below are priced by it.
         let mut pricing = info.pricing;
+        let mut counts = crate::usage::TokenCounts::default();
+        let mut cost = None;
         loop {
             tokio::select! {
                 biased;
@@ -252,12 +258,17 @@ impl Worker {
                             .pricing_of(Some(&(provider, model)), info.pricing);
                     }
                     Some(Ok(ProviderEvent::MessageStart { usage, .. })) => {
-                        self.usage.record_aside(usage, pricing);
+                        counts.add(usage);
                     }
                     // The summary costs money like anything else, and §7.1
                     // shows the money.
                     Some(Ok(ProviderEvent::MessageDelta { usage, .. })) => {
+                        counts.add(usage);
+                    }
+                    Some(Ok(ProviderEvent::Cost { usd })) => cost = Some(usd),
+                    Some(Ok(ProviderEvent::AsideUsage { usage, pricing, cost })) => {
                         self.usage.record_aside(usage, pricing);
+                        self.usage.reconcile_cost(usage, pricing, cost);
                     }
                     // The rest of the blocks: a summary has no feed to show
                     // them in, and the routed model is not shown either.
@@ -266,6 +277,8 @@ impl Worker {
                 },
             }
         }
+        self.usage.record_aside(counts, pricing);
+        self.usage.reconcile_cost(counts, pricing, cost);
         Ok(summary)
     }
 }

@@ -10,6 +10,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures_util::StreamExt;
 use yaca_core::error::ProviderError;
 use yaca_core::event::StopReason;
 use yaca_core::intent::Effort;
@@ -18,7 +19,6 @@ use yaca_core::provider::registry::ProviderSpec;
 use yaca_core::provider::{
     anthropic::AnthropicProvider, BlockKind, Provider, ProviderEvent, ProviderRequest,
 };
-use futures_util::StreamExt;
 
 mod common;
 use common::wire::{json_response, refusal, serve};
@@ -79,11 +79,19 @@ async fn a_truncated_http_body_preserves_the_transport_cause() {
     let provider = AnthropicProvider::new(spec(base), None);
     let mut stream = provider.stream(request()).await.unwrap();
     let err = tokio::time::timeout(Duration::from_secs(5), stream.next())
-        .await.unwrap().unwrap().unwrap_err();
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap_err();
     assert!(err.is_retryable());
-    let ProviderError::Network(message) = err else { panic!("expected network error") };
+    let ProviderError::Network(message) = err else {
+        panic!("expected network error")
+    };
     assert!(message.contains("body"), "{message}");
-    assert!(message.contains(": "), "transport cause was lost: {message}");
+    assert!(
+        message.contains(": "),
+        "transport cause was lost: {message}"
+    );
     assert!(!message.contains("http://"), "{message}");
 }
 
@@ -195,7 +203,8 @@ async fn rate_limit_carries_retry_after() {
 /// key, so a bare 401 does not have to be puzzled out.
 #[tokio::test]
 async fn without_a_key_the_request_goes_out_and_the_refusal_names_the_key() {
-    let body = r#"{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}"#;
+    let body =
+        r#"{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}"#;
     let (base, seen) = serve(json_response("401 Unauthorized", body)).await;
     let provider = AnthropicProvider::new(spec(base), Some("   ".into()));
 

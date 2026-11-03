@@ -42,15 +42,16 @@ use crate::instructions::Instructions;
 use crate::intent::Intent;
 use crate::message::{strip_thinking, ContentBlock, Message};
 use crate::process::shell::Shell;
+use crate::profile::Profile;
 use crate::provider::ProviderRequest;
-use crate::tool::memory::store::MemoryIndex;
 use crate::skills::Listing;
+use crate::tool::memory::store::MemoryIndex;
 use crate::usage::{Pricing, TokenCounts};
 
 use super::accumulator::{Accumulator, Completion};
 use super::calls::{Caller, ModelPick};
-use crate::agents::AgentDef;
 use super::prompt;
+use crate::agents::AgentDef;
 
 /// How many requests a subagent may make before it has to report.
 ///
@@ -78,14 +79,14 @@ const OUT_OF_STEPS: &str = "You have used all the steps you had. Do not call any
 /// batch — several subagents among them — run side by side. They write here,
 /// and the worker counts it once the batch is back.
 #[derive(Debug, Default)]
-pub struct Ledger(Mutex<Vec<(TokenCounts, Pricing)>>);
+pub struct Ledger(Mutex<Vec<(TokenCounts, Pricing, Option<f64>)>>);
 
 impl Ledger {
-    pub fn add(&self, counts: TokenCounts, pricing: Pricing) {
-        self.0.lock().unwrap().push((counts, pricing));
+    pub fn add(&self, counts: TokenCounts, pricing: Pricing, cost: Option<f64>) {
+        self.0.lock().unwrap().push((counts, pricing, cost));
     }
 
-    pub fn take(&self) -> Vec<(TokenCounts, Pricing)> {
+    pub fn take(&self) -> Vec<(TokenCounts, Pricing, Option<f64>)> {
         std::mem::take(&mut *self.0.lock().unwrap())
     }
 }
@@ -192,7 +193,7 @@ impl Subagents {
         let mut history = vec![Message::user_text(task)];
         // Times a `SubagentStop` hook sent this subagent back to work.
         let mut returns = 0;
-        let mut bound_to: Option<Intent> = None;
+        let mut bound_to: Option<(Intent, Profile)> = None;
         let mut spent = TokenCounts::default();
 
         for step in 1..=MAX_STEPS + 1 {
@@ -207,11 +208,12 @@ impl Subagents {
             let intent = state.mode.intent();
             // The reasoning so far was produced under the other mode's prompt
             // and tools, and a model that binds it to that prefix rejects the
-            // history once the prefix moves (`binding`).
-            if bound_to.is_some_and(|was| was != intent) {
+            // history once the prefix moves (`binding`). The profile moves the
+            // prefix the same way.
+            if bound_to.is_some_and(|was| was != (intent, state.profile)) {
                 strip_thinking(&mut history);
             }
-            bound_to = Some(intent);
+            bound_to = Some((intent, state.profile));
 
             let request = ProviderRequest {
                 model: model.id.clone(),
@@ -220,6 +222,7 @@ impl Subagents {
                         system_prompt(
                             me.ws.root(),
                             intent,
+                            state.profile,
                             me.instructions.as_deref(),
                             me.skills.as_deref(),
                             me.memory.as_deref(),
@@ -230,7 +233,7 @@ impl Subagents {
                     me.mcp_notes.as_deref(),
                 ),
                 messages: shared.shown_to(&model, &history),
-                tools: me.registry.schemas(intent),
+                tools: me.registry.schemas(intent, state.profile),
                 max_tokens: model.max_output.min(MAX_OUTPUT_TOKENS),
                 effort: model.supports_effort.then_some(state.effort),
                 thinking: model.supports_thinking,
@@ -238,9 +241,15 @@ impl Subagents {
             let done = self.complete(&me, request, cancel).await?;
             // The subagent runs on the session's model, which may be a router:
             // the request is paid for by the model the router chose.
-            shared
-                .ledger
-                .add(done.usage, shared.pricing_of(done.routed.as_ref(), model.pricing));
+            shared.ledger.add(
+                done.usage,
+                shared.pricing_of(done.routed.as_ref(), model.pricing),
+                done.cost,
+            );
+            for &(counts, price, cost) in &done.aside_usage {
+                shared.ledger.add(counts, price, cost);
+                spent.add(counts);
+            }
             spent.add(done.usage);
             me.emit(AgentEvent::SubagentUsage {
                 call_id: self.row.clone(),
@@ -307,9 +316,13 @@ impl Subagents {
                 _ = cancel.cancelled() => return Err(ToolError::Cancelled),
                 item = stream.next() => match item {
                     None => break,
-                    // The feed events it makes are the model's text, reasoning
-                    // and route; none is addressed to the human.
-                    Some(Ok(event)) => drop(acc.push(event)),
+                    Some(Ok(event)) => {
+                        for out in acc.push(event) {
+                            if matches!(out, AgentEvent::ToolCallPreparing { .. }) {
+                                me.emit_stream(out);
+                            }
+                        }
+                    },
                     Some(Err(err)) => return Err(failed(err)),
                 },
             }
@@ -397,17 +410,24 @@ fn with_agent(mut system: String, def: Option<&AgentDef>) -> String {
 fn system_prompt(
     project_root: &Path,
     intent: Intent,
+    profile: Profile,
     instructions: Option<&Instructions>,
     skills: Option<&Listing>,
     memory: Option<&MemoryIndex>,
     shell: Shell,
 ) -> String {
     let agent = intent == Intent::Agent;
+    let chat = profile == Profile::Chat;
     let mut s = String::from(INTRO);
 
     s.push_str("<environment>\n");
     s.push_str(&format!(
-        "Project root: {}. Write paths relative to it.\n",
+        "{}: {}. Write paths relative to it.\n",
+        if chat {
+            "The person's folder"
+        } else {
+            "Project root"
+        },
         prompt::shown(project_root)
     ));
     if agent {
@@ -418,10 +438,18 @@ fn system_prompt(
     s.push_str(if agent { MODE_AGENT } else { MODE_PLAN });
 
     s.push_str("<how_to_work>\n");
-    s.push_str(prompt::GROUNDING);
+    s.push_str(if chat {
+        prompt::GROUNDING_CHAT
+    } else {
+        prompt::GROUNDING
+    });
     s.push_str(SCOPE);
     if agent {
-        s.push_str(prompt::CODE);
+        s.push_str(if chat {
+            prompt::DOCUMENTS
+        } else {
+            prompt::CODE
+        });
     }
     s.push_str(prompt::BATCHING);
     s.push_str("</how_to_work>\n\n");
@@ -438,7 +466,11 @@ fn system_prompt(
     s.push_str("</permissions>\n\n");
 
     if agent {
-        s.push_str(prompt::EDITING);
+        s.push_str(if chat {
+            prompt::EDITING_CHAT
+        } else {
+            prompt::EDITING
+        });
     }
     s.push_str(REPORT);
     s.push_str(prompt::CAPTIONS);
@@ -484,7 +516,10 @@ mod tests {
     #[test]
     fn an_empty_report_is_a_failure_not_an_empty_result() {
         // The agent would read an empty result as "nothing found".
-        assert!(matches!(report(String::new()), Err(ToolError::Failed { .. })));
+        assert!(matches!(
+            report(String::new()),
+            Err(ToolError::Failed { .. })
+        ));
     }
 
     #[test]
@@ -496,7 +531,15 @@ mod tests {
     }
 
     fn plain(intent: Intent) -> String {
-        system_prompt(Path::new("/p"), intent, None, None, None, Shell::default())
+        system_prompt(
+            Path::new("/p"),
+            intent,
+            Profile::Code,
+            None,
+            None,
+            None,
+            Shell::default(),
+        )
     }
 
     fn notes() -> MemoryIndex {
@@ -514,6 +557,7 @@ mod tests {
         let with = system_prompt(
             Path::new("/p"),
             Intent::Agent,
+            Profile::Code,
             None,
             None,
             Some(&memory),
@@ -533,6 +577,7 @@ mod tests {
             system_prompt(
                 Path::new("/p"),
                 Intent::Agent,
+                Profile::Code,
                 None,
                 None,
                 Some(&memory),
@@ -554,6 +599,7 @@ mod tests {
         let with = system_prompt(
             Path::new("/p"),
             Intent::Plan,
+            Profile::Code,
             None,
             Some(&skills),
             None,
@@ -579,6 +625,7 @@ mod tests {
         let with = system_prompt(
             Path::new("/p"),
             Intent::Agent,
+            Profile::Code,
             Some(&rules),
             None,
             None,

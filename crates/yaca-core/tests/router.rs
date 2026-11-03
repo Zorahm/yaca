@@ -37,6 +37,7 @@ fn info(id: &str, ctx: u32, out: u32, effort: bool) -> ModelInfo {
         supports_thinking: effort,
         context_source: ContextSource::ProviderReported,
         supports_images: true,
+        pricing_by_hand: false,
         by_hand: false,
     }
 }

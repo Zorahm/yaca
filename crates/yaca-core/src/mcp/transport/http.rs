@@ -84,7 +84,10 @@ impl Http {
 
 impl Link {
     fn request(&self, method: reqwest::Method) -> reqwest::RequestBuilder {
-        let mut request = self.http.request(method, &self.url).headers(self.headers.clone());
+        let mut request = self
+            .http
+            .request(method, &self.url)
+            .headers(self.headers.clone());
         if let Some(session) = self.session.lock().unwrap().as_deref() {
             request = request.header(SESSION_HEADER, session);
         }
@@ -175,7 +178,11 @@ impl Transport for Http {
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
             let body: String = body.chars().take(500).collect();
-            return Err(McpError::Transport(format!("HTTP {}: {}", status.as_u16(), body.trim())));
+            return Err(McpError::Transport(format!(
+                "HTTP {}: {}",
+                status.as_u16(),
+                body.trim()
+            )));
         }
         if let Some(session) = response
             .headers()

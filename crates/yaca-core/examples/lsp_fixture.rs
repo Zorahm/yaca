@@ -71,7 +71,9 @@ fn main() {
             }
             "textDocument/didChange" => {
                 let uri = params["textDocument"]["uri"].as_str().unwrap_or_default();
-                let text = params["contentChanges"][0]["text"].as_str().unwrap_or_default();
+                let text = params["contentChanges"][0]["text"]
+                    .as_str()
+                    .unwrap_or_default();
                 docs.insert(uri.to_string(), text.to_string());
                 publish(&flag, uri, text);
             }
@@ -100,7 +102,11 @@ fn main() {
                 })
             }
             "textDocument/diagnostic" => {
-                let text = uri.as_str().and_then(|u| docs.get(u)).cloned().unwrap_or_default();
+                let text = uri
+                    .as_str()
+                    .and_then(|u| docs.get(u))
+                    .cloned()
+                    .unwrap_or_default();
                 json!({ "kind": "full", "items": broken(&text) })
             }
             // Always the same place; the test checks the request named the
@@ -177,8 +183,7 @@ fn publish(flag: &str, uri: &str, text: &str) {
 
 /// An error on every line that says `BROKEN`.
 fn broken(text: &str) -> Vec<Value> {
-    text
-        .lines()
+    text.lines()
         .enumerate()
         .filter(|(_, line)| line.contains("BROKEN"))
         .map(|(n, line)| {

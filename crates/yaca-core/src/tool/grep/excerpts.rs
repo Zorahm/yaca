@@ -93,7 +93,11 @@ impl Excerpts {
                 && self.shown + (j - i) < self.limit
                 && hits[j].first.saturating_sub(self.before) <= end.saturating_add(1)
             {
-                end = hits[j].last.saturating_add(self.after).min(last_line).max(end);
+                end = hits[j]
+                    .last
+                    .saturating_add(self.after)
+                    .min(last_line)
+                    .max(end);
                 j += 1;
             }
             // A group the page cut short would otherwise show the next match
@@ -133,7 +137,10 @@ impl Excerpts {
             // A match counts when its first line is printed, so one that spans
             // many lines is one match, and one cut off after its first line
             // still was shown.
-            self.shown += hits[printed.clone()].iter().filter(|h| h.first == n).count();
+            self.shown += hits[printed.clone()]
+                .iter()
+                .filter(|h| h.first == n)
+                .count();
         }
     }
 
@@ -163,7 +170,14 @@ mod tests {
         at.iter().map(|&n| Hit::line(n)).collect()
     }
 
-    fn page(before: usize, after: usize, limit: usize, n: usize, hits: &[Hit], skip: usize) -> (String, usize) {
+    fn page(
+        before: usize,
+        after: usize,
+        limit: usize,
+        n: usize,
+        hits: &[Hit],
+        skip: usize,
+    ) -> (String, usize) {
         let owned = lines(n);
         let refs: Vec<&str> = owned.iter().map(String::as_str).collect();
         let mut e = Excerpts::new(before, after, limit);

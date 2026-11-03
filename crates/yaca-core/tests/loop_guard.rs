@@ -45,7 +45,11 @@ fn texts_of_request(provider: &MockProvider, index: usize) -> Vec<String> {
         .collect()
 }
 
-async fn answer(handle: &yaca_core::SessionHandle, request: &QuestionRequest, reply: QuestionReply) {
+async fn answer(
+    handle: &yaca_core::SessionHandle,
+    request: &QuestionRequest,
+    reply: QuestionReply,
+) {
     handle
         .send(Command::AnswerQuestion {
             request_id: request.id.clone(),
@@ -160,10 +164,16 @@ async fn words_typed_instead_of_an_option_reach_the_model() {
 #[tokio::test]
 async fn a_different_call_in_between_breaks_the_run() {
     let dir = TempProject::new();
-    dir.write("a.rs", "fn main() {}
-");
-    dir.write("b.rs", "fn other() {}
-");
+    dir.write(
+        "a.rs",
+        "fn main() {}
+",
+    );
+    dir.write(
+        "b.rs",
+        "fn other() {}
+",
+    );
     let provider = Arc::new(MockProvider::new(vec![
         same_read("t1"),
         same_read("t2"),
@@ -183,7 +193,10 @@ async fn a_different_call_in_between_breaks_the_run() {
             .any(|e| matches!(e, AgentEvent::QuestionAsked { .. })),
         "asked about a run that was broken"
     );
-    assert!(matches!(events.last(), Some(AgentEvent::TurnFinished { .. })));
+    assert!(matches!(
+        events.last(),
+        Some(AgentEvent::TurnFinished { .. })
+    ));
 }
 
 // --- the step ceiling ---------------------------------------------------------
@@ -215,7 +228,9 @@ async fn a_turn_stops_at_the_step_ceiling_with_a_block_the_human_can_read() {
     let events = until(&mut rx, is_turn_over).await;
 
     let code = events.iter().find_map(|e| match e {
-        AgentEvent::Error { code, retryable, .. } => Some((code.clone(), *retryable)),
+        AgentEvent::Error {
+            code, retryable, ..
+        } => Some((code.clone(), *retryable)),
         _ => None,
     });
     assert_eq!(code, Some(("step_limit".to_string(), false)));
@@ -226,5 +241,9 @@ async fn a_turn_stops_at_the_step_ceiling_with_a_block_the_human_can_read() {
             ..
         })
     ));
-    assert_eq!(provider.seen.lock().unwrap().len(), 3, "the model was asked past the ceiling");
+    assert_eq!(
+        provider.seen.lock().unwrap().len(),
+        3,
+        "the model was asked past the ceiling"
+    );
 }

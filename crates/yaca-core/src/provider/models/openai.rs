@@ -8,8 +8,7 @@ use serde::Deserialize;
 use super::{get, parse};
 use crate::error::ProviderError;
 use crate::provider::registry::ProviderSpec;
-use crate::usage::{ContextSource, unknown_model, ModelInfo, Pricing};
-
+use crate::usage::{unknown_model, ContextSource, ModelInfo, Pricing};
 
 /// Chat Completions' `/v1/models`.
 ///
@@ -122,7 +121,11 @@ fn openai_model(m: &OpenAiModel) -> ModelInfo {
         // first and skips models the list already spoke for.
         info.context_source = ContextSource::ProviderReported;
     }
-    if let Some(output) = m.top_provider.as_ref().and_then(|t| t.max_completion_tokens) {
+    if let Some(output) = m
+        .top_provider
+        .as_ref()
+        .and_then(|t| t.max_completion_tokens)
+    {
         info.max_output = output;
     }
     if let Some(pricing) = m.pricing.as_ref().and_then(per_million) {
@@ -223,14 +226,16 @@ mod tests {
         assert_eq!(m.pricing.input, 5.0);
         assert_eq!(m.pricing.output, 25.0);
         assert!(m.supports_effort);
-        assert!(!m.supports_thinking, "this shape has no place for a signature");
+        assert!(
+            !m.supports_thinking,
+            "this shape has no place for a signature"
+        );
     }
 
     #[test]
     fn a_gateway_that_lists_parameters_without_reasoning_gets_no_effort() {
-        let models = openai_page(
-            r#"{"data":[{"id":"m","supported_parameters":["tools","max_tokens"]}]}"#,
-        );
+        let models =
+            openai_page(r#"{"data":[{"id":"m","supported_parameters":["tools","max_tokens"]}]}"#);
         assert!(!models[0].supports_effort);
     }
 
@@ -273,9 +278,8 @@ mod tests {
     #[test]
     fn a_price_the_gateway_does_not_know_is_not_a_price() {
         // OpenRouter answers `-1` where the cost is unknown to it.
-        let models = openai_page(
-            r#"{"data":[{"id":"m","pricing":{"prompt":"-1","completion":"-1"}}]}"#,
-        );
+        let models =
+            openai_page(r#"{"data":[{"id":"m","pricing":{"prompt":"-1","completion":"-1"}}]}"#);
         assert_eq!(models[0].pricing.input, 0.0);
     }
 }

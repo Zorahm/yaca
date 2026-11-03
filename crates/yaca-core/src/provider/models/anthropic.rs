@@ -7,14 +7,13 @@ use serde_json::Value;
 use super::{get, parse};
 use crate::error::ProviderError;
 use crate::provider::registry::ProviderSpec;
-use crate::usage::{ContextSource, unknown_model, ModelInfo};
+use crate::usage::{unknown_model, ContextSource, ModelInfo};
 
 /// Pages to walk before giving up on a provider that always says `has_more`.
 const MAX_PAGES: usize = 20;
 
 /// One page of Anthropic's list. 1000 is its own maximum.
 const PAGE_SIZE: u32 = 1000;
-
 
 /// Messages API's own `/v1/models`, paged.
 pub(super) async fn anthropic(
@@ -161,7 +160,10 @@ mod tests {
         );
 
         assert!(!models[0].supports_effort);
-        assert!(!models[0].supports_thinking, "adaptive is not among its types");
+        assert!(
+            !models[0].supports_thinking,
+            "adaptive is not among its types"
+        );
         assert_eq!(models[0].pricing.input, 1.0);
     }
 
@@ -181,5 +183,4 @@ mod tests {
         let models = anthropic_page(r#"{"data":[{"id":"claude-haiku-4-5-20251001"}]}"#);
         assert_eq!(models[0].pricing.input, 1.0);
     }
-
 }

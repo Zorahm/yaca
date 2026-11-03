@@ -79,7 +79,10 @@ impl Shared {
             transcript: self.plugins.transcript.as_deref(),
             permission_mode: claude_mode(mode),
         };
-        self.plugins.hooks.fire(event, subject, extra, &ctx, cancel).await
+        self.plugins
+            .hooks
+            .fire(event, subject, extra, &ctx, cancel)
+            .await
     }
 
     /// Runs the project's hooks of `event`. `None` when the turn was stopped
@@ -109,7 +112,11 @@ impl Shared {
         payload: serde_json::Value,
         cancel: &CancellationToken,
     ) {
-        for said in self.project_event(event, payload.clone(), cancel).await.unwrap_or_default() {
+        for said in self
+            .project_event(event, payload.clone(), cancel)
+            .await
+            .unwrap_or_default()
+        {
             if let Some(why) = said.failure_for_human() {
                 self.report(PROJECT, event, why, false);
             }
@@ -117,7 +124,10 @@ impl Shared {
         if !self.plugins.hooks.has(event) {
             return;
         }
-        for Said { plugin, verdict } in self.fire(event, Subject::Source(source), payload, cancel).await {
+        for Said { plugin, verdict } in self
+            .fire(event, Subject::Source(source), payload, cancel)
+            .await
+        {
             for text in verdict.notices.into_iter().chain(verdict.block) {
                 self.report(&plugin, event, text, false);
             }
@@ -135,7 +145,12 @@ impl Shared {
         tokio::spawn(async move {
             let payload = json!({ "notification_type": kind, "message": message });
             shared
-                .inform(HookEvent::Notification, kind, payload, &CancellationToken::new())
+                .inform(
+                    HookEvent::Notification,
+                    kind,
+                    payload,
+                    &CancellationToken::new(),
+                )
                 .await;
         });
     }
@@ -150,12 +165,21 @@ impl Shared {
     ) -> Vec<String> {
         let payload = json!({ "stop_hook_active": active });
         let mut reasons = Vec::new();
-        for said in self.project_event(event, payload.clone(), cancel).await.unwrap_or_default() {
+        for said in self
+            .project_event(event, payload.clone(), cancel)
+            .await
+            .unwrap_or_default()
+        {
             match &said.ending {
                 EventEnding::Passed(_) => {}
                 EventEnding::Failed { .. } => {
                     let output = said.output_for_model();
-                    self.report(PROJECT, event, said.failure_for_human().unwrap_or_default(), true);
+                    self.report(
+                        PROJECT,
+                        event,
+                        said.failure_for_human().unwrap_or_default(),
+                        true,
+                    );
                     reasons.push(format!(
                         "[hook] The project's {} hook `{}` does not let this end yet: it failed. Its output:\n{}",
                         event.name(),
@@ -165,12 +189,19 @@ impl Shared {
                 }
                 // Nothing the model could fix: a note for the human only.
                 EventEnding::TimedOut(_) | EventEnding::Broken(_) => {
-                    self.report(PROJECT, event, said.failure_for_human().unwrap_or_default(), false);
+                    self.report(
+                        PROJECT,
+                        event,
+                        said.failure_for_human().unwrap_or_default(),
+                        false,
+                    );
                 }
             }
         }
         if self.plugins.hooks.has(event) {
-            for Said { plugin, verdict } in self.fire(event, Subject::Nothing, payload, cancel).await {
+            for Said { plugin, verdict } in
+                self.fire(event, Subject::Nothing, payload, cancel).await
+            {
                 for notice in verdict.notices {
                     self.report(&plugin, event, notice, false);
                 }
@@ -188,11 +219,17 @@ impl Shared {
 
     /// `SubagentStop`: the message to send a subagent back to work with, or
     /// `None` to let it report. `returns` counts the times it was sent back.
-    pub(super) async fn subagent_stop(&self, returns: &mut u32, cancel: &CancellationToken) -> Option<Message> {
+    pub(super) async fn subagent_stop(
+        &self,
+        returns: &mut u32,
+        cancel: &CancellationToken,
+    ) -> Option<Message> {
         if *returns >= MAX_STOP_RETURNS {
             return None;
         }
-        let reasons = self.objections(HookEvent::SubagentStop, *returns > 0, cancel).await;
+        let reasons = self
+            .objections(HookEvent::SubagentStop, *returns > 0, cancel)
+            .await;
         if reasons.is_empty() || cancel.is_cancelled() {
             return None;
         }
@@ -216,7 +253,10 @@ const PROJECT: &str = "";
 
 /// The project's list for an event, with the name it has in the file. `None`
 /// for the events around a call, which `session::calls` runs itself.
-fn project_list(hooks: &HooksSettings, event: HookEvent) -> Option<(&'static str, &Vec<EventHookSettings>)> {
+fn project_list(
+    hooks: &HooksSettings,
+    event: HookEvent,
+) -> Option<(&'static str, &Vec<EventHookSettings>)> {
     Some(match event {
         HookEvent::SessionStart => ("sessionStart", &hooks.session_start),
         HookEvent::UserPromptSubmit => ("userPromptSubmit", &hooks.user_prompt_submit),
@@ -241,11 +281,19 @@ impl Worker {
     /// `SessionStart`: runs once, and keeps what the hooks said for the
     /// system prompt.
     pub(super) async fn session_start(&mut self) {
-        let source = if self.history.is_empty() { "startup" } else { "resume" };
+        let source = if self.history.is_empty() {
+            "startup"
+        } else {
+            "resume"
+        };
         let mut section = String::new();
         let project = self
             .shared
-            .project_event(HookEvent::SessionStart, json!({ "source": source }), &CancellationToken::new())
+            .project_event(
+                HookEvent::SessionStart,
+                json!({ "source": source }),
+                &CancellationToken::new(),
+            )
             .await
             .unwrap_or_default();
         for said in project {
@@ -253,12 +301,15 @@ impl Worker {
                 EventEnding::Passed(_) => {
                     let text = said.output_for_model();
                     if !text.is_empty() {
-                        section.push_str(&format!("<project_hook_context>\n{text}\n</project_hook_context>\n"));
+                        section.push_str(&format!(
+                            "<project_hook_context>\n{text}\n</project_hook_context>\n"
+                        ));
                     }
                 }
                 _ => {
                     let why = said.failure_for_human().unwrap_or_default();
-                    self.shared.report(PROJECT, HookEvent::SessionStart, why, false);
+                    self.shared
+                        .report(PROJECT, HookEvent::SessionStart, why, false);
                 }
             }
         }
@@ -280,12 +331,15 @@ impl Worker {
 
         for Said { plugin, verdict } in said {
             for text in verdict.context {
-                section.push_str(&format!("<plugin_context plugin=\"{plugin}\">\n{text}\n</plugin_context>\n"));
+                section.push_str(&format!(
+                    "<plugin_context plugin=\"{plugin}\">\n{text}\n</plugin_context>\n"
+                ));
             }
             // A session cannot be refused its start; a block is only words.
             let words = verdict.notices.into_iter().chain(verdict.block);
             for text in words {
-                self.shared.report(&plugin, HookEvent::SessionStart, text, false);
+                self.shared
+                    .report(&plugin, HookEvent::SessionStart, text, false);
             }
         }
         if !section.is_empty() {
@@ -302,6 +356,18 @@ impl Worker {
         attachments: Vec<String>,
         cancel: &CancellationToken,
     ) -> Option<Message> {
+        let attachments = if self.ws.is_chat() {
+            attachments
+                .into_iter()
+                .map(|raw| {
+                    self.attached(&raw)
+                        .map(|path| path.to_string_lossy().into_owned())
+                        .unwrap_or(raw)
+                })
+                .collect()
+        } else {
+            attachments
+        };
         // §5.1, ahead of the hooks, the snapshot and §15's `TurnStarted`: the
         // card is the human's message taken, and the session is already busy
         // with it. Hooks run processes and the first snapshot of a big tree
@@ -319,7 +385,11 @@ impl Worker {
         let mut context = Vec::new();
         let project = self
             .shared
-            .project_event(HookEvent::UserPromptSubmit, json!({ "prompt": text }), cancel)
+            .project_event(
+                HookEvent::UserPromptSubmit,
+                json!({ "prompt": text }),
+                cancel,
+            )
             .await
             .unwrap_or_default();
         for said in project {
@@ -332,20 +402,28 @@ impl Worker {
             }
             // Fails closed: a check that could not run keeps the message too.
             let why = said.failure_for_human().unwrap_or_default();
-            self.shared.report(PROJECT, HookEvent::UserPromptSubmit, why, true);
+            self.shared
+                .report(PROJECT, HookEvent::UserPromptSubmit, why, true);
             return None;
         }
         if self.shared.plugins.hooks.has(HookEvent::UserPromptSubmit) {
             let said = self
                 .shared
-                .fire(HookEvent::UserPromptSubmit, Subject::Nothing, json!({ "prompt": text }), cancel)
+                .fire(
+                    HookEvent::UserPromptSubmit,
+                    Subject::Nothing,
+                    json!({ "prompt": text }),
+                    cancel,
+                )
                 .await;
             for Said { plugin, verdict } in said {
                 for notice in verdict.notices {
-                    self.shared.report(&plugin, HookEvent::UserPromptSubmit, notice, false);
+                    self.shared
+                        .report(&plugin, HookEvent::UserPromptSubmit, notice, false);
                 }
                 if let Some(reason) = verdict.block {
-                    self.shared.report(&plugin, HookEvent::UserPromptSubmit, reason, true);
+                    self.shared
+                        .report(&plugin, HookEvent::UserPromptSubmit, reason, true);
                     return None;
                 }
                 context.extend(verdict.context.into_iter().map(|t| (plugin.clone(), t)));
@@ -365,11 +443,18 @@ impl Worker {
 
     /// `Stop`: the message to send the model back to work with, or `None` to
     /// let the turn end. `returns` counts the times this turn was sent back.
-    pub(super) async fn stop_hooks(&self, returns: &mut u32, cancel: &CancellationToken) -> Option<Message> {
+    pub(super) async fn stop_hooks(
+        &self,
+        returns: &mut u32,
+        cancel: &CancellationToken,
+    ) -> Option<Message> {
         if *returns >= MAX_STOP_RETURNS {
             return None;
         }
-        let reasons = self.shared.objections(HookEvent::Stop, *returns > 0, cancel).await;
+        let reasons = self
+            .shared
+            .objections(HookEvent::Stop, *returns > 0, cancel)
+            .await;
         if reasons.is_empty() || cancel.is_cancelled() {
             return None;
         }
@@ -382,7 +467,12 @@ impl Worker {
     /// `SessionEnd`: the session is closing. Told, not asked.
     pub(super) async fn session_end(&self, reason: &str) {
         self.shared
-            .inform(HookEvent::SessionEnd, reason, json!({ "reason": reason }), &CancellationToken::new())
+            .inform(
+                HookEvent::SessionEnd,
+                reason,
+                json!({ "reason": reason }),
+                &CancellationToken::new(),
+            )
             .await;
     }
 }
@@ -395,7 +485,10 @@ const PLUGIN_CONTEXT_INTRO: &str = "The enabled plugins added the context below 
 pub(super) enum PluginPre {
     /// Go on, with this context for the model's copy of the result.
     Go(Vec<String>),
-    Blocked { for_human: String, for_model: String },
+    Blocked {
+        for_human: String,
+        for_model: String,
+    },
     /// Ask the human, even where the mode would not.
     Ask(Vec<String>),
 }
@@ -421,7 +514,12 @@ impl Caller {
         });
         let said = self
             .shared
-            .fire(HookEvent::PreToolUse, Subject::Tool { name: tool, input }, extra, cancel)
+            .fire(
+                HookEvent::PreToolUse,
+                Subject::Tool { name: tool, input },
+                extra,
+                cancel,
+            )
             .await;
         let mut context = Vec::new();
         let mut ask = false;
@@ -439,7 +537,11 @@ impl Caller {
             ask |= verdict.ask;
             context.extend(verdict.context.into_iter().map(|t| note(&plugin, &t)));
             if let Some(updated) = verdict.updated_input {
-                self.row_notes(call_id, &plugin, &["changed the call's arguments".to_string()]);
+                self.row_notes(
+                    call_id,
+                    &plugin,
+                    &["changed the call's arguments".to_string()],
+                );
                 context.push(rewritten_note(&format!("the {plugin} plugin's"), &updated));
                 *input = updated;
             }
@@ -473,7 +575,12 @@ impl Caller {
         });
         let said = self
             .shared
-            .fire(HookEvent::PostToolUse, Subject::Tool { name: tool, input }, extra, cancel)
+            .fire(
+                HookEvent::PostToolUse,
+                Subject::Tool { name: tool, input },
+                extra,
+                cancel,
+            )
             .await;
         for Said { plugin, verdict } in said {
             self.row_notes(call_id, &plugin, &verdict.notices);

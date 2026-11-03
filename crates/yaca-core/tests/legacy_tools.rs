@@ -90,7 +90,10 @@ async fn session_honors_old_tool_name_standing_permission_rule() {
     let asked = seen
         .iter()
         .any(|e| matches!(e, AgentEvent::PermissionRequested { .. }));
-    assert!(!asked, "should not ask permission since delete_file was in standing rules");
+    assert!(
+        !asked,
+        "should not ask permission since delete_file was in standing rules"
+    );
 
     let changed = seen
         .iter()
@@ -202,7 +205,10 @@ fn session_store_replays_messages_with_canonical_tool_names() {
     assert_eq!(history.len(), 1);
     match &history[0].content[0] {
         ContentBlock::ToolUse { name, .. } => {
-            assert_eq!(name, "Edit", "tool use name should be canonicalized to Edit");
+            assert_eq!(
+                name, "Edit",
+                "tool use name should be canonicalized to Edit"
+            );
         }
         other => panic!("expected ToolUse, got {:?}", other),
     }

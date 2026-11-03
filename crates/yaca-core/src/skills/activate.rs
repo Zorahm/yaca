@@ -34,8 +34,8 @@ const OPEN: &str = "<skill_content name=\"";
 
 /// A skill's text as the model receives it, and whether something was cut.
 pub fn content(skill: &Skill) -> Result<(String, bool), String> {
-    let (text, file_cut) =
-        head(&skill.file(), MAX_FILE_BYTES).ok_or_else(|| format!("cannot read {}", plain(&skill.file())))?;
+    let (text, file_cut) = head(&skill.file(), MAX_FILE_BYTES)
+        .ok_or_else(|| format!("cannot read {}", plain(&skill.file())))?;
     let body = match super::frontmatter::parse(&text) {
         Ok((_, body)) => body.trim(),
         Err(_) => text.trim(),
@@ -65,7 +65,9 @@ pub fn content(skill: &Skill) -> Result<(String, bool), String> {
             out.push_str(&format!("  <file>{file}</file>\n"));
         }
         if more {
-            out.push_str(&format!("  (only the first {MAX_RESOURCES} files are listed)\n"));
+            out.push_str(&format!(
+                "  (only the first {MAX_RESOURCES} files are listed)\n"
+            ));
         }
         out.push_str("</skill_resources>\n");
     }
@@ -106,9 +108,13 @@ pub fn expand(roots: &super::SkillRoots, text: &str) -> Option<String> {
 /// Why a path given as a skill's file is refused, or the path under the skill.
 pub fn resource_path(skill: &Skill, raw: &str) -> Result<PathBuf, String> {
     let rel = Path::new(raw);
-    let plain_parts = rel.components().all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
+    let plain_parts = rel
+        .components()
+        .all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
     if raw.is_empty() || !plain_parts {
-        return Err(format!("{raw} is not a path inside skill: relative path without .. only"));
+        return Err(format!(
+            "{raw} is not a path inside skill: relative path without .. only"
+        ));
     }
     let path = std::fs::canonicalize(skill.dir.join(rel))
         .map_err(|_| format!("skill {} has no file {raw}", skill.name))?;
@@ -169,7 +175,9 @@ fn walk(base: &Path, dir: &Path, depth: usize, out: &mut Vec<String>, more: &mut
             continue;
         }
         let path = entry.path();
-        let Ok(kind) = entry.file_type() else { continue };
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
         if kind.is_dir() {
             if depth + 1 < MAX_RESOURCE_DEPTH {
                 walk(base, &path, depth + 1, out, more);
@@ -191,7 +199,8 @@ mod tests {
 
     #[test]
     fn activations_are_found_by_their_tag() {
-        let text = "x <skill_content name=\"pdf\">a</skill_content> y <skill_content name=\"git-flow\">";
+        let text =
+            "x <skill_content name=\"pdf\">a</skill_content> y <skill_content name=\"git-flow\">";
         assert_eq!(activated_in(text).collect::<Vec<_>>(), ["pdf", "git-flow"]);
         assert_eq!(activated_in("no skills here").count(), 0);
     }

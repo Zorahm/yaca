@@ -231,7 +231,9 @@ async fn a_model_said_to_be_blind_gets_a_note_instead_of_the_image() {
     // Never sent, so never refused: the note stands where the image was.
     let first = sent(&provider, 0);
     assert_eq!(images(&first), 0);
-    assert!(texts(&first[0]).iter().any(|t| t.contains("does not accept images")));
+    assert!(texts(&first[0])
+        .iter()
+        .any(|t| t.contains("does not accept images")));
 
     // And going to look at it is refused with the reason, not answered with
     // a result that promises an image and delivers none.

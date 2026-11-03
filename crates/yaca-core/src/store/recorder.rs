@@ -189,7 +189,11 @@ mod tests {
     use crate::usage::{TokenCounts, UsageSnapshot};
 
     fn recorder(dir: &TempDir) -> Recorder {
-        let meta = SessionMeta::new(SessionId::from("ses_rec"), "anthropic".into(), "claude-opus-5".into());
+        let meta = SessionMeta::new(
+            SessionId::from("ses_rec"),
+            "anthropic".into(),
+            "claude-opus-5".into(),
+        );
         Recorder::open(dir.path(), meta).unwrap()
     }
 
@@ -268,7 +272,10 @@ mod tests {
         let id = r.meta().id;
 
         r.prompt(&TurnId::from("t1"), "fix date parsing\nhere is trace");
-        assert_eq!(SessionMeta::load(dir.path(), &id).unwrap().title, "fix date parsing");
+        assert_eq!(
+            SessionMeta::load(dir.path(), &id).unwrap().title,
+            "fix date parsing"
+        );
 
         r.event(&AgentEvent::TitleSet {
             title: "Log date parsing".into(),

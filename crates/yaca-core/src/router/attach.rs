@@ -89,6 +89,29 @@ pub fn decision_setup(config_dir: &Path, providers: &Providers) -> Option<Decisi
     Some(setup)
 }
 
+/// The router's small model, without the Decision provider fallback.
+pub fn web_fetch_setup(config_dir: &Path, providers: &Providers) -> Option<DecisionSetup> {
+    let target = file::load(config_dir).ok().flatten()?.decision_model.model;
+    let spec = providers.get(&target.provider)?;
+    spec.model(&target.model)?;
+    Some(DecisionSetup {
+        provider: provider::build(spec.clone()),
+        model: target.model,
+        systemone: None,
+    })
+}
+
+/// Pricing of a side model from the provider that owns it.
+pub fn setup_pricing(
+    providers: &Providers,
+    setup: &DecisionSetup,
+) -> Option<crate::usage::Pricing> {
+    providers
+        .get(setup.provider.name())?
+        .model(&setup.model)
+        .map(|m| m.pricing)
+}
+
 /// [`decision_setup`] with the backend built by the caller: the tests do not
 /// reach for the keychain.
 pub fn decision_setup_with(

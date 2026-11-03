@@ -451,7 +451,10 @@ mod tests {
         assert!(reopened.list().is_empty());
         assert!(reopened.restore(&first.id).unwrap().is_none());
         let again = reopened.create(CheckpointReason::Message).unwrap();
-        assert!(again.is_some(), "the same tree is a new point to this instance");
+        assert!(
+            again.is_some(),
+            "the same tree is a new point to this instance"
+        );
 
         // The bytes are still on disk for anything that still holds the name.
         let store = Store::open(dir.path()).unwrap();
@@ -474,15 +477,21 @@ mod tests {
     #[test]
     fn a_saved_list_comes_back_and_still_rolls_back() {
         let dir = TempDir::new();
-        let file = dir.write("project/a.rs", "one
-");
+        let file = dir.write(
+            "project/a.rs",
+            "one
+",
+        );
         let first = {
             let ck = persisted(&dir).unwrap();
             ck.create(CheckpointReason::Message).unwrap().unwrap()
         };
         tick();
-        std::fs::write(&file, "two
-").unwrap();
+        std::fs::write(
+            &file, "two
+",
+        )
+        .unwrap();
 
         // The window was reloaded, or the chat was closed and opened again:
         // a new instance over the same list.
@@ -492,15 +501,21 @@ mod tests {
         let preview = reopened.preview(&first.id).unwrap().unwrap();
         assert_eq!(preview.len(), 1);
         reopened.restore(&first.id).unwrap().unwrap();
-        assert_eq!(std::fs::read_to_string(&file).unwrap(), "one
-");
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            "one
+"
+        );
     }
 
     #[test]
     fn a_reopened_list_does_not_repeat_the_tree_it_already_holds() {
         let dir = TempDir::new();
-        dir.write("project/a.rs", "one
-");
+        dir.write(
+            "project/a.rs",
+            "one
+",
+        );
         persisted(&dir)
             .unwrap()
             .create(CheckpointReason::Message)
@@ -510,29 +525,35 @@ mod tests {
         let reopened = persisted(&dir).unwrap();
         tick();
         // A reload must not add a divider that rolls back to where we are.
-        assert!(reopened.create(CheckpointReason::Message).unwrap().is_none());
+        assert!(reopened
+            .create(CheckpointReason::Message)
+            .unwrap()
+            .is_none());
         assert_eq!(reopened.list().len(), 1);
     }
 
     #[test]
     fn the_list_keeps_growing_across_reopens() {
         let dir = TempDir::new();
-        let file = dir.write("project/a.rs", "one
-");
+        let file = dir.write(
+            "project/a.rs",
+            "one
+",
+        );
         let first = persisted(&dir)
             .unwrap()
             .create(CheckpointReason::Message)
             .unwrap()
             .unwrap();
         tick();
-        std::fs::write(&file, "two
-").unwrap();
+        std::fs::write(
+            &file, "two
+",
+        )
+        .unwrap();
 
         let reopened = persisted(&dir).unwrap();
-        let second = reopened
-            .create(CheckpointReason::Message)
-            .unwrap()
-            .unwrap();
+        let second = reopened.create(CheckpointReason::Message).unwrap().unwrap();
 
         let third = persisted(&dir).unwrap();
         let ids: Vec<_> = third.list().into_iter().map(|c| c.id).collect();
@@ -542,13 +563,19 @@ mod tests {
     #[test]
     fn a_rollback_is_saved_with_the_points_it_made() {
         let dir = TempDir::new();
-        let file = dir.write("project/a.rs", "one
-");
+        let file = dir.write(
+            "project/a.rs",
+            "one
+",
+        );
         let ck = persisted(&dir).unwrap();
         let first = ck.create(CheckpointReason::Message).unwrap().unwrap();
         tick();
-        std::fs::write(&file, "two
-").unwrap();
+        std::fs::write(
+            &file, "two
+",
+        )
+        .unwrap();
         ck.restore(&first.id).unwrap().unwrap();
 
         let reopened = persisted(&dir).unwrap();
@@ -561,8 +588,11 @@ mod tests {
     #[test]
     fn the_sweep_is_told_about_the_points_of_every_saved_list() {
         let dir = TempDir::new();
-        dir.write("project/a.rs", "one
-");
+        dir.write(
+            "project/a.rs",
+            "one
+",
+        );
         let ck = persisted(&dir).unwrap();
         let point = ck.create(CheckpointReason::Message).unwrap().unwrap();
         let manifest = ck.manifest_name(&point.id).unwrap();
@@ -579,7 +609,11 @@ mod tests {
         .unwrap();
         assert!(other.inner.kept().contains(&manifest));
         assert!(
-            Checkpoints::open(project(&dir), &[]).unwrap().inner.kept().is_empty(),
+            Checkpoints::open(project(&dir), &[])
+                .unwrap()
+                .inner
+                .kept()
+                .is_empty(),
             "a run that saves nothing names nothing"
         );
     }

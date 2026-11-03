@@ -17,7 +17,9 @@ use common::{ask, is_turn_over, session, until, TempProject};
 
 fn replying(turns: usize) -> Arc<MockProvider> {
     Arc::new(MockProvider::new(
-        (0..turns).map(|_| Turn::Events(script_text("ok"))).collect(),
+        (0..turns)
+            .map(|_| Turn::Events(script_text("ok")))
+            .collect(),
     ))
 }
 
@@ -64,7 +66,10 @@ async fn the_first_message_carries_the_date_and_the_tree() {
     let text = first_text(&provider, 0);
     assert!(text.contains("<environment_context>"), "{text}");
     assert!(text.contains("Today's date: 20"), "{text}");
-    assert!(text.contains("Git branch: ") && text.contains("trunk"), "{text}");
+    assert!(
+        text.contains("Git branch: ") && text.contains("trunk"),
+        "{text}"
+    );
     assert!(text.contains("?? tracked.txt"), "{text}");
     // Not an octal escape: the model would copy it into a path.
     assert!(text.contains("?? new.txt"), "{text}");
@@ -107,7 +112,9 @@ async fn the_note_is_written_once_and_stays_put() {
         .messages
         .iter()
         .flat_map(|m| &m.content)
-        .filter(|b| matches!(b, ContentBlock::Text { text } if text.contains("<environment_context>")))
+        .filter(
+            |b| matches!(b, ContentBlock::Text { text } if text.contains("<environment_context>")),
+        )
         .count();
     assert_eq!(notes, 1);
 }

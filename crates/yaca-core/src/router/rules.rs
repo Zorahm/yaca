@@ -15,7 +15,7 @@ use std::cmp::Reverse;
 use std::collections::BTreeMap;
 
 use super::config::{
-    Answers, Condition, Decision, OnUnknown, Question, Rule, RoutingConfig, Signal, SignalValue,
+    Answers, Condition, Decision, OnUnknown, Question, RoutingConfig, Rule, Signal, SignalValue,
 };
 
 /// The three truth values of a rule.
@@ -224,7 +224,12 @@ mod tests {
     }
 
     fn signals() -> Vec<Signal> {
-        vec![noul_signal("a"), noul_signal("b"), noul_signal("c"), choice_signal("topic")]
+        vec![
+            noul_signal("a"),
+            noul_signal("b"),
+            noul_signal("c"),
+            choice_signal("topic"),
+        ]
     }
 
     fn answers(entries: Vec<(&str, SignalValue)>) -> Answers {
@@ -247,12 +252,7 @@ mod tests {
     }
 
     fn probs(entries: &[(&str, f32)]) -> SignalValue {
-        SignalValue::Choice(
-            entries
-                .iter()
-                .map(|(k, p)| (k.to_string(), *p))
-                .collect(),
-        )
+        SignalValue::Choice(entries.iter().map(|(k, p)| (k.to_string(), *p)).collect())
     }
 
     fn cond(name: &str, label: Option<&str>, gte: Option<f32>) -> Condition {
@@ -277,7 +277,10 @@ mod tests {
             ("a", yes()),
             ("b", no()),
             ("c", unknown()),
-            ("topic", probs(&[("math", 0.6), ("prose", 0.3), ("other", 0.1)])),
+            (
+                "topic",
+                probs(&[("math", 0.6), ("prose", 0.3), ("other", 0.1)]),
+            ),
         ])
     }
 
@@ -367,7 +370,10 @@ mod tests {
 
     #[test]
     fn choice_ties_all_count_as_maximum() {
-        let tied = answers(vec![("topic", probs(&[("math", 0.5), ("prose", 0.5), ("other", 0.0)]))]);
+        let tied = answers(vec![(
+            "topic",
+            probs(&[("math", 0.5), ("prose", 0.5), ("other", 0.0)]),
+        )]);
         let math = Rule::Signal(cond("topic", Some("math"), None));
         let prose = Rule::Signal(cond("topic", Some("prose"), None));
         let other = Rule::Signal(cond("topic", Some("other"), None));

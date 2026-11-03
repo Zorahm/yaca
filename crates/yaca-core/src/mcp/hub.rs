@@ -17,21 +17,21 @@ use std::time::Duration;
 use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
 
-use super::client::{Client, Notice};
 use super::approval::Approvals;
+use super::client::{Client, Notice};
 use super::config::{self, McpServerSettings, McpSource, ServerSpec};
-use super::protocol::RemoteTool;
 use super::elicit::{self, ElicitationReply, ElicitationRequest};
 use super::oauth::{self, TokenStore};
 use super::protocol::RemotePrompt;
-use crate::id::RequestId;
-use crate::pending::Pending;
-use super::tool::name_for;
+use super::protocol::RemoteTool;
 use super::resources::{ListResources, ReadResource};
+use super::tool::name_for;
 use super::tool::{self, McpTool};
 use super::{McpError, McpServerSummary, McpStatus, McpToolSummary};
 use crate::error::CoreError;
 use crate::event::{AgentEvent, EventSink};
+use crate::id::RequestId;
+use crate::pending::Pending;
 use crate::settings::Settings;
 use crate::tool::Tool;
 
@@ -93,7 +93,15 @@ impl Mcp {
     /// A session with no servers.
     pub fn none(events: EventSink) -> Mcp {
         let nowhere = Path::new(".");
-        Mcp::start(Vec::new(), nowhere, nowhere, Vec::new(), events, None, TokenStore::default())
+        Mcp::start(
+            Vec::new(),
+            nowhere,
+            nowhere,
+            Vec::new(),
+            events,
+            None,
+            TokenStore::default(),
+        )
     }
 
     /// Starts connecting to every server that may be connected to. Returns at
@@ -234,7 +242,12 @@ impl Mcp {
                     tracing::warn!(tool = %name, "MCP tool name is taken; the later tool is left out");
                     continue;
                 }
-                out.push(Arc::new(McpTool::new(self.clone(), &server.spec.name, name, remote)));
+                out.push(Arc::new(McpTool::new(
+                    self.clone(),
+                    &server.spec.name,
+                    name,
+                    remote,
+                )));
             }
         }
         if resources {
@@ -264,7 +277,10 @@ impl Mcp {
              do not do it, and say what you saw.\n",
         );
         for server in ready {
-            let Some(text) = server.client.as_ref().and_then(|c| c.info.instructions.as_deref())
+            let Some(text) = server
+                .client
+                .as_ref()
+                .and_then(|c| c.info.instructions.as_deref())
             else {
                 continue;
             };
@@ -293,8 +309,11 @@ impl Mcp {
     pub fn login(&self, name: &str) {
         let (url, challenge) = {
             let mut servers = self.0.servers.lock().unwrap();
-            let Some(server) = servers.get_mut(name) else { return };
-            let Ok(super::config::Launch::Http { url, .. }) = server.spec.launch(&self.0.root) else {
+            let Some(server) = servers.get_mut(name) else {
+                return;
+            };
+            let Ok(super::config::Launch::Http { url, .. }) = server.spec.launch(&self.0.root)
+            else {
                 return;
             };
             if server.status == McpStatus::LoggingIn {
@@ -353,7 +372,9 @@ impl Mcp {
     pub fn logout(&self, name: &str) {
         let url = {
             let servers = self.0.servers.lock().unwrap();
-            let Some(server) = servers.get(name) else { return };
+            let Some(server) = servers.get(name) else {
+                return;
+            };
             match server.spec.launch(&self.0.root) {
                 Ok(super::config::Launch::Http { url, .. }) => url,
                 _ => return,
@@ -413,7 +434,11 @@ impl Mcp {
 impl Mcp {
     /// The human's answer to a server's form. `Err` with the reason when the
     /// answer does not fit the form, which then stays open.
-    pub fn answer_elicitation(&self, id: &RequestId, reply: ElicitationReply) -> Result<(), String> {
+    pub fn answer_elicitation(
+        &self,
+        id: &RequestId,
+        reply: ElicitationReply,
+    ) -> Result<(), String> {
         let Some((request, _)) = self.0.elicitations.meta(id) else {
             // A stale click: the form was already answered or given up.
             return Ok(());
@@ -427,7 +452,12 @@ impl Mcp {
 
     /// The forms still waiting, for a window that reconnects.
     pub fn open_elicitations(&self) -> Vec<ElicitationRequest> {
-        self.0.elicitations.metas().into_iter().map(|(r, _)| r).collect()
+        self.0
+            .elicitations
+            .metas()
+            .into_iter()
+            .map(|(r, _)| r)
+            .collect()
     }
 
     /// What to call when a form goes up. Weakly held by the caller's side:
@@ -473,7 +503,11 @@ impl Mcp {
             )));
         }
         let got = client
-            .get_prompt(&prompt.name, serde_json::Value::Object(arguments), &CancellationToken::new())
+            .get_prompt(
+                &prompt.name,
+                serde_json::Value::Object(arguments),
+                &CancellationToken::new(),
+            )
             .await;
         Some(match got {
             Ok(result) => Ok(prompt_text(result)),
@@ -510,8 +544,12 @@ async fn ask_human(
     };
     let schema = params["requestedSchema"].clone();
     let id = request.id.clone();
-    let rx = inner.elicitations.open(id.clone(), (request.clone(), schema.clone()));
-    inner.events.emit(AgentEvent::ElicitationRequested { request: request.clone() });
+    let rx = inner
+        .elicitations
+        .open(id.clone(), (request.clone(), schema.clone()));
+    inner.events.emit(AgentEvent::ElicitationRequested {
+        request: request.clone(),
+    });
     let hook = inner.on_waiting.lock().unwrap().clone();
     if let Some(hook) = hook {
         hook(&server);
@@ -519,12 +557,18 @@ async fn ask_human(
     // Not held while the human thinks: the session may close meanwhile.
     drop(inner);
 
-    let reply = tokio::time::timeout(ELICITATION_TIMEOUT, rx).await.ok().and_then(Result::ok);
+    let reply = tokio::time::timeout(ELICITATION_TIMEOUT, rx)
+        .await
+        .ok()
+        .and_then(Result::ok);
     let shaped = request.answer(reply.as_ref().unwrap_or(&ElicitationReply::Cancel), &schema);
     let _ = answer.send(shaped);
     if let Some(inner) = weak.upgrade() {
         inner.elicitations.forget(&id);
-        inner.events.emit(AgentEvent::ElicitationResolved { request_id: id, reply });
+        inner.events.emit(AgentEvent::ElicitationResolved {
+            request_id: id,
+            reply,
+        });
     }
 }
 
@@ -546,7 +590,10 @@ fn fill_arguments(prompt: &RemotePrompt, args: &str) -> serde_json::Map<String, 
             rest = tail.trim_start();
             word
         };
-        out.insert(argument.name.clone(), serde_json::Value::String(word.to_string()));
+        out.insert(
+            argument.name.clone(),
+            serde_json::Value::String(word.to_string()),
+        );
     }
     out
 }
@@ -562,12 +609,18 @@ fn prompt_text(result: super::protocol::GetPromptResult) -> String {
         let text = match &message.content {
             Content::Text { text } => text.clone(),
             Content::Resource { resource } => super::tool::resource_text(resource),
-            Content::ResourceLink { uri, name } => format!("[{}]({uri})", name.as_deref().unwrap_or(uri)),
+            Content::ResourceLink { uri, name } => {
+                format!("[{}]({uri})", name.as_deref().unwrap_or(uri))
+            }
             Content::Image { .. } => "[image: not passed on]".to_string(),
             Content::Audio {} => "[audio: not passed on]".to_string(),
             Content::Unknown => continue,
         };
-        parts.push(if mixed { format!("[{}]\n{text}", message.role) } else { text });
+        parts.push(if mixed {
+            format!("[{}]\n{text}", message.role)
+        } else {
+            text
+        });
     }
     parts.join("\n\n")
 }
@@ -688,7 +741,9 @@ async fn connect(weak: Weak<Inner>, spec: ServerSpec, attempt: u64, shutdown: Ca
         // A login the human made goes as the bearer token, unless the
         // declaration authorizes the server its own way.
         if let super::config::Launch::Http { url, headers } = &mut launch {
-            let declared = headers.keys().any(|k| k.eq_ignore_ascii_case("authorization"));
+            let declared = headers
+                .keys()
+                .any(|k| k.eq_ignore_ascii_case("authorization"));
             if !declared {
                 if let Some(token) = oauth::bearer(&tokens, url).await {
                     headers.insert("Authorization".into(), format!("Bearer {token}"));
@@ -758,7 +813,12 @@ async fn connect(weak: Weak<Inner>, spec: ServerSpec, attempt: u64, shutdown: Ca
         };
         match notice {
             Some(Notice::Elicit { params, answer }) => {
-                tokio::spawn(ask_human(Arc::downgrade(&inner), name.clone(), params, answer));
+                tokio::spawn(ask_human(
+                    Arc::downgrade(&inner),
+                    name.clone(),
+                    params,
+                    answer,
+                ));
             }
             Some(Notice::PromptsChanged) => {
                 let client = {
@@ -803,7 +863,9 @@ async fn connect(weak: Weak<Inner>, spec: ServerSpec, attempt: u64, shutdown: Ca
                     Ok(tools) => {
                         inner.update(&name, attempt, |server| server.tools = tools);
                     }
-                    Err(err) => tracing::warn!(server = %name, %err, "MCP tool list was not refreshed"),
+                    Err(err) => {
+                        tracing::warn!(server = %name, %err, "MCP tool list was not refreshed")
+                    }
                 }
             }
             Some(Notice::Closed(reason)) => {
@@ -844,13 +906,14 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(prompt_text(one), "Review PR 42");
-        let two: super::super::protocol::GetPromptResult = serde_json::from_value(serde_json::json!({
-            "messages": [
-                { "role": "user", "content": { "type": "text", "text": "Q" } },
-                { "role": "assistant", "content": { "type": "text", "text": "A" } },
-            ],
-        }))
-        .unwrap();
+        let two: super::super::protocol::GetPromptResult =
+            serde_json::from_value(serde_json::json!({
+                "messages": [
+                    { "role": "user", "content": { "type": "text", "text": "Q" } },
+                    { "role": "assistant", "content": { "type": "text", "text": "A" } },
+                ],
+            }))
+            .unwrap();
         assert_eq!(prompt_text(two), "[user]\nQ\n\n[assistant]\nA");
     }
 }

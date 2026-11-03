@@ -30,6 +30,12 @@
 //! MCP adds two, both beyond §15's list: [`Command::ReconnectMcpServer`] and
 //! [`Command::ApproveMcpServer`]. Their answer is `McpUpdated`.
 //!
+//! [`Command::SetProfile`] is beyond §15's list as well: §7.1 knows one axis the
+//! human switches, and this is a second one — what the chat is for, code or
+//! documents. It is not a [`Mode`]: trust and the kind of work are different
+//! questions, and folding the profile into the mode menu would offer
+//! combinations nobody asked for.
+//!
 //! What is deliberately *not* here is the session panel of §9: listing,
 //! renaming, duplicating, exporting and deleting sessions. This channel talks
 //! to the session that is running, and last week's work is not something the
@@ -43,6 +49,7 @@ use crate::id::{CheckpointId, QueuedId, RequestId};
 use crate::intent::{Effort, Mode};
 use crate::permission::PermissionAnswer;
 use crate::process::ProcessId;
+use crate::profile::Profile;
 use crate::question::QuestionReply;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -64,6 +71,11 @@ pub enum Command {
     /// Mode switch in the bottom row of the composer (§7.1, §8).
     #[serde(rename_all = "camelCase")]
     SetMode { mode: Mode },
+
+    /// The kind of work the chat is for (§7.1): code, or documents. Not a trust
+    /// level, so it is a command of its own rather than a fifth [`Mode`].
+    #[serde(rename_all = "camelCase")]
+    SetProfile { profile: Profile },
 
     #[serde(rename_all = "camelCase")]
     SetModel { model: String },

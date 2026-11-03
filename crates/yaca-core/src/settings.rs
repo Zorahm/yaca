@@ -29,6 +29,7 @@ use crate::error::CoreError;
 use crate::intent::Mode;
 use crate::mcp::McpServerSettings;
 use crate::permission::{Refusal, ScopeKey};
+use crate::profile::Profile;
 
 /// Where the file sits under the project root.
 pub const FILE: &str = "settings.json";
@@ -41,6 +42,9 @@ pub struct Settings {
     /// with any model, weak local ones included, so the safe behaviour is the
     /// one you get without asking for it.
     pub mode: Option<Mode>,
+    /// What a session in this project is for (§7.1, §10): code, or documents.
+    /// Absent means code.
+    pub profile: Option<Profile>,
     /// The provider a session starts with (§10).
     pub provider: Option<String>,
     /// The model a session starts with (§10).
@@ -137,7 +141,10 @@ impl EventHookSettings {
     }
 
     pub fn timeout(&self) -> std::time::Duration {
-        std::time::Duration::from_secs(self.timeout_secs.unwrap_or(HookSettings::DEFAULT_TIMEOUT_SECS))
+        std::time::Duration::from_secs(
+            self.timeout_secs
+                .unwrap_or(HookSettings::DEFAULT_TIMEOUT_SECS),
+        )
     }
 }
 
@@ -210,7 +217,9 @@ impl HooksSettings {
                     ));
                 }
                 if hook.command().is_empty() {
-                    return Err(format!("{here}.command is empty: specify a command or remove the entry"));
+                    return Err(format!(
+                        "{here}.command is empty: specify a command or remove the entry"
+                    ));
                 }
                 check_timeout(&here, hook.timeout_secs)?;
             }
@@ -219,7 +228,9 @@ impl HooksSettings {
             for (at, hook) in list.iter().enumerate() {
                 let here = format!("hooks.{event}[{at}]");
                 if hook.command().is_empty() {
-                    return Err(format!("{here}.command is empty: specify a command or remove the entry"));
+                    return Err(format!(
+                        "{here}.command is empty: specify a command or remove the entry"
+                    ));
                 }
                 check_timeout(&here, hook.timeout_secs)?;
             }
@@ -301,7 +312,9 @@ impl VerifySettings {
     /// fail that edit, far from the line that caused it.
     fn validate(&self) -> Result<(), String> {
         if self.command().is_empty() {
-            return Err("verify.command is empty: specify a command or remove verify entirely".into());
+            return Err(
+                "verify.command is empty: specify a command or remove verify entirely".into(),
+            );
         }
         if let Some(secs) = self.timeout_secs {
             if !(1..=Self::MAX_TIMEOUT_SECS).contains(&secs) {
@@ -387,9 +400,8 @@ impl Settings {
             }
         };
 
-        let settings: Settings = serde_json::from_str(&text).map_err(|e| {
-            CoreError::Config(format!("failed to parse {}: {e}", path.display()))
-        })?;
+        let settings: Settings = serde_json::from_str(&text)
+            .map_err(|e| CoreError::Config(format!("failed to parse {}: {e}", path.display())))?;
         if let Some(verify) = &settings.verify {
             verify
                 .validate()
@@ -725,7 +737,10 @@ mod tests {
             panic!("got {err:?}");
         };
         assert!(why.contains("hooks.preToolUse[0].match"), "{why}");
-        assert!(why.contains("Bash") && why.contains("Skill"), "lists the real names: {why}");
+        assert!(
+            why.contains("Bash") && why.contains("Skill"),
+            "lists the real names: {why}"
+        );
     }
 
     #[test]
@@ -739,9 +754,15 @@ mod tests {
         assert_eq!(settings.hooks().stop[0].command(), "cargo test -q");
         assert_eq!(settings.hooks().notification.len(), 1);
 
-        dir.write(".yaca/settings.json", r#"{ "hooks": { "preCompact": [{ "command": "  " }] } }"#);
+        dir.write(
+            ".yaca/settings.json",
+            r#"{ "hooks": { "preCompact": [{ "command": "  " }] } }"#,
+        );
         let err = Settings::load(dir.path()).unwrap_err();
-        assert!(err.to_string().contains("hooks.preCompact[0].command"), "{err}");
+        assert!(
+            err.to_string().contains("hooks.preCompact[0].command"),
+            "{err}"
+        );
     }
 
     #[test]
@@ -754,7 +775,14 @@ mod tests {
                 { "match": "ReadMcpResource", "command": "x" }
             ] } }"#,
         );
-        assert_eq!(Settings::load(dir.path()).unwrap().hooks().pre_tool_use.len(), 2);
+        assert_eq!(
+            Settings::load(dir.path())
+                .unwrap()
+                .hooks()
+                .pre_tool_use
+                .len(),
+            2
+        );
     }
 
     #[test]

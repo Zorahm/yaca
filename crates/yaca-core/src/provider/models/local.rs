@@ -32,7 +32,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use super::http;
 use crate::provider::registry::ProviderSpec;
@@ -358,7 +358,10 @@ fn apply(m: &mut ModelInfo, window: Window) {
 mod tests {
     use super::*;
 
-    fn windows(answer: &str, read: fn(&Value) -> HashMap<String, Window>) -> HashMap<String, Window> {
+    fn windows(
+        answer: &str,
+        read: fn(&Value) -> HashMap<String, Window>,
+    ) -> HashMap<String, Window> {
         read(&serde_json::from_str(answer).unwrap())
     }
 
@@ -449,10 +452,9 @@ mod tests {
     fn lm_studio_answer_without_a_window_list_says_nothing() {
         // Recorded shape of an LM Studio with nothing loaded and no sizes
         // attached: the fields are simply absent.
-        let answer = serde_json::from_str::<Value>(
-            r#"{"object":"list","data":[{"id":"qwen/qwen3-30b"}]}"#,
-        )
-        .unwrap();
+        let answer =
+            serde_json::from_str::<Value>(r#"{"object":"list","data":[{"id":"qwen/qwen3-30b"}]}"#)
+                .unwrap();
         assert!(lm_studio_windows(&answer).is_empty());
     }
 

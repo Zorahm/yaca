@@ -55,7 +55,10 @@ async fn manual_mode_asks_with_the_number_of_files_inside() {
     let mut rx = handle.subscribe();
 
     ask(&handle, "remove the old directory").await;
-    let asking = until(&mut rx, |e| matches!(e, AgentEvent::PermissionRequested { .. })).await;
+    let asking = until(&mut rx, |e| {
+        matches!(e, AgentEvent::PermissionRequested { .. })
+    })
+    .await;
     let request = asking
         .iter()
         .find_map(|e| match e {
@@ -68,8 +71,17 @@ async fn manual_mode_asks_with_the_number_of_files_inside() {
     assert_eq!(request.kind, PermissionKind::DeleteDirectory);
     assert_eq!(request.target, "old");
     assert_eq!(request.detail, "old");
-    assert_eq!(request.files, Some(FileCount { files: 3, more: false }));
-    assert!(dir.path().join("old").exists(), "nothing happens before the answer");
+    assert_eq!(
+        request.files,
+        Some(FileCount {
+            files: 3,
+            more: false
+        })
+    );
+    assert!(
+        dir.path().join("old").exists(),
+        "nothing happens before the answer"
+    );
 
     handle
         .send(Command::AnswerPermission {
@@ -107,7 +119,9 @@ async fn a_directory_holding_a_repository_is_not_deleted() {
     ask(&handle, "clean up vendor").await;
     let seen = until(&mut rx, is_turn_over).await;
 
-    assert!(seen.iter().any(|e| matches!(e, AgentEvent::ToolCallRejected { .. })));
+    assert!(seen
+        .iter()
+        .any(|e| matches!(e, AgentEvent::ToolCallRejected { .. })));
     assert!(dir.path().join("vendor/lib/.git/HEAD").exists());
     assert!(dir.path().join("vendor/lib/src.rs").exists());
     let (text, is_error) = answer(&provider);
@@ -130,6 +144,8 @@ async fn the_project_itself_is_not_deleted() {
     ask(&handle, "wipe everything").await;
     let seen = until(&mut rx, is_turn_over).await;
 
-    assert!(seen.iter().any(|e| matches!(e, AgentEvent::ToolCallRejected { .. })));
+    assert!(seen
+        .iter()
+        .any(|e| matches!(e, AgentEvent::ToolCallRejected { .. })));
     assert!(dir.path().join("a.txt").exists());
 }

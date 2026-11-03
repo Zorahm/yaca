@@ -114,7 +114,9 @@ mod tests {
     }
 
     fn reply(text: &str) -> Record {
-        message(Message::assistant(vec![ContentBlock::Text { text: text.into() }]))
+        message(Message::assistant(vec![ContentBlock::Text {
+            text: text.into(),
+        }]))
     }
 
     fn said(records: &[Record]) -> Vec<(usize, Role, String)> {
@@ -126,7 +128,11 @@ mod tests {
 
     #[test]
     fn both_sides_are_numbered_in_the_order_they_spoke() {
-        let records = [prompt("question"), message(Message::user_text("question")), reply("answer")];
+        let records = [
+            prompt("question"),
+            message(Message::user_text("question")),
+            reply("answer"),
+        ];
         assert_eq!(
             said(&records),
             vec![
@@ -170,13 +176,17 @@ mod tests {
     #[test]
     fn the_text_around_a_call_is_one_message() {
         let records = [message(Message::assistant(vec![
-            ContentBlock::Text { text: "Looking first.".into() },
+            ContentBlock::Text {
+                text: "Looking first.".into(),
+            },
             ContentBlock::ToolUse {
                 id: "c1".into(),
                 name: "Read".into(),
                 input: serde_json::json!({}),
             },
-            ContentBlock::Text { text: "I see.".into() },
+            ContentBlock::Text {
+                text: "I see.".into(),
+            },
         ]))];
         assert_eq!(
             said(&records),
@@ -202,7 +212,10 @@ mod tests {
             prompt("three"),
             reply("answer three"),
         ];
-        let numbers: Vec<_> = said(&records).into_iter().map(|(n, _, text)| (n, text)).collect();
+        let numbers: Vec<_> = said(&records)
+            .into_iter()
+            .map(|(n, _, text)| (n, text))
+            .collect();
         assert_eq!(
             numbers,
             vec![

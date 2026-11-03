@@ -84,14 +84,25 @@ impl Caller {
             ),
             None => (self.provider.clone(), self.model().id, None),
         };
+        let pricing = if self.shared.decision.is_some() {
+            self.shared
+                .decision_pricing
+                .unwrap_or(crate::usage::Pricing {
+                    input: 0.0,
+                    output: 0.0,
+                })
+        } else {
+            self.model().pricing
+        };
         tokio::select! {
             _ = cancel.cancelled() => false,
-            safe = review::review(
+            safe = review::review_recording(
                 systemone.as_deref(),
                 provider.as_ref(),
                 &model,
                 need,
                 review::TIMEOUT,
+                Some((&self.shared.ledger, pricing)),
             ) => safe,
         }
     }
@@ -108,8 +119,10 @@ impl Caller {
         let rx = self.shared.broker.open(id.clone());
 
         let position = queue.asked + 1;
-        self.shared
-            .notify("permission_prompt", format!("Yaca needs your permission: {}", need.target));
+        self.shared.notify(
+            "permission_prompt",
+            format!("Yaca needs your permission: {}", need.target),
+        );
         self.emit(AgentEvent::PermissionRequested {
             request: PermissionRequest {
                 id: id.clone(),
@@ -170,7 +183,8 @@ impl Caller {
             .rest
             .iter()
             .filter(|call| {
-                let Some(tool) = self.registry.get(&call.name, self.intent()) else {
+                let Some(tool) = self.registry.get(&call.name, self.intent(), self.profile())
+                else {
                     return false;
                 };
                 let mut input = call.input.clone();

@@ -47,7 +47,10 @@ pub(crate) fn plain(path: &Path) -> String {
     let text = path.display().to_string();
     let text = match text.strip_prefix(r"\\?\UNC\") {
         Some(share) => format!(r"\\{share}"),
-        None => text.strip_prefix(r"\\?\").map(str::to_string).unwrap_or(text),
+        None => text
+            .strip_prefix(r"\\?\")
+            .map(str::to_string)
+            .unwrap_or(text),
     };
     text.replace('\\', "/")
 }
@@ -91,7 +94,10 @@ pub(crate) fn validate(primary: &Path, given: &[PathBuf]) -> Result<Vec<PathBuf>
     }
 
     let all = kept.clone();
-    kept.retain(|root| !all.iter().any(|other| other != root && root.starts_with(other)));
+    kept.retain(|root| {
+        !all.iter()
+            .any(|other| other != root && root.starts_with(other))
+    });
     Ok(kept)
 }
 
@@ -115,7 +121,10 @@ mod tests {
             PathBuf::from(r"\\?\D:\other\a.txt")
         );
         // Already verbatim, or no verbatim root to match: left alone.
-        assert_eq!(in_root_form(Path::new(r"\\?\D:\x"), like), PathBuf::from(r"\\?\D:\x"));
+        assert_eq!(
+            in_root_form(Path::new(r"\\?\D:\x"), like),
+            PathBuf::from(r"\\?\D:\x")
+        );
         assert_eq!(
             in_root_form(Path::new(r"D:\x"), Path::new(r"D:\project")),
             PathBuf::from(r"D:\x")

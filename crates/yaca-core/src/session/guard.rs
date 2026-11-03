@@ -235,8 +235,16 @@ mod tests {
     fn the_caption_is_not_part_of_the_call() {
         let mut guard = RepeatGuard::default();
         let calls = [
-            call("1", "Read", json!({ "path": "a.rs", "description": "first" })),
-            call("2", "Read", json!({ "path": "a.rs", "description": "again" })),
+            call(
+                "1",
+                "Read",
+                json!({ "path": "a.rs", "description": "first" }),
+            ),
+            call(
+                "2",
+                "Read",
+                json!({ "path": "a.rs", "description": "again" }),
+            ),
             call("3", "Read", json!({ "path": "a.rs" })),
         ];
         let results = [result("1", "r"), result("2", "r"), result("3", "r")];

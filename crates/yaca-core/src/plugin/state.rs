@@ -46,8 +46,9 @@ impl Switches {
     }
 
     pub(super) fn save(&self, config_dir: &Path) -> Result<(), CoreError> {
-        std::fs::create_dir_all(config_dir)
-            .map_err(|e| CoreError::Config(format!("cannot create {}: {e}", config_dir.display())))?;
+        std::fs::create_dir_all(config_dir).map_err(|e| {
+            CoreError::Config(format!("cannot create {}: {e}", config_dir.display()))
+        })?;
         let text = serde_json::to_string_pretty(self)
             .map_err(|e| CoreError::Config(format!("cannot assemble the plugin list: {e}")))?;
         std::fs::write(config_dir.join(SWITCHES), text)
@@ -79,7 +80,10 @@ pub(super) struct Install {
 /// `plugins/installed_plugins.json`, the installs of `scope: user` only: a
 /// project or local install belongs to one project, and project plugins are not
 /// something Yaca loads yet. In id order.
-pub(super) fn claude_installs(home: &Path, diagnostics: &mut Vec<PluginDiagnostic>) -> Vec<Install> {
+pub(super) fn claude_installs(
+    home: &Path,
+    diagnostics: &mut Vec<PluginDiagnostic>,
+) -> Vec<Install> {
     let file = home.join("plugins").join("installed_plugins.json");
     let Ok(text) = std::fs::read_to_string(&file) else {
         return Vec::new();
@@ -103,9 +107,14 @@ pub(super) fn claude_installs(home: &Path, diagnostics: &mut Vec<PluginDiagnosti
             _ => continue,
         };
         let user = installs.into_iter().find(|i| {
-            i.get("scope").and_then(Value::as_str).is_none_or(|s| s == "user")
+            i.get("scope")
+                .and_then(Value::as_str)
+                .is_none_or(|s| s == "user")
         });
-        let Some(path) = user.and_then(|i| i.get("installPath")).and_then(Value::as_str) else {
+        let Some(path) = user
+            .and_then(|i| i.get("installPath"))
+            .and_then(Value::as_str)
+        else {
             continue;
         };
         out.push(Install {

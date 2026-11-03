@@ -196,7 +196,8 @@ impl Tool for WebSearch {
         let count = max_results(&input);
 
         ctx.check_cancelled()?;
-        let key = (self.lookup)().filter(|k| !k.trim().is_empty())
+        let key = (self.lookup)()
+            .filter(|k| !k.trim().is_empty())
             .ok_or_else(|| ToolError::failed(NO_KEY))?;
 
         let url = format!("{}/search", self.endpoint.trim_end_matches('/'));
@@ -356,7 +357,11 @@ mod tests {
             .find(|l| l.to_ascii_lowercase().starts_with("authorization:"))
             .unwrap_or_default();
         // The whole key in the header, and nowhere else in the request line.
-        assert_eq!(auth.to_ascii_lowercase(), format!("authorization: bearer {KEY}"), "{request}");
+        assert_eq!(
+            auth.to_ascii_lowercase(),
+            format!("authorization: bearer {KEY}"),
+            "{request}"
+        );
         assert!(request.contains("Console wallpaper"), "{request}");
         assert!(request.contains(r#""max_results":5"#), "{request}");
 
@@ -383,7 +388,11 @@ mod tests {
             .unwrap();
 
         // The model gets the sentence in its language.
-        assert!(out.text.contains("No results for \"nothing\"."), "{}", out.text);
+        assert!(
+            out.text.contains("No results for \"nothing\"."),
+            "{}",
+            out.text
+        );
 
         let seen = events_text(&mut events);
         assert!(seen.contains("No results found for query"), "{seen}");
@@ -434,7 +443,10 @@ mod tests {
             .run(&ctx, json!({ "query": "x" }))
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("failed to perform search"), "{err}");
+        assert!(
+            err.to_string().contains("failed to perform search"),
+            "{err}"
+        );
     }
 
     #[tokio::test]
@@ -449,7 +461,10 @@ mod tests {
             .run(&ctx, json!({ "query": "x" }))
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("yaca key set --provider tavily"), "{err}");
+        assert!(
+            err.to_string().contains("yaca key set --provider tavily"),
+            "{err}"
+        );
         assert!(err.to_string().contains("TAVILY_API_KEY"), "{err}");
     }
 

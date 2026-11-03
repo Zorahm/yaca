@@ -121,8 +121,22 @@ pub async fn before(
         let current = updated.as_ref().unwrap_or(input);
         let stdin = json!({ "event": "preToolUse", "tool": tool, "input": current }).to_string();
         let env = [("YACA_TOOL", tool)];
-        match run(hook.command(), hook.timeout(), ws, shell, &env, stdin.as_bytes(), cancel).await {
-            Ending::Exited { success: true, output, .. } => {
+        match run(
+            hook.command(),
+            hook.timeout(),
+            ws,
+            shell,
+            &env,
+            stdin.as_bytes(),
+            cancel,
+        )
+        .await
+        {
+            Ending::Exited {
+                success: true,
+                output,
+                ..
+            } => {
                 if let Some(input) = updated_input(&output) {
                     updated = Some(input);
                 }
@@ -154,7 +168,10 @@ pub enum EventEnding {
     /// Exit code 0, with what it printed.
     Passed(String),
     /// Any other exit code, with what it printed.
-    Failed { code: Option<i32>, output: String },
+    Failed {
+        code: Option<i32>,
+        output: String,
+    },
     TimedOut(u64),
     /// Could not be started.
     Broken(String),
@@ -192,7 +209,9 @@ impl EventSaid {
                 english_exited(*code),
                 clip(body(output), FEED_BYTES)
             )),
-            EventEnding::TimedOut(secs) => Some(format!("`{command}` did not respond within {secs} s")),
+            EventEnding::TimedOut(secs) => {
+                Some(format!("`{command}` did not respond within {secs} s"))
+            }
             EventEnding::Broken(why) => Some(format!("`{command}` failed to start: {why}")),
         }
     }
@@ -217,8 +236,22 @@ pub async fn on_event(
     let env = [("YACA_HOOK_EVENT", event)];
     let mut out = Vec::new();
     for hook in list {
-        let ending = match run(hook.command(), hook.timeout(), ws, shell, &env, stdin.as_bytes(), cancel).await {
-            Ending::Exited { success: true, output, .. } => EventEnding::Passed(output),
+        let ending = match run(
+            hook.command(),
+            hook.timeout(),
+            ws,
+            shell,
+            &env,
+            stdin.as_bytes(),
+            cancel,
+        )
+        .await
+        {
+            Ending::Exited {
+                success: true,
+                output,
+                ..
+            } => EventEnding::Passed(output),
             Ending::Exited { code, output, .. } => EventEnding::Failed { code, output },
             Ending::TimedOut { secs } => EventEnding::TimedOut(secs),
             Ending::Broken(why) => EventEnding::Broken(why),
@@ -769,7 +802,11 @@ mod tests {
             "{}",
             note.for_model
         );
-        assert!(note.for_human.contains("exited with code 3"), "{}", note.for_human);
+        assert!(
+            note.for_human.contains("exited with code 3"),
+            "{}",
+            note.for_human
+        );
     }
 
     #[tokio::test]
@@ -840,7 +877,11 @@ mod tests {
         let dir = TempDir::new();
         let ws = Workspace::open(dir.path()).unwrap();
         let hooks = HooksSettings {
-            pre_tool_use: vec![hook("Bash", r#"echo '{"updatedInput":{"command":"ls -la"}}'"#, None)],
+            pre_tool_use: vec![hook(
+                "Bash",
+                r#"echo '{"updatedInput":{"command":"ls -la"}}'"#,
+                None,
+            )],
             ..HooksSettings::default()
         };
         let outcome = before(
@@ -852,12 +893,18 @@ mod tests {
             &CancellationToken::new(),
         )
         .await;
-        assert_eq!(outcome, PreOutcome::Go(Some(json!({ "command": "ls -la" }))));
+        assert_eq!(
+            outcome,
+            PreOutcome::Go(Some(json!({ "command": "ls -la" })))
+        );
     }
 
     #[test]
     fn only_an_object_is_taken_as_updated_input() {
-        assert_eq!(updated_input(r#"{"updatedInput":{"a":1}}"#), Some(json!({ "a": 1 })));
+        assert_eq!(
+            updated_input(r#"{"updatedInput":{"a":1}}"#),
+            Some(json!({ "a": 1 }))
+        );
         assert_eq!(updated_input(r#"{"updatedInput":"x"}"#), None);
         assert_eq!(updated_input("plain words"), None);
     }
@@ -867,17 +914,36 @@ mod tests {
         let dir = TempDir::new();
         let ws = Workspace::open(dir.path()).unwrap();
         let list = vec![
-            EventHookSettings { command: echo_and_exit("fine", 0), timeout_secs: None },
-            EventHookSettings { command: echo_and_exit("tests-fail", 1), timeout_secs: None },
+            EventHookSettings {
+                command: echo_and_exit("fine", 0),
+                timeout_secs: None,
+            },
+            EventHookSettings {
+                command: echo_and_exit("tests-fail", 1),
+                timeout_secs: None,
+            },
         ];
-        let said = on_event(&list, &ws, Shell::default(), "stop", json!({}), &CancellationToken::new())
-            .await
-            .unwrap();
+        let said = on_event(
+            &list,
+            &ws,
+            Shell::default(),
+            "stop",
+            json!({}),
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
         assert_eq!(said.len(), 2);
         assert!(matches!(&said[0].ending, EventEnding::Passed(out) if out.contains("fine")));
-        assert!(matches!(&said[1].ending, EventEnding::Failed { code: Some(1), .. }));
+        assert!(matches!(
+            &said[1].ending,
+            EventEnding::Failed { code: Some(1), .. }
+        ));
         assert!(said[1].output_for_model().contains("tests-fail"));
-        assert!(said[1].failure_for_human().unwrap().contains("exited with code 1"));
+        assert!(said[1]
+            .failure_for_human()
+            .unwrap()
+            .contains("exited with code 1"));
         assert!(said[0].failure_for_human().is_none());
     }
 }

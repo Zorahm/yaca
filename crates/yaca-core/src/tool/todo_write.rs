@@ -140,7 +140,8 @@ mod tests {
     fn the_description_names_the_statuses_the_schema_accepts() {
         // A model without constrained decoding trusts the prose over the enum:
         // told `in_progress`, it sends `in_progress`, and the list does not parse.
-        let accepted = TodoWrite.properties()["todos"]["items"]["properties"]["status"]["enum"].clone();
+        let accepted =
+            TodoWrite.properties()["todos"]["items"]["properties"]["status"]["enum"].clone();
         assert_eq!(accepted, json!(["pending", "inProgress", "completed"]));
         assert!(TodoWrite.description().contains("inProgress"));
         assert!(!TodoWrite.description().contains("in_progress"));

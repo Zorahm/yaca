@@ -24,8 +24,9 @@ use std::path::Path;
 use crate::instructions::{Instructions, Nested};
 use crate::intent::Intent;
 use crate::process::shell::Shell;
-use crate::tool::memory::store::MemoryIndex;
+use crate::profile::Profile;
 use crate::skills::Listing;
+use crate::tool::memory::store::MemoryIndex;
 
 /// Which shell the `bash` tool runs commands through.
 ///
@@ -71,6 +72,11 @@ const INTRO: &str = "You are Yaca, a coding agent working inside an editor, in f
      their feed as it happens, together with its result, so they see what you do \
      without being told.\n\n";
 
+const INTRO_CHAT: &str = "You are Yaca, an assistant working with the person's documents \
+     and files, in full view of the person you are working with. Every tool call you \
+     make shows up in their feed as it happens, together with its result, so they see \
+     what you do without being told.\n\n";
+
 const MODE_PLAN: &str = "<mode>\nMode: plan. You are here to investigate and plan: \
      tools that change files or run commands are not available in this mode. Work \
      out what needs doing and write the plan, keeping the task list current with \
@@ -89,6 +95,12 @@ pub(super) const GROUNDING: &str = "Ground what you say about this project in fi
      usually look. When a detail is missing, find it with your tools rather than \
      guess, and before saying something does not exist, search for it.\n\n";
 
+pub(super) const GROUNDING_CHAT: &str = "Ground what you say about these files in what you have \
+     read and what a command has shown you in this conversation, not in what such a \
+     document usually contains. When a detail is missing, find it with your tools \
+     rather than guess, and before saying something is not in a file, search the file \
+     for it.\n\n";
+
 const SCOPE: &str = "Deliver what was asked, at the scope intended. Make routine \
      judgment calls yourself, and ask only when different readings of the request \
      would lead to materially different work. If the request looks mistaken or a \
@@ -101,6 +113,24 @@ pub(super) const CODE: &str = "Write code that reads like the code around it: it
      simple as the task allows, without abstractions, options or fallbacks it does \
      not need. Solve the problem in general rather than for the cases the tests \
      check; if a test looks wrong, say so instead of working around it.\n\n";
+
+/// What a chat about documents says instead of [`CODE`].
+///
+/// The shapes of Word, Excel and PowerPoint are the one thing a model is
+/// reliably wrong about on its own: they look like text in a file listing, and a
+/// text write leaves a file no editor opens. The rule is the same one the
+/// office skills carry, said where it cannot be missed.
+pub(super) const DOCUMENTS: &str = "Produce and change documents with code, never by typing \
+     them out: a .docx, .xlsx or .pptx is a ZIP of XML, and a text write leaves a \
+     file no editor can open. Read them with Read, which returns the text, the \
+     tables and the slides, and shows the pictures inside; ExtractImages writes \
+     those pictures out as files when they are to be used rather than looked at. \
+     Build and edit them in the format's own library from a script you write and \
+     run through Bash, following the office skill for that format (`docx`, \
+     `xlsx`, `pptx`); write reusable work as a script file, since a script that \
+     can be run again is how a document gets fixed after a mistake. Once a \
+     document is written, look at what came out вЂ” read it back or convert it to \
+     images вЂ” before saying it is done.\n\n";
 
 pub(super) const BATCHING: &str = "When several reads or searches do not depend on each other, \
      request them together in one response: they run at the same time. A call that \
@@ -137,6 +167,15 @@ pub(super) const EDITING: &str = "<editing>\nYour edits go to the working tree a
      commands where you can, and delete any scratch file or script you do create \
      before you finish.\n</editing>\n\n";
 
+/// The same rules for a chat about documents, where a file is usually a document
+/// rather than source, and where the person's own files are at stake.
+pub(super) const EDITING_CHAT: &str = "<editing>\nYour edits go to the person's folder as you \
+     make them, so a file you have written reads back the way you wrote it, and there \
+     is nothing for them to save or apply. Read a document before replacing it, and \
+     keep a generator in a script file you can run again instead of retyping the \
+     whole document. Check things with commands where you can, and delete any scratch \
+     file or script you do create before you finish.\n</editing>\n\n";
+
 const COMMUNICATION: &str = "<communication>\nWrite to the human in the language they \
      write to you in. Be direct: no preamble, and no restating of what their feed \
      already shows.\n\n\
@@ -159,10 +198,11 @@ const COMMUNICATION: &str = "<communication>\nWrite to the human in the language
 pub(super) const CAPTIONS: &str = "<action_captions>\nSome tools carry a required `description` \
      field. That string is what the human sees in the feed in place of the tool \
      name. Write it about the substance: what you found out or accomplished, not \
-     which tool you reached for. Past tense, first person, at most 60 characters, \
+     which tool you reached for. Single line, past tense, first person, at most 60 characters, \
      no trailing period, and in the language the human is writing to you in.\n\
      Good: \"Found the existing clipboard usage\".\n\
      Bad: \"Ran rg clipboard src/\".\n\
+     Do not include tool names or command flags.\n\
      Tools without that field are captioned by the interface from the facts — do \
      not narrate those in prose as well.\n</action_captions>\n";
 
@@ -172,7 +212,15 @@ pub fn build(
     instructions: Option<&Instructions>,
     shell: Shell,
 ) -> String {
-    build_with_memory(project_root, intent, instructions, shell, None, None)
+    build_with_memory(
+        project_root,
+        intent,
+        Profile::Code,
+        instructions,
+        shell,
+        None,
+        None,
+    )
 }
 
 /// [`build`] with the project's memory index and skills list, where it has them.
@@ -181,40 +229,56 @@ pub fn build(
 /// request, and a read in here would change it the moment a note is written or
 /// a skill added mid-session, moving the cached prefix. The caller reads them
 /// once when the session starts.
+///
+/// The profile is the one axis that changes the shape of the text rather than a
+/// sentence in it: a chat about documents is not told how to write code, and a
+/// chat about code is not told about Word.
 pub fn build_with_memory(
     project_root: &Path,
     intent: Intent,
+    profile: Profile,
     instructions: Option<&Instructions>,
     shell: Shell,
     memory: Option<&MemoryIndex>,
     skills: Option<&Listing>,
 ) -> String {
     let agent = intent == Intent::Agent;
-    let mut s = String::from(INTRO);
+    let chat = profile == Profile::Chat;
+    let mut s = String::from(if chat { INTRO_CHAT } else { INTRO });
 
     s.push_str("<environment>\n");
     s.push_str(&format!(
-        "Project root: {}. Use it as the default base for relative paths.\n",
+        "{}: {}. Use it as the default base for relative paths.\n",
+        if chat {
+            "The person's folder"
+        } else {
+            "Project root"
+        },
         shown(project_root)
     ));
     // No bash tool in plan, so the fact would be noise in the cached prefix.
     if agent {
         s.push_str(shell_fact(shell));
-        s.push_str(
+        s.push_str(if chat {
+            "Keep all work in this chat's folder. If the user names an external file, \
+             use Read or ReadImage to bring it into the chat first, and use the copied \
+             path reported by the tool for further work. Do not use shell commands to \
+             read or modify external files directly. The shell is not a sandbox.\n"
+        } else {
             "The project is a starting directory, not a shell sandbox. Bash can run \
              installed programs such as Python and use any existing directory as cwd, \
-             including absolute paths outside the project.\n",
-        );
+             including absolute paths outside the project.\n"
+        });
     }
     s.push_str("</environment>\n\n");
 
     s.push_str(if agent { MODE_AGENT } else { MODE_PLAN });
 
     s.push_str("<how_to_work>\n");
-    s.push_str(GROUNDING);
+    s.push_str(if chat { GROUNDING_CHAT } else { GROUNDING });
     s.push_str(SCOPE);
     if agent {
-        s.push_str(CODE);
+        s.push_str(if chat { DOCUMENTS } else { CODE });
     }
     s.push_str(BATCHING);
     s.push_str(FOLLOW_THROUGH);
@@ -234,7 +298,7 @@ pub fn build_with_memory(
     // In plan there are no writing tools at all, so explaining how writing
     // works would be noise in the cached prefix.
     if agent {
-        s.push_str(EDITING);
+        s.push_str(if chat { EDITING_CHAT } else { EDITING });
     }
     s.push_str(COMMUNICATION);
     s.push_str(CAPTIONS);
@@ -351,7 +415,8 @@ pub(super) fn project_section(instructions: &Instructions) -> String {
     s
 }
 
-const NESTED_INTRO: &str = "Some directories keep instructions of their own. Each applies to files \
+const NESTED_INTRO: &str =
+    "Some directories keep instructions of their own. Each applies to files \
      under its directory and nowhere else, and there it is more specific than \
      the project's instructions above: where they disagree, the nearer file \
      wins. Read when this session started; if one changes, read it again.\n";
@@ -413,7 +478,12 @@ mod tests {
             }),
             nested: Vec::new(),
         };
-        build(Path::new("/p"), Intent::Agent, Some(&instructions), Shell::default())
+        build(
+            Path::new("/p"),
+            Intent::Agent,
+            Some(&instructions),
+            Shell::default(),
+        )
     }
 
     #[test]
@@ -520,6 +590,37 @@ mod tests {
     }
 
     #[test]
+    fn a_chat_about_documents_is_told_about_documents_not_about_code() {
+        let build_for = |profile| {
+            build_with_memory(
+                Path::new("/p"),
+                Intent::Agent,
+                profile,
+                None,
+                Shell::default(),
+                None,
+                None,
+            )
+        };
+        let chat = build_for(Profile::Chat);
+        let code = build_for(Profile::Code);
+        // The rule that keeps a .docx from being written as bytes is the one
+        // thing a model gets wrong without being told.
+        assert!(chat.contains("ZIP of XML"));
+        assert!(chat.contains("The person's folder"));
+        assert!(!chat.contains("Write code that reads like"));
+        assert!(!code.contains("ZIP of XML"));
+        assert!(code.contains("Project root"));
+        // Everything that is about how work is done rather than about code
+        // stays in both.
+        for shared in ["<permissions>", "<communication>", "<action_captions>"] {
+            assert!(chat.contains(shared), "{shared}");
+            assert!(code.contains(shared), "{shared}");
+        }
+        assert_ne!(chat, code);
+    }
+
+    #[test]
     fn project_instructions_come_last_and_name_their_file() {
         let p = with_file("Use tabs.\n", false);
         let section = p.find("<project_instructions").unwrap();
@@ -555,7 +656,12 @@ mod tests {
             }),
             nested,
         };
-        build(Path::new("/p"), Intent::Agent, Some(&instructions), Shell::default())
+        build(
+            Path::new("/p"),
+            Intent::Agent,
+            Some(&instructions),
+            Shell::default(),
+        )
     }
 
     #[test]
@@ -565,8 +671,13 @@ mod tests {
             vec![nested("crates/core", "Core rules.\n", false)],
         );
         let root = p.find("Root rules.").unwrap();
-        let section = p.find("<directory_instructions dir=\"crates/core\"").unwrap();
-        assert!(root < section, "the nearer file comes after the general one");
+        let section = p
+            .find("<directory_instructions dir=\"crates/core\"")
+            .unwrap();
+        assert!(
+            root < section,
+            "the nearer file comes after the general one"
+        );
         assert!(p[section..].contains("Core rules."));
         assert!(p[section..].contains("path=\"crates/core/AGENTS.md\""));
         assert!(p.contains("the nearer file"));
@@ -597,7 +708,12 @@ mod tests {
 
     #[test]
     fn the_prompt_with_nested_files_is_stable() {
-        let make = || prompt_with(Some("r"), vec![nested("a", "x", false), nested("b", "y", false)]);
+        let make = || {
+            prompt_with(
+                Some("r"),
+                vec![nested("a", "x", false), nested("b", "y", false)],
+            )
+        };
         assert_eq!(make(), make());
     }
 
@@ -616,7 +732,15 @@ mod tests {
     }
 
     fn with_memory(intent: Intent, memory: &MemoryIndex) -> String {
-        build_with_memory(Path::new("/p"), intent, None, Shell::default(), Some(memory), None)
+        build_with_memory(
+            Path::new("/p"),
+            intent,
+            Profile::Code,
+            None,
+            Shell::default(),
+            Some(memory),
+            None,
+        )
     }
 
     #[test]
@@ -633,6 +757,7 @@ mod tests {
         let p = build_with_memory(
             Path::new("/p"),
             Intent::Agent,
+            Profile::Code,
             Some(&instructions),
             Shell::default(),
             Some(&memory),
@@ -650,14 +775,25 @@ mod tests {
         // The index is an input, not a read: two builds with the same index
         // must be the same bytes, or the cache is lost on every request.
         let memory = index("- [a](a.md) — one\n", false);
-        assert_eq!(with_memory(Intent::Agent, &memory), with_memory(Intent::Agent, &memory));
+        assert_eq!(
+            with_memory(Intent::Agent, &memory),
+            with_memory(Intent::Agent, &memory)
+        );
     }
 
     #[test]
     fn without_memory_the_prompt_is_what_it_was_before() {
         assert!(!plain(Intent::Agent).contains("project_memory"));
         assert_eq!(
-            build_with_memory(Path::new("/p"), Intent::Agent, None, Shell::default(), None, None),
+            build_with_memory(
+                Path::new("/p"),
+                Intent::Agent,
+                Profile::Code,
+                None,
+                Shell::default(),
+                None,
+                None
+            ),
             plain(Intent::Agent)
         );
     }
@@ -677,11 +813,15 @@ mod tests {
 
     #[test]
     fn skills_are_listed_by_name_and_described_in_a_tagged_section() {
-        let skills = skills_of(&[("audit", "Dependency audit"), ("release", "Release")], false);
+        let skills = skills_of(
+            &[("audit", "Dependency audit"), ("release", "Release")],
+            false,
+        );
         for intent in [Intent::Plan, Intent::Agent] {
             let p = build_with_memory(
                 Path::new("/p"),
                 intent,
+                Profile::Code,
                 None,
                 Shell::default(),
                 None,
@@ -698,14 +838,30 @@ mod tests {
     #[test]
     fn a_cut_skills_list_says_so() {
         let skills = skills_of(&[("audit", "a")], true);
-        let p = build_with_memory(Path::new("/p"), Intent::Agent, None, Shell::default(), None, Some(&skills));
+        let p = build_with_memory(
+            Path::new("/p"),
+            Intent::Agent,
+            Profile::Code,
+            None,
+            Shell::default(),
+            None,
+            Some(&skills),
+        );
         assert!(p.contains("only its beginning is included"), "{p}");
     }
 
     #[test]
     fn a_project_without_skills_gets_the_prompt_it_always_had() {
         assert!(!plain(Intent::Agent).contains("available_skills"));
-        let p = build_with_memory(Path::new("/p"), Intent::Agent, None, Shell::default(), None, None);
+        let p = build_with_memory(
+            Path::new("/p"),
+            Intent::Agent,
+            Profile::Code,
+            None,
+            Shell::default(),
+            None,
+            None,
+        );
         assert_eq!(p, plain(Intent::Agent));
     }
 
@@ -716,6 +872,7 @@ mod tests {
             build_with_memory(
                 Path::new("/p"),
                 Intent::Agent,
+                Profile::Code,
                 None,
                 Shell::default(),
                 None,

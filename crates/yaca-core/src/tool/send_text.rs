@@ -94,16 +94,18 @@ impl Tool for SendText {
 
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
         let (label, command, text) = match (input["path"].as_str(), input["command"].as_u64()) {
-            (Some(_), Some(_)) => return Err(ToolError::failed("either path or command, not both")),
+            (Some(_), Some(_)) => {
+                return Err(ToolError::failed("either path or command, not both"))
+            }
             (None, None) => return Err(ToolError::failed("missing path or command")),
             (None, Some(id)) => {
                 let id = crate::process::ProcessId(
-                    u32::try_from(id).map_err(|_| ToolError::failed("no such background command"))?,
+                    u32::try_from(id)
+                        .map_err(|_| ToolError::failed("no such background command"))?,
                 );
-                let (command, text) = ctx
-                    .processes
-                    .full_output(id)
-                    .ok_or_else(|| ToolError::failed(format!("no background command with id {id}")))?;
+                let (command, text) = ctx.processes.full_output(id).ok_or_else(|| {
+                    ToolError::failed(format!("no background command with id {id}"))
+                })?;
                 (format!("command {id}"), Some(command), text)
             }
             (Some(raw_path), None) => {
@@ -118,8 +120,11 @@ impl Tool for SendText {
 /// The text of a file, with the name it is shown under.
 async fn file_text(ctx: &ToolCtx, raw_path: &str) -> Result<(String, String), ToolError> {
     {
-
-        if ctx.ws.resolve_new(raw_path).is_ok_and(|abs| crate::picture::is_picture(&abs)) {
+        if ctx
+            .ws
+            .resolve_new(raw_path)
+            .is_ok_and(|abs| crate::picture::is_picture(&abs))
+        {
             return Err(ToolError::failed_with(
                 format!("{raw_path} is an image, not text"),
                 "This file is an image, and SendText shows text only.",
@@ -135,7 +140,9 @@ async fn file_text(ctx: &ToolCtx, raw_path: &str) -> Result<(String, String), To
             .map_err(|_| ToolError::failed("failed to read file"))??;
 
         if target.abs.is_dir() {
-            return Err(ToolError::failed(format!("{raw_path} is a directory, not a file")));
+            return Err(ToolError::failed(format!(
+                "{raw_path} is a directory, not a file"
+            )));
         }
         let Some(text) = target.current else {
             return Err(ToolError::failed(format!("not found: {raw_path}")));
@@ -157,11 +164,16 @@ fn show(
         let all: Vec<&str> = text.lines().collect();
         let total = all.len();
         if total == 0 {
-            return Err(ToolError::failed(format!("{raw_path} is empty, nothing to show")));
+            return Err(ToolError::failed(format!(
+                "{raw_path} is empty, nothing to show"
+            )));
         }
 
         let first = input["start_line"].as_u64().unwrap_or(1).max(1) as usize;
-        let last = input["end_line"].as_u64().map_or(total, |n| n as usize).min(total);
+        let last = input["end_line"]
+            .as_u64()
+            .map_or(total, |n| n as usize)
+            .min(total);
         if first > total {
             return Err(ToolError::failed(format!(
                 "file has {total} lines, requested line {first}"
@@ -235,7 +247,10 @@ mod tests {
         let (ctx, mut rx) = ctx_with_events(&dir);
 
         SendText
-            .run(&ctx, json!({ "path": "a.rs", "start_line": 2, "end_line": 99 }))
+            .run(
+                &ctx,
+                json!({ "path": "a.rs", "start_line": 2, "end_line": 99 }),
+            )
             .await
             .unwrap();
 
@@ -269,9 +284,16 @@ mod tests {
         dir.write("big.log", &format!("{}\n", "x".repeat(999)).repeat(300));
         let (ctx, mut rx) = ctx_with_events(&dir);
 
-        let err = SendText.run(&ctx, json!({ "path": "big.log" })).await.unwrap_err();
+        let err = SendText
+            .run(&ctx, json!({ "path": "big.log" }))
+            .await
+            .unwrap_err();
 
-        assert!(err.for_model().contains("start_line"), "{}", err.for_model());
+        assert!(
+            err.for_model().contains("start_line"),
+            "{}",
+            err.for_model()
+        );
         assert!(rx.try_recv().is_err());
         // A part of the same file still goes through.
         SendText
@@ -284,11 +306,18 @@ mod tests {
     async fn a_binary_file_and_an_image_are_refused() {
         let dir = TempDir::new();
         std::fs::write(dir.path().join("bin"), [0u8, 1, 2, 3]).unwrap();
-        std::fs::write(dir.path().join("shot.png"), crate::picture::tests::png(8, 8)).unwrap();
+        std::fs::write(
+            dir.path().join("shot.png"),
+            crate::picture::tests::png(8, 8),
+        )
+        .unwrap();
         let (ctx, mut rx) = ctx_with_events(&dir);
 
         for path in ["bin", "shot.png"] {
-            assert!(SendText.run(&ctx, json!({ "path": path })).await.is_err(), "{path}");
+            assert!(
+                SendText.run(&ctx, json!({ "path": path })).await.is_err(),
+                "{path}"
+            );
         }
         assert!(rx.try_recv().is_err());
     }
@@ -298,17 +327,28 @@ mod tests {
         let dir = TempDir::new();
         let (ctx, mut rx) = ctx_with_events(&dir);
         let id = ctx.processes.register("npm test".into(), ".".into(), None);
-        ctx.processes.output(id, vec!["PASS a".into(), "PASS b".into()]);
+        ctx.processes
+            .output(id, vec!["PASS a".into(), "PASS b".into()]);
 
-        let out = SendText.run(&ctx, json!({ "command": id.0 })).await.unwrap();
-        assert!(out.text.contains(&format!("command {}", id.0)), "{}", out.text);
+        let out = SendText
+            .run(&ctx, json!({ "command": id.0 }))
+            .await
+            .unwrap();
+        assert!(
+            out.text.contains(&format!("command {}", id.0)),
+            "{}",
+            out.text
+        );
         let mut shown = None;
         while let Ok(event) = rx.try_recv() {
             if let AgentEvent::TextShown { text, command, .. } = event {
                 shown = Some((text, command));
             }
         }
-        assert_eq!(shown, Some(("PASS a\nPASS b".to_string(), Some("npm test".to_string()))));
+        assert_eq!(
+            shown,
+            Some(("PASS a\nPASS b".to_string(), Some("npm test".to_string())))
+        );
 
         // Showing is not reading: the model's cursor has not moved.
         let read = ctx.processes.read(id, 10_000).unwrap();
@@ -320,7 +360,10 @@ mod tests {
         let dir = TempDir::new();
         dir.write("a.rs", "x\n");
         let (ctx, _ws) = ctx_for(&dir);
-        assert!(SendText.run(&ctx, json!({ "path": "a.rs", "command": 1 })).await.is_err());
+        assert!(SendText
+            .run(&ctx, json!({ "path": "a.rs", "command": 1 }))
+            .await
+            .is_err());
         assert!(SendText.run(&ctx, json!({})).await.is_err());
         assert!(SendText.run(&ctx, json!({ "command": 42 })).await.is_err());
     }

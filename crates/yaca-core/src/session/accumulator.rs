@@ -3,14 +3,14 @@
 //! Kept apart from the turn loop on purpose: it is a pure transformation, with
 //! no network, no files and no clock, and it is checked line by line.
 //!
-//! The accumulator does not turn tool calls into `ToolCallStarted`: §5.4 requires
-//! a present-tense caption at the moment of execution, not at the moment of parsing
-//! response. The turn loop emits them when it actually starts the work.
+//! Tool calls are previewed as their arguments arrive; `ToolCallStarted` is
+//! still emitted only by the executor, after the whole response is assembled.
 
 use std::collections::BTreeMap;
 
+use super::preview::PreviewInput;
 use crate::event::{AgentEvent, StopReason};
-use crate::id::{BlockId, TurnId};
+use crate::id::{BlockId, CallId, TurnId};
 use crate::message::ContentBlock;
 use crate::provider::{BlockKind, ProviderEvent};
 use crate::usage::TokenCounts;
@@ -54,6 +54,8 @@ pub struct Completion {
     pub calls: Vec<PendingCall>,
     pub stop_reason: StopReason,
     pub usage: TokenCounts,
+    pub cost: Option<f64>,
+    pub aside_usage: Vec<(TokenCounts, crate::usage::Pricing, Option<f64>)>,
     /// `(provider, model)` the request was routed to, from the last `Routed`
     /// the request carried; `None` when the provider did not route it. The
     /// request is priced by this model, not by the session's one: the session
@@ -82,6 +84,7 @@ enum Partial {
         id: String,
         name: String,
         json: String,
+        preview: PreviewInput,
     },
 }
 
@@ -91,6 +94,8 @@ pub struct Accumulator {
     blocks: BTreeMap<u32, Partial>,
     stop_reason: Option<StopReason>,
     usage: TokenCounts,
+    cost: Option<f64>,
+    aside_usage: Vec<(TokenCounts, crate::usage::Pricing, Option<f64>)>,
     /// The last `Routed` of this request. Not a feed event here: the turn
     /// decides whether the human sees it, once per turn (`turn::steps`).
     route: Option<RouteDecision>,
@@ -103,6 +108,8 @@ impl Accumulator {
             blocks: BTreeMap::new(),
             stop_reason: None,
             usage: TokenCounts::default(),
+            cost: None,
+            aside_usage: Vec::new(),
             route: None,
         }
     }
@@ -136,6 +143,17 @@ impl Accumulator {
             }
 
             ProviderEvent::BlockStart { index, kind } => {
+                let events = match &kind {
+                    BlockKind::ToolUse { id, name } => {
+                        vec![Self::preview(
+                            &self.turn_id,
+                            id,
+                            name,
+                            serde_json::json!({}),
+                        )]
+                    }
+                    _ => vec![],
+                };
                 let partial = match kind {
                     BlockKind::Text => Partial::Text {
                         id: BlockId::new(),
@@ -151,10 +169,11 @@ impl Accumulator {
                         id,
                         name,
                         json: String::new(),
+                        preview: PreviewInput::default(),
                     },
                 };
                 self.blocks.insert(index, partial);
-                vec![]
+                events
             }
 
             ProviderEvent::TextDelta { index, text } => {
@@ -198,8 +217,17 @@ impl Accumulator {
                 index,
                 partial_json,
             } => {
-                if let Some(Partial::ToolUse { json, .. }) = self.blocks.get_mut(&index) {
+                if let Some(Partial::ToolUse {
+                    id,
+                    name,
+                    json,
+                    preview,
+                }) = self.blocks.get_mut(&index)
+                {
                     json.push_str(&partial_json);
+                    if let Some(input) = preview.push(&partial_json) {
+                        return vec![Self::preview(&self.turn_id, id, name, input)];
+                    }
                 }
                 vec![]
             }
@@ -214,7 +242,31 @@ impl Accumulator {
                 vec![]
             }
 
+            ProviderEvent::Cost { usd } => {
+                self.cost = Some(usd);
+                vec![]
+            }
+            ProviderEvent::AsideUsage {
+                usage,
+                pricing,
+                cost,
+            } => {
+                self.aside_usage.push((usage, pricing, cost));
+                vec![]
+            }
             ProviderEvent::MessageStop => vec![],
+        }
+    }
+
+    fn preview(turn_id: &TurnId, id: &str, name: &str, input: serde_json::Value) -> AgentEvent {
+        AgentEvent::ToolCallPreparing {
+            turn_id: turn_id.clone(),
+            call_id: CallId::from(id),
+            tool: name.to_owned(),
+            description: None,
+            target: None,
+            input,
+            parent: None,
         }
     }
 
@@ -258,7 +310,7 @@ impl Accumulator {
                     signature,
                 }),
                 Partial::Redacted { data } => blocks.push(ContentBlock::RedactedThinking { data }),
-                Partial::ToolUse { id, name, json } => {
+                Partial::ToolUse { id, name, json, .. } => {
                     // An empty string is a legal case: a tool with no arguments.
                     let parsed = if json.trim().is_empty() {
                         Ok(serde_json::json!({}))
@@ -295,6 +347,8 @@ impl Accumulator {
             // A stream cut off without a `message_delta` counts as the turn having ended.
             stop_reason: self.stop_reason.unwrap_or(StopReason::EndTurn),
             usage: self.usage,
+            cost: self.cost,
+            aside_usage: self.aside_usage,
             routed,
         }
     }
@@ -420,7 +474,10 @@ mod tests {
         let garbled: Vec<_> = acc.finish().calls.iter().map(|c| c.garbled).collect();
         // The broken one was finished before the cap came, so it was sent
         // broken: telling the model it ran out of room would be untrue.
-        assert_eq!(garbled, vec![None, Some(Garbled::Invalid), Some(Garbled::Cut)]);
+        assert_eq!(
+            garbled,
+            vec![None, Some(Garbled::Invalid), Some(Garbled::Cut)]
+        );
     }
 
     #[test]

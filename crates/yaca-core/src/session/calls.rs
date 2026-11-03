@@ -24,12 +24,13 @@ use crate::error::ToolError;
 use crate::event::{AgentEvent, ToolMeta};
 use crate::hooks::{self, Finished, PreOutcome};
 use crate::id::{CallId, TurnId};
-use crate::message::ContentBlock;
 use crate::instructions::Instructions;
-use crate::tool::memory::store::MemoryIndex;
-use crate::skills::Listing;
 use crate::intent::Intent;
+use crate::message::ContentBlock;
+use crate::profile::Profile;
 use crate::provider::Provider;
+use crate::skills::Listing;
+use crate::tool::memory::store::MemoryIndex;
 use crate::tool::{take_description, Progress, ToolCtx, ToolRegistry};
 use crate::usage::ModelInfo;
 use crate::verify;
@@ -37,9 +38,9 @@ use crate::workspace::Workspace;
 
 use super::accumulator::{Garbled, PendingCall};
 use super::asking::{Answer, Gate, Queue};
-use super::plugin_hooks::PluginPre;
 use super::changeset;
 use super::checkpoints;
+use super::plugin_hooks::PluginPre;
 use super::questions::Questions;
 use super::subagent::Subagents;
 use super::Shared;
@@ -116,6 +117,11 @@ impl Caller {
     /// Which tools exist at all in the current mode (§7.1).
     pub(super) fn intent(&self) -> Intent {
         self.shared.state.lock().unwrap().mode.intent()
+    }
+
+    /// What the chat is for, as the tools are filtered by (§7.1).
+    pub(super) fn profile(&self) -> Profile {
+        self.shared.state.lock().unwrap().profile
     }
 
     pub(super) fn emit(&self, event: AgentEvent) {
@@ -257,7 +263,7 @@ impl Caller {
             .iter()
             .take_while(|call| {
                 self.registry
-                    .get(&call.name, self.intent())
+                    .get(&call.name, self.intent(), self.profile())
                     .is_some_and(|tool| tool.concurrent())
             })
             .count()
@@ -276,7 +282,7 @@ impl Caller {
     ) -> (ContentBlock, bool) {
         let call_id = CallId::from(call.id.clone());
         let mut input = call.input;
-        let tool = self.registry.get(&call.name, self.intent());
+        let tool = self.registry.get(&call.name, self.intent(), self.profile());
         // Before the first event of the call, and before the checks that may
         // fail it: a silent call stays silent whichever way it ends.
         if tool.as_ref().is_some_and(|tool| tool.silent()) {
@@ -302,6 +308,36 @@ impl Caller {
             let result = self.failed_unrun(turn_id, call_id, &call.name, description, input, err);
             return (result, false);
         };
+
+        let mut copied_note = None;
+        if self.ws.is_chat() {
+            let field = match call.name.as_str() {
+                "Read" | "ReadImage" | "Edit" | "Write" | "Delete" | "ExtractImages" | "Grep"
+                | "Glob" | "SendText" => Some("path"),
+                "Move" => Some("from"),
+                _ => None,
+            };
+            if let Some((field, raw)) = field.and_then(|field| {
+                input
+                    .get(field)
+                    .and_then(|value| value.as_str())
+                    .map(|raw| (field, raw))
+            }) {
+                let source = std::path::Path::new(raw);
+                let source = if source.is_absolute() {
+                    source.to_path_buf()
+                } else {
+                    self.ws.root().join(source)
+                };
+                if self.ws.resolve_existing(raw).is_err() && source.is_file() {
+                    if let Ok(copy) = super::chat_files::copy(&source, self.ws.root()) {
+                        let destination = self.ws.display(&copy);
+                        copied_note = Some(format!("\n\nThe requested file was outside the chat. A copy was made at {destination}; the original was left unchanged."));
+                        input[field] = serde_json::Value::String(destination);
+                    }
+                }
+            }
+        }
 
         let target = tool.target(&input);
         self.emit(AgentEvent::ToolCallStarted {
@@ -346,7 +382,7 @@ impl Caller {
         };
 
         // What the model is told about arguments a hook rewrote.
-        let mut rewritten: Vec<String> = Vec::new();
+        let mut rewritten: Vec<String> = copied_note.into_iter().collect();
         // Hooks answer before the permission question (§5.7): a call a hook
         // refuses was never going to run, so the human is not asked about it. After
         // the lane, so a hook that reads the tree sees what the call would see.
@@ -366,7 +402,10 @@ impl Caller {
                     call_id: call_id.clone(),
                     chunk: "Project hook changed the call's arguments\n".to_string(),
                 });
-                rewritten.push(super::plugin_hooks::rewritten_note("The project's", &updated));
+                rewritten.push(super::plugin_hooks::rewritten_note(
+                    "The project's",
+                    &updated,
+                ));
                 input = updated;
             }
             PreOutcome::Refused(refusal) => {
@@ -384,10 +423,16 @@ impl Caller {
         // The plugins' hooks after the project's: the project's guard has the
         // first word. A plugin can refuse a call or ask for the question; it
         // cannot answer the question for the human.
-        let (mut pre_context, force_ask) = match self.plugin_pre(&call_id, &call.name, &mut input, cancel).await {
+        let (mut pre_context, force_ask) = match self
+            .plugin_pre(&call_id, &call.name, &mut input, cancel)
+            .await
+        {
             PluginPre::Go(context) => (context, false),
             PluginPre::Ask(context) => (context, true),
-            PluginPre::Blocked { for_human, for_model } => {
+            PluginPre::Blocked {
+                for_human,
+                for_model,
+            } => {
                 self.emit(AgentEvent::ToolCallRejected {
                     call_id,
                     reason: for_human,
@@ -460,6 +505,27 @@ impl Caller {
             vision: self.shared.sees(&self.model()),
             shell: self.shared.shell,
             respect_robots: self.shared.respect_robots,
+            aside_ledger: Some(self.shared.ledger.clone()),
+            decision_pricing: self
+                .shared
+                .decision_pricing
+                .unwrap_or(crate::usage::Pricing {
+                    input: 0.0,
+                    output: 0.0,
+                }),
+            web_fetch_pricing: self
+                .shared
+                .web_fetch_pricing
+                .unwrap_or_else(|| self.model().pricing),
+            web_fetch_model: self.shared.summarize_web_fetch.then(|| {
+                self.shared.web_fetch_model.clone().unwrap_or_else(|| {
+                    crate::tool::decision::DecisionSetup {
+                        provider: self.provider.clone(),
+                        model: self.model().id,
+                        systemone: None,
+                    }
+                })
+            }),
             title_locked: self
                 .shared
                 .recorder
@@ -473,7 +539,11 @@ impl Caller {
         // Copied only when a post hook will read it: most calls have none, and
         // a large write should not be copied for nothing.
         let for_hooks = (hooks::wants_post(self.shared.settings.hooks(), &call.name)
-            || self.shared.plugins.hooks.has(crate::plugin::hooks::HookEvent::PostToolUse)
+            || self
+                .shared
+                .plugins
+                .hooks
+                .has(crate::plugin::hooks::HookEvent::PostToolUse)
             || !pre_context.is_empty())
         .then(|| input.clone());
 
@@ -562,7 +632,15 @@ impl Caller {
                     );
                 }
                 let text = self
-                    .after_hooks(&call.name, for_hooks, false, out.text, &call_id, &pre_context, cancel)
+                    .after_hooks(
+                        &call.name,
+                        for_hooks,
+                        false,
+                        out.text,
+                        &call_id,
+                        &pre_context,
+                        cancel,
+                    )
                     .await;
                 if !out.detached {
                     self.emit(AgentEvent::ToolCallFinished {
@@ -598,7 +676,15 @@ impl Caller {
                 // the output of a failed command in an action's caption would be a wall of text,
                 // and without it the model has nothing to fix.
                 let text = self
-                    .after_hooks(&call.name, for_hooks, true, err.for_model(), &call_id, &pre_context, cancel)
+                    .after_hooks(
+                        &call.name,
+                        for_hooks,
+                        true,
+                        err.for_model(),
+                        &call_id,
+                        &pre_context,
+                        cancel,
+                    )
                     .await;
                 self.emit(AgentEvent::ToolCallFailed {
                     call_id,
@@ -657,8 +743,12 @@ impl Caller {
         let Some(input) = input else {
             return text;
         };
-        let text = self.project_after_hooks(tool, &input, failed, text, call_id, cancel).await;
-        let mut text = self.plugin_post(call_id, tool, &input, failed, text, cancel).await;
+        let text = self
+            .project_after_hooks(tool, &input, failed, text, call_id, cancel)
+            .await;
+        let mut text = self
+            .plugin_post(call_id, tool, &input, failed, text, cancel)
+            .await;
         for context in pre_context {
             text.push_str(context);
         }

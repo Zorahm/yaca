@@ -168,14 +168,12 @@ impl Tool for Decision {
             _ = ctx.cancel.cancelled() => return Err(ToolError::Cancelled),
             answer = tokio::time::timeout(
                 self.timeout,
-                collect_text(self.setup.provider.as_ref(), request),
+                collect_text(self.setup.provider.as_ref(), request, ctx, ctx.decision_pricing),
             ) => answer,
         };
 
         match answer {
-            Ok(Ok(text)) if !text.trim().is_empty() => {
-                Ok(ToolOutput::new(text.trim().to_string()))
-            }
+            Ok(Ok(text)) if !text.trim().is_empty() => Ok(ToolOutput::new(text.trim().to_string())),
             Ok(Ok(_)) => Err(unanswered("the model replied with nothing")),
             Ok(Err(e)) => Err(unanswered(&e.to_string())),
             Err(_) => Err(unanswered("it did not answer in time")),
@@ -184,16 +182,36 @@ impl Tool for Decision {
 }
 
 /// The text of the reply; thinking and other blocks are not part of the answer.
-async fn collect_text(
+pub(crate) async fn collect_text(
     provider: &dyn Provider,
     request: ProviderRequest,
+    ctx: &ToolCtx,
+    pricing: crate::usage::Pricing,
 ) -> Result<String, ProviderError> {
     let mut stream = provider.stream(request).await?;
     let mut text = String::new();
+    let mut usage = crate::usage::TokenCounts::default();
+    let mut cost = None;
     while let Some(event) = stream.next().await {
-        if let ProviderEvent::TextDelta { text: delta, .. } = event? {
-            text.push_str(&delta);
+        match event? {
+            ProviderEvent::TextDelta { text: delta, .. } => text.push_str(&delta),
+            ProviderEvent::MessageStart { usage: counts, .. }
+            | ProviderEvent::MessageDelta { usage: counts, .. } => usage.add(counts),
+            ProviderEvent::Cost { usd } => cost = Some(usd),
+            ProviderEvent::AsideUsage {
+                usage,
+                pricing,
+                cost,
+            } => {
+                if let Some(ledger) = &ctx.aside_ledger {
+                    ledger.add(usage, pricing, cost);
+                }
+            }
+            _ => {}
         }
+    }
+    if let Some(ledger) = &ctx.aside_ledger {
+        ledger.add(usage, pricing, cost);
     }
     Ok(text)
 }

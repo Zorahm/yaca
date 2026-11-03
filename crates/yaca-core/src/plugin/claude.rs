@@ -33,7 +33,9 @@ pub fn load(root: &Path, fallback_name: Option<&str>) -> Result<Contents, String
     let fields = match read_manifest(root)? {
         Some(fields) => fields,
         None => match fallback_name {
-            Some(name) => serde_json::Map::from_iter([("name".to_string(), Value::String(name.into()))]),
+            Some(name) => {
+                serde_json::Map::from_iter([("name".to_string(), Value::String(name.into()))])
+            }
             None => return Err("no .claude-plugin/plugin.json".into()),
         },
     };
@@ -78,11 +80,13 @@ pub fn load(root: &Path, fallback_name: Option<&str>) -> Result<Contents, String
         ("outputStyles", "output-styles", "output styles"),
     ] {
         if fields.contains_key(key) || root.join(default).exists() {
-            c.notes.push(format!("{what} of the plugin are not supported in Yaca"));
+            c.notes
+                .push(format!("{what} of the plugin are not supported in Yaca"));
         }
     }
     if empty && c.notes.is_empty() {
-        c.notes.push("the plugin has nothing that Yaca can load".into());
+        c.notes
+            .push("the plugin has nothing that Yaca can load".into());
     }
     Ok(c)
 }
@@ -92,8 +96,10 @@ fn read_manifest(root: &Path) -> Result<Option<serde_json::Map<String, Value>>, 
     if !path.exists() {
         return Ok(None);
     }
-    let manifest = contained(root, &path).ok_or(".claude-plugin/plugin.json points outside the plugin")?;
-    let text = std::fs::read_to_string(&manifest).map_err(|e| format!("cannot read plugin.json: {e}"))?;
+    let manifest =
+        contained(root, &path).ok_or(".claude-plugin/plugin.json points outside the plugin")?;
+    let text =
+        std::fs::read_to_string(&manifest).map_err(|e| format!("cannot read plugin.json: {e}"))?;
     match serde_json::from_str(&text).map_err(|e| format!("plugin.json is not JSON: {e}"))? {
         Value::Object(fields) => Ok(Some(fields)),
         _ => Err("plugin.json is not an object".into()),
@@ -110,13 +116,22 @@ pub fn is_namespace(name: &str) -> bool {
 
 /// The default location of a component and whatever the manifest adds, each
 /// checked to stay inside the plugin. Paths that do not exist are left out.
-fn paths(root: &Path, default: &str, declared: Option<&Value>, notes: &mut Vec<String>) -> Vec<PathBuf> {
+fn paths(
+    root: &Path,
+    default: &str,
+    declared: Option<&Value>,
+    notes: &mut Vec<String>,
+) -> Vec<PathBuf> {
     let mut raw = vec![default.to_string()];
     match declared {
         None => {}
         Some(Value::String(s)) => raw.push(s.clone()),
-        Some(Value::Array(items)) => raw.extend(items.iter().filter_map(Value::as_str).map(str::to_string)),
-        Some(_) => notes.push(format!("{default}: the manifest has neither a path nor a list of paths")),
+        Some(Value::Array(items)) => {
+            raw.extend(items.iter().filter_map(Value::as_str).map(str::to_string))
+        }
+        Some(_) => notes.push(format!(
+            "{default}: the manifest has neither a path nor a list of paths"
+        )),
     }
     let mut out = Vec::new();
     for path in raw {
@@ -143,12 +158,19 @@ fn push_unique(list: &mut Vec<PathBuf>, path: PathBuf) {
 fn markdown_files(path: &Path) -> Vec<PathBuf> {
     let is_md = |p: &Path| p.extension().is_some_and(|e| e == "md");
     if path.is_file() {
-        return if is_md(path) { vec![path.to_path_buf()] } else { Vec::new() };
+        return if is_md(path) {
+            vec![path.to_path_buf()]
+        } else {
+            Vec::new()
+        };
     }
     let Ok(read) = std::fs::read_dir(path) else {
         return Vec::new();
     };
-    read.flatten().map(|e| e.path()).filter(|p| p.is_file() && is_md(p)).collect()
+    read.flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_file() && is_md(p))
+        .collect()
 }
 
 /// Commands under the plugin's name: `commands/review.md` of `tools` is
@@ -172,16 +194,24 @@ fn commands(root: &Path, namespace: &str, files: &[PathBuf]) -> Vec<SlashCommand
 
 /// `${CLAUDE_PLUGIN_ROOT}` and `${PLUGIN_ROOT}` in text a plugin ships.
 pub fn substitute(text: &str, root: &str) -> String {
-    text.replace("${CLAUDE_PLUGIN_ROOT}", root).replace("${PLUGIN_ROOT}", root)
+    text.replace("${CLAUDE_PLUGIN_ROOT}", root)
+        .replace("${PLUGIN_ROOT}", root)
 }
 
 /// `.mcp.json` at the root and whatever `mcpServers` adds: a path to such a
 /// file, a list of paths, or the servers written inline.
-fn mcp(root: &Path, declared: Option<&Value>, notes: &mut Vec<String>) -> BTreeMap<String, McpServerSettings> {
+fn mcp(
+    root: &Path,
+    declared: Option<&Value>,
+    notes: &mut Vec<String>,
+) -> BTreeMap<String, McpServerSettings> {
     let mut servers = BTreeMap::new();
     let files = match declared {
         Some(Value::Object(inline)) => {
-            let map = inline.get("mcpServers").and_then(Value::as_object).unwrap_or(inline);
+            let map = inline
+                .get("mcpServers")
+                .and_then(Value::as_object)
+                .unwrap_or(inline);
             add_servers(map, &mut servers, notes);
             paths(root, ".mcp.json", None, notes)
         }
@@ -192,10 +222,16 @@ fn mcp(root: &Path, declared: Option<&Value>, notes: &mut Vec<String>) -> BTreeM
             .ok()
             .and_then(|t| serde_json::from_str::<Value>(&t).ok());
         let Some(Value::Object(doc)) = parsed else {
-            notes.push(format!("{} is not JSON, its servers were not loaded", plain(&file)));
+            notes.push(format!(
+                "{} is not JSON, its servers were not loaded",
+                plain(&file)
+            ));
             continue;
         };
-        let map = doc.get("mcpServers").and_then(Value::as_object).unwrap_or(&doc);
+        let map = doc
+            .get("mcpServers")
+            .and_then(Value::as_object)
+            .unwrap_or(&doc);
         add_servers(map, &mut servers, notes);
     }
     servers
@@ -208,7 +244,9 @@ fn add_servers(
 ) {
     for (name, entry) in map {
         if entry.get("type").and_then(Value::as_str) == Some("sse") {
-            notes.push(format!("server «{name}»: the sse transport is not supported in Yaca"));
+            notes.push(format!(
+                "server «{name}»: the sse transport is not supported in Yaca"
+            ));
             continue;
         }
         match serde_json::from_value::<McpServerSettings>(entry.clone()) {
@@ -232,9 +270,15 @@ fn hooks_of(root: &Path, declared: Option<&Value>, notes: &mut Vec<String>) -> V
         other => paths(root, "hooks/hooks.json", other, notes),
     };
     for file in files.into_iter().filter(|f| f.is_file()) {
-        match std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) {
+        match std::fs::read_to_string(&file)
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        {
             Some(doc) => out.extend(hooks::parse(&doc, notes)),
-            None => notes.push(format!("{} is not JSON, its hooks were not loaded", plain(&file))),
+            None => notes.push(format!(
+                "{} is not JSON, its hooks were not loaded",
+                plain(&file)
+            )),
         }
     }
     out

@@ -8,12 +8,12 @@ mod common;
 use std::sync::Arc;
 use std::time::Duration;
 
+use serde_json::json;
+use tokio::sync::broadcast::Receiver;
 use yaca_core::event::AgentEvent;
 use yaca_core::process::{ProcessId, ProcessState};
 use yaca_core::provider::mock::{script_text, MockProvider, Turn};
 use yaca_core::{Command, Mode, PermissionAnswer, ScopeKey};
-use serde_json::json;
-use tokio::sync::broadcast::Receiver;
 
 use common::{ask, calls, is_turn_over, session, until, until_within, TempProject};
 
@@ -331,10 +331,7 @@ async fn background_output_waits_for_the_row_to_be_selected() {
     };
     assert_eq!(*shown_id, id);
     assert_eq!(*dropped, 0);
-    assert!(
-        text.contains("one") && text.contains("two"),
-        "got: {text}"
-    );
+    assert!(text.contains("one") && text.contains("two"), "got: {text}");
 }
 
 #[tokio::test]
@@ -396,8 +393,13 @@ async fn a_background_command_wakes_an_idle_model_with_output() {
     assert_eq!(provider.seen.lock().unwrap().len(), 2);
     dir.write("release", "ready");
     let events = until_within(&mut rx, Duration::from_secs(30), is_turn_over).await;
-    assert!(events.iter().any(|event| matches!(event, AgentEvent::TurnStarted { .. })));
-    assert!(!events.iter().any(|event| matches!(event, AgentEvent::UserMessage { .. } | AgentEvent::CheckpointCreating { .. })));
+    assert!(events
+        .iter()
+        .any(|event| matches!(event, AgentEvent::TurnStarted { .. })));
+    assert!(!events.iter().any(|event| matches!(
+        event,
+        AgentEvent::UserMessage { .. } | AgentEvent::CheckpointCreating { .. }
+    )));
     assert_eq!(provider.seen.lock().unwrap().len(), 3);
     let note = last_user_text(&provider, 2);
     assert!(note.contains("exit code 3"), "{note}");

@@ -123,7 +123,11 @@ impl Installer {
         self.known()
             .into_iter()
             .find(|k| k.name == name)
-            .ok_or_else(|| err(format!("no marketplace {name}; list them with yaca plugins marketplace list")))
+            .ok_or_else(|| {
+                err(format!(
+                    "no marketplace {name}; list them with yaca plugins marketplace list"
+                ))
+            })
     }
 
     pub fn marketplaces(&self) -> Vec<MarketplaceSummary> {
@@ -165,8 +169,10 @@ impl Installer {
                     let name = marketplace::read(&staging.join("repo")).map_err(err)?.name;
                     let target = self.config_dir.join(marketplace::CLONES_DIR).join(&name);
                     git::remove_tree(&target);
-                    std::fs::create_dir_all(target.parent().unwrap_or(&self.config_dir)).map_err(|e| err(e.to_string()))?;
-                    std::fs::rename(staging.join("repo"), &target).map_err(|e| err(format!("cannot move the clone into place: {e}")))?;
+                    std::fs::create_dir_all(target.parent().unwrap_or(&self.config_dir))
+                        .map_err(|e| err(e.to_string()))?;
+                    std::fs::rename(staging.join("repo"), &target)
+                        .map_err(|e| err(format!("cannot move the clone into place: {e}")))?;
                     Ok(name)
                 })();
                 git::remove_tree(&staging);
@@ -175,7 +181,8 @@ impl Installer {
         };
         let mut list = marketplace::ListFile::load(&self.config_dir);
         list.hidden.retain(|h| h != &name);
-        list.marketplaces.insert(name.clone(), marketplace::Stored { source });
+        list.marketplaces
+            .insert(name.clone(), marketplace::Stored { source });
         list.save(&self.config_dir)?;
         let known = self.find(&name)?;
         Ok(self.summary(&known))
@@ -215,8 +222,10 @@ impl Installer {
             git::fetch(&url, known.source.reference(), &staging.join("repo")).map_err(err)?;
             let target = known.dir(&self.config_dir);
             git::remove_tree(&target);
-            std::fs::create_dir_all(target.parent().unwrap_or(&self.config_dir)).map_err(|e| err(e.to_string()))?;
-            std::fs::rename(staging.join("repo"), &target).map_err(|e| err(format!("cannot move the clone into place: {e}")))
+            std::fs::create_dir_all(target.parent().unwrap_or(&self.config_dir))
+                .map_err(|e| err(e.to_string()))?;
+            std::fs::rename(staging.join("repo"), &target)
+                .map_err(|e| err(format!("cannot move the clone into place: {e}")))
         })();
         git::remove_tree(&staging);
         result
@@ -278,9 +287,14 @@ impl Installer {
             marketplace: market.to_string(),
             entry: entry_name.to_string(),
         };
-        self.put(id, entry_name, market, entry.version.clone(), from, |staging| {
-            fetch::from_entry(&dir, &manifest, entry, staging)
-        })
+        self.put(
+            id,
+            entry_name,
+            market,
+            entry.version.clone(),
+            from,
+            |staging| fetch::from_entry(&dir, &manifest, entry, staging),
+        )
         .map(|(summary, _)| summary)
     }
 
@@ -324,7 +338,11 @@ impl Installer {
                 Registry::load(&self.config_dir).plugins.get(id).cloned()
             }
         }
-        .ok_or_else(|| err(format!("{id} disappeared from the registry during the update")))?;
+        .ok_or_else(|| {
+            err(format!(
+                "{id} disappeared from the registry during the update"
+            ))
+        })?;
         Ok(UpdateOutcome {
             id: id.to_string(),
             from: old.version,
@@ -336,11 +354,16 @@ impl Installer {
     /// Every plugin Yaca installed, updated; one that fails does not stop the
     /// others.
     pub fn update_all(&self) -> Vec<(String, Result<UpdateOutcome, CoreError>)> {
-        let ids: Vec<String> = Registry::load(&self.config_dir).plugins.into_keys().collect();
-        ids.into_iter().map(|id| {
-            let outcome = self.update(&id);
-            (id, outcome)
-        }).collect()
+        let ids: Vec<String> = Registry::load(&self.config_dir)
+            .plugins
+            .into_keys()
+            .collect();
+        ids.into_iter()
+            .map(|id| {
+                let outcome = self.update(&id);
+                (id, outcome)
+            })
+            .collect()
     }
 
     /// Removes an installed plugin: its files, its entry and its switch. Its
@@ -373,13 +396,19 @@ impl Installer {
         let staging = self.staging("install")?;
         let result = (|| -> Result<bool, CoreError> {
             let fetched = get(&staging).map_err(err)?;
-            let package = std::fs::canonicalize(&fetched.package).map_err(|e| err(e.to_string()))?;
+            let package =
+                std::fs::canonicalize(&fetched.package).map_err(|e| err(e.to_string()))?;
             let (_, contents) = read_package(&package, Some(name))
                 .map_err(|why| err(format!("the plugin was not accepted: {why}")))?;
             let content = registry::content_hash(&package);
             let version = declared_version
                 .or(contents.version.clone())
-                .or_else(|| fetched.revision.as_ref().map(|r| r.chars().take(12).collect()))
+                .or_else(|| {
+                    fetched
+                        .revision
+                        .as_ref()
+                        .map(|r| r.chars().take(12).collect())
+                })
                 .unwrap_or_else(|| content.clone());
 
             let mut registry = Registry::load(&self.config_dir);
@@ -393,8 +422,10 @@ impl Installer {
                 .join(dir_safe(&version));
             if changed || previous.as_ref().is_none_or(|p| p.path != target) {
                 git::remove_tree(&target);
-                std::fs::create_dir_all(target.parent().unwrap_or(&self.config_dir)).map_err(|e| err(e.to_string()))?;
-                std::fs::rename(&package, &target).map_err(|e| err(format!("cannot move the plugin into place: {e}")))?;
+                std::fs::create_dir_all(target.parent().unwrap_or(&self.config_dir))
+                    .map_err(|e| err(e.to_string()))?;
+                std::fs::rename(&package, &target)
+                    .map_err(|e| err(format!("cannot move the plugin into place: {e}")))?;
                 if let Some(p) = &previous {
                     if p.path != target {
                         self.remove_install_dir(&p.path);
@@ -420,12 +451,18 @@ impl Installer {
         })();
         git::remove_tree(&staging);
         let changed = result?;
-        let report = PluginSources::new(&self.config_dir, self.claude_home.clone()).load().report();
+        let report = PluginSources::new(&self.config_dir, self.claude_home.clone())
+            .load()
+            .report();
         let summary = report
             .plugins
             .into_iter()
             .find(|p| p.id == id)
-            .ok_or_else(|| err(format!("{id} was installed, but did not load: its name is taken by another plugin")))?;
+            .ok_or_else(|| {
+                err(format!(
+                    "{id} was installed, but did not load: its name is taken by another plugin"
+                ))
+            })?;
         Ok((summary, changed))
     }
 
@@ -436,7 +473,8 @@ impl Installer {
             .config_dir
             .join(CACHE_DIR)
             .join(format!(".{what}-{}", uuid::Uuid::new_v4().simple()));
-        std::fs::create_dir_all(&dir).map_err(|e| err(format!("cannot create {}: {e}", plain(&dir))))?;
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| err(format!("cannot create {}: {e}", plain(&dir))))?;
         Ok(dir)
     }
 
@@ -453,7 +491,13 @@ impl Installer {
 fn dir_safe(text: &str) -> String {
     let out: String = text
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || "-_.+".contains(c) { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || "-_.+".contains(c) {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     if out.is_empty() || out.starts_with('.') {
         format!("v{out}")
@@ -470,7 +514,8 @@ fn now() -> u64 {
 
 pub(super) fn write_json(path: &Path, value: &impl Serialize) -> Result<(), CoreError> {
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| err(format!("cannot create {}: {e}", dir.display())))?;
+        std::fs::create_dir_all(dir)
+            .map_err(|e| err(format!("cannot create {}: {e}", dir.display())))?;
     }
     let text = serde_json::to_string_pretty(value).map_err(|e| err(e.to_string()))?;
     std::fs::write(path, text).map_err(|e| err(format!("cannot write {}: {e}", plain(path))))

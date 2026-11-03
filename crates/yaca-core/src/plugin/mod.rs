@@ -115,7 +115,11 @@ pub struct Contents {
 }
 
 impl Contents {
-    pub(crate) fn named(name: String, version: Option<String>, description: Option<String>) -> Self {
+    pub(crate) fn named(
+        name: String,
+        version: Option<String>,
+        description: Option<String>,
+    ) -> Self {
         Contents {
             name,
             version,
@@ -207,7 +211,13 @@ impl PluginSources {
         // Ahead of Claude Code's: the same plugin installed in both is Yaca's
         // copy, which Yaca updates.
         for (id, path) in install::installed(&self.config_dir) {
-            catalog.add(&path, Some((id, None)), PluginOrigin::Marketplace, &data_root, &switches);
+            catalog.add(
+                &path,
+                Some((id, None)),
+                PluginOrigin::Marketplace,
+                &data_root,
+                &switches,
+            );
         }
         if let Some(home) = &self.claude_home {
             let enabled_in_claude = state::claude_enabled(home);
@@ -277,13 +287,19 @@ impl PluginCatalog {
         let Ok(root) = std::fs::canonicalize(dir) else {
             return self.reject(&shown, "the plugin directory cannot be opened".into());
         };
-        let installed_as = installed.as_ref().map(|(id, _)| id.split('@').next().unwrap_or(id).to_string());
+        let installed_as = installed
+            .as_ref()
+            .map(|(id, _)| id.split('@').next().unwrap_or(id).to_string());
         let (format, contents) = match read_package(&root, installed_as.as_deref()) {
             Ok(read) => read,
             Err(why) => return self.reject(&shown, why),
         };
         if let Some(first) = self.plugins.iter().find(|p| p.name == contents.name) {
-            let why = format!("plugin «{}» is already loaded from {}", contents.name, plain(&first.root));
+            let why = format!(
+                "plugin «{}» is already loaded from {}",
+                contents.name,
+                plain(&first.root)
+            );
             return self.reject(&shown, why);
         }
 
@@ -329,8 +345,15 @@ impl PluginCatalog {
 /// Reads a package in whichever format it is in. `installed_as` is the name an
 /// installer gave it: what was installed is a Claude Code plugin with or
 /// without a manifest, and without one it takes that name.
-pub(crate) fn read_package(root: &Path, installed_as: Option<&str>) -> Result<(PluginFormat, Contents), String> {
-    if root.join(claude::MANIFEST_DIR).join(claude::MANIFEST).is_file() {
+pub(crate) fn read_package(
+    root: &Path,
+    installed_as: Option<&str>,
+) -> Result<(PluginFormat, Contents), String> {
+    if root
+        .join(claude::MANIFEST_DIR)
+        .join(claude::MANIFEST)
+        .is_file()
+    {
         Ok((PluginFormat::Claude, claude::load(root, installed_as)?))
     } else if root.join(agent::MANIFEST).is_file() {
         Ok((PluginFormat::AgentPlugins, agent::load(root)?))
@@ -345,7 +368,13 @@ pub(crate) fn read_package(root: &Path, installed_as: Option<&str>) -> Result<(P
 /// filesystem might refuse becomes `_`.
 fn data_name(id: &str) -> String {
     id.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || "-_.@".contains(c) { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || "-_.@".contains(c) {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -395,26 +424,31 @@ pub fn mcp_specs(plugins: &[Plugin]) -> Vec<ServerSpec> {
     plugins
         .iter()
         .flat_map(|p| {
-            p.mcp_servers.iter().map(move |(name, settings)| ServerSpec {
-                name: format!("plugin:{}:{name}", p.name),
-                source: McpSource::Plugin,
-                settings: settings.clone(),
-                plugin: Some(PluginLaunch {
-                    root: p.root.clone(),
-                    data: p.data.clone(),
-                    // Agent Plugins §9: nothing but the two plugin variables
-                    // is expanded; Claude Code expands the environment too.
-                    expand_env: p.format == PluginFormat::Claude,
-                }),
-                app: None,
-            })
+            p.mcp_servers
+                .iter()
+                .map(move |(name, settings)| ServerSpec {
+                    name: format!("plugin:{}:{name}", p.name),
+                    source: McpSource::Plugin,
+                    settings: settings.clone(),
+                    plugin: Some(PluginLaunch {
+                        root: p.root.clone(),
+                        data: p.data.clone(),
+                        // Agent Plugins §9: nothing but the two plugin variables
+                        // is expanded; Claude Code expands the environment too.
+                        expand_env: p.format == PluginFormat::Claude,
+                    }),
+                    app: None,
+                })
         })
         .collect()
 }
 
 /// The commands of `plugins`, in name order.
 pub fn commands(plugins: &[Plugin]) -> Vec<SlashCommand> {
-    let mut out: Vec<SlashCommand> = plugins.iter().flat_map(|p| p.commands.iter().cloned()).collect();
+    let mut out: Vec<SlashCommand> = plugins
+        .iter()
+        .flat_map(|p| p.commands.iter().cloned())
+        .collect();
     out.sort_by(|a, b| a.name.cmp(&b.name));
     out
 }

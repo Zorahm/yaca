@@ -10,11 +10,11 @@ mod common;
 
 use std::sync::Arc;
 
+use serde_json::json;
 use yaca_core::event::AgentEvent;
 use yaca_core::message::ContentBlock;
 use yaca_core::provider::mock::{script_text, MockProvider, Turn};
 use yaca_core::Mode;
-use serde_json::json;
 
 use common::{ask, calls, is_turn_over, session, until, TempProject};
 

@@ -91,7 +91,11 @@ async fn a_servers_tool_is_offered_and_called_like_any_other() {
     let dir = TempProject::new();
     declare(&dir, &[], json!({}));
     let provider = Arc::new(MockProvider::new(vec![
-        call("t1", "echo", json!({ "text": "hello", "description": "Checked echo" })),
+        call(
+            "t1",
+            "echo",
+            json!({ "text": "hello", "description": "Checked echo" }),
+        ),
         Turn::Events(script_text("Done.")),
     ]));
     let handle = open(&dir, provider.clone(), Mode::Manual);
@@ -110,7 +114,10 @@ async fn a_servers_tool_is_offered_and_called_like_any_other() {
     assert_eq!(echo.description, "Repeats the text back.");
     // §5.4.1: an MCP call is captioned by the model, beside the server's own
     // arguments.
-    assert_eq!(echo.input_schema["required"], json!(["text", "description"]));
+    assert_eq!(
+        echo.input_schema["required"],
+        json!(["text", "description"])
+    );
     assert!(echo.input_schema["properties"]["text"].is_object());
     // And the prompt says whose words the results are, with the server's own.
     assert!(seen.system.contains("<mcp_servers>"), "{}", seen.system);
@@ -125,7 +132,12 @@ async fn a_servers_tool_is_offered_and_called_like_any_other() {
                 target,
                 input,
                 ..
-            } => Some((tool.clone(), description.clone(), target.clone(), input.clone())),
+            } => Some((
+                tool.clone(),
+                description.clone(),
+                target.clone(),
+                input.clone(),
+            )),
             _ => None,
         })
         .expect("the call has no row");
@@ -139,7 +151,10 @@ async fn a_servers_tool_is_offered_and_called_like_any_other() {
     let kinds: Vec<_> = events.iter().map(AgentEvent::kind).collect();
     assert!(!kinds.contains(&"permissionRequested"), "{kinds:?}");
     assert!(kinds.contains(&"toolCallFinished"), "{kinds:?}");
-    assert_eq!(tool_result_of(&provider, "t1"), ("hello".to_string(), false));
+    assert_eq!(
+        tool_result_of(&provider, "t1"),
+        ("hello".to_string(), false)
+    );
 }
 
 #[tokio::test]
@@ -148,7 +163,11 @@ async fn a_tool_that_writes_asks_first_and_a_refusal_runs_nothing() {
     declare(&dir, &[], json!({}));
     let note = dir.path().join("note.txt");
     let provider = Arc::new(MockProvider::new(vec![
-        call("t1", "write_note", json!({ "path": note, "text": "x", "description": "Wrote it" })),
+        call(
+            "t1",
+            "write_note",
+            json!({ "path": note, "text": "x", "description": "Wrote it" }),
+        ),
         Turn::Events(script_text("Not written.")),
     ]));
     let handle = open(&dir, provider.clone(), Mode::Manual);
@@ -189,7 +208,10 @@ async fn a_tool_that_writes_asks_first_and_a_refusal_runs_nothing() {
     turn(&mut rx).await;
 
     assert!(!note.exists());
-    assert!(tool_result_of(&provider, "t1").1, "a refusal reads as an error");
+    assert!(
+        tool_result_of(&provider, "t1").1,
+        "a refusal reads as an error"
+    );
 }
 
 #[tokio::test]
@@ -198,8 +220,16 @@ async fn allowing_a_whole_server_stops_the_questions_about_its_tools() {
     declare(&dir, &[], json!({}));
     let (first, second) = (dir.path().join("a.txt"), dir.path().join("b.txt"));
     let provider = Arc::new(MockProvider::new(vec![
-        call("t1", "write_note", json!({ "path": first, "text": "1", "description": "First" })),
-        call("t2", "write_note", json!({ "path": second, "text": "2", "description": "Second" })),
+        call(
+            "t1",
+            "write_note",
+            json!({ "path": first, "text": "1", "description": "First" }),
+        ),
+        call(
+            "t2",
+            "write_note",
+            json!({ "path": second, "text": "2", "description": "Second" }),
+        ),
         Turn::Events(script_text("Both written.")),
     ]));
     let handle = open(&dir, provider, Mode::Manual);
@@ -278,9 +308,15 @@ async fn a_server_that_dies_on_start_is_listed_with_what_it_said() {
     // The session works without it, and offers none of its tools.
     ask(&handle, "hi").await;
     let events = turn(&mut rx).await;
-    assert!(events.iter().any(|e| matches!(e, AgentEvent::TurnFinished { .. })));
-    assert!(offered(&provider, 0).iter().all(|name| !name.starts_with("mcp__")));
-    assert!(!provider.seen.lock().unwrap()[0].system.contains("<mcp_servers>"));
+    assert!(events
+        .iter()
+        .any(|e| matches!(e, AgentEvent::TurnFinished { .. })));
+    assert!(offered(&provider, 0)
+        .iter()
+        .all(|name| !name.starts_with("mcp__")));
+    assert!(!provider.seen.lock().unwrap()[0]
+        .system
+        .contains("<mcp_servers>"));
 }
 
 #[tokio::test]
@@ -295,12 +331,20 @@ async fn a_server_that_never_answers_is_given_up_on_at_its_deadline() {
     // deadline and no longer.
     ask(&handle, "hi").await;
     let events = turn(&mut rx).await;
-    assert!(events.iter().any(|e| matches!(e, AgentEvent::TurnFinished { .. })));
+    assert!(events
+        .iter()
+        .any(|e| matches!(e, AgentEvent::TurnFinished { .. })));
 
     let servers = handle.mcp();
     assert_eq!(servers[0].status, McpStatus::Failed);
-    assert!(servers[0].reason.as_deref().unwrap_or_default().contains("1 s"));
-    assert!(offered(&provider, 0).iter().all(|name| !name.starts_with("mcp__")));
+    assert!(servers[0]
+        .reason
+        .as_deref()
+        .unwrap_or_default()
+        .contains("1 s"));
+    assert!(offered(&provider, 0)
+        .iter()
+        .all(|name| !name.starts_with("mcp__")));
 }
 
 #[tokio::test]
@@ -360,7 +404,9 @@ async fn a_server_from_the_projects_mcp_json_waits_for_approval() {
     assert_eq!(servers[0].source, McpSource::ProjectFile);
     ask(&handle, "hi").await;
     turn(&mut rx).await;
-    assert!(offered(&provider, 0).iter().all(|name| !name.starts_with("mcp__")));
+    assert!(offered(&provider, 0)
+        .iter()
+        .all(|name| !name.starts_with("mcp__")));
 
     handle
         .send(Command::ApproveMcpServer {
@@ -414,14 +460,17 @@ async fn a_tool_list_that_changes_applies_from_the_next_turn() {
     assert!(!offered(&provider, 1).contains(&"mcp__fixture__late".to_string()));
 
     // The notice may arrive a moment after the turn ends.
-    let knows_late = |servers: &[McpServerSummary]| servers[0].tools.iter().any(|t| t.name == "late");
+    let knows_late =
+        |servers: &[McpServerSummary]| servers[0].tools.iter().any(|t| t.name == "late");
     let already = events
         .iter()
         .any(|e| matches!(e, AgentEvent::McpUpdated { servers } if knows_late(servers)));
     if !already {
-        until_within(&mut rx, ROPE, |e| {
-            matches!(e, AgentEvent::McpUpdated { servers } if knows_late(servers))
-        })
+        until_within(
+            &mut rx,
+            ROPE,
+            |e| matches!(e, AgentEvent::McpUpdated { servers } if knows_late(servers)),
+        )
         .await;
     }
 
@@ -436,7 +485,11 @@ async fn resources_are_listed_and_read() {
     declare(&dir, &[], json!({}));
     let provider = Arc::new(MockProvider::new(vec![
         Turn::Events(calls(&[
-            ("t1", "ListMcpResources", json!({ "description": "Looked at resources" })),
+            (
+                "t1",
+                "ListMcpResources",
+                json!({ "description": "Looked at resources" }),
+            ),
             (
                 "t2",
                 "ReadMcpResource",
@@ -450,11 +503,16 @@ async fn resources_are_listed_and_read() {
 
     ask(&handle, "what is there").await;
     let events = turn(&mut rx).await;
-    assert!(!events.iter().any(|e| matches!(e, AgentEvent::PermissionRequested { .. })));
+    assert!(!events
+        .iter()
+        .any(|e| matches!(e, AgentEvent::PermissionRequested { .. })));
 
     let (listing, failed) = tool_result_of(&provider, "t1");
     assert!(!failed);
-    assert!(listing.contains("fixture\tnote://hello\thello"), "{listing}");
+    assert!(
+        listing.contains("fixture\tnote://hello\thello"),
+        "{listing}"
+    );
     assert_eq!(
         tool_result_of(&provider, "t2"),
         ("hello from a resource".to_string(), false)
@@ -492,7 +550,11 @@ async fn a_server_is_told_the_sessions_roots() {
     let dir = TempProject::new();
     declare(&dir, &[], json!({}));
     let provider = Arc::new(MockProvider::new(vec![
-        call("t1", "roots", json!({ "description": "Asked for the roots" })),
+        call(
+            "t1",
+            "roots",
+            json!({ "description": "Asked for the roots" }),
+        ),
         Turn::Events(script_text("Known.")),
     ]));
     let handle = open(&dir, provider.clone(), Mode::Manual);
@@ -503,7 +565,12 @@ async fn a_server_is_told_the_sessions_roots() {
 
     let (text, failed) = tool_result_of(&provider, "t1");
     assert!(!failed, "{text}");
-    let name = dir.path().file_name().unwrap().to_string_lossy().to_string();
+    let name = dir
+        .path()
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
     assert!(text.contains("file:///"), "{text}");
     assert!(text.contains(&name), "{text}");
 }
@@ -521,12 +588,17 @@ async fn stopping_the_turn_does_not_wait_for_a_slow_server() {
     let mut rx = handle.subscribe();
 
     ask(&handle, "wait").await;
-    until_within(&mut rx, ROPE, |e| matches!(e, AgentEvent::ToolCallStarted { .. })).await;
+    until_within(&mut rx, ROPE, |e| {
+        matches!(e, AgentEvent::ToolCallStarted { .. })
+    })
+    .await;
     handle.send(Command::Cancel).await.unwrap();
 
     // Far inside the minute the server sleeps for.
     let events = until_within(&mut rx, Duration::from_secs(10), is_turn_over).await;
-    assert!(events.iter().any(|e| matches!(e, AgentEvent::TurnCancelled { .. })));
+    assert!(events
+        .iter()
+        .any(|e| matches!(e, AgentEvent::TurnCancelled { .. })));
 }
 
 #[tokio::test]
@@ -534,7 +606,11 @@ async fn a_call_that_outlasts_its_deadline_fails_and_the_turn_goes_on() {
     let dir = TempProject::new();
     declare(&dir, &[], json!({ "toolTimeoutSecs": 1 }));
     let provider = Arc::new(MockProvider::new(vec![
-        call("t1", "slow", json!({ "ms": 60_000, "description": "Waiting" })),
+        call(
+            "t1",
+            "slow",
+            json!({ "ms": 60_000, "description": "Waiting" }),
+        ),
         Turn::Events(script_text("Gave up.")),
     ]));
     let handle = open(&dir, provider.clone(), Mode::Manual);
@@ -542,7 +618,9 @@ async fn a_call_that_outlasts_its_deadline_fails_and_the_turn_goes_on() {
 
     ask(&handle, "wait").await;
     let events = turn(&mut rx).await;
-    assert!(events.iter().any(|e| matches!(e, AgentEvent::TurnFinished { .. })));
+    assert!(events
+        .iter()
+        .any(|e| matches!(e, AgentEvent::TurnFinished { .. })));
 
     let (text, failed) = tool_result_of(&provider, "t1");
     assert!(failed);
@@ -570,7 +648,10 @@ async fn a_subagent_has_the_servers_tools_too() {
     turn(&mut rx).await;
 
     let subagent = provider.seen.lock().unwrap()[1].clone();
-    assert!(subagent.tools.iter().any(|t| t.name == "mcp__fixture__echo"));
+    assert!(subagent
+        .tools
+        .iter()
+        .any(|t| t.name == "mcp__fixture__echo"));
     assert!(subagent.tools.iter().all(|t| t.name != "Task"));
     assert!(subagent.system.contains("<mcp_servers>"));
 }
@@ -584,7 +665,10 @@ async fn a_servers_prompt_is_a_slash_command_the_model_gets_filled() {
     let servers = settled(&handle).await;
     let prompt = &servers[0].prompts[0];
     assert_eq!(prompt.command, "mcp__fixture__review");
-    assert_eq!(prompt.arguments, vec!["pr".to_string(), "focus".to_string()]);
+    assert_eq!(
+        prompt.arguments,
+        vec!["pr".to_string(), "focus".to_string()]
+    );
 
     let mut rx = handle.subscribe();
     ask(&handle, "/mcp__fixture__review 42 error handling").await;
@@ -592,7 +676,10 @@ async fn a_servers_prompt_is_a_slash_command_the_model_gets_filled() {
 
     let request = provider.seen.lock().unwrap()[0].clone();
     let said = format!("{:?}", request.messages.last());
-    assert!(said.contains("Review PR 42 focusing on error handling"), "{said}");
+    assert!(
+        said.contains("Review PR 42 focusing on error handling"),
+        "{said}"
+    );
     // The feed keeps what the human typed.
     assert!(seen.iter().any(|e| matches!(
         e,
@@ -631,7 +718,10 @@ async fn elicited(reply: yaca_core::mcp::ElicitationReply) -> (String, Vec<Agent
     let mut rx = handle.subscribe();
     ask(&handle, "ask me").await;
 
-    let shown = until_within(&mut rx, ROPE, |e| matches!(e, AgentEvent::ElicitationRequested { .. })).await;
+    let shown = until_within(&mut rx, ROPE, |e| {
+        matches!(e, AgentEvent::ElicitationRequested { .. })
+    })
+    .await;
     let Some(AgentEvent::ElicitationRequested { request }) = shown.last().cloned() else {
         panic!("no form: {shown:?}");
     };
@@ -641,7 +731,10 @@ async fn elicited(reply: yaca_core::mcp::ElicitationReply) -> (String, Vec<Agent
     assert!(request.fields[0].required);
 
     handle
-        .send(yaca_core::Command::AnswerElicitation { request_id: request.id.clone(), reply })
+        .send(yaca_core::Command::AnswerElicitation {
+            request_id: request.id.clone(),
+            reply,
+        })
         .await
         .unwrap();
     let mut seen = turn(&mut rx).await;
@@ -654,7 +747,9 @@ async fn a_servers_form_is_filled_by_the_human_and_answered() {
     let values = serde_json::from_value(json!({ "name": "Ada" })).unwrap();
     let (text, seen) = elicited(yaca_core::mcp::ElicitationReply::Accept { values }).await;
     assert!(text.contains("accept") && text.contains("Ada"), "{text}");
-    assert!(seen.iter().any(|e| matches!(e, AgentEvent::ElicitationResolved { reply: Some(_), .. })));
+    assert!(seen
+        .iter()
+        .any(|e| matches!(e, AgentEvent::ElicitationResolved { reply: Some(_), .. })));
 }
 
 #[tokio::test]

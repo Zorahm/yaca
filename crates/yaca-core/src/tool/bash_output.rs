@@ -198,7 +198,10 @@ impl Tool for BashWait {
                 until.as_ref().map_or("", |re| re.as_str())
             ),
             Waited::Ended => match &until {
-                Some(re) => format!("[command ended without printing a line matching /{}/]\n", re.as_str()),
+                Some(re) => format!(
+                    "[command ended without printing a line matching /{}/]\n",
+                    re.as_str()
+                ),
                 None => "[command ended]\n".to_string(),
             },
             Waited::TimedOut => format!("[still waiting after {secs} s: gave up]\n"),
@@ -302,7 +305,9 @@ mod tests {
     async fn waiting_stops_at_a_matching_line() {
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
-        let id = ctx.processes.register("npm run dev".into(), ".".into(), None);
+        let id = ctx
+            .processes
+            .register("npm run dev".into(), ".".into(), None);
         ctx.processes.output(id, vec!["compiling".into()]);
 
         let processes = ctx.processes.clone();
@@ -312,12 +317,19 @@ mod tests {
         });
 
         let out = BashWait
-            .run(&ctx, json!({ "id": id.0, "until": "localhost:\\d+", "timeout": 5 }))
+            .run(
+                &ctx,
+                json!({ "id": id.0, "until": "localhost:\\d+", "timeout": 5 }),
+            )
             .await
             .unwrap();
         assert!(out.text.starts_with("[output matched"), "{}", out.text);
         // Everything unread comes back, the lines before the match included.
-        assert!(out.text.contains("compiling") && out.text.contains("5173"), "{}", out.text);
+        assert!(
+            out.text.contains("compiling") && out.text.contains("5173"),
+            "{}",
+            out.text
+        );
         assert!(out.text.contains("command is running"), "{}", out.text);
     }
 
@@ -325,7 +337,9 @@ mod tests {
     async fn waiting_without_a_pattern_ends_with_the_command() {
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
-        let id = ctx.processes.register("cargo build".into(), ".".into(), None);
+        let id = ctx
+            .processes
+            .register("cargo build".into(), ".".into(), None);
 
         let processes = ctx.processes.clone();
         tokio::spawn(async move {
@@ -343,7 +357,9 @@ mod tests {
     async fn a_command_that_ends_before_the_line_says_so() {
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
-        let id = ctx.processes.register("npm run dev".into(), ".".into(), None);
+        let id = ctx
+            .processes
+            .register("npm run dev".into(), ".".into(), None);
         ctx.processes.output(id, vec!["Error: port in use".into()]);
         ctx.processes.finished(id, Some(1));
 
@@ -359,13 +375,19 @@ mod tests {
     async fn waiting_gives_up_at_the_timeout() {
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
-        let id = ctx.processes.register("tail -f log".into(), ".".into(), None);
+        let id = ctx
+            .processes
+            .register("tail -f log".into(), ".".into(), None);
 
         let out = BashWait
             .run(&ctx, json!({ "id": id.0, "until": "never", "timeout": 1 }))
             .await
             .unwrap();
-        assert!(out.text.starts_with("[still waiting after 1 s"), "{}", out.text);
+        assert!(
+            out.text.starts_with("[still waiting after 1 s"),
+            "{}",
+            out.text
+        );
     }
 
     #[tokio::test]
@@ -374,7 +396,10 @@ mod tests {
         let (ctx, _ws) = ctx_for(&dir);
         let id = ctx.processes.register("x".into(), ".".into(), None);
 
-        let err = BashWait.run(&ctx, json!({ "id": id.0, "until": "(" })).await.unwrap_err();
+        let err = BashWait
+            .run(&ctx, json!({ "id": id.0, "until": "(" }))
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("regular expression"), "{err}");
         let err = BashWait.run(&ctx, json!({ "id": 99 })).await.unwrap_err();
         assert!(err.to_string().contains("no background command"), "{err}");

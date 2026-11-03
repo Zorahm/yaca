@@ -41,9 +41,10 @@ async fn an_attached_file_can_be_edited_without_reading_it_first() {
     // Refused for "not read in this session" would be a rejection; the edit
     // landing is the proof that the attachment registered the file.
     assert!(
-        !events
-            .iter()
-            .any(|e| matches!(e, AgentEvent::ToolCallRejected { .. } | AgentEvent::ToolCallFailed { .. })),
+        !events.iter().any(|e| matches!(
+            e,
+            AgentEvent::ToolCallRejected { .. } | AgentEvent::ToolCallFailed { .. }
+        )),
         "{events:?}"
     );
     assert!(events

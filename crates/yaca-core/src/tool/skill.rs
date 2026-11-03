@@ -129,7 +129,9 @@ impl Tool for Skill {
                 } else {
                     format!("{text}\n\nFollow the skill above for: {args}")
                 };
-                let report = agents.run(task, skill.agent.clone(), None, &ctx.cancel).await?;
+                let report = agents
+                    .run(task, skill.agent.clone(), None, &ctx.cancel)
+                    .await?;
                 return Ok(ToolOutput::new(format!(
                     "The skill `{name}` ran in a subagent of its own. Its report:\n{report}"
                 )));
@@ -164,6 +166,7 @@ impl Tool for Skill {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::profile::Profile;
     use crate::testutil::TempDir;
     use crate::tool::tests_support::ctx_for;
     use crate::tool::ToolRegistry;
@@ -184,9 +187,18 @@ mod tests {
         let (ctx, _ws) = ctx_for(&dir);
 
         let out = Skill.run(&ctx, json!({ "name": "release" })).await.unwrap();
-        assert!(out.text.starts_with("<skill_content name=\"release\">\nTag, then build."), "{}", out.text);
+        assert!(
+            out.text
+                .starts_with("<skill_content name=\"release\">\nTag, then build."),
+            "{}",
+            out.text
+        );
         assert!(out.text.contains("Skill directory: "), "{}", out.text);
-        assert!(out.text.contains("<file>scripts/tag.sh</file>"), "{}", out.text);
+        assert!(
+            out.text.contains("<file>scripts/tag.sh</file>"),
+            "{}",
+            out.text
+        );
         assert!(!out.text.contains("<file>SKILL.md</file>"), "{}", out.text);
         assert!(out.text.ends_with("</skill_content>"));
         assert!(!out.meta.truncated);
@@ -200,7 +212,10 @@ mod tests {
         let (ctx, _ws) = ctx_for(&dir);
 
         let out = Skill
-            .run(&ctx, json!({ "name": "release", "file": "references/steps.md" }))
+            .run(
+                &ctx,
+                json!({ "name": "release", "file": "references/steps.md" }),
+            )
             .await
             .unwrap();
         assert_eq!(out.text, "1. tag");
@@ -250,9 +265,16 @@ mod tests {
         skill(&dir, "audit", "---\ndescription: audit\n---\ntext");
         let (ctx, _ws) = ctx_for(&dir);
 
-        let err = Skill.run(&ctx, json!({ "name": "deploy" })).await.unwrap_err();
+        let err = Skill
+            .run(&ctx, json!({ "name": "deploy" }))
+            .await
+            .unwrap_err();
         assert!(matches!(err, ToolError::Failed { .. }), "{err:?}");
-        assert!(err.for_model().contains("audit, release"), "{}", err.for_model());
+        assert!(
+            err.for_model().contains("audit, release"),
+            "{}",
+            err.for_model()
+        );
     }
 
     #[tokio::test]
@@ -265,7 +287,10 @@ mod tests {
         );
         let (ctx, _ws) = ctx_for(&dir);
 
-        let err = Skill.run(&ctx, json!({ "name": "deploy" })).await.unwrap_err();
+        let err = Skill
+            .run(&ctx, json!({ "name": "deploy" }))
+            .await
+            .unwrap_err();
         assert!(err.for_model().contains("no skills"), "{}", err.for_model());
     }
 
@@ -296,7 +321,9 @@ mod tests {
     #[test]
     fn the_tool_is_offered_in_plan_and_agent_alike() {
         let registry = ToolRegistry::standard();
-        assert!(registry.get("Skill", Intent::Plan).is_some());
-        assert!(registry.get("Skill", Intent::Agent).is_some());
+        assert!(registry.get("Skill", Intent::Plan, Profile::Code).is_some());
+        assert!(registry
+            .get("Skill", Intent::Agent, Profile::Code)
+            .is_some());
     }
 }

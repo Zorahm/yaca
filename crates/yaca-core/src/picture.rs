@@ -352,7 +352,8 @@ pub(crate) mod tests {
     /// A real PNG of the given size: a flat colour with a diagonal, so that
     /// scaling has something to keep.
     pub(crate) fn png(width: u32, height: u32) -> Vec<u8> {
-        let mut image = image::RgbaImage::from_pixel(width, height, image::Rgba([30, 90, 160, 255]));
+        let mut image =
+            image::RgbaImage::from_pixel(width, height, image::Rgba([30, 90, 160, 255]));
         for i in 0..width.min(height) {
             image.put_pixel(i, i, image::Rgba([255, 255, 255, 255]));
         }
@@ -385,7 +386,10 @@ pub(crate) mod tests {
         assert_eq!(picture.scaled_from, Some((3_840, 2_160)));
         // What was sent is what was claimed.
         let sent = decoded(&picture);
-        assert_eq!((sent.width(), sent.height()), (picture.width, picture.height));
+        assert_eq!(
+            (sent.width(), sent.height()),
+            (picture.width, picture.height)
+        );
     }
 
     #[test]
@@ -456,10 +460,19 @@ pub(crate) mod tests {
         let at = |name: &str| look(&dir.path().join(name));
 
         assert_eq!(at("shot.png").kind, AttachmentKind::Image);
-        assert!(at("shot.png").preview.unwrap().starts_with("data:image/png;base64,"));
+        assert!(at("shot.png")
+            .preview
+            .unwrap()
+            .starts_with("data:image/png;base64,"));
         // The name is a claim; a tile that promised a picture and showed
         // nothing would be the interface lying about what was attached.
-        assert_eq!(at("fake.png"), AttachmentLook { kind: AttachmentKind::File, preview: None });
+        assert_eq!(
+            at("fake.png"),
+            AttachmentLook {
+                kind: AttachmentKind::File,
+                preview: None
+            }
+        );
         assert_eq!(at("notes").kind, AttachmentKind::File);
         assert_eq!(at("src").kind, AttachmentKind::Folder);
         assert_eq!(at("gone.png").kind, AttachmentKind::Missing);
@@ -493,7 +506,10 @@ pub(crate) mod tests {
         // Text pasted by mistake is not something to keep as an image.
         assert!(stash(dir.path(), b"hello").is_err());
         // The webview's road leads to the same file.
-        assert_eq!(stash_encoded(dir.path(), &BASE64.encode(&bytes)).unwrap(), first);
+        assert_eq!(
+            stash_encoded(dir.path(), &BASE64.encode(&bytes)).unwrap(),
+            first
+        );
         assert!(stash_encoded(dir.path(), "not base64 at all!").is_err());
     }
 

@@ -132,6 +132,16 @@ pub enum ProviderEvent {
         stop_reason: Option<StopReason>,
         usage: TokenCounts,
     },
+    /// Exact dollar cost reported by the provider for this response.
+    Cost {
+        usd: f64,
+    },
+    /// Usage of a separate routing request; it does not occupy the main context.
+    AsideUsage {
+        usage: TokenCounts,
+        pricing: crate::usage::Pricing,
+        cost: Option<f64>,
+    },
     MessageStop,
 }
 

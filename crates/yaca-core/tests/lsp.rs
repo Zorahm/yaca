@@ -29,7 +29,11 @@ fn open(dir: &TempProject, provider: Arc<MockProvider>, flag: Option<&str>) -> S
             "fixture".into(),
             LspServerSettings {
                 command: fixture("lsp_fixture").to_string_lossy().into_owned(),
-                args: if flag.is_empty() { vec![] } else { vec![flag.to_string()] },
+                args: if flag.is_empty() {
+                    vec![]
+                } else {
+                    vec![flag.to_string()]
+                },
                 extensions: vec!["zz".into()],
                 ..Default::default()
             },
@@ -129,9 +133,16 @@ async fn references_list_every_place() {
 #[tokio::test]
 async fn an_outline_and_a_name_search() {
     let dir = source();
-    let (text, _) =
-        one(&dir, "", json!({ "action": "symbols", "path": "a.zz", "description": "Overview" })).await;
-    assert!(text.starts_with("struct Thing  :1\n  method go  :3"), "{text}");
+    let (text, _) = one(
+        &dir,
+        "",
+        json!({ "action": "symbols", "path": "a.zz", "description": "Overview" }),
+    )
+    .await;
+    assert!(
+        text.starts_with("struct Thing  :1\n  method go  :3"),
+        "{text}"
+    );
 
     let (text, _) = one(
         &dir,
@@ -153,7 +164,10 @@ async fn diagnostics_are_asked_for_by_name() {
     )
     .await;
     assert!(!is_error, "{text}");
-    assert!(text.contains("error a.zz:2:9 this line is BROKEN [fixture E1]"), "{text}");
+    assert!(
+        text.contains("error a.zz:2:9 this line is BROKEN [fixture E1]"),
+        "{text}"
+    );
 
     let clean = source();
     let (text, _) = one(
@@ -170,7 +184,10 @@ async fn an_edit_reports_what_it_broke_in_the_same_result() {
     let dir = source();
     let provider = Arc::new(MockProvider::new(vec![
         // Starts the server: an edit alone does not.
-        lsp("t1", json!({ "action": "symbols", "path": "a.zz", "description": "Overview" })),
+        lsp(
+            "t1",
+            json!({ "action": "symbols", "path": "a.zz", "description": "Overview" }),
+        ),
         Turn::Events(calls(&[(
             "t2",
             "Write",
@@ -185,15 +202,25 @@ async fn an_edit_reports_what_it_broke_in_the_same_result() {
 
     let (text, is_error) = tool_result_of(&provider, "t2");
     assert!(!is_error, "{text}");
-    assert!(text.contains("Diagnostics from fixture: 1 errors"), "{text}");
-    assert!(text.contains("error b.zz:2:9 this line is BROKEN"), "{text}");
+    assert!(
+        text.contains("Diagnostics from fixture: 1 errors"),
+        "{text}"
+    );
+    assert!(
+        text.contains("error b.zz:2:9 this line is BROKEN"),
+        "{text}"
+    );
 }
 
 #[tokio::test]
 async fn an_edit_alone_does_not_start_a_server() {
     let dir = source();
     let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(calls(&[("t1", "Write", json!({ "path": "b.zz", "content": "BROKEN\n" }))])),
+        Turn::Events(calls(&[(
+            "t1",
+            "Write",
+            json!({ "path": "b.zz", "content": "BROKEN\n" }),
+        )])),
         Turn::Events(script_text("Done.")),
     ]));
     let handle = open(&dir, provider.clone(), Some(""));
@@ -210,8 +237,15 @@ async fn an_edit_alone_does_not_start_a_server() {
 async fn a_server_that_does_not_answer_is_said_so_not_taken_for_clean() {
     let dir = source();
     let provider = Arc::new(MockProvider::new(vec![
-        lsp("t1", json!({ "action": "symbols", "path": "a.zz", "description": "Overview" })),
-        Turn::Events(calls(&[("t2", "Write", json!({ "path": "b.zz", "content": "BROKEN\n" }))])),
+        lsp(
+            "t1",
+            json!({ "action": "symbols", "path": "a.zz", "description": "Overview" }),
+        ),
+        Turn::Events(calls(&[(
+            "t2",
+            "Write",
+            json!({ "path": "b.zz", "content": "BROKEN\n" }),
+        )])),
         Turn::Events(script_text("Done.")),
     ]));
     let handle = open(&dir, provider.clone(), Some("--silent"));
@@ -227,7 +261,10 @@ async fn a_server_that_does_not_answer_is_said_so_not_taken_for_clean() {
 async fn a_server_that_cannot_start_fails_with_its_own_words() {
     let dir = source();
     let provider = Arc::new(MockProvider::new(vec![
-        lsp("t1", json!({ "action": "hover", "path": "a.zz", "line": 1, "description": "Looked" })),
+        lsp(
+            "t1",
+            json!({ "action": "hover", "path": "a.zz", "line": 1, "description": "Looked" }),
+        ),
         Turn::Events(script_text("Done.")),
     ]));
     let handle = open(&dir, provider.clone(), Some("--crash"));
@@ -314,7 +351,10 @@ async fn a_rename_changes_every_file_the_server_names() {
     )
     .await;
     assert!(!is_error, "{text}");
-    assert!(text.contains("Renamed `Thing` to `Widget` in 2 files"), "{text}");
+    assert!(
+        text.contains("Renamed `Thing` to `Widget` in 2 files"),
+        "{text}"
+    );
     assert_eq!(contents(&dir, "a.zz"), "struct Widget {\n}\nfn go() {}\n");
     assert_eq!(contents(&dir, "b.zz"), "use Widget;\nfn other() {}\n");
 
@@ -340,7 +380,10 @@ async fn a_rename_off_the_name_is_refused_before_anything_changes() {
     )
     .await;
     assert!(is_error, "{text}");
-    assert!(text.contains("nothing to rename at this position"), "{text}");
+    assert!(
+        text.contains("nothing to rename at this position"),
+        "{text}"
+    );
     assert_eq!(contents(&dir, "a.zz"), "struct Thing {\n}\nfn go() {}\n");
 }
 
@@ -369,14 +412,20 @@ async fn a_server_that_only_answers_when_asked_is_asked() {
     )
     .await;
     assert!(!is_error, "{text}");
-    assert!(text.contains("error a.zz:2:9 this line is BROKEN [fixture E1]"), "{text}");
+    assert!(
+        text.contains("error a.zz:2:9 this line is BROKEN [fixture E1]"),
+        "{text}"
+    );
 }
 
 #[tokio::test]
 async fn a_server_can_be_restarted_from_the_panel() {
     let dir = source();
     let provider = Arc::new(MockProvider::new(vec![
-        lsp("t1", json!({ "action": "symbols", "path": "a.zz", "description": "Overview" })),
+        lsp(
+            "t1",
+            json!({ "action": "symbols", "path": "a.zz", "description": "Overview" }),
+        ),
         Turn::Events(script_text("Done.")),
     ]));
     let handle = open(&dir, provider.clone(), Some(""));
@@ -385,7 +434,9 @@ async fn a_server_can_be_restarted_from_the_panel() {
     turn(&mut rx).await;
 
     handle
-        .send(yaca_core::Command::RestartLspServer { server: "fixture".into() })
+        .send(yaca_core::Command::RestartLspServer {
+            server: "fixture".into(),
+        })
         .await
         .unwrap();
     // Down first, then up again: the panel sees both.
@@ -393,8 +444,11 @@ async fn a_server_can_be_restarted_from_the_panel() {
         matches!(e, AgentEvent::LspUpdated { servers } if servers[0].status == LspStatus::Ready)
     })
     .await;
-    assert!(seen.iter().any(|e| matches!(
-        e,
-        AgentEvent::LspUpdated { servers } if servers[0].status == LspStatus::Idle
-    )), "{seen:?}");
+    assert!(
+        seen.iter().any(|e| matches!(
+            e,
+            AgentEvent::LspUpdated { servers } if servers[0].status == LspStatus::Idle
+        )),
+        "{seen:?}"
+    );
 }

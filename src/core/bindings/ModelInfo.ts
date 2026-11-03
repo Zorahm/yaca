@@ -7,6 +7,10 @@ import type { Pricing } from "./Pricing";
  */
 export type ModelInfo = { id: string, providerId: string, displayName: string, contextMax: number, maxOutput: number, pricing: Pricing, 
 /**
+ * User-provided price, retained when the model list is refreshed.
+ */
+pricingByHand: boolean, 
+/**
  * Whether it supports `output_config.effort`. Older models do not.
  */
 supportsEffort: boolean, 

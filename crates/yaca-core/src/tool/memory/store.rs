@@ -127,7 +127,10 @@ pub fn write(
     let existed = path.is_file();
     let dir = dir_of(ws);
     fs::create_dir_all(&dir)?;
-    let text = format!("---\nname: {title}\ndescription: {hook}\n---\n\n{}\n", body.trim_end());
+    let text = format!(
+        "---\nname: {title}\ndescription: {hook}\n---\n\n{}\n",
+        body.trim_end()
+    );
     fs::write(&path, text)?;
     rebuild_index(&dir)?;
     Ok(existed)
@@ -305,13 +308,29 @@ mod tests {
     fn write_read_delete_round_trip() {
         let (dir, ws) = project();
 
-        assert!(!write(&ws, "build-quirks.md", Some("Build quirks"), "why the build is slow", "Use -j1 on CI.").unwrap());
+        assert!(!write(
+            &ws,
+            "build-quirks.md",
+            Some("Build quirks"),
+            "why the build is slow",
+            "Use -j1 on CI."
+        )
+        .unwrap());
         let text = read(&ws, "build-quirks.md").unwrap();
-        assert!(text.starts_with("---\nname: Build quirks\ndescription: why the build is slow\n---\n"));
+        assert!(
+            text.starts_with("---\nname: Build quirks\ndescription: why the build is slow\n---\n")
+        );
         assert!(text.contains("Use -j1 on CI."));
 
         // Replacing reports that it existed before.
-        assert!(write(&ws, "build-quirks.md", None, "why the build is slow", "Use -j2.").unwrap());
+        assert!(write(
+            &ws,
+            "build-quirks.md",
+            None,
+            "why the build is slow",
+            "Use -j2."
+        )
+        .unwrap());
         assert!(read(&ws, "build-quirks.md").unwrap().contains("Use -j2."));
 
         delete(&ws, "build-quirks.md").unwrap();
@@ -341,10 +360,7 @@ mod tests {
         write(&ws, "a.md", None, "one", "x").unwrap();
         std::fs::write(dir.path().join(".yaca/memory/MEMORY.md"), "garbage").unwrap();
         write(&ws, "b.md", None, "two", "y").unwrap();
-        assert_eq!(
-            index_of(&dir),
-            "- [a](a.md) — one\n- [b](b.md) — two\n"
-        );
+        assert_eq!(index_of(&dir), "- [a](a.md) — one\n- [b](b.md) — two\n");
     }
 
     #[test]
@@ -361,7 +377,10 @@ mod tests {
         let (dir, ws) = project();
         write(&ws, "x.md", None, "fine\n---\nname: evil", "body").unwrap();
         let text = read(&ws, "x.md").unwrap();
-        assert!(text.contains("description: fine --- name: evil\n---\n"), "{text}");
+        assert!(
+            text.contains("description: fine --- name: evil\n---\n"),
+            "{text}"
+        );
         assert_eq!(index_of(&dir), "- [x](x.md) — fine --- name: evil\n");
     }
 
@@ -472,7 +491,10 @@ mod tests {
         std::fs::write(dir.path().join(".yaca/memory/Upper.md"), "no").unwrap();
         // Rebuild, so the stray files would show if they were listed.
         write(&ws, "real2.md", None, "also", "y").unwrap();
-        assert_eq!(index_of(&dir), "- [real](real.md) — yes\n- [real2](real2.md) — also\n");
+        assert_eq!(
+            index_of(&dir),
+            "- [real](real.md) — yes\n- [real2](real2.md) — also\n"
+        );
     }
 
     #[test]

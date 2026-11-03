@@ -34,7 +34,6 @@ use crate::workspace::Workspace;
 const DEFAULT_TIMEOUT_MS: u64 = 120_000;
 const MAX_TIMEOUT_MS: u64 = 600_000;
 
-
 /// How much of the output the model sees. Shared with `bash_output`:
 /// the budget belongs to the model, not to one way of reaching it.
 pub(crate) const MODEL_OUTPUT_MAX_BYTES: usize = 30_000;
@@ -414,7 +413,11 @@ mod tests {
 
         let out = Bash.run(&ctx, json!({ "command": "cd ." })).await.unwrap();
 
-        assert!(out.text.contains("command produced no output"), "{}", out.text);
+        assert!(
+            out.text.contains("command produced no output"),
+            "{}",
+            out.text
+        );
     }
 
     #[tokio::test]
@@ -609,7 +612,11 @@ mod tests {
         let started = std::time::Instant::now();
         let out = Bash.run(&ctx, json!({ "command": command })).await.unwrap();
 
-        assert!(started.elapsed() < Duration::from_secs(6), "{:?}", started.elapsed());
+        assert!(
+            started.elapsed() < Duration::from_secs(6),
+            "{:?}",
+            started.elapsed()
+        );
         assert!(out.text.contains("launched"), "{}", out.text);
         assert!(!out.text.contains("NOT stopped"), "{}", out.text);
     }
@@ -649,7 +656,10 @@ mod tests {
         let (ctx, _) = crate::tool::tests_support::ctx_on(project);
 
         let out = Bash
-            .run(&ctx, json!({ "command": "cat input.txt", "cwd": "../tools" }))
+            .run(
+                &ctx,
+                json!({ "command": "cat input.txt", "cwd": "../tools" }),
+            )
             .await
             .unwrap();
         assert!(out.text.contains("outside project"), "{}", out.text);
