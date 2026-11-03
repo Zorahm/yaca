@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/yaca-core", "crates/yaca-cli", "crates/yaca-evals", "crates/yaca-remote", "src-tauri"]
 
 [workspace.package]
-version = "1.0.4-beta"
+version = "1.0.5-beta"
 authors = ["ZorahM"]
 edition = "2021"
 license = "MIT"
@@ -36,6 +36,10 @@ libc = "0.2"
 pdf-extract = "0.12"
 # The pairing code for the phone client, as SVG for the window and as text for `yaca serve`.
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+# A .docx, .xlsx or .pptx is a ZIP container of XML: `Read` takes it apart
+# itself, so an office document costs no program installed next to Yaca.
+quick-xml = "0.41"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 # The remote server's self-signed certificate. `ring`, like the rustls reqwest
 # already pulls in: aws-lc-rs needs cmake and nasm to build on Windows.
 rcgen = { version = "0.13", default-features = false, features = ["crypto", "pem", "ring"] }
