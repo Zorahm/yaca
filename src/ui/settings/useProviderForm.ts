@@ -39,7 +39,7 @@ import {
 import {
   draftProblems,
   draftToSpec,
-  keepContextEdits,
+  mergeAnswer,
   needsKey,
   type HeaderDraft,
   type KeyState,
@@ -73,6 +73,7 @@ export function useProviderForm({
   taken,
   onSave,
   onSaved,
+  checkedAt,
 }: {
   draft: ProviderDraft;
   /** A new provider is not in the registry, so the shell cannot be asked about its key yet. */
@@ -82,10 +83,48 @@ export function useProviderForm({
   /** Returns whether the spec was saved; the form closes only on success. */
   onSave: (spec: ProviderSpec) => Promise<boolean>;
   onSaved: () => void;
+  checkedAt?: number;
 }) {
   const [draft, setDraft] = useState<ProviderDraft>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [modelsSaveState, setModelsSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const pendingModels = useRef<ModelInfo[] | null>(null);
+  const savingModels = useRef<Promise<void> | null>(null);
+
+  // Serialize writes and coalesce edits arriving while the previous write is
+  // in flight. The queue continues when the form closes, so navigating away
+  // immediately after typing cannot discard the last edit.
+  function flushModels(): Promise<void> {
+    if (savingModels.current) return savingModels.current;
+    const run = async () => {
+      while (pendingModels.current !== null) {
+        const models = pendingModels.current;
+        pendingModels.current = null;
+        setModelsSaveState("saving");
+        const spec = draftToSpec({ ...initial, models }, taken);
+        if (spec === null || !(await onSave(spec))) {
+          setModelsSaveState("error");
+          return;
+        }
+      }
+      setModelsSaveState("saved");
+    };
+    savingModels.current = run().finally(() => { savingModels.current = null; });
+    return savingModels.current;
+  }
+
+  function changeModels(models: ModelInfo[]) {
+    setDraft((now) => ({ ...now, models }));
+    if (isNew || reachOf(draft) !== openedWith.current) {
+      setModelsSaveState("idle");
+      return;
+    }
+    pendingModels.current = models;
+    void flushModels();
+  }
+  const changeModelsRef = useRef(changeModels);
+  changeModelsRef.current = changeModels;
 
   // --- models --------------------------------------------------------------
 
@@ -93,7 +132,8 @@ export function useProviderForm({
   const [modelsError, setModelsError] = useState<string | null>(null);
   // Whether the last question asked from this form was answered: the "ok"
   // beside "asking" and the error.
-  const [modelsAnswered, setModelsAnswered] = useState(false);
+  const [modelsAnswered, setModelsAnswered] = useState(checkedAt !== undefined);
+  const [modelsCheckedAt, setModelsCheckedAt] = useState(checkedAt);
   // The number of the newest question; an answer to any other is dropped.
   const asked = useRef(0);
   // The reach the shell's saved provider has, which its own lookups go to,
@@ -131,8 +171,9 @@ export function useProviderForm({
         models: [],
       });
       if (question !== asked.current) return;
-      setDraft((now) => ({ ...now, models: keepContextEdits(now.models, models) }));
+      changeModelsRef.current(mergeAnswer(latest.current.models, models));
       setModelsAnswered(true);
+      setModelsCheckedAt(Date.now());
     } catch (e) {
       if (question !== asked.current) return;
       setModelsError(String(e));
@@ -194,6 +235,7 @@ export function useProviderForm({
     setKeyError(null);
     setModelsError(null);
     try {
+      await savingModels.current;
       const answer = await setApiKey(value, id);
       // The value has done its job; keeping it in the field would keep a
       // secret on screen for no reason.
@@ -217,9 +259,10 @@ export function useProviderForm({
         setModelsError(answer.pollError);
         setModelsAnswered(false);
       } else if (models !== null) {
-        setDraft((now) => ({ ...now, models: keepContextEdits(now.models, models) }));
+        setDraft((now) => ({ ...now, models: mergeAnswer(now.models, models) }));
         setModelsError(null);
         setModelsAnswered(true);
+        setModelsCheckedAt(Date.now());
       }
     } catch (e) {
       setKeyError(String(e));
@@ -288,6 +331,7 @@ export function useProviderForm({
     setBusy(true);
     setError(null);
     try {
+      await savingModels.current;
       if (keyValue.trim()) {
         // The key goes first: if the keychain refuses, nothing is saved
         // half-way and the error points at the only thing that failed.
@@ -297,12 +341,11 @@ export function useProviderForm({
         // and the draft's list is from before it: saving that over the answer
         // would undo the lookup. A new provider is not in the list yet —
         // nobody was asked, and the save below asks. Neither was a draft that
-        // reaches elsewhere: the shell asked the old address, so the spec goes
-        // without a list and the save asks the new one.
+        // reaches elsewhere: the shell asked the old address, so the save
+        // below asks the new one while retaining manual rows and overrides.
         const models = modelsIn(answer, spec.id);
-        if (reachOf(draft) !== openedWith.current) spec = { ...spec, models: [] };
-        else if (answer.pollError === null && models !== null) {
-          spec = { ...spec, models: keepContextEdits(spec.models, models) };
+        if (reachOf(draft) === openedWith.current && answer.pollError === null && models !== null) {
+          spec = { ...spec, models: mergeAnswer(spec.models, models) };
         }
       }
       if (await onSave(spec)) onSaved();
@@ -323,6 +366,9 @@ export function useProviderForm({
     modelsBusy,
     modelsError,
     modelsAnswered,
+    modelsCheckedAt,
+    changeModels,
+    modelsSaveState,
     problems,
     busy,
     error,

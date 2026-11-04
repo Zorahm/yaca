@@ -477,106 +477,6 @@
   color: var(--muted);
 }
 
-/* --- providers §10 ----------------------------------------------------- */
-
-.prov-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.prov {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 58px;
-  padding: 0 12px 0 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  background: var(--surface);
-}
-
-.prov:hover {
-  border-color: var(--line-strong);
-}
-
-/* Filled — the provider answered with a list of models, empty — it was not asked.
-   Not red: an unasked one is not broken (§10, "configured — means answered"). */
-.prov-dot {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border: 1.5px solid var(--line-strong);
-  border-radius: 50%;
-}
-
-.prov-dot-on {
-  border-color: var(--ok);
-  background: var(--ok);
-}
-
-.prov-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  text-align: left;
-}
-
-.prov-name {
-  /* The provider's mark sits in the name row; the text is cut, not the mark. */
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  font-size: 13.5px;
-  font-weight: 500;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.prov-meta {
-  font: 400 11.5px var(--mono);
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* The protocol form is a label on the right, not in the meta line: it alone cannot be
-   guessed from the address, and §10 insists on that. */
-.prov-proto {
-  flex: none;
-  font: 400 11.5px var(--mono);
-  color: var(--muted);
-}
-
-.prov-actions {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 4px;
-}
-
-.prov-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  margin-top: 20px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-  font-size: 12.5px;
-  line-height: 18px;
-  color: var(--muted);
-}
-
-.prov-note .prov-dot {
-  margin-top: 5px;
-}
-
 /* --- provider form --------------------------------------------------- */
 
 .prov-form {
@@ -750,78 +650,611 @@
   text-align: center;
 }
 
-/* The model list §10: rows are not edited — the provider sent them. */
-.prov-models-head {
+/* The model list §10 — rich model cards with 3-state data model */
+.prov-models-container {
+  max-width: 960px;
+  width: 100%;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
 }
 
-.prov-models-note {
+.prov-models-head-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.prov-models-explanation-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.prov-models-status-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.prov-poll-status {
   font-size: 12px;
   color: var(--muted);
 }
 
-.prov-model-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 110px 55px 82px 82px 50px;
-  gap: 8px;
-  align-items: baseline;
-  padding: 6px 10px;
+.prov-poll-error {
+  font-size: 12px;
+  color: var(--err);
+}
+
+.prov-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 3px;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.prov-icon-btn:hover {
+  background: var(--sunk);
+  color: var(--ink);
+}
+
+.prov-help-box {
+  padding: 10px 14px;
+  background: var(--sunk);
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
-  background: var(--surface);
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.prov-model-name {
+.prov-notice-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: var(--note-bg);
+  border: 1px solid var(--note-line);
+  border-radius: var(--radius-m);
   font-size: 12.5px;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--warn);
 }
 
-.prov-context-field {
+.prov-saved-badge {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ok);
+}
+
+.prov-controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.prov-search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  height: 28px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  width: 240px;
+  color: var(--muted);
+}
+
+.prov-search-input {
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: var(--ink);
+  outline: none;
+  width: 100%;
+}
+
+.prov-filters {
+  display: flex;
+  gap: 4px;
+}
+
+.prov-filter-pill {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.1s;
+}
+
+.prov-filter-pill:hover:not(.active) {
+  background: var(--sunk);
+  color: var(--ink);
+}
+
+.prov-filter-pill.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.prov-table {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.prov-table-head {
   display: grid;
+  grid-template-columns: 34px minmax(180px, 1.4fr) 110px 140px 160px 34px;
+  padding: 7px 10px;
+  background: var(--sunk);
+  border-bottom: 1px solid var(--line);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  align-items: center;
+}
+
+.prov-table-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.prov-vendor-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--sunk);
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+}
+
+.prov-vendor-name {
+  font-family: var(--mono);
+}
+
+.prov-vendor-count {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.prov-row-wrap {
+  border-bottom: 1px solid var(--line);
+}
+
+.prov-row-wrap:last-child {
+  border-bottom: 0;
+}
+
+.prov-row-wrap.disabled {
+  opacity: 0.55;
+}
+
+.prov-row-collapsed {
+  display: grid;
+  grid-template-columns: 34px minmax(180px, 1.4fr) 110px 140px 160px 34px;
+  padding: 7px 10px;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.prov-row-collapsed:hover {
+  background: var(--sunk);
+}
+
+.prov-vis-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: var(--radius-s);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.prov-vis-btn.active {
+  color: var(--accent);
+}
+
+.prov-vis-btn:hover {
+  background: var(--thumb);
+}
+
+.prov-cell-model {
+  display: flex;
+  flex-direction: column;
   gap: 2px;
   min-width: 0;
+  padding-right: 8px;
 }
 
-.prov-context-field .prov-input {
-  width: 100%;
-  min-width: 0;
-}
-
-.prov-context-field .prov-input[aria-invalid="true"] {
-  border-color: var(--err);
-}
-
-@media (max-width: 900px) {
-  .prov-model-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-}
-
-.prov-model-id {
-  font: 400 11.5px var(--mono);
-  color: var(--muted);
+.prov-model-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 6px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.prov-model-num {
-  font: 400 11.5px var(--mono);
+.prov-model-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-family: var(--mono);
   color: var(--muted);
-  text-align: right;
-  white-space: nowrap;
 }
 
-.prov-model-flag {
+.prov-mono-id {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
+
+.prov-date-chip {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: var(--radius-s);
+  background: var(--thumb);
+  color: var(--muted);
+}
+
+.prov-copy-id-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: var(--radius-s);
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+
+.prov-copy-id-btn:hover {
+  background: var(--thumb);
+  color: var(--ink);
+}
+
+.copy-ok {
+  color: var(--ok);
+}
+
+.prov-cell-context,
+.prov-cell-pricing {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.prov-val-default {
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.prov-val-edited {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.dot-edited {
+  color: var(--accent);
+  font-weight: bold;
+  margin-left: 3px;
+}
+
+.prov-price-free {
+  color: var(--ok);
+  font-weight: 500;
+  font-family: var(--sans);
+}
+
+.prov-price-variable {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-family: var(--sans);
+}
+
+.prov-price-unknown {
+  color: var(--muted);
+}
+
+.badge-free {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: var(--radius-s);
+  background: var(--add);
+  color: var(--ok);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.badge-deprecated {
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: var(--radius-s);
+  background: var(--note-bg);
+  color: var(--warn);
+  border: 1px solid var(--note-line);
+}
+
+.badge-manual {
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: var(--radius-s);
+  background: var(--thumb);
+  color: var(--muted);
+}
+
+.badge-edited {
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: var(--radius-s);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  margin-left: 6px;
+}
+
+.badge-warn {
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: var(--radius-s);
+  background: var(--note-bg);
+  color: var(--warn);
+  border: 1px solid var(--note-line);
+  font-family: var(--sans);
+}
+
+.prov-subline {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--sans);
+}
+
+.prov-cell-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip-cap {
+  font-size: 11px;
+  font-family: var(--mono);
+  padding: 1px 5px;
+  border-radius: var(--radius-s);
+  background: var(--thumb);
+  color: var(--ink);
+}
+
+.prov-edit-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-s);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.prov-edit-btn:hover {
+  background: var(--thumb);
+  color: var(--ink);
+}
+
+.prov-row-expanded {
+  padding: 14px 18px;
+  background: var(--sunk);
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.prov-expanded-grid {
+  display: grid;
+  grid-template-columns: 140px 160px minmax(140px, 1fr);
+  gap: 10px 16px;
+  align-items: center;
+}
+
+.prov-expanded-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.prov-input-with-tag {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 100%;
+}
+
+.prov-input-dense {
+  height: 28px;
+  padding: 2px 8px;
+  font-size: 12px;
+  width: 100%;
+}
+
+.prov-unit {
+  position: absolute;
+  right: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.prov-symbol {
+  position: absolute;
+  left: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.prov-input-with-tag input[class*="prov-input"] {
+  padding-right: 48px;
+}
+
+.prov-input-with-tag .prov-symbol + input[class*="prov-input"] {
+  padding-left: 18px;
+}
+
+.prov-cache-inputs {
+  display: flex;
+  gap: 8px;
+}
+
+.prov-cache-mini {
+  width: 76px !important;
+}
+
+.prov-effort-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.prov-api-hint {
   font-size: 11.5px;
   color: var(--muted);
-  text-align: right;
-  white-space: nowrap;
+  font-family: var(--mono);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* The way back to the provider's number, beside the mark that says the number
+   on screen is not it. */
+.prov-reset-field {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.prov-reset-field:hover {
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+}
+
+.prov-expanded-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.prov-add-model-card {
+  padding: 14px;
+  background: var(--sunk);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-l);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.prov-add-model-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.prov-add-model-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.prov-add-model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.prov-add-model-checks {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.prov-check-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.prov-add-model-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .prov-problems {

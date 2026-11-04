@@ -123,6 +123,7 @@ export default function Settings({
   onClose,
   narrow = false,
   startOnList = false,
+  currentProvider,
 }: {
   prefs: Preferences;
   /** Held by the window, not here: the Help menu opens the layer on a section
@@ -134,6 +135,7 @@ export default function Settings({
   narrow?: boolean;
   /** Opened as «Settings» rather than on a section: a narrow window shows the list first. */
   startOnList?: boolean;
+  currentProvider?: string;
 }) {
   const prefs = usePreferences(initial);
   // Narrow only: the list, a section picked from it, or a section the layer
@@ -255,7 +257,7 @@ export default function Settings({
           </header>
         )}
         <div className="set-scroll">
-          {shown === "providers" && <ProvidersSection models={models} onChanged={refreshModels} />}
+          {shown === "providers" && <ProvidersSection models={models} onChanged={refreshModels} currentProvider={currentProvider} />}
           {shown === "tools" && <ToolsSection prefs={prefs} onPatch={patchPrefs} />}
           {shown === "mcp" && (
             <McpSection

@@ -598,6 +598,7 @@ export function setPluginEnabled(id: string, enabled: boolean): Promise<PluginRe
  * lying about the state (§0). The stand has no keychain, and it stores no keys.
  */
 let demoRegistry: Providers = {
+  polls: {},
   // Presets are the same as in the core, and also have no models: the provider itself
   // supplies them, and in the stand there is no one to ask — the panel will honestly say
   // there are no models. Anthropic is the exception: the stand needs a provider to show
@@ -661,7 +662,7 @@ export const providers = {
   ask: (id: string): Promise<Asked> =>
     inTauri
       ? invoke<Asked>("ask_provider", { id })
-      : Promise.resolve({ providers: demoProviders(), pollError: null }),
+      : Promise.reject(new Error("model discovery is only available in the desktop app")),
 };
 
 /** The command is addressed to a chat: there are several, and a nameless one would not know which. */
@@ -677,8 +678,89 @@ export const providers = {
  * provider stands behind it. An empty list would be an answer "no models", which is not
  * true, so this is a refusal.
  */
+/**
+ * Fallback to Models.dev (https://models.dev) in the stand, which has no provider
+ * behind its registry.
+ *
+ * The entry is picked the way the core picks it (`provider::models::models_dev`):
+ * by the address the provider serves, and by its name only when no entry serves
+ * that address. A gateway of one's own — MiMo, a proxy — is then described by
+ * the entry of the upstream it points at, rather than by nothing at all.
+ */
+export async function fetchModelsDev(spec: {
+  id: string;
+  baseUrl: string;
+}): Promise<ModelInfo[]> {
+  const resp = await fetch("https://models.dev/api.json?type=all");
+  if (!resp.ok) throw new Error(`models.dev responded HTTP ${resp.status}`);
+  const data = await resp.json();
+  const providers: Record<string, any> = data;
+  const host = hostOf(spec.baseUrl);
+  const entry =
+    (host !== null
+      ? Object.values(providers).find((p: any) => hostOf(p?.api ?? "") === host)
+      : undefined) ?? providers[spec.id.toLowerCase()];
+  if (!entry || !entry.models) {
+    throw new Error(`provider "${spec.id}" is not in the models.dev catalog`);
+  }
+  const result: ModelInfo[] = Object.entries(entry.models).map(([key, m]: [string, any]) => {
+    const id = m.id || key;
+    return {
+      id,
+      providerId: spec.id,
+      displayName: m.name?.trim() || id,
+      contextMax: m.limit?.context ?? 1_000_000,
+      maxOutput: m.limit?.output ?? 8_192,
+      pricing: {
+        input: m.cost?.input != null && m.cost.input >= 0 ? m.cost.input : 0,
+        output: m.cost?.output != null && m.cost.output >= 0 ? m.cost.output : 0,
+      },
+      pricingByHand: false,
+      supportsEffort: Boolean(
+        m.reasoning ||
+          m.reasoning_options?.some(
+            (opt: any) => opt.type === "effort" || opt.type === "reasoning",
+          ),
+      ),
+      supportsThinking: false,
+      contextSource: m.limit?.context ? "provider_reported" : "default_guess",
+      supportsImages: m.modalities?.input ? m.modalities.input.includes("image") : true,
+      byHand: false,
+      enabled: true,
+      supportedParameters: m.tool_call ? ["tools"] : undefined,
+      inputModalities: m.modalities?.input,
+      cacheRead: m.cost?.cache_read,
+      cacheWrite: m.cost?.cache_write,
+      fetched: {
+        contextMax: m.limit?.context ?? undefined,
+        maxOutput: m.limit?.output ?? undefined,
+        pricing: m.cost?.input != null && m.cost?.output != null
+          ? { input: m.cost.input, output: m.cost.output } : undefined,
+        supportsEffort: m.reasoning ?? undefined,
+        inputPrice: m.cost?.input >= 0 ? m.cost.input : undefined,
+        outputPrice: m.cost?.output >= 0 ? m.cost.output : undefined,
+        cacheRead: m.cost?.cache_read,
+        cacheWrite: m.cost?.cache_write,
+      },
+    };
+  });
+  result.sort((a, b) => a.id.localeCompare(b.id));
+  if (result.length > 30) result.forEach((model, index) => { model.enabled = index < 8; });
+  return result;
+}
+
+/** The host of an address, or `null` for a placeholder or a loopback one. */
+function hostOf(url: string): string | null {
+  const match = /^[a-z]+:\/\/([^/?#]+)/i.exec(url.trim());
+  if (match === null) return null;
+  const host = match[1].split("@").pop()!.split(":")[0].toLowerCase();
+  return host.includes(".") && !host.includes("{") ? host : null;
+}
+
 export function discoverModels(spec: ProviderSpec): Promise<ModelInfo[]> {
-  if (!inTauri) return Promise.reject("in the stand there is no provider behind the registry");
+  if (!inTauri) {
+    return fetchModelsDev(spec);
+  }
   return invoke<ModelInfo[]>("discover_models", { spec });
 }
 

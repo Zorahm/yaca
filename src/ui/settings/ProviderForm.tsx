@@ -39,20 +39,24 @@ const PROTOCOLS: Protocol[] = ["openai", "anthropic"];
 export function ProviderForm({
   draft: initial,
   isNew,
+  focusKey = false,
   taken,
   onSave,
   onSaved,
   onCancel,
+  checkedAt,
 }: {
   draft: ProviderDraft;
   isNew: boolean;
+  focusKey?: boolean;
   /** The ids already in the list (`newProviderId`). */
   taken: ReadonlyArray<string>;
   onSave: (spec: ProviderSpec) => Promise<boolean>;
   onSaved: () => void;
   onCancel: () => void;
+  checkedAt?: number;
 }) {
-  const form = useProviderForm({ draft: initial, isNew, taken, onSave, onSaved });
+  const form = useProviderForm({ draft: initial, isNew, taken, onSave, onSaved, checkedAt });
   const { draft, keyState } = form;
   const canSave = !form.busy && form.problems.length === 0;
   const keyFilled = form.keyValue.trim().length > 0;
@@ -138,9 +142,11 @@ export function ProviderForm({
         <input
           className="prov-input prov-input-mono prov-key-input"
           type="password"
+          autoFocus={focusKey}
           autoComplete="off"
           spellCheck={false}
           value={form.keyValue}
+          placeholder={keyState.kind === "keychain" || keyState.kind === "environment" ? "••••••••••••••••" : ""}
           aria-label={t("prov.form_key_title")}
           onChange={(e) => form.setKeyValue(e.target.value)}
         />
@@ -154,7 +160,9 @@ export function ProviderForm({
             disabled={!keyFilled || form.keyBusy}
             onClick={() => void form.saveKey()}
           >
-            {t("prov.key_save")}
+            {keyState.kind === "keychain" || keyState.kind === "environment"
+              ? t("prov.key_replace")
+              : t("prov.key_save")}
           </button>
         )}
         {keyState.kind === "keychain" && (
@@ -187,25 +195,20 @@ export function ProviderForm({
         <div className="prov-hint">{t("prov.key_not_needed")}</div>
       )}
 
-      {!isNew && (
+      {(
         <section className="prov-section">
           <span className="prov-label">{t("prov.form_models")}</span>
-          <div className="prov-hint">{t("prov.form_models_hint")}</div>
-          <div className="prov-hint">{t("prov.context_hint")}</div>
-          <div className="prov-hint">{t("prov.context_reopen")}</div>
-          <div className="prov-hint">{t("prov.price_hint")}</div>
           <ModelsList
             models={draft.models}
             busy={form.modelsBusy || form.keyBusy}
             answered={form.modelsAnswered}
             error={form.modelsError}
+            isLocal={draft.baseUrl.includes("localhost") || draft.baseUrl.includes("127.0.0.1")}
             onAsk={form.askForModels}
-            onPrice={(id, kind, value) => form.patch({ models: draft.models.map((model) => model.id === id ? { ...model, pricing: { ...model.pricing, [kind]: value }, pricingByHand: true } : model) })}
-            onContext={(id, contextMax) => form.patch({
-              models: draft.models.map((model) => model.id === id
-                ? { ...model, contextMax, contextSource: "hand" }
-                : model),
-            })}
+            onModelsChange={form.changeModels}
+            saveState={form.modelsSaveState}
+            canAsk={!isNew}
+            checkedAt={form.modelsCheckedAt}
           />
         </section>
       )}

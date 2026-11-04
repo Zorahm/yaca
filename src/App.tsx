@@ -568,6 +568,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
     <div className="settings-overlay">
       <Settings
         prefs={livePrefs}
+        currentProvider={active?.feed.state?.provider}
         section={settingsAt}
         onSection={setSettingsAt}
         onClose={closeSettings}

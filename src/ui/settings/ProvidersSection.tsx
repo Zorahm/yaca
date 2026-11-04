@@ -1,225 +1,137 @@
-/**
- * Providers (§10): the list, the full description, models, keys.
- *
- * This used to be the slide-out panel §1.1 — an intermediate step, written in §16
- * item 30 as "before the settings window". The window arrived, the panel went away.
- *
- * The main thing in a row is the dot on the left: filled with moss means "the
- * provider answered with a list of models", empty means "it was not asked". §10
- * says "configured — means answered", and everything else depends on it: an unasked
- * provider will not appear in the model choice §7.1, and the home screen §9.1 will
- * not start a conversation. Before, this had to be inferred from the model count in
- * the meta line.
- *
- * `id` was removed from the row: it is almost always the name in lower case, which
- * is noise. It is not in the form either: it is assigned automatically on creation
- * (`newProviderId`). Instead, on the right is the protocol form — the only thing that
- * cannot be guessed from the address.
- *
- * Built-in providers have no delete button: the core would refuse anyway, and a
- * button whose press is always an error lies about being a button (§0).
- */
-
-import { ArrowClockwise, CaretLeft, PencilSimple, Plus, X } from "@phosphor-icons/react";
-import { useState } from "react";
+/** Providers are grouped by setup, with readiness and the next action on each row. */
+import { ArrowClockwise, CaretLeft, Plus, MagnifyingGlass } from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
 
 import type { ModelInfo, ProviderSpec } from "../../core/client";
-import { t, tp } from "../../i18n";
-import { PROTOCOL_NAME, ProviderMark } from "../brand";
+import { t } from "../../i18n";
 import { ProviderForm } from "./ProviderForm";
-import { draftFromSpec, emptyDraft, isPreset, type ProviderDraft } from "./provider";
+import { ProviderRow } from "./ProviderRow";
+import { draftFromSpec, emptyDraft, type ProviderDraft } from "./provider";
+import { providerStatus, STATUS_ORDER } from "./providerStatus";
 import { RoutingSection } from "./RoutingSection";
 import { useProviders } from "./useProviders";
+import "./providers.css";
 
-type Editing = { draft: ProviderDraft; isNew: boolean };
+type Editing = { draft: ProviderDraft; isNew: boolean; focusKey?: boolean };
 
-export function ProvidersSection({
-  models,
-  onChanged,
-}: {
-  /** Every model the providers listed: the router picks its three from them. */
+export function ProvidersSection({ models, onChanged, currentProvider }: {
   models: ModelInfo[];
   onChanged: () => void;
+  currentProvider?: string;
 }) {
-  const { providers, error, save, remove, ask } = useProviders();
+  const { providers, error, keySources, pollErrors, reload, save, remove, ask } = useProviders();
   const [editing, setEditing] = useState<Editing | null>(null);
-  const [confirming, setConfirming] = useState<string | null>(null);
-  // Rows being asked now. A set, not one id: two rows may be asked at once.
+  const [search, setSearch] = useState("");
   const [asking, setAsking] = useState<ReadonlySet<string>>(new Set());
+  const inFlight = useRef(new Set<string>());
+  const [refreshing, setRefreshing] = useState(false);
+  const batchRunning = useRef(false);
+  const [now, setNow] = useState(Date.now);
 
-  const askRow = (spec: ProviderSpec) => {
-    setAsking((now) => new Set(now).add(spec.id));
-    void ask(spec).finally(() => {
-      setAsking((now) => {
-        const next = new Set(now);
-        next.delete(spec.id);
-        return next;
-      });
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const askRow = async (spec: ProviderSpec) => {
+    if (inFlight.current.has(spec.id)) return;
+    inFlight.current.add(spec.id);
+    setAsking(new Set(inFlight.current));
+    try {
+      await ask(spec);
+    } finally {
+      inFlight.current.delete(spec.id);
+      setAsking(new Set(inFlight.current));
+      setNow(Date.now());
       onChanged();
-    });
+    }
   };
 
-  const done = () => {
+  const closeForm = () => {
     setEditing(null);
+    void reload();
     onChanged();
   };
 
   if (editing !== null) {
-    return (
-      <>
-        <button type="button" className="prov-back" onClick={() => setEditing(null)}>
-          <CaretLeft size={13} /> {t("prov.title")}
-        </button>
-        <ProviderForm
-          key={editing.isNew ? "new" : editing.draft.id}
-          draft={editing.draft}
-          isNew={editing.isNew}
-          taken={providers?.list.map((spec) => spec.id) ?? []}
-          onSave={save}
-          onSaved={done}
-          onCancel={() => setEditing(null)}
-        />
-      </>
-    );
+    return <>
+      <button type="button" className="prov-back" onClick={closeForm}>
+        <CaretLeft size={13} /> {t("prov.title")}
+      </button>
+      <ProviderForm
+        key={editing.isNew ? "new" : editing.draft.id}
+        draft={editing.draft} isNew={editing.isNew} focusKey={editing.focusKey}
+        taken={providers?.list.map((spec) => spec.id) ?? []}
+        onSave={save} onSaved={closeForm} onCancel={closeForm}
+        checkedAt={providers?.polls[editing.draft.id]?.checkedAt}
+      />
+    </>;
   }
 
-  return (
-    <>
-      <div className="set-head">
-        <div>
-          <h1 className="set-title">{t("prov.title")}</h1>
-          <p className="set-lede">{t("prov.lede")}</p>
-        </div>
-        <button
-          type="button"
-          className="btn btn-small"
-          onClick={() => setEditing({ draft: emptyDraft(), isNew: true })}
-        >
+  const sourceOf = (spec: ProviderSpec) => keySources[spec.id] ?? { kind: "loading" as const };
+  const statusOf = (spec: ProviderSpec) => providerStatus(spec, sourceOf(spec), providers?.polls[spec.id], asking.has(spec.id), pollErrors[spec.id]);
+  const canPoll = (spec: ProviderSpec) => ["keychain", "environment", "not_needed"].includes(sourceOf(spec).kind);
+  const pollable = providers?.list.filter(canPoll) ?? [];
+  const refreshAll = async () => {
+    if (batchRunning.current || inFlight.current.size > 0) return;
+    batchRunning.current = true;
+    setRefreshing(true);
+    try {
+      // Commands return the whole registry; serial polling avoids competing file writes.
+      for (const spec of pollable) await askRow(spec);
+    } finally {
+      batchRunning.current = false;
+      setRefreshing(false);
+    }
+  };
+  const visible = (providers?.list ?? []).filter((spec) =>
+    `${spec.displayName} ${spec.baseUrl}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
+  ).sort((a, b) => STATUS_ORDER[statusOf(a)] - STATUS_ORDER[statusOf(b)] || a.displayName.localeCompare(b.displayName));
+  const groups = [
+    { name: t("prov.group_connected"), list: visible.filter(canPoll), muted: false },
+    { name: t("prov.group_unconfigured"), list: visible.filter((spec) => !canPoll(spec)), muted: true },
+  ];
+
+  return <>
+    <div className="set-head providers-head">
+      <div>
+        <h1 className="set-title">{t("prov.title")}</h1>
+        <p className="set-lede">{t("prov.lede")}</p>
+      </div>
+      <div className="providers-toolbar">
+        <button type="button" className="btn btn-small" disabled={!pollable.length || asking.size > 0 || refreshing}
+          onClick={() => void refreshAll()}>
+          <ArrowClockwise size={14} className={refreshing ? "prov-spin" : undefined} />
+          {t("prov.refresh_all")}
+        </button>
+        <button type="button" className="btn btn-small" disabled={refreshing}
+          onClick={() => setEditing({ draft: emptyDraft(), isNew: true })}>
           <Plus size={14} /> {t("prov.add")}
         </button>
       </div>
-
-      {error !== null && <div className="set-error">{error}</div>}
-
-      {/* `providers === null` without an error is the moment before the list arrives;
-          with an error the truth is shown above, not as an empty list (§0). */}
-      {providers !== null && (
-        <>
-          <div className="prov-list">
-            {providers.list.map((spec) => (
-              <ProviderRow
-                key={spec.id}
-                spec={spec}
-                confirming={confirming === spec.id}
-                asking={asking.has(spec.id)}
-                onAsk={() => askRow(spec)}
-                onEdit={() => setEditing({ draft: draftFromSpec(spec), isNew: false })}
-                onDeleteStart={() => setConfirming(spec.id)}
-                onDeleteCancel={() => setConfirming(null)}
-                onDelete={() => {
-                  setConfirming(null);
-                  void remove(spec.id).then(onChanged);
-                }}
-              />
-            ))}
-          </div>
-
-          <div className="prov-note">
-            <span className="prov-dot" aria-hidden="true" />
-            <span>{t("prov.unasked_note")}</span>
-          </div>
-        </>
-      )}
-
-      {/* The router is made of the providers above, so it is set up under them. */}
-      <RoutingSection models={models} onChanged={onChanged} />
-    </>
-  );
-}
-
-function ProviderRow({
-  spec,
-  confirming,
-  asking,
-  onAsk,
-  onEdit,
-  onDeleteStart,
-  onDeleteCancel,
-  onDelete,
-}: {
-  spec: ProviderSpec;
-  confirming: boolean;
-  asking: boolean;
-  onAsk: () => void;
-  onEdit: () => void;
-  onDeleteStart: () => void;
-  onDeleteCancel: () => void;
-  onDelete: () => void;
-}) {
-  // Built-in providers are not deleted: the core would bring them back on the next load.
-  const builtin = isPreset(spec.id);
-  const answered = spec.models.length > 0;
-
-  return (
-    <div className="prov">
-      <span
-        className={answered ? "prov-dot prov-dot-on" : "prov-dot"}
-        title={answered ? t("prov.answered") : t("prov.unasked")}
-      />
-
-      <button type="button" className="prov-main" onClick={onEdit} title={t("prov.edit_row")}>
-        <span className="prov-name">
-          <ProviderMark id={spec.id} size={14} />
-          <span className="prov-name-text">{spec.displayName}</span>
-        </span>
-        <span className="prov-meta">
-          {spec.baseUrl} ·{" "}
-          {answered ? tp("prov.models_count", spec.models.length) : t("prov.unasked")}
-        </span>
-      </button>
-
-      <span className="prov-proto">{PROTOCOL_NAME[spec.protocol]}</span>
-
-      <div className="prov-actions">
-        {/* Asking for models is the most common thing done with an unconfigured
-            provider, and the button sits where the trouble is visible: before, one had
-            to open the form and scroll it to the end. It asks right here; the form
-            is the pencil next to it. */}
-        {!answered && (
-          <button type="button" className="btn btn-small" disabled={asking} onClick={onAsk}>
-            <ArrowClockwise size={13} className={asking ? "pulse" : undefined} />{" "}
-            {asking ? t("prov.models_asking") : t("prov.models_ask")}
-          </button>
-        )}
-
-        <button
-          type="button"
-          className="btn btn-row"
-          aria-label={t("prov.edit_row")}
-          title={t("prov.edit_row")}
-          onClick={onEdit}
-        >
-          <PencilSimple size={14} />
-        </button>
-
-        {!builtin &&
-          (confirming ? (
-            <button type="button" className="btn btn-row btn-danger" onClick={onDelete}>
-              {t("prov.delete_confirm")}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-row btn-danger"
-              aria-label={t("prov.delete")}
-              title={t("prov.delete")}
-              onClick={onDeleteStart}
-              onBlur={onDeleteCancel}
-            >
-              <X size={14} />
-            </button>
-          ))}
-      </div>
     </div>
-  );
+
+    {error !== null && <div className="set-error" role="alert">{error}</div>}
+    {providers === null && error === null && <p className="set-empty" role="status">{t("prov.loading")}</p>}
+    {providers !== null && <>
+      {(providers.list.length > 10 || search.length > 0) && <label className="providers-search">
+        <MagnifyingGlass size={15} aria-hidden="true" />
+        <input type="search" value={search} placeholder={t("prov.search_providers")}
+          aria-label={t("prov.search_providers")} onChange={(event) => setSearch(event.target.value)} />
+      </label>}
+      {groups.filter((group) => group.list.length > 0).map((group) => <section className="providers-group" key={group.name} aria-label={group.name}>
+        <h2 className="providers-group-title">{group.name}<span>{group.list.length}</span></h2>
+        <div className="providers-list">
+          {group.list.map((spec) => <ProviderRow key={spec.id} spec={spec} source={sourceOf(spec)}
+            poll={providers.polls[spec.id]} status={statusOf(spec)} pollError={pollErrors[spec.id]} now={now}
+            muted={group.muted} current={currentProvider === spec.id} locked={refreshing || asking.has(spec.id)}
+            onAsk={() => void askRow(spec)}
+            onEdit={(focusKey = false) => setEditing({ draft: draftFromSpec(spec), isNew: false, focusKey })}
+            onDelete={() => void remove(spec.id).then(onChanged)} />)}
+        </div>
+      </section>)}
+      {visible.length === 0 && <p className="set-empty" role="status">{t("prov.search_empty")}</p>}
+    </>}
+    <RoutingSection models={models} onChanged={onChanged} />
+  </>;
 }
