@@ -35,7 +35,7 @@ import { SessionList } from "./SessionList";
 import { PROFILES, PROFILE_KEY } from "../ProfileMenu";
 import { useSwipeShut } from "./useSwipeShut";
 import type { Chat } from "../chats";
-import type { Profile, ReleaseInfo, SessionId } from "../../core/client";
+import { hasFileDialogs, type Profile, type ReleaseInfo, type SessionId } from "../../core/client";
 
 /** Search over the journals is linear in their size (README); the debounce
     keeps it to one pass per pause rather than one per keystroke. */
@@ -43,6 +43,8 @@ const SEARCH_DEBOUNCE_MS = 200;
 
 export function Sidebar({
   projects,
+  onAddProject,
+  onEditProject,
   profile,
   onProfile,
   chatRoot,
@@ -66,7 +68,9 @@ export function Sidebar({
   drawer = null,
 }: {
   /** Projects the window knows about, freshest first. */
-  projects: string[];
+  projects: import("../../core/client").ProjectEntry[];
+  onAddProject: () => void;
+  onEditProject: (entry: import("../../core/client").ProjectEntry) => void;
   profile: Profile;
   onProfile: (profile: Profile) => void;
   chatRoot: string | null;
@@ -200,26 +204,31 @@ export function Sidebar({
             activeId={activeId} query={query} reload={reload}
             onOpen={(id) => onOpenSession(chatRoot, id)} onClose={onCloseChat} />
         ) : profile === "code" && <>
-        {projects.length > 0 && <div className="side-label">{t("side.projects")}</div>}
+        <div className="side-label side-projects-heading">
+          <span>{t("side.projects")}</span>
+          <button type="button" className="side-project-act" disabled={!hasFileDialogs} onClick={onAddProject} aria-label={t("project.create")} title={t("project.create")}><Plus size={14} /></button>
+        </div>
         {projects.length === 0 ? (
           <div className="side-empty">{t("side.no_projects")}</div>
         ) : (
-          projects.map((project) => (
+          projects.map((entry) => (
             <ProjectGroup
-              key={project}
-              project={project}
-              chats={chats.filter((chat) => chat.project === project)}
+              key={entry.path}
+              project={entry.path}
+              entry={entry}
+              onEdit={() => onEditProject(entry)}
+              chats={chats.filter((chat) => chat.project === entry.path)}
               activeId={activeId}
               query={query}
               reload={reload}
               // Searching unfolds everything: a match hidden in a folded
               // project is a search that answered «nothing» and meant «not
               // here».
-              expanded={expanded.has(project) || query !== ""}
-              onToggle={() => toggle(project)}
-              onNewChat={() => onNewChat(project)}
-              onForget={() => onForgetProject(project)}
-              onOpen={(id) => onOpenSession(project, id)}
+              expanded={expanded.has(entry.path) || query !== ""}
+              onToggle={() => toggle(entry.path)}
+              onNewChat={() => onNewChat(entry.path)}
+              onForget={() => onForgetProject(entry.path)}
+              onOpen={(id) => onOpenSession(entry.path, id)}
               onClose={onCloseChat}
             />
           ))

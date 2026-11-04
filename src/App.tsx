@@ -22,9 +22,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
-  addProject as rememberProject,
   chooseFiles,
-  chooseFolder,
   chatRoot as getChatRoot,
   enabledPlugins,
   commands,
@@ -34,7 +32,7 @@ import {
   onProviders,
   projectCommands,
   projectSkills,
-  projects as listProjects,
+  projectEntries as listProjects,
   sessions,
   sendCommand,
   type Command,
@@ -45,6 +43,7 @@ import {
   type Preferences,
   type ProcessId,
   type Profile,
+  type ProjectEntry,
 } from "./core/client";
 import { agentsOf, tally } from "./core/agents";
 import { retryAgentMessage } from "./ui/agentState";
@@ -59,6 +58,7 @@ import { Composer, type ComposerActions } from "./ui/Composer";
 import { MODES } from "./ui/ModeMenu";
 import { mcpPrompts, withSkills, type MenuCommand } from "./ui/slash";
 import { Home } from "./ui/Home";
+import { ProjectEditor } from "./ui/projects/ProjectEditor";
 import { imageActions } from "./ui/images";
 import { galleryOf } from "./ui/viewer/gallery";
 import { Pictures } from "./ui/viewer/Viewer";
@@ -169,7 +169,9 @@ export default function App({ prefs }: { prefs: Preferences }) {
 
   const [error, setError] = useState<string | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
-  const [projects, setProjects] = useState<string[]>([]);
+  const [projects, setProjects] = useState<ProjectEntry[]>([]);
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [editingProject, setEditingProject] = useState<ProjectEntry | null>(null);
   const [slashCommands, setSlashCommands] = useState<MenuCommand[]>([]);
   const [draft, setDraft] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile>("code");
@@ -279,7 +281,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
     // no place to keep the list, and it is needed before any project is known.
     void listProjects().then((list) => {
       setProjects(list);
-      setDraft((now) => now ?? list[0] ?? null);
+      setDraft((now) => now ?? list[0]?.path ?? null);
     }, failed);
   }, [failed]);
 
@@ -340,26 +342,15 @@ export default function App({ prefs }: { prefs: Preferences }) {
     [chats],
   );
 
-  const addProject = useCallback(async () => {
-    const picked = await chooseFolder(t("home.pick_title"));
-    if (picked === null) return;
-    try {
-      const list = await rememberProject(picked);
-      setProjects(list);
-      // Added means this is where they were headed: the home screen opens in it.
-      setDraft(list[0] ?? picked);
-      chats.activate(null);
-    } catch (e) {
-      failed(e);
-    }
-  }, [chats, failed]);
+  const addProject = useCallback(() => setCreatingProject(true), []);
 
   const forgetProject = useCallback(
     async (project: string) => {
       try {
-        const list = await dropProject(project);
+        await dropProject(project);
+        const list = await listProjects();
         setProjects(list);
-        setDraft((now) => (now === project ? (list[0] ?? null) : now));
+        setDraft((now) => (now === project ? (list[0]?.path ?? null) : now));
       } catch (e) {
         failed(e);
       }
@@ -549,6 +540,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
   const sidebar = (collapsed: boolean) => (
     <Sidebar
       projects={projects}
+      onAddProject={addProject}
+      onEditProject={setEditingProject}
       profile={profile}
       chatRoot={chatRoot}
       onProfile={(next) => {
@@ -596,10 +589,21 @@ export default function App({ prefs }: { prefs: Preferences }) {
     />
   );
 
-  const settingsView = settingsAt !== null ? (
+  const settingsView = <>
+    {(creatingProject || editingProject !== null) && <ProjectEditor entry={editingProject} onClose={() => { setCreatingProject(false); setEditingProject(null); }} onSaved={(list, path) => {
+      setProjects(list);
+      if (creatingProject) {
+        setDraft(path);
+        chats.activate(null);
+      }
+    }} />}
+    {settingsAt !== null ? (
     <div className="settings-overlay">
       <Settings
         prefs={livePrefs}
+        projects={projects}
+        currentProject={project}
+        onProjectsChanged={setProjects}
         currentProvider={active?.feed.state?.provider}
         section={settingsAt}
         onSection={setSettingsAt}
@@ -608,7 +612,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
         startOnList={settingsList}
       />
     </div>
-  ) : null;
+  ) : null}
+  </>;
 
   // The state arrives together with the open chat, so `null` here means exactly
   // one thing: there is no open chat and the window is on the home screen.
@@ -630,6 +635,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
           commands={slashCommands}
           onRefreshCommands={refreshCommands}
           project={homeProject}
+          projectEntry={projects.find((entry) => entry.path === homeProject) ?? null}
           profile={profile}
           error={error}
           onStart={(path, text, startup, attachments) =>
@@ -673,6 +679,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
         <TopBar
           title={active.title}
           projectRoot={state.projectRoot}
+          projectEntry={projects.find((entry) => entry.path === active.project) ?? null}
+          folders={[state.projectRoot, ...(active.additionalFolders ?? [])]}
           canGoBack={humanKeys.length > 0 && active.at !== 0}
           canGoForward={active.at >= 0 && active.at < humanKeys.length - 1}
           onBack={() => jumpTo(active.at <= 0 ? humanKeys.length - 1 : active.at - 1)}

@@ -42,6 +42,7 @@ export function Home({
   commands,
   onRefreshCommands,
   project,
+  projectEntry,
   profile,
   error,
   onStart,
@@ -55,6 +56,7 @@ export function Home({
   onRefreshCommands: () => void;
   /** The project picked in the window: the session list beside it reads the same one (§9.1). */
   project: string | null;
+  projectEntry: import("../core/client").ProjectEntry | null;
   profile: Profile;
   /** A session start error: it comes from the window, not from here. */
   error: string | null;
@@ -188,14 +190,13 @@ export function Home({
             </div>
           </div>
 
-          {/* The project is the folder: a card that names it and the one
-              button that changes it (§9). */}
           {profile === "code" && <div className="home-pick">
             <div className="home-pick-text">
               <div className="home-pick-title">{t("home.pick_title")}</div>
-              <div className="home-pick-path" title={project ?? undefined}>
-                {project === null ? t("home.not_chosen") : plainPath(project)}
+              <div className="home-project-name">
+                {projectEntry?.name ?? (project === null ? t("home.not_chosen") : plainPath(project))}
               </div>
+              {projectEntry && <div className="home-project-folders">{projectEntry.folders.map((folder) => <div className="home-pick-path" key={folder} title={plainPath(folder)}>{plainPath(folder)}</div>)}</div>}
             </div>
             <button className="btn" onClick={onPickProject} disabled={!hasFileDialogs}>
               {t("home.pick_project")}

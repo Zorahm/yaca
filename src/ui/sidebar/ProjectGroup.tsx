@@ -11,17 +11,19 @@
  * beside the plus was one slip of the pointer away from it every day.
  */
 
-import { CaretDown, CaretRight, FolderMinus, Plus } from "@phosphor-icons/react";
+import { CaretDown, CaretRight, FolderMinus, Gear, Plus } from "@phosphor-icons/react";
 import { ContextMenu } from "radix-ui";
 
 import { t } from "../../i18n";
-import { baseName } from "../format";
+import { plainPath } from "../format";
 import { SessionList } from "./SessionList";
 import type { Chat } from "../chats";
 import type { SessionId } from "../../core/client";
 
 export function ProjectGroup({
   project,
+  entry,
+  onEdit,
   chats,
   activeId,
   query,
@@ -34,6 +36,8 @@ export function ProjectGroup({
   onClose,
 }: {
   project: string;
+  entry: import("../../core/client").ProjectEntry;
+  onEdit: () => void;
   /** Chats of this project open in the window right now. */
   chats: Chat[];
   activeId: SessionId | null;
@@ -59,14 +63,16 @@ export function ProjectGroup({
               className="side-row side-project-main"
               onClick={onToggle}
               aria-expanded={expanded}
-              title={project}
+              title={entry.folders.map(plainPath).join("\n")}
             >
               <span className="side-icon" aria-hidden="true">
                 {expanded ? <CaretDown size={12} /> : <CaretRight size={12} />}
               </span>
-              <span className="side-project-name">{baseName(project)}</span>
+              <span className="side-project-name">{entry.name}</span>
+              {entry.folders.length > 1 && <span className="side-project-count" aria-label={`${t("project.folders")}: ${entry.folders.length}`}>{entry.folders.length}</span>}
             </button>
 
+            <button className="side-project-act" onClick={onEdit} title={t("project.edit")} aria-label={t("project.edit")}><Gear size={13} /></button>
             <button
               className="side-project-act"
               aria-label={t("side.new_here")}
@@ -83,6 +89,7 @@ export function ProjectGroup({
               <Plus size={14} />
               {t("side.new_here")}
             </ContextMenu.Item>
+            <ContextMenu.Item className="pop-item" onSelect={onEdit}><Gear size={14} />{t("project.edit")}</ContextMenu.Item>
             <div className="pop-sep" />
             <ContextMenu.Item className="pop-item" disabled={busy} onSelect={onForget}>
               <FolderMinus size={14} />

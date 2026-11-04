@@ -5,6 +5,21 @@
 import type { settings as source } from "../ru/settings";
 
 export const settings = {
+  "project.create": "Projekt erstellen",
+  "project.edit": "Projekt bearbeiten",
+  "project.description": "Verwandte Ordner unter einem Namen zusammenfassen.",
+  "project.name": "Projektname",
+  "project.folders": "Projektordner",
+  "project.add_folder": "Ordner hinzufügen",
+  "project.no_folders": "Mindestens einen Ordner auswählen.",
+  "project.primary": "Hauptordner",
+  "project.primary_hint": "Projekteinstellungen liegen im Hauptordner; Befehle starten dort.",
+  "project.future_chats": "Ordneränderungen gelten für neue Chats. Aktive und gespeicherte Chats behalten ihre ursprünglichen Ordner.",
+  "project.rollback_hint": "Das Zurücksetzen gilt nur für den Hauptordner.",
+  "project.remove_folder": "Ordner {path} entfernen",
+  "project.cancel": "Abbrechen",
+  "project.save": "Speichern",
+  "project.saving": "Wird gespeichert…",
   "set.title": "Einstellungen",
   "set.nav": "Einstellungsbereiche",
   "set.close": "Zurück zum Gespräch",

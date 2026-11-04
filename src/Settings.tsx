@@ -20,8 +20,8 @@
  *
  * Settings apply at once, without a "Save" button: it would let the window show
  * one thing while the disk held another. The exception is the provider's
- * description: it is a document, and an unfinished address must not reach the
- * disk.
+ * description and the project's name and folders: unfinished edits stay in
+ * their forms until saved.
  *
  * In a narrow window the two columns are two screens, as Android's own
  * settings are: the list of sections, and a section over it. The arrow over a
@@ -47,15 +47,15 @@ import {
   globalMcpServers,
   models as fetchModels,
   projectMcpFile,
-  projects as listProjects,
   saveGlobalMcpServers,
   setPreferences,
   type ModelInfo,
   type Preferences,
+  type ProjectEntry,
 } from "./core/client";
 import { t, type Key } from "./i18n";
 import { McpMark } from "./ui/brand";
-import { plainPath } from "./ui/format";
+import { ProjectEditor } from "./ui/projects/ProjectEditor";
 import { usePreferences } from "./ui/prefs";
 import { AboutSection } from "./ui/settings/AboutSection";
 import { AppearanceSection } from "./ui/settings/AppearanceSection";
@@ -109,9 +109,6 @@ const PROJECT_SECTIONS: Item[] = [
   { id: "project", name: "proj.title", icon: <FolderSimple size={15} /> },
 ];
 
-/** U+200E, the left-to-right mark. By code: the character itself is invisible in source. */
-const LTR_MARK = String.fromCharCode(0x200e);
-
 function isProjectSection(section: Section): boolean {
   return PROJECT_SECTIONS.some((item) => item.id === section);
 }
@@ -124,6 +121,9 @@ export default function Settings({
   narrow = false,
   startOnList = false,
   currentProvider,
+  projects,
+  currentProject,
+  onProjectsChanged,
 }: {
   prefs: Preferences;
   /** Held by the window, not here: the Help menu opens the layer on a section
@@ -136,6 +136,9 @@ export default function Settings({
   /** Opened as «Settings» rather than on a section: a narrow window shows the list first. */
   startOnList?: boolean;
   currentProvider?: string;
+  projects: ProjectEntry[];
+  currentProject: string | null;
+  onProjectsChanged: (projects: ProjectEntry[]) => void;
 }) {
   const prefs = usePreferences(initial);
   // Narrow only: the list, a section picked from it, or a section the layer
@@ -146,30 +149,27 @@ export default function Settings({
     onSection(next);
     setView("picked");
   };
-  const [projects, setProjects] = useState<string[]>([]);
-  const [project, setProject] = useState<string | null>(null);
+  const [project, setProject] = useState<string | null>(() => projects.find((entry) => entry.path === currentProject)?.path ?? projects[0]?.path ?? null);
+  const [editingProject, setEditingProject] = useState(false);
+  const entry = projects.find((entry) => entry.path === project) ?? null;
   const [models, setModels] = useState<ModelInfo[]>([]);
 
   useEffect(() => {
-    // Newest first — the same order in which the main window picks the default
-    // project, so the settings window opens on that same one.
-    void listProjects().then((list) => {
-      setProjects(list);
-      setProject((now) => now ?? list[0] ?? null);
-    });
-  }, []);
+    setProject((now) => projects.some((entry) => entry.path === now) ? now : projects[0]?.path ?? null);
+  }, [projects]);
 
   // Esc closes the layer while focus is not in a field: inside a field, Esc belongs to the field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (editingProject) return;
       const target = e.target as HTMLElement | null;
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
       onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, editingProject]);
 
   const refreshModels = useCallback(() => {
     void fetchModels().then(setModels, () => setModels([]));
@@ -195,7 +195,7 @@ export default function Settings({
   const shown = project === null && isProjectSection(section) ? "providers" : section;
 
   return (
-    <div
+    <><div
       className={
         !narrow
           ? "settings"
@@ -217,21 +217,15 @@ export default function Settings({
         {project !== null && (
           <>
             <div className="set-group">{t("set.group_project")}</div>
-            {/* The project chip is also the switcher: there are several folders in
-                the list, and the section must say which one it edits. */}
+            {/* The switcher names the project whose repository settings are being edited. */}
             <Select
-              mono
               align="start"
               className="set-project"
               label={t("set.project")}
               value={project}
-              // Shown without the `\\?\` prefix, like everywhere else a path is
-              // read. The mark in front pins the text left-to-right: the chip
-              // is `rtl` to cut a long path on the left, and without it the
-              // slashes a path starts with are drawn at its far end.
-              options={projects.map((path) => ({
-                value: path,
-                label: LTR_MARK + plainPath(path),
+              options={projects.map((entry) => ({
+                value: entry.path,
+                label: entry.name,
               }))}
               onChange={setProject}
             />
@@ -308,6 +302,8 @@ export default function Settings({
                   {shown === "project" && (
                     <ProjectSection
                       project={project}
+                      entry={entry}
+                      onEdit={() => setEditingProject(true)}
                       settings={projectSettings.settings}
                       onPatch={projectSettings.patch}
                     />
@@ -319,6 +315,8 @@ export default function Settings({
         </div>
       </main>
     </div>
+    {editingProject && entry !== null && <ProjectEditor entry={entry} onClose={() => setEditingProject(false)} onSaved={(entries) => onProjectsChanged(entries)} />}
+    </>
   );
 }
 

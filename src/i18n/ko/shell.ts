@@ -38,11 +38,11 @@ export const shell = {
 
   "home.greeting": "무엇부터 시작할까요?",
   "home.greeting_named": "{name}님, 무엇부터 시작할까요?",
-  "home.pick_project": "폴더 선택",
-  "home.pick_title": "프로젝트 폴더",
+  "home.pick_project": "프로젝트 만들기",
+  "home.pick_title": "프로젝트",
   "home.not_chosen": "선택되지 않음",
   "home.lead":
-    "프로젝트 폴더를 고르세요. 그러면 에이전트가 그 안의 파일로 작업을 시작합니다. 모드, 모델, 추론 강도는 첫 메시지 전에 바꿀 수 있습니다.",
+    "사이드바에서 프로젝트를 선택하거나 관련 폴더를 묶어 새로 만드세요. 첫 메시지를 보내기 전에 모드, 모델, 추론 수준을 변경할 수 있습니다.",
    "home.lead_chat":
      "필요한 것을 적으면 에이전트가 대화를 시작합니다. 모드, 모델, 추론 강도는 첫 메시지 전에 바꿀 수 있습니다.",
   "home.no_provider": "프로바이더가 없습니다.",

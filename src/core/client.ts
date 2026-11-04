@@ -49,6 +49,8 @@ import type { ElicitationRequest } from "./bindings/ElicitationRequest";
 import type { LspStatus } from "./bindings/LspStatus";
 import type { ModelInfo } from "./bindings/ModelInfo";
 import type { OpenedChat } from "./bindings/OpenedChat";
+import type { ProjectEntry } from "./bindings/ProjectEntry";
+export type { ProjectEntry } from "./bindings/ProjectEntry";
 import type { PermissionAnswer } from "./bindings/PermissionAnswer";
 import type { PermissionKind } from "./bindings/PermissionKind";
 import type { PermissionRequest } from "./bindings/PermissionRequest";
@@ -210,6 +212,24 @@ let demoNext = 1;
  * same (§0).
  */
 let demoProjects: string[] = [demoState.projectRoot];
+const demoProjectDetails = new Map<string, ProjectEntry>();
+
+export function projectEntries(): Promise<ProjectEntry[]> {
+  if (inTauri) return invoke<ProjectEntry[]>("project_entries");
+  return Promise.resolve(demoProjects.map((path) => demoProjectDetails.get(path) ?? {
+    path, name: path.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? path, folders: [path],
+  }));
+}
+
+export function saveProjectEntry(path: string | null, name: string, folders: string[]): Promise<ProjectEntry[]> {
+  if (inTauri) return invoke<ProjectEntry[]>("save_project_entry", { path, name, folders });
+  if (!name.trim() || folders.length === 0) return Promise.reject(new Error("project name and folders are required"));
+  const primary = folders[0];
+  if (path === null && demoProjects.includes(primary)) return Promise.reject(new Error("a project with this primary folder already exists"));
+  demoProjectDetails.set(primary, { path: primary, name: name.trim(), folders: [...new Set(folders)] });
+  if (path === null) demoProjects = [primary, ...demoProjects];
+  return projectEntries();
+}
 
 export function projects(): Promise<string[]> {
   return inTauri ? invoke<string[]>("projects") : Promise.resolve([...demoProjects]);
@@ -252,6 +272,13 @@ export function chooseFolder(title: string): Promise<string | null> {
   if (!hasFileDialogs) return Promise.resolve(null);
   return open({ directory: true, multiple: false, title }).then((picked) =>
     typeof picked === "string" ? picked : null,
+  );
+}
+
+export function chooseFolders(title: string): Promise<string[]> {
+  if (!hasFileDialogs) return Promise.resolve([]);
+  return open({ directory: true, multiple: true, title }).then((picked) =>
+    picked === null ? [] : typeof picked === "string" ? [picked] : picked,
   );
 }
 
@@ -436,6 +463,7 @@ export function openProject(
     const recorded = resume !== undefined && demoSessions.meta(resume) !== null;
     return Promise.resolve({
       id: recorded ? resume : startDemo(path),
+      additionalFolders: demoProjectDetails.get(path)?.folders.slice(1) ?? [],
       state: { ...demoState, projectRoot: path },
       mcp: structuredClone(demoMcp),
       lsp: structuredClone(demoLsp),

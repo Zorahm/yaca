@@ -38,11 +38,11 @@ export const shell = {
 
   "home.greeting": "从哪里开始？",
   "home.greeting_named": "从哪里开始，{name}？",
-  "home.pick_project": "选择文件夹",
-  "home.pick_title": "项目文件夹",
+  "home.pick_project": "创建项目",
+  "home.pick_title": "项目",
   "home.not_chosen": "未选择",
   "home.lead":
-    "选择项目文件夹，智能体便会开始处理其中的文件。模式、模型和强度可以在发送第一条消息之前更改。",
+    "在侧栏中选择项目，或将相关文件夹组成新项目。发送第一条消息前可以更改模式、模型和推理强度。",
    "home.lead_chat":
      "写下你需要的帮助，智能体便会开始对话。模式、模型和强度可以在发送第一条消息之前更改。",
   "home.no_provider": "没有提供商。",

@@ -5,6 +5,21 @@
 import type { settings as source } from "../ru/settings";
 
 export const settings = {
+  "project.create": "Criar projeto",
+  "project.edit": "Editar projeto",
+  "project.description": "Agrupe pastas relacionadas com um único nome.",
+  "project.name": "Nome do projeto",
+  "project.folders": "Pastas do projeto",
+  "project.add_folder": "Adicionar pastas",
+  "project.no_folders": "Escolha pelo menos uma pasta.",
+  "project.primary": "Principal",
+  "project.primary_hint": "As configurações ficam na pasta principal; os comandos são iniciados nela.",
+  "project.future_chats": "As alterações de pastas aplicam-se a novos chats. Chats ativos e salvos mantêm as pastas originais.",
+  "project.rollback_hint": "A reversão abrange apenas a pasta principal.",
+  "project.remove_folder": "Remover pasta {path}",
+  "project.cancel": "Cancelar",
+  "project.save": "Salvar",
+  "project.saving": "Salvando…",
   "set.title": "Configurações",
   "set.nav": "Seções das configurações",
   "set.close": "Voltar para a conversa",

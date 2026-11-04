@@ -49,6 +49,7 @@ export type Chat = {
   /** The project it belongs to. The store is per project (§9), and the same
       project can hold several open chats. */
   project: string;
+  additionalFolders: string[];
   /** Title from the store (§3), which the core writes after the first turn. */
   title: string;
   feed: Feed;
@@ -306,6 +307,7 @@ export function useChats(onError: (error: unknown) => void): Chats {
  */
 function born(opened: OpenedChat, project: string, recorded: AgentEvent[] = []): Chat {
   return {
+    additionalFolders: opened.additionalFolders,
     id: opened.id,
     project,
     title: "",
@@ -333,6 +335,7 @@ function born(opened: OpenedChat, project: string, recorded: AgentEvent[] = []):
  */
 export function chatOf(attached: AttachedChat): Chat {
   return {
+    additionalFolders: attached.additionalFolders,
     id: attached.id,
     project: attached.project,
     title: "",

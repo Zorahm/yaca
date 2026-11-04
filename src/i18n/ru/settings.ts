@@ -4,6 +4,21 @@
  */
 
 export const settings = {
+  "project.create": "Создать проект",
+  "project.edit": "Настроить проект",
+  "project.description": "Объедините связанные папки под одним именем.",
+  "project.name": "Название проекта",
+  "project.folders": "Папки проекта",
+  "project.add_folder": "Добавить папки",
+  "project.no_folders": "Выберите хотя бы одну папку.",
+  "project.primary": "Основная",
+  "project.primary_hint": "В основной папке хранятся настройки проекта; команды запускаются из неё.",
+  "project.future_chats": "Изменения папок применяются к новым чатам. Текущие и сохранённые чаты сохраняют прежний набор папок.",
+  "project.rollback_hint": "Откат изменений доступен только для основной папки.",
+  "project.remove_folder": "Убрать папку {path}",
+  "project.cancel": "Отмена",
+  "project.save": "Сохранить",
+  "project.saving": "Сохранение…",
   // --- settings window -------------------------------------------------
   "set.title": "Настройки",
   "set.nav": "Разделы настроек",

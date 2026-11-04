@@ -1,0 +1,46 @@
+.project-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  background: var(--scrim);
+}
+.project-editor {
+  position: fixed;
+  z-index: 111;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-pop);
+}
+.project-editor-head, .project-folder-heading, .project-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+.project-editor-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.project-editor fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.project-name-field { display: grid; gap: 8px; margin: 20px 0; font-weight: 500; }
+.project-name-field .prov-input { width: 100%; }
+.project-folder-heading { margin-bottom: 10px; font-weight: 500; }
+.project-folders { list-style: none; margin: 0; padding: 0; }
+.project-folders li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.project-folders li > svg { flex: none; color: var(--muted); }
+.project-folder-path { flex: 1; min-width: 0; overflow-wrap: anywhere; font: 12px/1.6 var(--mono); }
+.project-primary { flex: none; padding: 2px 6px; border-radius: var(--radius-s); color: var(--accent-ink); background: var(--accent-soft); font-size: 11px; }
+.project-hint { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 10px 0; }
+.project-editor-actions { justify-content: flex-end; margin-top: 20px; flex-wrap: wrap; }
+.project-error { color: var(--err); font-size: 12px; overflow-wrap: anywhere; margin-top: 12px; }
+.side-project-count { flex: none; color: var(--muted); font: 11px var(--mono); }
+.home-project-folders { margin-top: 6px; }
+.home-project-name { font-weight: 600; overflow-wrap: anywhere; }
+.side-projects-heading { display: flex; align-items: center; justify-content: space-between; }
+.home-pick > .btn { flex: none; }

@@ -5,6 +5,21 @@
 import type { settings as source } from "../ru/settings";
 
 export const settings = {
+  "project.create": "创建项目",
+  "project.edit": "编辑项目",
+  "project.description": "用一个名称组织相关文件夹。",
+  "project.name": "项目名称",
+  "project.folders": "项目文件夹",
+  "project.add_folder": "添加文件夹",
+  "project.no_folders": "请至少选择一个文件夹。",
+  "project.primary": "主文件夹",
+  "project.primary_hint": "项目设置保存在主文件夹中，命令也从这里启动。",
+  "project.future_chats": "文件夹更改适用于新聊天。正在进行和已保存的聊天保留原来的文件夹。",
+  "project.rollback_hint": "回滚仅涵盖主文件夹。",
+  "project.remove_folder": "移除文件夹 {path}",
+  "project.cancel": "取消",
+  "project.save": "保存",
+  "project.saving": "正在保存…",
   "set.title": "设置",
   "set.nav": "设置分区",
   "set.close": "返回对话",

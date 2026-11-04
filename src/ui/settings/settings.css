@@ -78,9 +78,7 @@
   margin-top: 20px;
 }
 
-/* The project chip — the same as in the §3 header and on the home screen §9.1: the
-   project section must say which project. `rtl` cuts the path on the left: in
-   `D:\очень\длинный\путь\Kod` the tail matters. */
+/* Project names use the same reading direction and type as the other navigation labels. */
 .select.set-project {
   /* Not `inline-flex`: the chip takes the width of the column, so the list
      of sections under it starts at the same edge. */
@@ -102,7 +100,7 @@
 }
 
 .set-project .select-value {
-  direction: rtl;
+  direction: ltr;
   text-align: left;
 }
 

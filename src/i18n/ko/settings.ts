@@ -5,6 +5,21 @@
 import type { settings as source } from "../ru/settings";
 
 export const settings = {
+  "project.create": "프로젝트 만들기",
+  "project.edit": "프로젝트 편집",
+  "project.description": "관련 폴더를 하나의 이름으로 묶으세요.",
+  "project.name": "프로젝트 이름",
+  "project.folders": "프로젝트 폴더",
+  "project.add_folder": "폴더 추가",
+  "project.no_folders": "폴더를 하나 이상 선택하세요.",
+  "project.primary": "기본",
+  "project.primary_hint": "프로젝트 설정은 기본 폴더에 저장되며 명령도 여기서 시작됩니다.",
+  "project.future_chats": "폴더 변경은 새 채팅에 적용됩니다. 실행 중이거나 저장된 채팅은 기존 폴더를 유지합니다.",
+  "project.rollback_hint": "되돌리기는 기본 폴더에만 적용됩니다.",
+  "project.remove_folder": "폴더 {path} 제거",
+  "project.cancel": "취소",
+  "project.save": "저장",
+  "project.saving": "저장 중…",
   "set.title": "설정",
   "set.nav": "설정 섹션",
   "set.close": "대화로 돌아가기",

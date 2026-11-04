@@ -23,7 +23,7 @@ const said = (text: string): AgentEvent => ({
 });
 
 function attached(id: string, epoch: number, ...events: AgentEvent[]): AttachedChat {
-  return { id, project: "C:\\Kod", epoch, events };
+  return { id, project: "C:\\Kod", additionalFolders: [], epoch, events };
 }
 
 function frame(session: string, epoch: number, ...events: AgentEvent[]): EventFrame {
@@ -43,6 +43,12 @@ describe("a chat taken back from the shell", () => {
     expect(chat.project).toBe("C:\\Kod");
     expect(chat.epoch).toBe(1);
     expect(spoken(chat)).toBe("halfway ");
+  });
+
+  it("keeps the session folders when a project has since been edited", () => {
+    const chat = chatOf({ ...attached("ses_roots", 1), additionalFolders: ["D:/original"] });
+    const next = apply([chat], frame("ses_roots", 1, started));
+    expect(next[0].additionalFolders).toEqual(["D:/original"]);
   });
 
   it("keeps a turn that is still running running", () => {
