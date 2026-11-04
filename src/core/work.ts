@@ -22,6 +22,7 @@
  */
 
 import { isAgent } from "./agents";
+import { inProcessesPanel } from "./backgroundCommands";
 import type { ActionRow, FeedBlock } from "./feed";
 
 /** One line of the work item, in the order it happened. */
@@ -114,6 +115,7 @@ function foldRun(out: FeedItem[], run: FeedBlock[]): void {
         break;
       case "actions":
         for (const row of block.rows) {
+          if (inProcessesPanel(row)) continue;
           if (isAgent(row)) {
             flushSteps();
             agents.push(row);
@@ -174,6 +176,7 @@ const REPLY_GOES_ON = new Set<FeedItem["kind"]>([
   "agents",
   "plan",
   "shown",
+  "sent",
 ]);
 
 /**

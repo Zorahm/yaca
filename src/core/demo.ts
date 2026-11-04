@@ -15,6 +15,8 @@ import type { LspServerSummary } from "./bindings/LspServerSummary";
 import type { McpServerSummary } from "./bindings/McpServerSummary";
 import type { ModelInfo } from "./bindings/ModelInfo";
 import type { SessionState } from "./bindings/SessionState";
+import { demoBackgroundEvents } from "./demoProcesses";
+import { demoCheckpoints } from "./demoCheckpoints";
 
 export const inTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -43,14 +45,16 @@ export const demoLsp: LspServerSummary[] = [
     status: "ready",
     reason: null,
     label: "rust-analyzer 1.85.0",
+    installation: null,
   },
   {
-    name: "typescript",
+    name: "typescript-language-server",
     command: "typescript-language-server --stdio",
     extensions: ["ts", "tsx", "js", "jsx"],
-    status: "idle",
+    status: "missing",
     reason: null,
     label: null,
+    installation: "npm install --prefix ~/.config/yaca/lsp/tools/typescript-language-server typescript-language-server typescript@5",
   },
 ];
 
@@ -155,8 +159,6 @@ export const demoModels: ModelInfo[] = [
   },
 ];
 
-const NOW = 1_735_732_320_000;
-
 function state(patch: Partial<SessionState>): AgentEvent {
   return { type: "stateChanged", state: { ...demoState, ...patch } };
 }
@@ -230,18 +232,11 @@ export const demoScript: AgentEvent[] = [
   state({}),
   {
     type: "checkpointCreated",
-    checkpoint: {
-      id: "ckpt_1",
-      at: NOW,
-      reason: { type: "message" },
-      tracked: 148,
-    },
+    checkpoint: demoCheckpoints[0],
   },
   {
     type: "checkpointsUpdated",
-    checkpoints: [
-      { id: "ckpt_1", at: NOW, reason: { type: "message" }, tracked: 148 },
-    ],
+    checkpoints: demoCheckpoints,
   },
   {
     type: "userMessage",
@@ -249,8 +244,7 @@ export const demoScript: AgentEvent[] = [
     text: "fix date parsing in segments — it fails at the time zone boundary",
     attachments: ["src/segments.ts"],
   },
-  // The stand has no core behind it, so the turn starts when the window does:
-  // the live timer counts from a real moment, not from the fixed NOW.
+  // The recording starts with the window so the live timer uses a real moment.
   { type: "turnStarted", turnId: "t1", at: Date.now() },
   state({ busy: true }),
   {
@@ -403,16 +397,38 @@ export const demoScript: AgentEvent[] = [
       removed: 1,
     },
     diff: diff(
-      ["  const at = Date.parse(raw);", "  return new Date(at + offset(raw));"],
+      ["  const at = Date.parse(raw);", "  return new Date(at + offset);"],
       ["  return new Date(raw);"],
     ),
   },
   {
+    type: "toolCallProgress",
+    callId: "c3",
+    chunk: "Edited src/segments.ts\n\nDiagnostics from typescript-language-server: 1 errors\n" +
+      "src/segments.ts:14:22: error [TS2365]: Operator '+' cannot be applied to types 'number' and '(raw: string) => number'.\n" +
+      "  return new Date(at + offset);\n                     ^",
+  },
+  {
     type: "toolCallFinished",
     callId: "c3",
+    meta: { lines: 6, items: null, truncated: false, durationMs: 215 },
+  },
+  call("c3fix", "Edit", "src/segments.ts", null),
+  {
+    type: "fileChanged",
+    callId: "c3fix",
+    fact: {
+      path: "src/segments.ts", kind: "modified", movedFrom: null, added: 1, removed: 1,
+    },
+    diff: diff(["  return new Date(at + offset(raw));"], ["  return new Date(at + offset);"]),
+  },
+  {
+    type: "toolCallFinished",
+    callId: "c3fix",
     meta: { lines: 0, items: null, truncated: false, durationMs: 12 },
   },
   call("c3d", "DeleteDir", "src/legacy", null),
+  ...demoBackgroundEvents,
   {
     type: "toolCallProgress",
     callId: "c3d",

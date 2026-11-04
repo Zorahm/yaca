@@ -516,6 +516,212 @@
   color: var(--muted);
 }
 
+.row-lsp-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  margin-inline: 3px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  white-space: nowrap;
+  font-size: 11.5px;
+  line-height: 18px;
+}
+
+.row-lsp-errors {
+  color: var(--err);
+  background: color-mix(in srgb, var(--err) 6%, var(--surface));
+}
+
+.row-lsp-warnings {
+  color: var(--warn);
+  background: var(--note-bg);
+}
+
+.row-lsp-neutral {
+  color: var(--muted);
+  background: var(--sunk);
+}
+
+.row-diagnostics {
+  margin: 10px 12px 0;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--sunk);
+  font-size: 12.5px;
+  line-height: 1.6;
+  overflow: hidden;
+}
+
+.row-diagnostics-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px 0;
+}
+
+.row-diagnostics-title {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.row-diagnostics-error .row-diagnostics-title,
+.diagnostic-error {
+  color: var(--err);
+}
+
+.diagnostic-warning {
+  color: var(--warn);
+}
+
+.row-diagnostics-server,
+.diagnostic-code {
+  color: var(--muted);
+}
+
+.row-diagnostics-server {
+  padding: 0 12px 8px;
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+.row-diagnostics > .row-dim {
+  padding: 0 12px 10px;
+}
+
+.row-diagnostics-copy {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 5px;
+  min-height: var(--h-row-button);
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.row-diagnostics-copy:hover {
+  color: var(--ink);
+}
+
+.row-diagnostics-output {
+  max-height: var(--h-action-content);
+  margin: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+  font: 400 12px/1.6 var(--mono);
+  font-variant-ligatures: none;
+  user-select: text;
+}
+
+.row-diagnostics-output::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.row-diagnostics-output::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+@supports selector(::-webkit-scrollbar) {
+  .row-diagnostics-output {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+}
+
+.diagnostic-entry {
+  padding-left: 2ch;
+  text-indent: -2ch;
+}
+
+.diagnostic-entry + .diagnostic-entry {
+  margin-top: 6px;
+}
+
+.diagnostic-scope {
+  display: block;
+  color: var(--muted);
+  font: 400 11.5px/1.6 var(--sans);
+  text-indent: 0;
+}
+
+.diagnostic-location {
+  color: var(--accent-ink);
+  font: inherit;
+  display: inline;
+  text-align: inherit;
+  white-space: inherit;
+  overflow-wrap: inherit;
+  text-indent: 0;
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+.diagnostic-location:hover,
+.diagnostic-location:focus-visible {
+  text-decoration: underline;
+}
+
+.group {
+  container-type: inline-size;
+}
+
+/* Counts stay complete without squeezing the file name out of a narrow card. */
+@container (max-width: 560px) {
+  .group-head:has(.row-lsp-label),
+  .row-head:has(.row-lsp-label) {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr) auto auto 12px;
+    row-gap: 5px;
+    height: auto;
+  }
+
+  .row-head:has(.row-lsp-label) {
+    padding-block: 8px;
+  }
+
+  .group-head:has(.row-lsp-label) .group-title,
+  .row-head:has(.row-lsp-label) .row-caption {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .group-head:has(.row-lsp-label) > .counts,
+  .row-head:has(.row-lsp-label) > .counts {
+    grid-row: 1;
+    grid-column: 3;
+  }
+
+  .row-head:has(.row-lsp-label) > .counts-pill + .counts {
+    grid-column: 4;
+  }
+
+  .group-head:has(.row-lsp-label) > .caret,
+  .row-head:has(.row-lsp-label) > .caret {
+    grid-row: 1;
+    grid-column: 5;
+  }
+
+  .group-head > .row-lsp-label,
+  .row-head > .row-lsp-label {
+    grid-row: 2;
+    grid-column: 2 / -1;
+    justify-self: start;
+    margin: 0;
+    white-space: normal;
+  }
+}
+
 .row-dot {
   display: inline-flex;
   align-items: center;

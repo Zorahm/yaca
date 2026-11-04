@@ -46,11 +46,63 @@
 }
 
 .diff-gutter {
+  position: relative;
   padding-right: 8px;
   color: var(--muted);
   font-size: 11.5px;
   text-align: right;
   user-select: none;
+}
+
+.diff-diagnostic-error .diff-gutter {
+  color: var(--err);
+}
+
+.diff-diagnostic-warning .diff-gutter {
+  color: var(--warn);
+}
+
+.diff-diagnostic-cell {
+  order: -2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--diff-line);
+  user-select: none;
+}
+
+.diff-diagnostic-mark {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.diff-diagnostic-mark-error {
+  background: var(--err);
+}
+
+.diff-diagnostic-mark-warning {
+  background: var(--warn);
+}
+
+.diagnostic-squiggle {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+
+.diagnostic-squiggle-error {
+  text-decoration-color: var(--err);
+}
+
+.diagnostic-squiggle-warning {
+  text-decoration-color: var(--warn);
+}
+
+.diff-has-diagnostics .diff-line {
+  grid-template-columns: 12px var(--gutter) 16px 1fr;
 }
 
 .diff-sign {
@@ -102,6 +154,10 @@
 }
 .diff-soft .diff-gutter {
   padding-right: 10px;
+}
+
+.diff-soft.diff-has-diagnostics .diff-line {
+  grid-template-columns: 12px 22px calc(var(--digits, 3) * 1ch + 10px) 1fr;
 }
 
 /* What a `Read` returned: no mark to show, and nothing changed for the lines

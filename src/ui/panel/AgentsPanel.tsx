@@ -1,175 +1,112 @@
-/**
- * The agents panel: every subagent of the conversation, folded to one row.
- *
- * A row opens into a small conversation of its own: the task the agent wrote
- * for the subagent, what the subagent did, and the report it handed back.
- * The actions are the same rows the feed draws, with the same diff and the
- * same way into the file panel, because an edit a subagent made is an edit to
- * the person's files.
- *
- * What the subagent said between its actions is not here: the core does not
- * send it, and tells the subagent so.
- *
- * The list is read from the feed's `Task` rows (`core/agents`); the panel
- * keeps only which rows are open. The plate in the feed opens the panel on
- * its own agents through `focus`.
- */
-
-import { CaretDown, CaretRight, Check } from "@phosphor-icons/react";
+/** Compact agent overview; expansion and filters belong to the reader. */
+import { CaretDown, CaretRight, Check, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
-import { agentPrompt, agentsOf, agentTokens } from "../../core/agents";
+import { agentPrompt, agentsOf, agentTokens, orderedAgents, tally } from "../../core/agents";
+import { inProcessesPanel } from "../../core/backgroundCommands";
 import type { ActionRow, Feed } from "../../core/feed";
 import { t, tp } from "../../i18n";
-import { ActionRowView } from "../ActionRow";
-import { tokens } from "../format";
-import { Markdown } from "../Markdown";
-import { RowSign } from "../RowSign";
+import { agentIssue, agentTitle } from "../agentState";
+import { caption } from "../captions";
+import { durationOf, tokens } from "../format";
+import { Spinner } from "../RowSign";
+import { AgentDetails, RetryAgentButton } from "./AgentDetails";
 import { Panel } from "./Panel";
 
-/** A prompt longer than this is folded until asked for. */
-const PROMPT_FOLD_CHARS = 360;
-const PROMPT_FOLD_LINES = 6;
+type Filter = "all" | "running" | "failed";
 
-export function AgentsPanel({
-  feed,
-  focus,
-  onOpenFile,
-}: {
+export function AgentsPanel({ feed, focus, onOpenFile, onRetry }: {
   feed: Feed;
-  /** The agents to open: those of the plate that was pressed. */
   focus: string[];
-  onOpenFile: (path: string) => void;
+  onOpenFile: (path: string, line?: number) => void;
+  onRetry: (row: ActionRow) => Promise<void>;
 }) {
   const agents = agentsOf(feed);
-  const [open, setOpen] = useState<Set<string>>(() => new Set(focus));
+  const sum = tally(agents);
+  const [open, setOpen] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [query, setQuery] = useState("");
   const list = useRef<HTMLDivElement>(null);
 
-  // A plate pressed while the panel is up: its agents open, and the first of
-  // them comes into view.
   useEffect(() => {
-    setOpen(new Set(focus));
-    const first = focus[0];
-    if (first === undefined) return;
-    list.current
-      ?.querySelector(`[data-agent="${CSS.escape(first)}"]`)
-      ?.scrollIntoView({ block: "nearest" });
+    setOpen(focus[0] ?? null);
+    if (!focus[0]) return;
+    setFilter("all");
+    setQuery("");
+    const timer = requestAnimationFrame(() => list.current?.querySelector(`[data-agent="${CSS.escape(focus[0])}"]`)?.scrollIntoView({ block: "nearest" }));
+    return () => cancelAnimationFrame(timer);
   }, [focus]);
 
-  function toggle(id: string) {
-    setOpen((now) => {
-      const next = new Set(now);
-      if (!next.delete(id)) next.add(id);
-      return next;
-    });
-  }
+  const needle = query.trim().toLocaleLowerCase();
+  const shown = orderedAgents(agents).filter((row) => {
+    if (filter === "running" && row.state !== "running") return false;
+    if (filter === "failed" && !agentIssue(row)) return false;
+    return !needle || `${agentTitle(row)}\n${agentPrompt(row)}`.toLocaleLowerCase().includes(needle);
+  });
 
-  return (
-    <Panel>
-      {agents.length === 0 ? (
-        <div className="panel-empty">{t("agents.empty")}</div>
-      ) : (
-        <div className="panel-body" ref={list}>
-          {agents.map((row) => (
-            <Subagent
-              key={row.callId}
-              row={row}
-              open={open.has(row.callId)}
-              onToggle={() => toggle(row.callId)}
-              onOpenFile={onOpenFile}
-            />
-          ))}
+  return <Panel>
+    {agents.length === 0 ? <div className="panel-empty">{t("agents.empty")}</div> : <>
+      <div className="agents-overview">
+        <div className="agents-summary">
+          <span>{tp("agents.count", sum.count)}</span>
+          {sum.running > 0 && <span>{tp("agents.running", sum.running)}</span>}
+          {sum.failed > 0 && <span className="agents-summary-failed">{tp("agents.failed", sum.failed)}</span>}
+          {sum.tokens !== null && <span>{tokens(sum.tokens)}</span>}
         </div>
-      )}
-    </Panel>
-  );
+        <div className="agents-filters" role="group">
+          {(["all", "running", "failed"] as const).map((value) => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>
+            {t(value === "all" ? "agents.filter_all" : value === "running" ? "agents.filter_running" : "agents.filter_failed")}
+            <span>{value === "all" ? sum.count : value === "running" ? sum.running : sum.failed}</span>
+          </button>)}
+        </div>
+        {agents.length >= 10 && <input className="agents-search" type="search" aria-label={t("agents.search")} placeholder={t("agents.search")} value={query} onChange={(event) => setQuery(event.target.value)} />}
+      </div>
+      <div className="agents-list" ref={list}>
+        {shown.length === 0 && <div className="agents-no-matches">{t("agents.no_matches")}</div>}
+        {shown.map((row) => <Subagent key={row.callId} row={row} open={open === row.callId} onToggle={() => setOpen(open === row.callId ? null : row.callId)} onOpenFile={onOpenFile} onRetry={onRetry} />)}
+      </div>
+    </>}
+  </Panel>;
 }
 
-function Subagent({
-  row,
-  open,
-  onToggle,
-  onOpenFile,
-}: {
+function Subagent({ row, open, onToggle, onOpenFile, onRetry }: {
   row: ActionRow;
   open: boolean;
   onToggle: () => void;
-  onOpenFile: (path: string) => void;
+  onOpenFile: (path: string, line?: number) => void;
+  onRetry: (row: ActionRow) => Promise<void>;
 }) {
-  const prompt = agentPrompt(row);
-  const spent = agentTokens(row);
+  const issue = agentIssue(row);
   const running = row.state === "running";
-  const done = row.state === "done";
+  const spent = agentTokens(row);
+  const children = row.children.filter((child) => !inProcessesPanel(child));
+  const live = [...row.children].reverse().find((child) => child.state === "running");
+  const [retryState, setRetryState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
 
-  return (
-    <section className="subagent" data-agent={row.callId}>
-      <button className="subagent-head" aria-expanded={open} onClick={onToggle}>
-        {done ? (
-          <span className="sign subagent-done" aria-hidden="true">
-            <Check size={14} weight="bold" />
-          </span>
-        ) : (
-          <RowSign row={row} />
-        )}
-        <span className="subagent-name">
-          <span className="subagent-title">{row.description ?? firstLine(prompt)}</span>
-          <span className="subagent-meta">
-            {running && <span>{t("agents.working")}</span>}
-            <span>{tp("agents.steps", row.children.length)}</span>
-            {spent !== null && <span>{t("agents.tokens", { n: tokens(spent) })}</span>}
-          </span>
-        </span>
-        <span className="caret" aria-hidden="true">
-          {open ? <CaretDown size={12} /> : <CaretRight size={12} />}
-        </span>
-      </button>
+  async function retry() {
+    setRetryState("sending");
+    try { await onRetry(row); setRetryState("sent"); }
+    catch { setRetryState("failed"); }
+  }
+  const retryControl = agentPrompt(row) ? <RetryAgentButton state={retryState} onRetry={() => void retry()} /> : null;
 
-      {open && (
-        <div className="subagent-chat">
-          {prompt !== "" && <Prompt text={prompt} />}
-
-          {row.children.length > 0 && (
-            <div className="group-list">
-              {row.children.map((child) => (
-                <ActionRowView key={child.callId} row={child} onOpenFile={onOpenFile} />
-              ))}
-            </div>
-          )}
-
-          {done && row.output.trim() !== "" && <Markdown text={row.output} />}
-
-          {/* Ended without a report: the reason stands where the report would. */}
-          {!running && !done && (
-            <div className="subagent-failed">
-              {row.message ?? t(row.state === "stopped" ? "act.stopped" : "act.cancelled")}
-            </div>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
-/** The task as the agent wrote it: the other side of this small conversation. */
-function Prompt({ text }: { text: string }) {
-  const long =
-    text.length > PROMPT_FOLD_CHARS || text.split("\n").length > PROMPT_FOLD_LINES;
-  const [whole, setWhole] = useState(false);
-
-  return (
-    <div className="subagent-prompt">
-      <div className={long && !whole ? "subagent-prompt-text subagent-prompt-folded" : "subagent-prompt-text"}>
-        {text}
-      </div>
-      {long && (
-        <button className="subagent-prompt-more" onClick={() => setWhole(!whole)}>
-          {t(whole ? "agents.prompt_less" : "agents.prompt_more")}
-        </button>
-      )}
+  return <section className="subagent" data-agent={row.callId}>
+    <button className="subagent-head" aria-expanded={open} onClick={onToggle} title={agentTitle(row)}>
+      {running ? <Spinner /> : <span className={`sign ${issue ? "subagent-bad" : "subagent-done"}`} aria-hidden="true">{issue ? <X size={14} /> : <Check size={14} />}</span>}
+      <span className="subagent-title">{agentTitle(row)}</span>
+      <span className="subagent-measures">
+        {row.meta && <span>{durationOf(row.meta.durationMs)}</span>}
+        {spent !== null && <span title={t("agents.tokens", { n: tokens(spent) })}>{tokens(spent)}</span>}
+      </span>
+      <span className="caret" aria-hidden="true">{open ? <CaretDown size={12} /> : <CaretRight size={12} />}</span>
+    </button>
+    <div className="subagent-statusline">
+      <span className={issue ? "subagent-status-bad" : ""}>
+        {running ? live?.tool === "BashWait" ? t("agents.waiting_background") : live ? caption(live) : t("agents.working") : issue ? t(issue.reason) : tp("agents.steps", children.length)}
+      </span>
+      {issue && !open && retryControl}
     </div>
-  );
-}
-
-function firstLine(text: string): string {
-  return text.split("\n").find((line) => line.trim() !== "")?.trim() ?? "";
+    {retryState === "failed" && <div className="subagent-retry-error" role="status">{t("agents.retry_failed")}</div>}
+    {open && <AgentDetails row={row} retryControl={retryControl} onOpenFile={onOpenFile} />}
+  </section>;
 }

@@ -1,94 +1,69 @@
-/**
- * The language-server panel, opened by `/lsp`: this chat's servers and the
- * state of each.
- *
- * The list is the core's, whole, from the last `lspUpdated` — the panel keeps
- * none of its own, and needs no refresh: the list arrives with the chat and
- * again on every change. A server starts when a file first needs it, so an
- * idle one is normal, not a fault.
- *
- * One thing can be done here: restart a server. It is a command to the core,
- * which stops the process and starts it again; the panel shows it go down and
- * come back up through the same list. Declaring a server is the settings
- * window's.
- */
-
-import { Circle } from "@phosphor-icons/react";
-
+/** Project language servers. Status and switches come from the core. */
+import { Circle, DownloadSimple, Power, ArrowClockwise } from "@phosphor-icons/react";
 import type { LspServerSummary, LspStatus } from "../../core/client";
 import { t, type Key } from "../../i18n";
 import { Panel } from "./Panel";
+import "./lsp.css";
 
 const STATUS: Record<LspStatus, Key> = {
-  idle: "lsp.status_idle",
-  starting: "lsp.status_starting",
-  ready: "lsp.status_ready",
-  failed: "lsp.status_failed",
-  disabled: "lsp.status_disabled",
+  idle: "lsp.status_idle", starting: "lsp.status_starting", ready: "lsp.status_ready",
+  failed: "lsp.status_failed", disabled: "lsp.status_disabled",
+  missing: "lsp.status_missing", installing: "lsp.status_installing",
 };
 
-export function LspPanel({
-  servers,
-  onRestart,
-}: {
-  /** `null` — the list has not arrived yet. */
+export function LspPanel({ servers, onRestart, onEnable, onInstall }: {
   servers: LspServerSummary[] | null;
   onRestart: (server: string) => void;
+  onEnable: (server: string, enabled: boolean) => void;
+  onInstall: (server: string) => void;
 }) {
-  return (
-    <Panel>
-      {servers === null || servers.length === 0 ? (
-        <div className="panel-empty">{t("lsp.panel_empty")}</div>
-      ) : (
-        <div className="panel-body">
-          {servers.map((server) => (
-            <Server key={server.name} server={server} onRestart={() => onRestart(server.name)} />
-          ))}
-        </div>
-      )}
-    </Panel>
-  );
+  return <Panel>
+    <div className="lsp-list">
+      <p className="lsp-note">{t("lsp.autostart")}</p>
+      {servers === null ? <div className="lsp-note">{t("lsp.loading")}</div>
+        : servers.length === 0 ? <div className="lsp-note">{t("lsp.panel_empty")}</div>
+        : servers.map((server) => <Server key={server.name} server={server}
+          onRestart={() => onRestart(server.name)} onEnable={(enabled) => onEnable(server.name, enabled)}
+          onInstall={() => onInstall(server.name)} />)}
+    </div>
+  </Panel>;
 }
 
-function Server({ server, onRestart }: { server: LspServerSummary; onRestart: () => void }) {
-  const canRestart = server.status !== "disabled" && server.status !== "starting";
-  return (
-    <section className="mcp-server">
-      <div className="mcp-head">
-        <span className="mcp-name">{server.name}</span>
-        <Status status={server.status} />
-        <div className="composer-gap" />
-        {canRestart && (
-          <button type="button" className="btn btn-small" onClick={onRestart}>
-            {t(server.status === "idle" ? "lsp.start" : "lsp.restart")}
-          </button>
-        )}
-      </div>
-      <div className="mcp-target">{server.command}</div>
-      <div className="mcp-meta">
-        {t("lsp.extensions", { list: server.extensions.map((e) => `.${e}`).join(" ") })}
-        {server.label !== null && ` · ${server.label}`}
-      </div>
-      {server.reason !== null && <pre className="mcp-reason">{server.reason}</pre>}
-    </section>
-  );
-}
-
-function Status({ status }: { status: LspStatus }) {
-  const tone =
-    status === "ready" || status === "starting"
-      ? "mcp-status-live"
-      : status === "failed"
-        ? "mcp-status-fail"
-        : "";
-  return (
-    <span className={`mcp-status ${tone}`}>
-      {status === "starting" && (
-        <span className="pulse">
-          <Circle size={7} weight="fill" />
+function Server({ server, onRestart, onEnable, onInstall }: {
+  server: LspServerSummary; onRestart: () => void;
+  onEnable: (enabled: boolean) => void; onInstall: () => void;
+}) {
+  const disabled = server.status === "disabled";
+  const busy = server.status === "starting" || server.status === "installing";
+  const canInstall = (server.status === "missing" || server.status === "failed") && server.installation;
+  const tone = server.status === "ready" ? "lsp-status-ready" : server.status === "failed" ? "lsp-status-failed" : busy ? "lsp-status-busy" : "";
+  return <article className="lsp-server">
+    <div className="lsp-info">
+      <div className="lsp-heading">
+        <h3 className="lsp-name">{server.name}</h3>
+        <span className={`lsp-status ${tone}`} role="status">
+          {busy && <span className="pulse"><Circle size={7} weight="fill" /></span>}
+          {t(STATUS[server.status])}
         </span>
-      )}{" "}
-      {t(STATUS[status])}
-    </span>
-  );
+      </div>
+      <div className="lsp-extensions">{server.extensions.map((ext) => <code key={ext}>.{ext}</code>)}</div>
+      {server.label && <div className="lsp-note">{server.label}</div>}
+      <code className="lsp-command">{server.command}</code>
+      {server.reason && <pre className="lsp-reason">{server.reason}</pre>}
+      {canInstall && <div className="lsp-install">
+        <p className="lsp-note">{t("lsp.install_note")}</p>
+        <code className="lsp-command">{server.installation}</code>
+      </div>}
+    </div>
+    <div className="lsp-actions">
+      {canInstall ? <button className="btn btn-small btn-accent" onClick={onInstall}>
+        <DownloadSimple size={14} />{t("lsp.install")}
+      </button> : !disabled && !busy && <button className="btn btn-small" onClick={onRestart}>
+        <ArrowClockwise size={14} />{t(server.status === "idle" ? "lsp.start" : "lsp.restart")}
+      </button>}
+      <button className="btn btn-small lsp-switch" onClick={() => onEnable(disabled)}>
+        <Power size={14} />{t(disabled ? "lsp.enable" : "lsp.disable")}
+      </button>
+    </div>
+  </article>;
 }

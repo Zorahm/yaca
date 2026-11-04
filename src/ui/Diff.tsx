@@ -34,6 +34,7 @@ import { utf16Spans, between, plainLine } from "./highlight";
 import { languageOf } from "./languages";
 import { useHighlight, type LineHighlighter } from "./useHighlight";
 import { windowOf } from "./window";
+import type { Diagnostic } from "./editNotices";
 
 /**
  * Shorter than this, the diff is drawn whole: spacers and a scroll listener on a
@@ -64,6 +65,8 @@ export function Diff({
   body,
   soft = false,
   path,
+  diagnostics = [],
+  location,
 }: {
   /** The stream's diff of one call (§5.5.1). Absent when `body` is given. */
   diff?: FileDiff;
@@ -73,6 +76,8 @@ export function Diff({
   soft?: boolean;
   /** The file path: the highlighting grammar is picked from it (§6.3). */
   path?: string;
+  diagnostics?: Diagnostic[];
+  location?: { line: number } | null;
 }) {
   const language = useMemo(() => (path === undefined ? null : languageOf(path)), [path]);
   const highlight = useHighlight(language);
@@ -84,13 +89,13 @@ export function Diff({
               key={at}
               line={line}
               highlight={highlight}
-              mark={at === body.current ? "now" : body.hits?.has(at) ? "hit" : null}
+              mark={(body.current != null ? at === body.current : line.newLine === location?.line) ? "now" : body.hits?.has(at) ? "hit" : null}
             />
           ))
         : diff
-          ? rows(diff, highlight)
+          ? rows(diff, highlight, diagnostics)
           : [],
-    [diff, body, highlight],
+    [diff, body, highlight, diagnostics, location],
   );
   const truncated = body ? body.truncated : (diff?.truncated ?? false);
   // The gutter is as wide as the longest number in it and no wider: a column
@@ -126,7 +131,8 @@ export function Diff({
 
   // The search steps from hit to hit: the one it stands on comes into view, a
   // third of the way down, so the lines before it are there to read too.
-  const current = body?.current ?? null;
+  const target = location && body ? body.lines.findIndex((line) => line.newLine === location.line) : -1;
+  const current = body?.current ?? (target >= 0 ? target : null);
   useEffect(() => {
     const node = box.current;
     if (!node || current === null) return;
@@ -134,7 +140,7 @@ export function Diff({
     if (top < node.scrollTop || top > node.scrollTop + node.clientHeight - rowHeight(node)) {
       node.scrollTop = Math.max(0, top - node.clientHeight / 3);
     }
-  }, [current]);
+  }, [current, location]);
 
   const slice = windowed
     ? windowOf(items.length, view.row, view.scrollTop, view.height, OVERSCAN)
@@ -145,11 +151,12 @@ export function Diff({
       // A diff in a feed row wraps long lines like the rest of the tool's
       // output. Windowing needs rows of one height, so a long diff that is
       // windowed keeps single lines and scrolls sideways.
-      className={
+      className={[
         soft
           ? `diff diff-soft${windowed ? "" : " diff-wrap"}${body ? " diff-read" : ""}`
-          : "diff diff-whole"
-      }
+          : "diff diff-whole",
+        diagnostics.length > 0 && "diff-has-diagnostics",
+      ].filter(Boolean).join(" ")}
       style={{ "--digits": digits } as CSSProperties}
       ref={box}
     >
@@ -185,6 +192,7 @@ function rowHeight(node: HTMLElement): number {
 function rows(
   diff: FileDiff,
   highlight: LineHighlighter | null,
+  diagnostics: Diagnostic[],
 ): ReactElement[] {
   const out: ReactElement[] = [];
 
@@ -199,7 +207,9 @@ function rows(
       );
     }
     for (const [at, line] of hunk.lines.entries()) {
-      out.push(<Line key={`h${index}l${at}`} line={line} highlight={highlight} />);
+      const issues = line.kind === "del" ? [] : diagnostics.filter((item) => item.line === line.newLine);
+      out.push(<Line key={`h${index}l${at}`} line={line} highlight={highlight}
+        diagnostics={issues} diagnosticGutter={diagnostics.length > 0} />);
     }
   }
 
@@ -210,10 +220,14 @@ function Line({
   line,
   highlight,
   mark = null,
+  diagnostics = [],
+  diagnosticGutter = false,
 }: {
   line: DiffLine;
   /** Found by the panel's search; `now` is the hit it stands on. */
   mark?: "hit" | "now" | null;
+  diagnostics?: Diagnostic[];
+  diagnosticGutter?: boolean;
   /** Until the grammar arrives — `null`, and the line is rendered without highlighting. */
   highlight: LineHighlighter | null;
 }) {
@@ -222,12 +236,17 @@ function Line({
   const sign = line.kind === "add" ? "+" : line.kind === "del" ? "−" : " ";
   // The gutter shows the side the line belongs to (§6.3).
   const number = line.kind === "del" ? line.oldLine : line.newLine;
+  const severity = diagnostics.some((item) => item.severity === "error") ? "error" : "warning";
+  const diagnosticTitle = diagnostics.map((item) => `${item.severity} ${item.code} ${item.location}: ${item.message}`).join("\n");
 
   return (
-    <div className={mark ? `diff-line ${kind} diff-hit diff-hit-${mark}` : `diff-line ${kind}`}>
+    <div className={`diff-line ${kind}${mark ? ` diff-hit diff-hit-${mark}` : ""}${diagnostics.length ? ` diff-diagnostic diff-diagnostic-${severity}` : ""}`} title={diagnosticTitle || undefined}>
+      {diagnosticGutter && <span className="diff-diagnostic-cell">
+        {diagnostics.length > 0 && <span className={`diff-diagnostic-mark diff-diagnostic-mark-${severity}`} role="img" aria-label={diagnosticTitle} />}
+      </span>}
       <span className="diff-gutter">{number ?? ""}</span>
       <span className="diff-sign">{sign}</span>
-      <span className="diff-text">{styled(line.text, line.spans, highlight)}</span>
+      <span className="diff-text">{styled(line.text, line.spans, highlight, diagnostics)}</span>
     </div>
   );
 }
@@ -239,30 +258,30 @@ function Line({
  * bounds are converted to UTF-16 to agree with the Lezer ranges — otherwise a
  * surrogate pair would cut both the word and the token.
  */
-function styled(text: string, spans: Span[], highlight: LineHighlighter | null): ReactNode {
+function styled(text: string, spans: Span[], highlight: LineHighlighter | null, diagnostics: Diagnostic[]): ReactNode {
   const pieces = highlight === null ? plainLine(text) : highlight(text);
   const bounds = utf16Spans(text, spans);
 
-  if (bounds.length === 0) return runsOf(text, pieces);
+  // Post-edit output carries only the start column, counted in code points.
+  // Mark that character rather than implying an unknown diagnostic end range.
+  const locations = diagnostics.map((diagnostic) => ({
+    ...utf16Spans(text, [{ start: diagnostic.column - 1, end: diagnostic.column }])[0],
+    severity: diagnostic.severity,
+  })).filter((location) => location.to > location.from);
+
+  if (bounds.length === 0 && locations.length === 0) return runsOf(text, pieces);
 
   const out: ReactNode[] = [];
-  let at = 0;
-  for (const [index, bound] of bounds.entries()) {
-    if (bound.from > at) {
-      out.push(runsOf(text.slice(at, bound.from), between(pieces, at, bound.from)));
-    }
-    out.push(
-      <span className="word" key={index}>
-        {runsOf(
-          text.slice(bound.from, bound.to),
-          between(pieces, bound.from, bound.to),
-        )}
-      </span>,
-    );
-    at = bound.to;
-  }
-  if (at < text.length) {
-    out.push(runsOf(text.slice(at), between(pieces, at, text.length)));
+  const cuts = [...new Set([0, text.length, ...[...bounds, ...locations].flatMap(({ from, to }) => [from, to])])].sort((a, b) => a - b);
+  for (let index = 0; index < cuts.length - 1; index++) {
+    const from = cuts[index];
+    const to = cuts[index + 1];
+    const word = bounds.some((bound) => bound.from <= from && bound.to >= to);
+    const issues = locations.filter((location) => location.from <= from && location.to >= to);
+    const severity = issues.some((issue) => issue.severity === "error") ? "error" : "warning";
+    const className = [word && "word", issues.length > 0 && `diagnostic-squiggle diagnostic-squiggle-${severity}`].filter(Boolean).join(" ");
+    const content = runsOf(text.slice(from, to), between(pieces, from, to));
+    out.push(<span key={index} className={className || undefined}>{content}</span>);
   }
   return out;
 }

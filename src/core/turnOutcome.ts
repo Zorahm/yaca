@@ -7,7 +7,7 @@ export function missingOutcome(blocks: FeedBlock[], failed: boolean): string | n
   const visible = blocks.some((b) =>
     (b.kind === "agent" && b.text.trim().length > 0) ||
     (b.kind === "actions" && b.rows.length > 0) ||
-    ["shown", "plan", "question", "permission", "elicitation", "hook"].includes(b.kind),
+    ["shown", "sent", "plan", "question", "permission", "elicitation", "hook"].includes(b.kind),
   );
   return visible ? null : "response_missing";
 }

@@ -65,3 +65,9 @@ export function tally(rows: ActionRow[]): AgentsTally {
     tokens,
   };
 }
+
+/** Active and unsuccessful work stays above completed reports, preserving order within each. */
+export function orderedAgents(rows: ActionRow[]): ActionRow[] {
+  const rank = (row: ActionRow) => row.state === "running" ? 0 : row.state === "done" ? 2 : 1;
+  return [...rows].sort((a, b) => rank(a) - rank(b));
+}

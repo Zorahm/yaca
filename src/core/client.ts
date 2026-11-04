@@ -6,13 +6,17 @@
  * compiler, not by a person reading the feed.
  */
 
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { sentImage } from "./sentImage";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
 
 import { demoFinish, demoLsp, demoMcp, demoModels, demoScript, demoState, inTauri } from "./demo";
 import { DEMO_FILE_PATH, demoFileView } from "./demoFile";
+import { demoProcessCommand } from "./demoProcesses";
+import { demoCheckpointCommand } from "./demoCheckpoints";
+import { demoAgentFileView, demoAgentRetry } from "./demoAgents";
 import { demoSessions } from "./demoSessions";
 import { BUILTIN_PROVIDER_ID, PRESETS, isPreset, needsKey } from "./provider";
 
@@ -304,8 +308,24 @@ export function attachmentLook(project: string, path: string): Promise<Attachmen
  * recognise a picture, but not to look at it.
  */
 export function imageFull(project: string, path: string): Promise<string> {
+  const delivery = sentImage(path);
+  if (delivery !== null) return Promise.resolve(sentFileUrl(project, delivery.id));
   if (!inTauri) return Promise.reject("in the stand there is no one to read the picture");
   return invoke<string>("image_full", { project, path });
+}
+
+export function sentFileUrl(project: string, id: string): string {
+  const root = Array.from(new TextEncoder().encode(project), (b) => b.toString(16).padStart(2, "0")).join("");
+  return `${convertFileSrc(id, "sent")}?root=${root}`;
+}
+
+export function sentPreview(project: string, id: string): Promise<string> {
+  return invoke<string>("sent_preview", { project, id });
+}
+
+export async function downloadSentFile(project: string, id: string, name: string): Promise<void> {
+  const destination = await save({ defaultPath: name });
+  if (destination !== null) await invoke("save_sent_file", { project, id, destination });
 }
 
 /**
@@ -910,6 +930,22 @@ export function onEvents(handler: (frame: EventFrame) => void): Promise<Unlisten
  * interface had remembered the request.
  */
 function answerInDemo(session: SessionId, command: Command): void {
+  const retry = demoAgentRetry(command);
+  if (retry !== null) {
+    window.setTimeout(() => demoHandler?.({ session, epoch: 0, events: retry.started }), 0);
+    window.setTimeout(() => demoHandler?.({ session, epoch: 0, events: retry.finished }), 900);
+    return;
+  }
+  const checkpointEvents = demoCheckpointCommand(session, command);
+  if (checkpointEvents !== null) {
+    window.setTimeout(() => demoHandler?.({ session, epoch: 0, events: checkpointEvents }), 0);
+    return;
+  }
+  const processEvents = demoProcessCommand(session, command);
+  if (processEvents !== null) {
+    window.setTimeout(() => demoHandler?.({ session, epoch: 0, events: processEvents }), 0);
+    return;
+  }
   if (command.type === "answerPermission") {
     // The recorded turn stops on this question; answering it lets the turn
     // end, as it would with a core behind it.
@@ -919,7 +955,7 @@ function answerInDemo(session: SessionId, command: Command): void {
   }
   if (command.type === "readFileView") {
     const events: AgentEvent[] = [
-      { type: "fileViewLoaded", path: command.path, view: demoFileView(command.path) },
+      { type: "fileViewLoaded", path: command.path, view: demoFileView(command.path) ?? demoAgentFileView(command.path) },
     ];
     window.setTimeout(() => demoHandler?.({ session, epoch: 0, events }), 0);
     return;
@@ -1031,6 +1067,8 @@ export const commands = {
   reconnectMcpServer: (server: string): Command => ({ type: "reconnectMcpServer", server }),
   approveMcpServer: (server: string): Command => ({ type: "approveMcpServer", server }),
   restartLspServer: (server: string): Command => ({ type: "restartLspServer", server }),
+  setLspServerEnabled: (server: string, enabled: boolean): Command => ({ type: "setLspServerEnabled", server, enabled }),
+  installLspServer: (server: string): Command => ({ type: "installLspServer", server }),
   loginMcpServer: (server: string): Command => ({ type: "loginMcpServer", server }),
   logoutMcpServer: (server: string): Command => ({ type: "logoutMcpServer", server }),
   answerElicitation: (requestId: string, reply: ElicitationReply): Command => ({

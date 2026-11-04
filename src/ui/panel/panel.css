@@ -92,11 +92,11 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   height: var(--h-small-button);
-  padding: 0 10px;
+  padding: 0 6px;
   border-radius: var(--radius-s);
-  font-size: 13px;
+  font-size: 12px;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -259,108 +259,126 @@
 /* --- processes panel --------------------------------------------------- */
 
 .proc-list {
-  flex: none;
-  max-height: 45%;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .proc {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  height: var(--h-row);
-  padding: 0 18px;
-  text-align: left;
-}
-
-/* The same two steps as an action row in the feed: hover is a faint ink shadow,
-   selected is a light plate and weight. There is no coloured edge on the left. */
-.proc:hover {
-  background: color-mix(in srgb, var(--ink) 4%, transparent);
-}
-
-.proc[aria-pressed="true"] {
-  background: var(--accent-soft);
-}
-
-.proc[aria-pressed="true"] .proc-cmd {
-  font-weight: 600;
-}
-
-.proc-num {
   flex: none;
-  font: 400 11.5px var(--mono);
-  color: var(--muted);
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  overflow: hidden;
 }
 
-.proc-cmd {
+.proc-info {
+  padding: 14px 14px 10px;
+}
+.proc-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.proc-title {
   flex: 1;
   min-width: 0;
-  font: 400 12.5px var(--mono);
   color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
-
-/* State is a word, not a measure, set in the regular font. It turns red only for a failed
-   command: a running one is ink with a pulse, a finished one is grey. */
+.proc-num {
+  margin-left: auto;
+  font: 400 11px var(--mono);
+  color: var(--muted);
+}
+.proc-cmd {
+  display: block;
+  color: var(--ink);
+  font: 400 12px/1.65 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.proc-cwd {
+  margin-top: 6px;
+  color: var(--muted);
+  font: 400 11px/1.5 var(--mono);
+  overflow-wrap: anywhere;
+}
+.proc-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 12px;
+  min-height: 24px;
+}
 .proc-state {
-  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11.5px;
   color: var(--muted);
 }
-
 .proc-state-run {
   color: var(--accent-ink);
 }
-
 .proc-state-ok {
-  color: var(--muted);
+  color: var(--ok);
 }
-
 .proc-state-fail {
   color: var(--err);
 }
-
 .proc-time {
-  flex: none;
-  font: 400 11.5px var(--mono);
   color: var(--muted);
+  font: 400 11.5px var(--mono);
 }
-
-.proc-output {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--line);
+.proc-stop {
+  margin-left: auto;
 }
-
-.proc-output-head {
+.proc-toggle {
   display: flex;
-  flex: none;
   align-items: center;
   gap: 8px;
-  height: var(--h-bar);
-  padding: 0 18px;
-}
-
-.proc-dropped {
-  font: 400 11.5px var(--mono);
+  padding: 9px 14px;
+  width: 100%;
+  text-align: left;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
   color: var(--muted);
 }
-
-.proc-output-text {
-  flex: 1;
-  min-height: 0;
-  margin: 0;
-  padding: 8px 10px;
+.proc-toggle:hover {
+  color: var(--ink);
+  background: var(--sunk);
+}
+.proc-output {
   border-top: 1px solid var(--line);
+}
+.proc-output-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+}
+.proc-dropped {
+  font: 400 11px var(--mono);
+  color: var(--muted);
+}
+.proc-output-text {
+  max-height: var(--h-action-content);
+  margin: 0;
+  padding: 10px 14px 14px;
   background: var(--sunk);
   color: var(--ink);
-  font: 400 11.5px/19px var(--mono);
+  font: 400 11.5px/1.7 var(--mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   overflow: auto;
@@ -373,61 +391,153 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
-
-.ckpt-row {
+.ckpt-order {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.ckpt {
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  overflow: hidden;
+}
+.ckpt-open {
+  border-color: var(--line-strong);
+}
+.ckpt-info {
+  padding: 14px;
+}
+.ckpt-heading {
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  height: var(--h-row);
-  padding: 0 18px;
-  text-align: left;
+  gap: 8px;
+  color: var(--muted);
 }
-
-.ckpt-row:hover {
-  background: color-mix(in srgb, var(--ink) 4%, transparent);
-}
-
-.ckpt-row[aria-expanded="true"] {
-  background: var(--accent-soft);
-}
-
-.ckpt-row[aria-expanded="true"] .ckpt-reason {
-  font-weight: 600;
-}
-
-.ckpt-dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--line);
-}
-
-.ckpt-dot-on {
-  background: var(--accent);
-}
-
-.ckpt-reason {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
+.ckpt-title {
   color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 0;
+}
+.ckpt-latest {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10.5px;
   white-space: nowrap;
+}
+.ckpt-time {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font: 400 11.5px/1.6 var(--mono);
+}
+.ckpt-command {
+  display: block;
+  margin-top: 10px;
+  color: var(--ink);
+  font: 400 12px/1.65 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.ckpt-message {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
+  margin-top: 10px;
+  color: var(--ink);
+  font-size: 12.5px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
-
-/* The rollback confirmation lives inside its row: the question sits where it was asked. */
-.ckpt .confirm {
-  margin: 4px 16px 12px;
-  border-color: var(--line);
-  background: var(--surface);
+.ckpt-meta {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 11.5px;
 }
-
-.ckpt .error-actions {
-  justify-content: flex-end;
+.ckpt-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  width: 100%;
+  text-align: left;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+.ckpt-toggle:hover {
+  background: var(--sunk);
+  color: var(--ink);
+}
+.ckpt-preview {
+  border-top: 1px solid var(--line);
+}
+.ckpt-preview-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.ckpt-files {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 0 14px;
+}
+.ckpt-file {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ckpt-file:last-child {
+  border-bottom: 0;
+}
+.ckpt-file-path {
+  color: var(--ink);
+  font: 400 11.5px/1.65 var(--mono);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.ckpt-file-action {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.ckpt-file-created {
+  color: var(--ok);
+}
+.ckpt-file-deleted {
+  color: var(--err);
+}
+.ckpt-restore {
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.ckpt-restore-question {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ckpt-no-changes {
+  padding: 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
 }
 
 /* --- MCP servers panel -------------------------------------------------- */

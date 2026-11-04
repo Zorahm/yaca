@@ -30,6 +30,11 @@ const looked = (callId: string, path: string, parent: string | null = null): Age
 ];
 
 describe("viewer gallery", () => {
+  it("keeps delivered SVG images in the shared viewer after the source changes", () => {
+    const file = { id: "delivery_00000000000000000000000000000001", name: "a chart.svg", title: "Chart", mime: "image/svg+xml", size: 10, sha256: "abc", caption: null, renderType: "inline" as const };
+    const feed = reduceAll(emptyFeed, [{ type: "fileSent", file }]);
+    expect(galleryOf(feed)).toEqual([`sent://${file.id}/a%20chart.svg`]);
+  });
   it("walks the conversation: both attached and opened by the model", () => {
     const feed = reduceAll(emptyFeed, [
       said(["shot.png", "notes.md"]),
