@@ -59,9 +59,7 @@ pub(crate) async fn open_chat(
     config.mcp_servers =
         yaca_core::mcp::config::load_global(&config_home).map_err(|e| e.to_string())?;
     // The human's own language servers, from the same directory.
-    config.lsp_servers =
-        yaca_core::lsp::config::load_global(&config_home).map_err(|e| e.to_string())?;
-    config.lsp_autodetect = true;
+    config.lsp_registry = Some(state.lsps(&config_home));
     config.user_skills = yaca_core::skills::user_dirs(&config_home);
     config.user_agents = yaca_core::agents::user_dirs(&config_home);
     config.plugins = yaca_core::plugin::PluginSources::standard(&config_home)
@@ -69,6 +67,13 @@ pub(crate) async fn open_chat(
         .enabled();
     config.mcp_approvals = Some(config_home);
     config.journal = Some(yaca_core::store::chats_dir().map_err(|e| e.to_string())?);
+    let settings = AppSettings::load(&config_dir()?);
+    config.additional_roots = crate::project_entries::session_folders(
+        &settings,
+        &root,
+        resume.as_deref(),
+        &crate::store(&path)?,
+    );
     if let Some(id) = resume {
         config.resume_session(SessionId::from(id));
     }
