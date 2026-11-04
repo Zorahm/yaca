@@ -53,6 +53,12 @@ string_id!(
     SessionId,
     "ses"
 );
+
+string_id!(
+    /// An immutable file delivery, independent of the source path.
+    DeliveryId,
+    "delivery"
+);
 string_id!(
     /// Turn — one run of the agent from the human's message to its stop.
     TurnId,

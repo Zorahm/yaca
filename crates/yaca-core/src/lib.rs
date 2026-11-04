@@ -49,6 +49,7 @@ pub mod provider;
 pub mod question;
 pub mod router;
 pub mod secrets;
+pub mod sent;
 pub mod session;
 pub mod settings;
 pub mod skills;

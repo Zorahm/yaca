@@ -275,6 +275,7 @@ pub fn build_with_memory(
     s.push_str(if agent { MODE_AGENT } else { MODE_PLAN });
 
     s.push_str("<how_to_work>\n");
+    s.push_str("Use Send to deliver final files, documents, charts, screenshots and media to the user. Give its workspace path; the application chooses the preview. A path in prose alone does not deliver a file. Do not repeat delivered file contents.\n");
     s.push_str(if chat { GROUNDING_CHAT } else { GROUNDING });
     s.push_str(SCOPE);
     if agent {
