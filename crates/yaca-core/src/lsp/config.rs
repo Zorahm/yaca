@@ -1,7 +1,8 @@
 //! Which language servers a session may use, and for which files.
 //!
 //! Two sources, and only two. A built-in table of well-known servers, each
-//! used only when its program is found on `PATH`; and `lsp.json` in the
+//! offered for the project's languages (including programs not installed yet);
+//! and `lsp.json` in the
 //! application's configuration directory, the human's own list. A project file
 //! is deliberately not a source: a stdio server is a command, a repository
 //! that ships one would run it on whoever opens it, and `.mcp.json` needs an
@@ -71,7 +72,7 @@ const BUILTIN: &[(&str, &str, &[&str], &[&str])] = &[
         "typescript-language-server",
         "typescript-language-server",
         &["--stdio"],
-        &["ts", "tsx", "js", "jsx", "mjs", "cjs"],
+        &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"],
     ),
     (
         "pyright",
@@ -82,7 +83,7 @@ const BUILTIN: &[(&str, &str, &[&str], &[&str])] = &[
     ("gopls", "gopls", &[], &["go"]),
 ];
 
-fn builtin(name: &str) -> Option<LspServerSettings> {
+pub(crate) fn builtin(name: &str) -> Option<LspServerSettings> {
     BUILTIN
         .iter()
         .find(|(n, ..)| *n == name)
@@ -197,9 +198,10 @@ pub fn on_path(program: &str) -> bool {
         vec![String::new()]
     };
     std::env::split_paths(&path).any(|dir| {
-        extensions
-            .iter()
-            .any(|ext| dir.join(format!("{program}{ext}")).is_file())
+        dir.join(program).is_file()
+            || extensions
+                .iter()
+                .any(|ext| dir.join(format!("{program}{ext}")).is_file())
     })
 }
 

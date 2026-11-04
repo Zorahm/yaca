@@ -342,7 +342,7 @@ pub(crate) fn render_found(
 
 /// How serious a diagnostic is. LSP numbers them 1 to 4; a server that says
 /// nothing means an error.
-fn severity(diagnostic: &Value) -> u64 {
+pub(super) fn severity(diagnostic: &Value) -> u64 {
     diagnostic
         .get("severity")
         .and_then(Value::as_u64)

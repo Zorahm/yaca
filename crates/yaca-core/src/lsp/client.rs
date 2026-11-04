@@ -63,6 +63,7 @@ pub(crate) struct Client {
     pulls: bool,
     /// Ends the reading task when the client goes.
     _alive: DropGuard,
+    alive: CancellationToken,
 }
 
 impl Client {
@@ -102,10 +103,16 @@ impl Client {
             diagnostics,
             label: None,
             pulls: false,
-            _alive: alive.drop_guard(),
+            _alive: alive.clone().drop_guard(),
+            alive,
         };
         client.initialize(root).await?;
         Ok(client)
+    }
+
+    pub(crate) fn stop(&self) {
+        self.alive.cancel();
+        self.wire.stop();
     }
 
     async fn initialize(&mut self, root: &Path) -> Result<(), LspError> {
@@ -326,7 +333,7 @@ async fn read(
 ) {
     let closed = loop {
         let next = tokio::select! {
-            _ = alive.cancelled() => return,
+            _ = alive.cancelled() => break "language server stopped".to_string(),
             next = incoming.recv() => next,
         };
         let message = match next {

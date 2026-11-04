@@ -184,4 +184,10 @@ pub enum Command {
     /// answer is `LspUpdated`. A name the session does not have is ignored.
     #[serde(rename_all = "camelCase")]
     RestartLspServer { server: String },
+    /// Remember the manual switch for this project and start or stop the server.
+    #[serde(rename_all = "camelCase")]
+    SetLspServerEnabled { server: String, enabled: bool },
+    /// Install a known server after the human chooses the displayed command.
+    #[serde(rename_all = "camelCase")]
+    InstallLspServer { server: String },
 }

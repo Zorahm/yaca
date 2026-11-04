@@ -19,9 +19,11 @@
 
 mod client;
 pub mod config;
+mod control;
 mod edits;
 pub(crate) mod format;
 mod hub;
+pub mod runtime;
 mod wire;
 
 use serde::{Deserialize, Serialize};
@@ -63,6 +65,8 @@ pub enum LspStatus {
     /// Could not start, or was up and went away. `reason` says which.
     Failed,
     Disabled,
+    Missing,
+    Installing,
 }
 
 /// One server of the session, as the interface lists it.
@@ -79,4 +83,7 @@ pub struct LspServerSummary {
     pub reason: Option<String>,
     /// How the server introduces itself: `name version`.
     pub label: Option<String>,
+    /// The built-in installation command, shown before the human starts it.
+    #[serde(default)]
+    pub installation: Option<String>,
 }

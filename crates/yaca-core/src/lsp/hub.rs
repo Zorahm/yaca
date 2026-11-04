@@ -1,8 +1,7 @@
-//! The language servers of one session and the state each is in.
+//! The language servers of a working tree and the state each is in.
 //!
-//! A server is started by the first call that needs it, not when the session
-//! opens: most sessions never ask a language server anything, and
-//! `rust-analyzer` on a large workspace is not a thing to start for nothing.
+//! The application registry starts servers at launch and shares them by root.
+//! Standalone clients may also start them on demand.
 //! State leaves whole, as [`AgentEvent::LspUpdated`].
 //!
 //! A server that dies is not restarted by itself. It stays `Failed` with the
@@ -27,31 +26,36 @@ use crate::event::{AgentEvent, EventSink};
 const STARTUP: Duration = Duration::from_secs(30);
 
 #[derive(Clone)]
-pub struct Lsp(Arc<Inner>);
+pub struct Lsp(pub(super) Arc<Inner>);
 
-struct Inner {
+pub(super) struct Inner {
     /// Where servers start and what they are told is the project.
-    root: PathBuf,
+    pub(super) root: PathBuf,
     events: EventSink,
-    servers: Mutex<BTreeMap<String, Server>>,
+    listeners: Mutex<Vec<Weak<EventSink>>>,
+    publishing: Mutex<()>,
+    pub(super) servers: Mutex<BTreeMap<String, Server>>,
+    pub(super) managed: Option<(PathBuf, PathBuf)>,
 }
 
-struct Server {
-    spec: ServerSpec,
-    state: State,
+pub(super) struct Server {
+    pub(super) spec: ServerSpec,
+    pub(super) state: State,
     /// Held while the server is being started, so two calls that need it at
     /// once start one process, not two.
     starting: Arc<tokio::sync::Mutex<()>>,
     /// Which start the state belongs to. A close notice from an earlier
     /// process finds a different number and leaves the state alone.
-    attempt: u64,
+    pub(super) attempt: u64,
+    pub(super) cancel: CancellationToken,
 }
 
-enum State {
+pub(super) enum State {
     Idle,
     Starting,
     Ready(Arc<Client>),
     Failed(String),
+    Installing,
 }
 
 impl Lsp {
@@ -63,6 +67,25 @@ impl Lsp {
     /// Nothing is started: the specs are what may be, and each starts when a
     /// call needs it.
     pub fn new(specs: Vec<ServerSpec>, root: &Path, events: EventSink) -> Lsp {
+        Self::build(specs, root, events, None)
+    }
+
+    pub(crate) fn managed(
+        specs: Vec<ServerSpec>,
+        root: &Path,
+        events: EventSink,
+        config: PathBuf,
+        preferences: PathBuf,
+    ) -> Lsp {
+        Self::build(specs, root, events, Some((config, preferences)))
+    }
+
+    fn build(
+        specs: Vec<ServerSpec>,
+        root: &Path,
+        events: EventSink,
+        managed: Option<(PathBuf, PathBuf)>,
+    ) -> Lsp {
         let servers = specs
             .into_iter()
             .map(|spec| {
@@ -75,6 +98,7 @@ impl Lsp {
                     state,
                     starting: Arc::default(),
                     attempt: 0,
+                    cancel: CancellationToken::new(),
                 };
                 (server.spec.name.clone(), server)
             })
@@ -84,6 +108,9 @@ impl Lsp {
             root: root.to_path_buf(),
             events,
             servers: Mutex::new(servers),
+            listeners: Mutex::default(),
+            publishing: Mutex::default(),
+            managed,
         });
         if listed {
             inner.announce();
@@ -93,6 +120,28 @@ impl Lsp {
 
     pub fn snapshot(&self) -> Vec<LspServerSummary> {
         self.0.snapshot()
+    }
+
+    /// The caller owns the subscription; closing a chat drops its sink.
+    pub fn listen(&self, events: Arc<EventSink>) -> Arc<EventSink> {
+        let _publishing = self.0.publishing.lock().unwrap();
+        self.0
+            .listeners
+            .lock()
+            .unwrap()
+            .push(Arc::downgrade(&events));
+        events.emit(AgentEvent::LspUpdated {
+            servers: self.snapshot(),
+        });
+        events
+    }
+
+    pub fn start(&self) {
+        for server in self.snapshot() {
+            if server.status == LspStatus::Idle {
+                self.restart(&server.name);
+            }
+        }
     }
 
     /// The server that answers for `path`, by its extension.
@@ -150,13 +199,18 @@ impl Lsp {
         };
 
         // Whoever held the lock before may have started it.
-        let (spec, attempt) = {
+        let (spec, attempt, stopped) = {
             let mut servers = self.0.servers.lock().unwrap();
             let server = servers.get_mut(name).expect("checked above");
             match &server.state {
                 State::Ready(client) => return Ok(client.clone()),
                 State::Failed(reason) if server.spec.invalid.is_some() => {
                     return Err(LspError::Transport(reason.clone()));
+                }
+                State::Installing => {
+                    return Err(LspError::Transport(format!(
+                        "server \"{name}\" is installing"
+                    )))
                 }
                 _ => {}
             }
@@ -166,8 +220,9 @@ impl Lsp {
                 )));
             }
             server.attempt += 1;
+            server.cancel = CancellationToken::new();
             server.state = State::Starting;
-            (server.spec.clone(), server.attempt)
+            (server.spec.clone(), server.attempt, server.cancel.clone())
         };
         self.0.announce();
 
@@ -179,6 +234,7 @@ impl Lsp {
                 Err(_) => Err(LspError::Timeout(STARTUP.as_secs())),
             },
             _ = cancel.cancelled() => Err(LspError::Cancelled),
+            _ = stopped.cancelled() => Err(LspError::Cancelled),
         };
 
         match outcome {
@@ -187,6 +243,9 @@ impl Lsp {
                 {
                     let mut servers = self.0.servers.lock().unwrap();
                     if let Some(server) = servers.get_mut(name) {
+                        if server.attempt != attempt {
+                            return Err(LspError::Cancelled);
+                        }
                         server.state = State::Ready(client.clone());
                     }
                 }
@@ -214,6 +273,9 @@ impl Lsp {
                 {
                     let mut servers = self.0.servers.lock().unwrap();
                     if let Some(server) = servers.get_mut(name) {
+                        if server.attempt != attempt {
+                            return Err(LspError::Cancelled);
+                        }
                         server.state = state;
                     }
                 }
@@ -231,13 +293,18 @@ impl Lsp {
             let Some(server) = servers.get_mut(name) else {
                 return;
             };
-            if server.spec.settings.disabled || matches!(server.state, State::Starting) {
+            if server.spec.settings.disabled
+                || matches!(server.state, State::Starting | State::Installing)
+            {
                 return;
             }
             // Dropping the client drops its process (`kill_on_drop`). A new
             // attempt number keeps the old process's close notice from
             // marking the new one failed.
             server.attempt += 1;
+            if let State::Ready(client) = &server.state {
+                client.stop();
+            }
             server.state = State::Idle;
         }
         self.0.announce();
@@ -277,8 +344,18 @@ impl Inner {
             .unwrap()
             .values()
             .map(|server| {
+                let installation = self.managed.as_ref().and_then(|(dir, _)| {
+                    super::control::installation(&server.spec, dir).map(|plan| plan.display())
+                });
                 let (status, reason, label) = match &server.state {
                     _ if server.spec.settings.disabled => (LspStatus::Disabled, None, None),
+                    State::Installing => (LspStatus::Installing, None, None),
+                    State::Idle
+                        if installation.is_some()
+                            && !super::config::on_path(&server.spec.settings.command) =>
+                    {
+                        (LspStatus::Missing, None, None)
+                    }
                     State::Idle => (LspStatus::Idle, None, None),
                     State::Starting => (LspStatus::Starting, None, None),
                     State::Ready(client) => (LspStatus::Ready, None, client.label.clone()),
@@ -295,14 +372,30 @@ impl Inner {
                     status,
                     reason,
                     label,
+                    installation,
                 }
             })
             .collect()
     }
 
-    fn announce(&self) {
-        self.events.emit(AgentEvent::LspUpdated {
+    pub(super) fn announce(&self) {
+        // Snapshot and publication share an order: a concurrent stop must not
+        // be followed by an older startup snapshot reaching the interface.
+        let _publishing = self.publishing.lock().unwrap();
+        self.emit(AgentEvent::LspUpdated {
             servers: self.snapshot(),
+        });
+    }
+
+    pub(super) fn emit(&self, event: AgentEvent) {
+        self.events.emit(event.clone());
+        self.listeners.lock().unwrap().retain(|weak| {
+            if let Some(sink) = weak.upgrade() {
+                sink.emit(event.clone());
+                true
+            } else {
+                false
+            }
         });
     }
 }

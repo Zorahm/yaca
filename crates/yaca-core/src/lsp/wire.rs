@@ -47,7 +47,7 @@ type Tail = Arc<Mutex<VecDeque<String>>>;
 
 pub(crate) struct Wire {
     out: mpsc::UnboundedSender<Vec<u8>>,
-    pid: Option<u32>,
+    pid: Mutex<Option<u32>>,
     owner: AbortHandle,
 }
 
@@ -90,7 +90,11 @@ impl Wire {
         let (out, frames) = mpsc::unbounded_channel();
         tokio::spawn(write_frames(stdin, frames));
         let owner = tokio::spawn(read_frames(child, stdout, tail, inbox)).abort_handle();
-        Ok(Wire { out, pid, owner })
+        Ok(Wire {
+            out,
+            pid: Mutex::new(pid),
+            owner,
+        })
     }
 
     pub(crate) fn send(&self, message: &Value) -> Result<(), LspError> {
@@ -98,19 +102,23 @@ impl Wire {
             .send(encode(message))
             .map_err(|_| LspError::Closed("server process exited".into()))
     }
-}
 
-impl Drop for Wire {
-    fn drop(&mut self) {
+    /// Stop even while an in-flight query still owns a client reference.
+    pub(crate) fn stop(&self) {
         let owner = self.owner.clone();
-        let pid = self.pid;
-        // Off this thread: on Windows the tree is killed by running `taskkill`.
+        let pid = self.pid.lock().unwrap().take();
         std::thread::spawn(move || {
             if let Some(pid) = pid {
                 kill::tree(pid);
             }
             owner.abort();
         });
+    }
+}
+
+impl Drop for Wire {
+    fn drop(&mut self) {
+        self.stop();
     }
 }
 
