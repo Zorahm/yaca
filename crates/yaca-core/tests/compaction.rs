@@ -47,6 +47,9 @@ fn tiny_session(dir: &TempProject, provider: Arc<MockProvider>) -> SessionHandle
         supports_images: true,
         pricing_by_hand: false,
         by_hand: false,
+        fetched: None,
+        overrides: None,
+        enabled: true,
     }];
     yaca_core::spawn(cfg, provider).unwrap()
 }

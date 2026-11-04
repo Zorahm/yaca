@@ -31,14 +31,17 @@ use std::path::Path;
 use serde_json::Value;
 
 use super::http;
-use super::registry::{Protocol, ProviderSpec, Providers};
+use super::registry::{Protocol, ProviderPoll, ProviderSpec, Providers};
 use crate::error::{CoreError, ProviderError};
 use crate::secrets;
-use crate::usage::{ContextSource, ModelInfo};
+use crate::usage::{ContextSource, ModelFacts, ModelInfo};
 
 mod anthropic;
+mod catalog;
 mod local;
+mod models_dev;
 mod openai;
+mod price;
 
 use anthropic::anthropic;
 use openai::openai;
@@ -52,7 +55,10 @@ pub async fn discover(
     spec: &ProviderSpec,
     key: Option<&str>,
 ) -> Result<Vec<ModelInfo>, ProviderError> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| ProviderError::Network(e.to_string()))?;
     let mut models = match spec.protocol {
         Protocol::Anthropic => anthropic(&client, spec, key).await?,
         Protocol::OpenAi => openai(&client, spec, key).await?,
@@ -62,45 +68,98 @@ pub async fn discover(
     // Auto-compaction reads the same number (§5.11), so whatever is here is
     // what it compacts by.
     local::probe(spec, key, &mut models).await;
-    for m in &mut models {
+    // The local probe runs after the wire parser captured its facts. Preserve
+    // the detected allocation before an external catalog fills the gaps.
+    for model in &mut models {
+        if model.context_source != ContextSource::DefaultGuess {
+            if let Some(facts) = &mut model.fetched {
+                facts.context_max = Some(model.context_max);
+            }
+        }
+    }
+    // What the provider left unsaid, from a public catalog: a gateway of one's
+    // own answers ids and nothing else, and the panel has fields for the rest.
+    catalog::enrich(&client, spec, &mut models).await;
+    let large_list = models.len() > 30;
+    for (index, m) in models.iter_mut().enumerate() {
         m.provider_id = spec.id.clone();
+        if large_list {
+            m.enabled = index < 8;
+        }
     }
     keep_hand_edits(&spec.models, &mut models);
     Ok(models)
 }
 
-/// Refresh capabilities and prices without losing a person's context override.
+/// Merges a fresh answer into the rows saved before it (§10).
+///
+/// Three states per number, and they must not be confused:
+///
+/// - `fetched` — what the provider (or a public catalog) answered just now;
+/// - `overrides` — what a person set by hand;
+/// - the numbers the session runs on: `override ?? fetched ?? default`.
+///
+/// A refresh replaces the first and leaves the second alone: an edit somebody
+/// made on purpose is not undone by the provider answering again. That was the
+/// bug the panel kept reporting — a maximum output or a capability typed in by
+/// hand was back to the provider's word after the next poll, because nothing
+/// recorded that it was an edit.
+///
+/// A row added by hand is kept even when the address never lists it, and stays
+/// marked as such.
 pub fn keep_hand_edits(saved: &[ModelInfo], models: &mut Vec<ModelInfo>) {
-    for previous in saved {
-        if previous.by_hand {
-            if let Some(model) = models.iter_mut().find(|m| m.id == previous.id) {
-                *model = previous.clone();
-            } else {
-                models.push(previous.clone());
-            }
-        } else if let Some(model) = models.iter_mut().find(|m| m.id == previous.id) {
-            if previous.context_source == ContextSource::Hand {
-                model.context_max = previous.context_max;
-                model.context_source = ContextSource::Hand;
-            }
-            if previous.pricing_by_hand {
-                model.pricing = previous.pricing;
-                model.pricing_by_hand = true;
+    for model in models.iter_mut() {
+        model.fetched = Some(ModelFacts::of(model));
+        if let Some(previous) = saved.iter().find(|p| p.id == model.id) {
+            model.overrides = hand_edits(previous);
+            model.enabled = previous.enabled;
+            model.by_hand = previous.by_hand;
+            if previous.by_hand {
+                model.display_name = previous.display_name.clone();
+                model.supported_parameters = previous.supported_parameters.clone();
+                model.input_modalities = previous.input_modalities.clone();
+                model.supports_images = previous.supports_images;
+                model.supports_thinking = previous.supports_thinking;
             }
         }
+        model.apply_overrides();
     }
+    for previous in saved {
+        if previous.by_hand && !models.iter().any(|m| m.id == previous.id) {
+            models.push(previous.clone());
+        }
+    }
+}
+
+/// The hand edits of a saved row.
+///
+/// Includes the ones written before `overrides` existed: `context_source: hand`
+/// and `pricing_by_hand` were the only marks of an edit then, and the number
+/// beside each mark is the edit itself.
+fn hand_edits(previous: &ModelInfo) -> Option<ModelFacts> {
+    let mut facts = previous.overrides.clone().unwrap_or_default();
+    if facts.context_max.is_none() && previous.context_source == ContextSource::Hand {
+        facts.context_max = Some(previous.context_max);
+    }
+    if facts.pricing.is_none()
+        && facts.input_price.is_none()
+        && facts.output_price.is_none()
+        && previous.pricing_by_hand
+    {
+        facts.pricing = Some(previous.pricing);
+    }
+    (!facts.is_empty()).then_some(facts)
 }
 
 /// Asks a saved provider for its models and writes the answer into
 /// `providers.json` in `dir`.
 ///
-/// A refusal leaves the file as it was: the list that was there is what the
-/// provider last said, and an error is not a statement that it serves nothing.
+/// A refusal keeps the previous models and records the failed lookup separately.
 pub async fn refresh(dir: &Path, id: &str) -> Result<Providers, CoreError> {
     let missing = || CoreError::Config(format!("provider «{id}» is not in the list"));
 
     let spec = Providers::load(dir)?.get(id).cloned().ok_or_else(missing)?;
-    let mut models = discover(&spec, stored_key(&spec).as_deref()).await?;
+    let answer = discover(&spec, stored_key(&spec).as_deref()).await;
 
     // Read again rather than kept from above: the question took a round trip,
     // and whatever was saved meanwhile must not be written over with a copy
@@ -111,9 +170,33 @@ pub async fn refresh(dir: &Path, id: &str) -> Result<Providers, CoreError> {
         .iter_mut()
         .find(|p| p.id == id)
         .ok_or_else(missing)?;
-    keep_hand_edits(&current.models, &mut models);
-    current.models = models;
+    // An in-flight response for an old endpoint cannot describe a newly edited one.
+    if current.base_url != spec.base_url
+        || current.protocol != spec.protocol
+        || current.headers != spec.headers
+    {
+        return Err(CoreError::Config(
+            "provider changed during model lookup; retry".into(),
+        ));
+    }
+    let poll = ProviderPoll {
+        checked_at: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64,
+        error: answer.as_ref().err().map(ToString::to_string),
+    };
+    let result = match answer {
+        Ok(mut models) => {
+            keep_hand_edits(&current.models, &mut models);
+            current.models = models;
+            Ok(())
+        }
+        Err(error) => Err(CoreError::from(error)),
+    };
+    providers.polls.insert(id.to_string(), poll);
     providers.save(dir)?;
+    result?;
     Ok(providers)
 }
 

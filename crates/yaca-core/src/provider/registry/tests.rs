@@ -14,6 +14,86 @@ fn spec(protocol: Protocol) -> ProviderSpec {
 }
 
 #[test]
+fn custom_model_edits_and_sources_survive_disk_and_repeated_merges() {
+    use crate::usage::{ModelFacts, Pricing};
+    let dir = TempDir::new();
+    let mut edited = unknown_model("private/model");
+    edited.overrides = Some(ModelFacts {
+        max_output: Some(200_000),
+        input_price: Some(0.15),
+        cache_read: Some(0.01),
+        supports_effort: Some(true),
+        ..Default::default()
+    });
+    edited.supported_parameters = Some(vec!["tools".into()]);
+    edited.by_hand = true;
+    edited.enabled = false;
+    edited.apply_overrides();
+    let mut gateway = spec(Protocol::OpenAi);
+    gateway.models = vec![edited.clone()];
+    let mut providers = Providers::default();
+    providers.put(gateway);
+    providers.save(dir.path()).unwrap();
+    let saved = Providers::load(dir.path())
+        .unwrap()
+        .get("gateway")
+        .unwrap()
+        .models
+        .clone();
+    assert_eq!(saved[0], edited);
+
+    let mut fresh = unknown_model("private/model");
+    fresh.pricing = Pricing {
+        input: 1.0,
+        output: 3.0,
+    };
+    fresh.fetched = Some(ModelFacts {
+        max_output: Some(8192),
+        pricing: Some(fresh.pricing),
+        ..Default::default()
+    });
+    let mut models = vec![fresh];
+    crate::provider::models::keep_hand_edits(&saved, &mut models);
+    crate::provider::models::keep_hand_edits(&saved, &mut models);
+    assert_eq!(
+        models[0].pricing,
+        Pricing {
+            input: 0.15,
+            output: 3.0
+        }
+    );
+    assert_eq!(models[0].max_output, 200_000);
+    assert_eq!(models[0].fetched.as_ref().unwrap().max_output, Some(8192));
+    assert_eq!(
+        models[0].fetched.as_ref().unwrap().pricing.unwrap().input,
+        1.0
+    );
+    assert_eq!(models[0].cache_read, Some(0.01));
+    assert_eq!(models[0].supported_parameters, edited.supported_parameters);
+    assert!(!models[0].enabled);
+}
+
+#[test]
+fn changing_the_endpoint_invalidates_the_poll_but_renaming_does_not() {
+    let mut providers = Providers::default();
+    let mut gateway = spec(Protocol::OpenAi);
+    providers.put(gateway.clone());
+    providers.polls.insert(
+        gateway.id.clone(),
+        ProviderPoll {
+            checked_at: 1,
+            error: None,
+        },
+    );
+    gateway.display_name = "Renamed".into();
+    providers.put(gateway.clone());
+    assert!(providers.polls.contains_key(&gateway.id));
+    gateway.base_url = "http://localhost:8080".into();
+    providers.put(gateway.clone());
+    assert!(!providers.polls.contains_key(&gateway.id));
+}
+
+#[test]
 fn a_missing_file_gives_both_presets() {
     let dir = TempDir::new();
     let providers = Providers::load(dir.path()).unwrap();
@@ -153,16 +233,7 @@ fn a_model_not_in_the_list_is_an_error() {
         display_name: "Qwen3 Coder".into(),
         context_max: 256_000,
         max_output: 32_000,
-        pricing: crate::usage::Pricing {
-            input: 0.0,
-            output: 0.0,
-        },
-        supports_effort: false,
-        supports_thinking: false,
-        context_source: crate::usage::ContextSource::DefaultGuess,
-        supports_images: true,
-        pricing_by_hand: false,
-        by_hand: false,
+        ..crate::usage::unknown_model("qwen3-coder")
     }];
 
     // Another provider's model is not silently substituted, it is rejected.
@@ -375,10 +446,98 @@ fn manual_price_survives_discovery_without_freezing_capabilities() {
     saved.pricing_by_hand = true;
     let mut refreshed = unknown_model("model");
     refreshed.context_max = 42_000;
+    refreshed.context_source = crate::usage::ContextSource::ProviderReported;
     let mut models = vec![refreshed];
     crate::provider::models::keep_hand_edits(&[saved], &mut models);
     assert_eq!(models[0].pricing.input, 3.0);
     assert_eq!(models[0].pricing.output, 12.0);
     assert_eq!(models[0].context_max, 42_000);
     assert!(models[0].pricing_by_hand);
+}
+
+#[test]
+fn an_output_cap_typed_by_hand_survives_discovery() {
+    // The bug the panel kept reporting: a maximum output typed in by hand was
+    // back to the provider's number at the next poll, because nothing recorded
+    // that it was an edit.
+    let mut saved = unknown_model("model");
+    saved.max_output = 393_216;
+    saved.overrides = Some(crate::usage::ModelFacts {
+        max_output: Some(393_216),
+        ..Default::default()
+    });
+    let mut refreshed = unknown_model("model");
+    refreshed.context_max = 1_048_576;
+    refreshed.context_source = crate::usage::ContextSource::ProviderReported;
+    let mut models = vec![refreshed];
+
+    crate::provider::models::keep_hand_edits(&[saved], &mut models);
+
+    assert_eq!(models[0].max_output, 393_216);
+    assert_eq!(models[0].context_max, 1_048_576);
+    // Both sources are kept: the edit, and the answer under it.
+    assert_eq!(
+        models[0].overrides.as_ref().and_then(|o| o.max_output),
+        Some(393_216)
+    );
+    assert_eq!(
+        models[0].fetched.as_ref().and_then(|f| f.context_max),
+        Some(1_048_576)
+    );
+}
+
+#[test]
+fn a_model_switched_off_stays_switched_off_and_out_of_the_switcher() {
+    let mut saved = unknown_model("hidden");
+    saved.enabled = false;
+    let mut models = vec![unknown_model("hidden"), unknown_model("shown")];
+
+    crate::provider::models::keep_hand_edits(&[saved], &mut models);
+
+    assert!(!models[0].enabled);
+    assert!(models[1].enabled);
+    let providers = Providers {
+        polls: Default::default(),
+        list: vec![ProviderSpec {
+            models: models.clone(),
+            ..spec(Protocol::OpenAi)
+        }],
+    };
+    let all = providers.all_models();
+    let ids: Vec<&str> = all.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, vec!["shown"]);
+}
+
+#[test]
+fn a_row_written_by_hand_that_the_provider_never_lists_is_kept() {
+    let mut hand = unknown_model("mine");
+    hand.by_hand = true;
+    let mut models = vec![unknown_model("theirs")];
+
+    crate::provider::models::keep_hand_edits(&[hand], &mut models);
+
+    assert!(models.iter().any(|m| m.id == "mine"));
+    assert!(!models[0].by_hand);
+}
+
+#[test]
+fn a_context_window_from_before_the_three_states_is_read_as_an_edit() {
+    // `providers.json` written by an older build marks a hand edit only by
+    // `context_source: hand`; the number beside it is the edit.
+    let mut saved = unknown_model("model");
+    saved.context_max = 750_000;
+    saved.context_source = crate::usage::ContextSource::Hand;
+    let mut refreshed = unknown_model("model");
+    refreshed.context_max = 1_000_000;
+    refreshed.context_source = crate::usage::ContextSource::ProviderReported;
+    let mut models = vec![refreshed];
+
+    crate::provider::models::keep_hand_edits(&[saved], &mut models);
+
+    assert_eq!(models[0].context_max, 750_000);
+    assert_eq!(models[0].context_source, crate::usage::ContextSource::Hand);
+    assert_eq!(
+        models[0].fetched.as_ref().and_then(|f| f.context_max),
+        Some(1_000_000)
+    );
 }

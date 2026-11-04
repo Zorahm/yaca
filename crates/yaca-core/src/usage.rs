@@ -103,10 +103,14 @@ impl Pricing {
     /// Anthropic's cache multipliers: writes ~1.25× the input price, reads ~0.1×.
     pub fn cost(&self, t: TokenCounts) -> f64 {
         let m = 1e-6;
-        t.input as f64 * self.input * m
-            + t.output as f64 * self.output * m
-            + t.cache_write as f64 * self.input * 1.25 * m
-            + t.cache_read as f64 * self.input * 0.10 * m
+        // OpenRouter's -1 means that the eventual route determines the rate.
+        // It must not make an estimate negative before reported cost arrives.
+        let input = self.input.max(0.0);
+        let output = self.output.max(0.0);
+        t.input as f64 * input * m
+            + t.output as f64 * output * m
+            + t.cache_write as f64 * input * 1.25 * m
+            + t.cache_read as f64 * input * 0.10 * m
     }
 }
 
@@ -137,6 +141,101 @@ pub enum ContextSource {
     /// guess than a server's answer, and the tag keeps the ring from drawing it
     /// dashed — and the local probe from writing over it.
     Hand,
+}
+
+/// What one source says about a model's numbers: the provider's answer, a
+/// public catalog, or a person's hand.
+///
+/// `None` is silence, and silence is not zero: a price nobody stated is
+/// "unknown", a window nobody stated is a guess, and a model with no limit on
+/// its answer is not a model that answers in 8 192 tokens. Keeping the two
+/// kinds of source apart is what lets a refresh replace one without eating the
+/// other (`provider::models::keep_hand_edits`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelFacts {
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_max: Option<u32>,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_output: Option<u32>,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pricing: Option<Pricing>,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supports_effort: Option<bool>,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_read: Option<f64>,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_write: Option<f64>,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_price: Option<f64>,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_price: Option<f64>,
+}
+
+impl ModelFacts {
+    pub fn is_empty(&self) -> bool {
+        self.context_max.is_none()
+            && self.max_output.is_none()
+            && self.pricing.is_none()
+            && self.supports_effort.is_none()
+            && self.cache_read.is_none()
+            && self.cache_write.is_none()
+            && self.input_price.is_none()
+            && self.output_price.is_none()
+    }
+
+    /// Fills what this source left unsaid from another one: the first word on a
+    /// field wins, so a provider's own answer outranks a catalog.
+    pub fn fill_missing(&mut self, other: &ModelFacts) {
+        self.input_price = self
+            .input_price
+            .or(self.pricing.map(|p| p.input))
+            .or(other.input_price)
+            .or(other.pricing.map(|p| p.input));
+        self.output_price = self
+            .output_price
+            .or(self.pricing.map(|p| p.output))
+            .or(other.output_price)
+            .or(other.pricing.map(|p| p.output));
+        self.context_max = self.context_max.or(other.context_max);
+        self.max_output = self.max_output.or(other.max_output);
+        self.pricing = self.pricing.or(other.pricing);
+        self.supports_effort = self.supports_effort.or(other.supports_effort);
+        self.cache_read = self.cache_read.or(other.cache_read);
+        self.cache_write = self.cache_write.or(other.cache_write);
+    }
+
+    /// The facts a row holds as plain numbers — used to read a fresh answer
+    /// back into `fetched`.
+    pub fn of(model: &ModelInfo) -> ModelFacts {
+        if let Some(stated) = &model.fetched {
+            return stated.clone();
+        }
+        ModelFacts {
+            // A guess is not a statement: `DefaultGuess` means nobody said.
+            context_max: (model.context_source != ContextSource::DefaultGuess)
+                .then_some(model.context_max),
+            max_output: (model.max_output != DEFAULT_MAX_OUTPUT).then_some(model.max_output),
+            // Zero is "free" and "unknown" at once (§4 of the models panel);
+            // only a positive price is a statement a catalog may overrule.
+            pricing: (model.pricing.input > 0.0 || model.pricing.output > 0.0)
+                .then_some(model.pricing),
+            supports_effort: model.supports_effort.then_some(true),
+            cache_read: model.cache_read,
+            cache_write: model.cache_write,
+            input_price: None,
+            output_price: None,
+        }
+    }
 }
 
 /// A model available in the switcher (§7.1).
@@ -183,18 +282,105 @@ pub struct ModelInfo {
     /// Whether the row was written by hand in the models panel (§10) rather
     /// than answered by the provider.
     ///
-    /// Such a row is kept as it is when the provider is asked again — the point
-    /// of writing it was to differ from the answer — while everything else is
-    /// replaced by what the address says now
+    /// Such a row is kept when the provider is asked again, even if the address
+    /// never lists it — the point of writing it was to differ from the answer —
+    /// while its numbers follow the same three states as every other row
     /// (`provider::models::keep_hand_edits`). `default` is `false`: a row from
     /// before the field existed is what the provider answered.
     #[serde(default)]
     pub by_hand: bool,
+    /// What the provider last answered, kept apart from the numbers above so a
+    /// hand edit can be undone and a refresh can replace the answer without
+    /// touching the edit. `None` for a row written before the field existed, and
+    /// for a model the provider has never listed.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fetched: Option<ModelFacts>,
+    /// What a person set by hand in the models panel (§10).
+    ///
+    /// The numbers above are the result: `override ?? fetched ?? default`.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overrides: Option<ModelFacts>,
+    /// Whether the model is offered in the switcher (§7.1).
+    ///
+    /// A provider like OpenRouter lists hundreds of models, and the few a
+    /// person reaches for are a handful: the rest stay in the panel, switched
+    /// off. The row is kept rather than dropped, because a refresh would
+    /// otherwise bring it back switched on.
+    #[serde(default = "yes")]
+    pub enabled: bool,
+    /// Presentation metadata must survive the registry round trip. Runtime
+    /// image support deliberately has a permissive default; a capability chip
+    /// only describes what the provider explicitly reported.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supported_parameters: Option<Vec<String>>,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_modalities: Option<Vec<String>>,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expiration_date: Option<String>,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_read: Option<f64>,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_write: Option<f64>,
+}
+
+impl ModelInfo {
+    /// Lays the hand edits over the numbers, marking what they touched: the
+    /// context source that keeps the ring from drawing a typed size as a
+    /// guess, and the price flag a refresh reads.
+    pub fn apply_overrides(&mut self) {
+        // A copy, because the fields it writes live in the same struct.
+        let Some(overrides) = self.overrides.clone() else {
+            return;
+        };
+        if let Some(context) = overrides.context_max {
+            self.context_max = context;
+            self.context_source = ContextSource::Hand;
+        }
+        if let Some(output) = overrides.max_output {
+            self.max_output = output;
+        }
+        if let Some(pricing) = overrides.pricing {
+            self.pricing = pricing;
+            self.pricing_by_hand = true;
+        }
+        if let Some(input) = overrides.input_price {
+            self.pricing.input = input;
+            self.pricing_by_hand = true;
+        }
+        if let Some(output) = overrides.output_price {
+            self.pricing.output = output;
+            self.pricing_by_hand = true;
+        }
+        if let Some(effort) = overrides.supports_effort {
+            self.supports_effort = effort;
+        }
+        if let Some(price) = overrides.cache_read {
+            self.cache_read = Some(price);
+        }
+        if let Some(price) = overrides.cache_write {
+            self.cache_write = Some(price);
+        }
+    }
 }
 
 fn yes() -> bool {
     true
 }
+
+/// What `unknown_model` gives a model nobody said anything about: a million
+/// tokens of window and 8 192 of answer. Named, because a number equal to one
+/// of them is read as "not stated".
+pub const DEFAULT_CONTEXT_MAX: u32 = 1_000_000;
+
+/// See [`DEFAULT_CONTEXT_MAX`].
+pub const DEFAULT_MAX_OUTPUT: u32 = 8_192;
 
 /// Anthropic's price list, dollars per million tokens.
 ///
@@ -256,6 +442,14 @@ pub fn catalog() -> Vec<ModelInfo> {
         supports_images: true,
         pricing_by_hand: false,
         by_hand: false,
+        fetched: None,
+        overrides: None,
+        enabled: true,
+        supported_parameters: None,
+        input_modalities: None,
+        expiration_date: None,
+        cache_read: None,
+        cache_write: None,
     };
     vec![
         m("claude-opus-5", "Opus 5", 1_000_000, 128_000),
@@ -285,8 +479,8 @@ pub fn unknown_model(id: &str) -> ModelInfo {
         id: id.to_string(),
         provider_id: String::new(),
         display_name: id.to_string(),
-        context_max: 1_000_000,
-        max_output: 8_192,
+        context_max: DEFAULT_CONTEXT_MAX,
+        max_output: DEFAULT_MAX_OUTPUT,
         pricing: price_of(id).unwrap_or(Pricing {
             input: 0.0,
             output: 0.0,
@@ -297,6 +491,14 @@ pub fn unknown_model(id: &str) -> ModelInfo {
         supports_images: true,
         pricing_by_hand: false,
         by_hand: false,
+        fetched: None,
+        overrides: None,
+        enabled: true,
+        supported_parameters: None,
+        input_modalities: None,
+        expiration_date: None,
+        cache_read: None,
+        cache_write: None,
     }
 }
 
@@ -383,6 +585,23 @@ impl UsageMeter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn variable_route_rates_do_not_produce_negative_cost_estimates() {
+        assert_eq!(
+            Pricing {
+                input: -1.0,
+                output: -1.0
+            }
+            .cost(TokenCounts {
+                input: 1_000,
+                output: 1_000,
+                cache_read: 1_000,
+                cache_write: 1_000,
+            }),
+            0.0
+        );
+    }
 
     #[test]
     fn cache_is_cheaper_than_fresh_input() {

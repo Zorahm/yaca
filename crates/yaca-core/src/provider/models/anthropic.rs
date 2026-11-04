@@ -94,6 +94,12 @@ fn anthropic_model(m: &AnthropicModel) -> ModelInfo {
     // The other way round: only a stated "no" turns images off (see
     // `ModelInfo::supports_images`).
     info.supports_images = supported(&m.capabilities, &["image_input"]).unwrap_or(true);
+    if m.max_input_tokens.is_some() || m.max_tokens.is_some() || m.capabilities.is_some() {
+        let mut facts = crate::usage::ModelFacts::of(&info);
+        facts.max_output = m.max_tokens;
+        facts.supports_effort = supported(&m.capabilities, &["effort"]);
+        info.fetched = Some(facts);
+    }
     info
 }
 

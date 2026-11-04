@@ -213,6 +213,7 @@ mod tests {
 
     fn providers() -> Providers {
         Providers {
+            polls: Default::default(),
             list: vec![ProviderSpec {
                 id: "gateway".into(),
                 display_name: "Gateway".into(),

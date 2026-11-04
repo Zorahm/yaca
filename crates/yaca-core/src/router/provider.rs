@@ -403,6 +403,16 @@ fn virtual_model(name: &str, targets: &[Target], default: usize) -> Result<Model
         supports_images: targets.iter().any(|t| t.info.supports_images),
         pricing_by_hand: false,
         by_hand: false,
+        // A virtual model is not a row anybody edits: it is what the routes
+        // amount to, and the panel shows the routes themselves.
+        fetched: None,
+        overrides: None,
+        enabled: true,
+        supported_parameters: None,
+        input_modalities: None,
+        expiration_date: None,
+        cache_read: None,
+        cache_write: None,
     })
 }
 
