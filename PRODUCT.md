@@ -46,12 +46,15 @@ running. The tray icon restores the window, and its context menu exits Yaca.
 
 ## Capabilities and Constraints
 
+- Projects have a custom name and one or more folders. The primary folder owns
+  repository settings and is the default command directory. Folder edits apply
+  to new chats; existing chats keep their original folders and history.
 - Density is a principle: 14px body, 13px feed and menu text, 12–12.5px mono in
   tools, 22px diff line (20px in compact mode).
 - No stubs: a control that silently does nothing is not declared at all.
 - Every user-facing string goes through i18n keys.
 - Background commands have a visible count and a direct link to their state and
-  output, including after they finish. The project is the default shell directory;
+  output, including after they finish. The primary folder is the default shell directory;
   commands can use any existing directory as their working directory.
 - Two themes exist, light by default and dark, plus "follow the system".
 - Motion is limited to state pulses and short transitions of layers coming and
