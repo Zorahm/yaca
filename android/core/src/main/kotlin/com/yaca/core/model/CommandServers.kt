@@ -37,3 +37,16 @@ data class CommandLogoutMcpServer(
 data class CommandRestartLspServer(
     val server: String,
 ) : Command
+
+@Serializable
+@SerialName("setLspServerEnabled")
+data class CommandSetLspServerEnabled(
+    val server: String,
+    val enabled: Boolean,
+) : Command
+
+@Serializable
+@SerialName("installLspServer")
+data class CommandInstallLspServer(
+    val server: String,
+) : Command

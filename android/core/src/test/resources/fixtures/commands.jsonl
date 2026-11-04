@@ -19,6 +19,8 @@
 {"type":"loginMcpServer","server":"asana"}
 {"type":"logoutMcpServer","server":"asana"}
 {"type":"restartLspServer","server":"rust-analyzer"}
+{"type":"setLspServerEnabled","server":"rust-analyzer","enabled":false}
+{"type":"installLspServer","server":"pyright"}
 {"type":"setMode","mode":"plan"}
 {"type":"setMode","mode":"manual"}
 {"type":"setMode","mode":"auto"}
