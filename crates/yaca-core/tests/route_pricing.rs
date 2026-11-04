@@ -34,6 +34,7 @@ fn priced(id: &str, provider: &str, input: f64, output: f64) -> ModelInfo {
         fetched: None,
         overrides: None,
         enabled: true,
+        ..yaca_core::usage::unknown_model(id)
     }
 }
 

@@ -50,6 +50,7 @@ fn tiny_session(dir: &TempProject, provider: Arc<MockProvider>) -> SessionHandle
         fetched: None,
         overrides: None,
         enabled: true,
+        ..yaca_core::usage::unknown_model("tiny")
     }];
     yaca_core::spawn(cfg, provider).unwrap()
 }

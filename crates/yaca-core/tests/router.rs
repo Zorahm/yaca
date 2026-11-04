@@ -42,6 +42,7 @@ fn info(id: &str, ctx: u32, out: u32, effort: bool) -> ModelInfo {
         fetched: None,
         overrides: None,
         enabled: true,
+        ..yaca_core::usage::unknown_model(id)
     }
 }
 
