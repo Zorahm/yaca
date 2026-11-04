@@ -18,6 +18,7 @@ use yaca_core::{Command, Effort, Mode, PermissionAnswer, Profile};
 
 use session_config::{session_config, Choice};
 
+mod lsp;
 mod mcp;
 mod plugins;
 mod serve;
@@ -27,6 +28,11 @@ mod skills;
 
 #[derive(Subcommand, Debug)]
 enum Cmd {
+    /// List language servers, install one, or change its remembered project switch.
+    Lsp {
+        #[command(subcommand)]
+        action: Option<lsp::Action>,
+    },
     #[command(flatten)]
     Session(sessions::Cmd),
 
@@ -162,6 +168,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     match args.command {
+        Some(Cmd::Lsp { action }) => return lsp::run(&args.project, action).await,
         Some(Cmd::Session(cmd)) => return sessions::run(&args.project, cmd),
         Some(Cmd::Mcp {
             approve,
@@ -396,6 +403,7 @@ fn human(event: &AgentEvent) -> Option<String> {
         }
         AgentEvent::PlanProposed { plan } => format!("\n--- plan ---\n{plan}\n"),
         AgentEvent::TextShown { path, text, .. } => format!("\n--- {path} ---\n{text}\n"),
+        AgentEvent::FileSent { file } => format!("\n[file] {} · {} · {} bytes · SHA-256 {}\n", file.title, file.name, file.size, file.sha256),
         AgentEvent::FileChanged { fact, .. } => format!(
             "\x1b[2m  {} +{} −{}\x1b[0m",
             fact.path, fact.added, fact.removed

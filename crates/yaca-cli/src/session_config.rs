@@ -55,8 +55,9 @@ pub fn session_config(
     // reason as the providers: a server set up in the window must be there
     // from the CLI too.
     config.mcp_servers = yaca_core::mcp::config::load_global(&config_dir)?;
-    config.lsp_servers = yaca_core::lsp::config::load_global(&config_dir)?;
-    config.lsp_autodetect = true;
+    config.lsp_registry = Some(std::sync::Arc::new(yaca_core::lsp::runtime::Registry::new(
+        config_dir.clone(),
+    )));
     config.user_skills = yaca_core::skills::user_dirs(&config_dir);
     // The office skills Yaca ships with, into the human's own folder. A
     // folder that cannot be written is not a reason to refuse the chat: the

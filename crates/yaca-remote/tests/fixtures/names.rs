@@ -31,6 +31,7 @@ pub fn agent_event_name(event: &AgentEvent) -> &'static str {
         AgentEvent::TodosUpdated { .. } => "todosUpdated",
         AgentEvent::TitleSet { .. } => "titleSet",
         AgentEvent::TextShown { .. } => "textShown",
+        AgentEvent::FileSent { .. } => "fileSent",
         AgentEvent::PlanProposed { .. } => "planProposed",
         AgentEvent::FileChanged { .. } => "fileChanged",
         AgentEvent::FileViewLoaded { .. } => "fileViewLoaded",
@@ -87,6 +88,8 @@ pub fn command_name(command: &Command) -> &'static str {
         Command::LoginMcpServer { .. } => "loginMcpServer",
         Command::LogoutMcpServer { .. } => "logoutMcpServer",
         Command::RestartLspServer { .. } => "restartLspServer",
+        Command::SetLspServerEnabled { .. } => "setLspServerEnabled",
+        Command::InstallLspServer { .. } => "installLspServer",
     }
 }
 

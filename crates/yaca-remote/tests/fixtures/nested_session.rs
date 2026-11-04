@@ -64,7 +64,15 @@ pub fn model_infos() -> Vec<ModelInfo> {
             context_source,
             supports_images: i % 2 == 0,
             pricing_by_hand: false,
+            supported_parameters: None,
+            input_modalities: None,
+            expiration_date: None,
+            cache_read: None,
+            cache_write: None,
             by_hand: false,
+            fetched: None,
+            overrides: None,
+            enabled: true,
         })
         .collect()
 }

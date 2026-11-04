@@ -61,6 +61,13 @@ pub fn all() -> Vec<Command> {
         Command::RestartLspServer {
             server: "rust-analyzer".to_owned(),
         },
+        Command::SetLspServerEnabled {
+            server: "rust-analyzer".to_owned(),
+            enabled: false,
+        },
+        Command::InstallLspServer {
+            server: "pyright".to_owned(),
+        },
     ];
 
     commands.extend(
