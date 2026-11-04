@@ -142,6 +142,26 @@ const FOLLOW_THROUGH: &str = "A step you have decided on is something to do, not
      destructive or hard to undo, a real change of scope, or information only they \
      have.\n";
 
+const BACKGROUND_WORK: &str = "<background_work>\nChoose `background: true` yourself on \
+     an available Bash or Task tool when the work should run alongside yours; the \
+     usual permissions still apply. While it runs, you may continue independent \
+     work and write progress messages, wait for a result you need next, or end \
+     your response when nothing independent remains. Ending your response leaves \
+     background work running and lets its result resume you automatically. Avoid \
+     polling or sleep loops to keep yourself active, and check the results you \
+     depend on before reporting the overall job complete.\n\n";
+
+const BACKGROUND_COMMANDS: &str = "For a Bash command, use BashWait to wait for an \
+     output line or completion, and BashOutput to inspect its unread output. If \
+     you end your response instead, a command that exits on its own delivers its \
+     status and unread output at your next step, or starts a new turn if you are \
+     idle. Explicitly stopped commands do not trigger that wakeup.\n\n";
+
+const BACKGROUND_TASKS: &str = "For a background Task, continue on work that does \
+     not overlap the subagent's files. To wait for its report, end your response \
+     without further tool calls: the current turn waits and resumes you when the \
+     report arrives. The person can still send you a message while you wait.\n";
+
 /// Fetching a page waits for permission in every mode, so the rule that governs
 /// a refusal cannot live in the agent-only part.
 pub(super) const PERMISSION_NETWORK: &str = "Some actions wait for the human's permission before \
@@ -284,6 +304,13 @@ pub fn build_with_memory(
     s.push_str(BATCHING);
     s.push_str(FOLLOW_THROUGH);
     s.push_str("</how_to_work>\n\n");
+
+    s.push_str(BACKGROUND_WORK);
+    if agent {
+        s.push_str(BACKGROUND_COMMANDS);
+    }
+    s.push_str(BACKGROUND_TASKS);
+    s.push_str("</background_work>\n\n");
 
     s.push_str("<permissions>\n");
     s.push_str(PERMISSION_NETWORK);
@@ -578,6 +605,7 @@ mod tests {
                 "environment",
                 "mode",
                 "how_to_work",
+                "background_work",
                 "permissions",
                 "communication",
                 "action_captions",
