@@ -19,6 +19,7 @@ import type { QuestionReply } from "./QuestionReply";
 import type { QuestionRequest } from "./QuestionRequest";
 import type { QueuedMessage } from "./QueuedMessage";
 import type { RequestId } from "./RequestId";
+import type { SentFile } from "./SentFile";
 import type { SessionState } from "./SessionState";
 import type { StopReason } from "./StopReason";
 import type { TodoItem } from "./TodoItem";
@@ -86,7 +87,7 @@ lines: number,
  * How many lines the file has: with the two above it tells a whole
  * file from a part of one.
  */
-total: number, text: string, } | { "type": "planProposed", plan: string, } | { "type": "fileChanged", callId: CallId, fact: FileFact, diff: FileDiff, } | { "type": "fileViewLoaded", path: string, view: FileView | null, } | { "type": "queueUpdated", queued: Array<QueuedMessage>, } | { "type": "filesFound", query: string, paths: Array<string>, } | { "type": "processesUpdated", processes: Array<ProcessSummary>, } | { "type": "mcpUpdated", servers: Array<McpServerSummary>, } | { "type": "lspUpdated", servers: Array<LspServerSummary>, } | { "type": "processOutputReset", id: ProcessId, text: string, 
+total: number, text: string, } | { "type": "fileSent", file: SentFile, } | { "type": "planProposed", plan: string, } | { "type": "fileChanged", callId: CallId, fact: FileFact, diff: FileDiff, } | { "type": "fileViewLoaded", path: string, view: FileView | null, } | { "type": "queueUpdated", queued: Array<QueuedMessage>, } | { "type": "filesFound", query: string, paths: Array<string>, } | { "type": "processesUpdated", processes: Array<ProcessSummary>, } | { "type": "mcpUpdated", servers: Array<McpServerSummary>, } | { "type": "lspUpdated", servers: Array<LspServerSummary>, } | { "type": "processOutputReset", id: ProcessId, text: string, 
 /**
  * How many lines were pushed out of the buffer. The panel says so outright:
  * output lost in silence cannot be told apart from output that never existed.

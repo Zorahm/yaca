@@ -12,7 +12,7 @@ import type { SessionId } from "./SessionId";
  * had before the reload, with a turn that is still running still running and a
  * question that is still open still open.
  */
-export type AttachedChat = { id: SessionId, 
+export type AttachedChat = { id: SessionId, additionalFolders: Array<string>, 
 /**
  * The project the window opened the chat in.
  */
