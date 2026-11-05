@@ -7,6 +7,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing release tag to rebuild; leave empty for artifacts only"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -22,10 +27,10 @@ jobs:
             args: "--bundles nsis"
           - name: macos-arm64
             platform: macos-latest
-            args: "--target aarch64-apple-darwin --bundles dmg"
+            args: "--target aarch64-apple-darwin --bundles app,dmg"
           - name: macos-x64
             platform: macos-latest
-            args: "--target x86_64-apple-darwin --bundles dmg"
+            args: "--target x86_64-apple-darwin --bundles app,dmg"
           - name: linux
             platform: ubuntu-22.04
             args: "--bundles deb,appimage"
@@ -35,14 +40,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - name: Check the tag matches the app version
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
         shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           app=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          if [ "v$app" != "${GITHUB_REF_NAME}" ]; then
-            echo "tag ${GITHUB_REF_NAME} does not match tauri.conf.json version $app" >&2
+          if [ "v$app" != "$RELEASE_TAG" ]; then
+            echo "tag $RELEASE_TAG does not match tauri.conf.json version $app" >&2
             exit 1
           fi
 
@@ -73,9 +82,8 @@ jobs:
 
       - run: npm test
 
-      # A tag makes a draft release. A manual run (workflow_dispatch) only
-      # builds and keeps the installers as artifacts: without a tag name the
-      # action creates no release, so a dry run leaves nothing on the Releases page.
+      # A tag makes a draft release. A manual run can rebuild an existing tag;
+      # without release_tag it only keeps artifacts and creates no release.
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -85,11 +93,11 @@ jobs:
           # left out rather than set to an empty string.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         with:
-          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
-          releaseName: "Yaca ${{ github.ref_name }}"
+          tagName: ${{ inputs.release_tag || (startsWith(github.ref, 'refs/tags/v') && github.ref_name) || '' }}
+          releaseName: "Yaca ${{ inputs.release_tag || github.ref_name }}"
           releaseBody: "Installers for Windows (NSIS), macOS (dmg, Apple silicon and Intel) and Linux (deb, AppImage). The macOS builds are not signed: open them with right click, Open. See the README for what is new."
           releaseDraft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(inputs.release_tag || github.ref_name, '-') }}
           # The updater artifacts and `latest.json` are built for CI only: a local
           # build must not need the signing key (see `tauri.updater.conf.json`).
           args: ${{ matrix.args }} --config src-tauri/tauri.updater.conf.json
@@ -97,7 +105,7 @@ jobs:
           updaterJsonPreferNsis: true
 
       - name: Keep the installers of a manual run
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') && inputs.release_tag == '' }}
         uses: actions/upload-artifact@v4
         with:
           name: installers-${{ matrix.name }}
