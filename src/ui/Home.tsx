@@ -32,9 +32,10 @@ import {
 import { t } from "../i18n";
 import type { MenuCommand } from "./slash";
 import { Composer, type ComposerActions, type ComposerSettings } from "./Composer";
-import { plainPath, relativeTo } from "./format";
+import { relativeTo } from "./format";
 import { imageActions } from "./images";
 import { YakMascot } from "./YakMascot";
+import { HomeProject } from "./projects/HomeProject";
 import type { Profile } from "../core/client";
 
 export function Home({
@@ -43,10 +44,12 @@ export function Home({
   onRefreshCommands,
   project,
   projectEntry,
+  projects,
   profile,
   error,
   onStart,
-  onPickProject,
+  onSelectProject,
+  onCreateProject,
   onOpenSettings,
   onMenu,
 }: {
@@ -57,6 +60,7 @@ export function Home({
   /** The project picked in the window: the session list beside it reads the same one (§9.1). */
   project: string | null;
   projectEntry: import("../core/client").ProjectEntry | null;
+  projects: import("../core/client").ProjectEntry[];
   profile: Profile;
   /** A session start error: it comes from the window, not from here. */
   error: string | null;
@@ -66,8 +70,8 @@ export function Home({
     startup: Startup,
     attachments: string[],
   ) => void;
-  /** The folder picker dialog belongs to the window — the project lives there. */
-  onPickProject: () => void;
+  onSelectProject: (path: string) => void;
+  onCreateProject: () => void;
   /** The "Set up a provider" button leads to the settings window §10. */
   onOpenSettings: () => void;
   /** Opens the drawer the sidebar is in a narrow window; absent where it is a column. */
@@ -190,18 +194,13 @@ export function Home({
             </div>
           </div>
 
-          {profile === "code" && <div className="home-pick">
-            <div className="home-pick-text">
-              <div className="home-pick-title">{t("home.pick_title")}</div>
-              <div className="home-project-name">
-                {projectEntry?.name ?? (project === null ? t("home.not_chosen") : plainPath(project))}
-              </div>
-              {projectEntry && <div className="home-project-folders">{projectEntry.folders.map((folder) => <div className="home-pick-path" key={folder} title={plainPath(folder)}>{plainPath(folder)}</div>)}</div>}
-            </div>
-            <button className="btn" onClick={onPickProject} disabled={!hasFileDialogs}>
-              {t("home.pick_project")}
-            </button>
-          </div>}
+          {profile === "code" && <HomeProject
+            project={project}
+            entry={projectEntry}
+            projects={projects}
+            onSelect={onSelectProject}
+            onCreate={onCreateProject}
+          />}
 
           {/* Before the first message a provider may be missing, and that is
               said here, not discovered by a refused send (§9.1, §10). */}

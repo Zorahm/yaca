@@ -30,9 +30,10 @@
   padding: 14px 10px 8px;
 }
 
-/* The logo on the left, the Код | Чат switch on the right: one row. */
+/* The logo and profile switch share one row. */
 .side-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -45,9 +46,9 @@
   color: var(--ink);
 }
 
-/* Two short words beside the logo: the segments give up some of their side room. */
+/* Compact profile buttons leave room for the logo. */
 .side-top .segment {
-  padding: 0 10px;
+  padding: 0 8px;
 }
 
 /* The mark is drawn in the text colour; the square at its centre is the

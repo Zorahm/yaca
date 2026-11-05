@@ -38,11 +38,11 @@ export const shell = {
 
   "home.greeting": "Womit fangen wir an?",
   "home.greeting_named": "Womit fangen wir an, {name}?",
-  "home.pick_project": "Projekt erstellen",
+  "home.pick_project": "Projekt auswählen",
   "home.pick_title": "Projekt",
   "home.not_chosen": "nicht gewählt",
   "home.lead":
-    "Wählen Sie ein Projekt in der Seitenleiste oder erstellen Sie eines mit verwandten Ordnern. Modus, Modell und Aufwand lassen sich vor der ersten Nachricht ändern.",
+    "Wählen Sie ein Projekt oder erstellen Sie eines mit verwandten Ordnern. Modus, Modell und Aufwand lassen sich vor der ersten Nachricht ändern.",
    "home.lead_chat":
      "Schreiben Sie, wobei Sie Hilfe brauchen, dann beginnt der Agent das Gespräch. Modus, Modell und Aufwand lassen sich bis zur ersten Nachricht ändern.",
   "home.no_provider": "Kein Anbieter.",

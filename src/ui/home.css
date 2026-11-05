@@ -71,23 +71,65 @@
 
 .home-pick {
   display: flex;
+  align-self: center;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
+  width: 100%;
+  max-width: 520px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   background: var(--surface);
 }
 
 .home-pick-text {
+  flex: 1;
   min-width: 0;
 }
 
 .home-pick-title {
+  display: flex;
+  gap: 5px;
+  font-size: 13px;
+}
+
+.home-pick-title > :first-child {
+  flex: none;
+}
+
+.home-project-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 600;
 }
 
+.home-project-folders {
+  display: grid;
+  gap: 4px;
+  max-height: 100px;
+  margin: 5px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.home-project-folders li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+}
+
+.home-project-folders svg {
+  flex: none;
+}
+
 .home-pick-path {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   color: var(--muted);
   font: 400 12px var(--mono);
@@ -96,7 +138,30 @@
 }
 
 .home-pick .btn {
-  margin-left: auto;
+  flex: none;
+}
+
+.home-project-menu {
+  width: 320px;
+  max-width: calc(100vw - 32px);
+}
+
+.home-project-options {
+  max-height: min(260px, calc(var(--radix-dropdown-menu-content-available-height) - 54px));
+  overflow-y: auto;
+}
+
+.home-project-option {
+  height: auto;
+  min-height: 44px;
+  padding-block: 6px;
+}
+
+.home-project-option-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
 }
 
 .home-note {
@@ -146,6 +211,15 @@
 
   .home-wrap {
     gap: 18px;
+  }
+
+  .home-pick {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .home-pick-text {
+    flex-basis: 180px;
   }
 
   .home-intro {

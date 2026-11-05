@@ -72,7 +72,7 @@ export function Segments<T extends string>({
 }: {
   label: string;
   value: T;
-  options: { value: T; label: string; title?: string }[];
+  options: { value: T; label: string; title?: string; icon?: ReactNode }[];
   onChange: (value: T) => void;
 }) {
   return (
@@ -86,6 +86,7 @@ export function Segments<T extends string>({
           title={option.title}
           onClick={() => onChange(option.value)}
         >
+          {option.icon}
           {option.label}
         </button>
       ))}

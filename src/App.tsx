@@ -636,12 +636,14 @@ export default function App({ prefs }: { prefs: Preferences }) {
           onRefreshCommands={refreshCommands}
           project={homeProject}
           projectEntry={projects.find((entry) => entry.path === homeProject) ?? null}
+          projects={projects}
           profile={profile}
           error={error}
           onStart={(path, text, startup, attachments) =>
             void chats.start(path, text, startup, attachments).catch(failed)
           }
-          onPickProject={() => void addProject()}
+          onSelectProject={setDraft}
+          onCreateProject={addProject}
           onOpenSettings={() => {
             setSettingsList(false);
             setSettingsAt("providers");
@@ -678,7 +680,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
       <div className="app">
         <TopBar
           title={active.title}
-          projectRoot={state.projectRoot}
+          projectRoot={active.project === chatRoot ? null : state.projectRoot}
           projectEntry={projects.find((entry) => entry.path === active.project) ?? null}
           folders={[state.projectRoot, ...(active.additionalFolders ?? [])]}
           canGoBack={humanKeys.length > 0 && active.at !== 0}

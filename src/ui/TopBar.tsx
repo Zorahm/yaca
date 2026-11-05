@@ -47,7 +47,7 @@ export function TopBar({
   browser,
 }: {
   title: string;
-  projectRoot: string;
+  projectRoot: string | null;
   projectEntry?: import("../core/client").ProjectEntry | null;
   folders?: string[];
   canGoBack: boolean;
@@ -137,10 +137,10 @@ export function TopBar({
         />
       )}
 
-      <span className="top-project" title={(folders ?? [projectRoot]).map(plainPath).join("\n")}>
+      {projectRoot !== null && <span className="top-project" title={(folders ?? [projectRoot]).map(plainPath).join("\n")}>
         {projectEntry?.name ?? baseName(projectRoot)}
         {folders && folders.length > 1 && <span className="side-project-count"> · {folders.length}</span>}
-      </span>
+      </span>}
 
       <div className="top-gap" />
 

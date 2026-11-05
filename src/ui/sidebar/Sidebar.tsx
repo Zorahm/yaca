@@ -22,7 +22,7 @@
  * it, shut again by the scrim, a swipe, Back, or by picking where to go.
  */
 
-import { ArrowCircleUp, Gear, Plus, X } from "@phosphor-icons/react";
+import { ArrowCircleUp, ChatCircle, Code, Gear, Plus, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
 import { t } from "../../i18n";
@@ -32,7 +32,7 @@ import { Segments } from "../settings/Row";
 import { Splitter } from "../Splitter";
 import { ProjectGroup } from "./ProjectGroup";
 import { SessionList } from "./SessionList";
-import { PROFILES, PROFILE_KEY } from "../ProfileMenu";
+import { PROFILE_KEY } from "../ProfileMenu";
 import { useSwipeShut } from "./useSwipeShut";
 import type { Chat } from "../chats";
 import { hasFileDialogs, type Profile, type ReleaseInfo, type SessionId } from "../../core/client";
@@ -172,7 +172,10 @@ export function Sidebar({
           <Segments
             label={t("profile.title")}
             value={profile}
-            options={PROFILES.map((item) => ({ value: item, label: t(PROFILE_KEY[item]) }))}
+            options={[
+              { value: "chat", label: t(PROFILE_KEY.chat), icon: <ChatCircle size={14} aria-hidden="true" /> },
+              { value: "code", label: t(PROFILE_KEY.code), icon: <Code size={14} aria-hidden="true" /> },
+            ]}
             onChange={onProfile}
           />
         </div>
