@@ -2,7 +2,7 @@
 
 Yaca is a desktop coding agent: a headless Rust core (`yaca-core`) wrapped by a
 Tauri 2 shell (`src-tauri`) with a React 19 + TypeScript UI (`src`). The UI is a
-pure function of the core's event stream. Current version: `1.0.0-beta`.
+pure function of the core's event stream. Current version: `1.0.7-beta`.
 
 The project was renamed from **edoC** to **Yaca**. The old name survives only in
 the migration of data written by earlier builds: `crates/yaca-core/src/legacy.rs`
