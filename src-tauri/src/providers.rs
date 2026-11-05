@@ -49,7 +49,7 @@ async fn ask(dir: &Path, saved: Providers, id: &str) -> Asked {
             poll_error: None,
         },
         Err(e) => Asked {
-            providers: saved,
+            providers: Providers::load(dir).unwrap_or(saved),
             poll_error: Some(e.to_string()),
         },
     }
@@ -63,20 +63,23 @@ pub fn providers() -> Result<Providers, String> {
 
 /// Adds a provider or replaces one with the same name.
 ///
-/// One saved without models is asked for them on the spot. That is the new
-/// provider: its key is stored before it is in the list, so the question
-/// `set_api_key` asks had nobody to go to yet.
+/// A new connection or a changed endpoint is asked on save, even if a previous
+/// model list remains in the form after a failed draft lookup.
 #[tauri::command]
 pub async fn save_provider(app: tauri::AppHandle, spec: ProviderSpec) -> Result<Asked, String> {
     let dir = config_dir()?;
     let id = spec.id.clone();
-    let unasked = spec.models.is_empty();
-
     let mut providers = Providers::load(&dir).map_err(|e| e.to_string())?;
+    let needs_poll = spec.models.is_empty()
+        || providers.get(&id).is_none_or(|previous| {
+            previous.base_url != spec.base_url
+                || previous.protocol != spec.protocol
+                || previous.headers != spec.headers
+        });
     providers.put(spec);
     providers.save(&dir).map_err(|e| e.to_string())?;
 
-    let asked = if unasked {
+    let asked = if needs_poll {
         ask(&dir, providers, &id).await
     } else {
         Asked {

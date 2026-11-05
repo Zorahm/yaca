@@ -19,9 +19,12 @@ import { Brain, CaretDown, CaretRight, Check } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import type { WorkStep } from "../core/work";
+import { flatRows } from "../core/feed";
 import { workRows } from "../core/work";
 import { t } from "../i18n";
 import { ActionRowView } from "./ActionRow";
+import { actionNotices } from "./editNotices";
+import { LspBadge } from "./LspBadge";
 import { Checkpoint } from "./Blocks";
 import { summary } from "./captions";
 import type { FeedActions } from "./Feed";
@@ -45,6 +48,8 @@ export function Work({
   const rows = workRows(steps);
   const head = summary(rows);
   const failed = head.failed > 0;
+  const notices = flatRows(rows).flatMap(actionNotices).filter((notice) => notice.kind !== "lsp-clean");
+  const lspIssues = notices.some((notice) => notice.kind !== "lsp-clean");
 
   return (
     <div className="group">
@@ -56,7 +61,7 @@ export function Work({
         {live ? (
           <Spinner />
         ) : (
-          !failed && (
+          !failed && !lspIssues && (
             <span className="group-state" aria-hidden="true">
               <Check size={14} weight="bold" />
             </span>
@@ -75,6 +80,7 @@ export function Work({
             </span>
           ))}
         </span>
+        <LspBadge notices={notices} />
         {(head.added > 0 || head.removed > 0) && (
           <span className="counts">
             <span className="count-add">+{head.added}</span>{" "}

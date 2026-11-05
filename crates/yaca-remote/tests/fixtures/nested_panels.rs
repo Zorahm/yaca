@@ -299,6 +299,9 @@ pub fn lsp_servers() -> Vec<LspServerSummary> {
             let failed = matches!(status, LspStatus::Failed);
             let ready = matches!(status, LspStatus::Ready);
             LspServerSummary {
+                installation: matches!(status, LspStatus::Missing | LspStatus::Installing).then(
+                    || "npm install --prefix /config/yaca/lsp/tools/pyright pyright".to_owned(),
+                ),
                 name: format!("lsp-{i}"),
                 command: "rust-analyzer".to_owned(),
                 extensions: vec!["rs".to_owned()],

@@ -45,16 +45,21 @@ export function McpMark({ size }: { size: number }) {
 }
 
 /**
- * The mark of a preset provider, or `null` for one's own.
+ * The preset mark, or an optional initial for one's own provider.
  *
  * By identifier, not by address or name: presets are recognised exactly the way
  * the core recognises them. One's own gateway with the OpenAI address stays
  * without a mark — it belongs to someone else, and someone else's logo over it
  * would lie.
  */
-export function ProviderMark({ id, size }: { id: string; size: number }) {
+export function ProviderMark({ id, size, fallbackName }: { id: string; size: number; fallbackName?: string }) {
   const Mark = PROVIDER_MARKS.get(id);
-  return Mark === undefined ? null : <Mark size={size} aria-hidden="true" />;
+  if (Mark !== undefined) return <Mark size={size} aria-hidden="true" />;
+  if (fallbackName === undefined) return null;
+  const hash = Array.from(fallbackName).reduce((value, char) => (value * 31 + (char.codePointAt(0) ?? 0)) >>> 0, 0);
+  return <span className="provider-initial" aria-hidden="true" style={{
+    background: `color-mix(in srgb, var(--accent-soft) ${40 + hash % 61}%, var(--thumb))`,
+  }}>{Array.from(fallbackName.trim())[0]?.toLocaleUpperCase() ?? "?"}</span>;
 }
 
 /**

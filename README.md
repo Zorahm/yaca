@@ -490,7 +490,7 @@ The position is specified as `path` + `line` + `symbol` (identifying substring w
 
 In addition to explicit queries, errors reported by the language server for newly written files are automatically appended to `Edit`, `Write`, and `Rename` results, allowing the model to immediately catch syntax or type errors it introduced. This only applies if a server for that file is already running; file edits do not start the server on their own.
 
-**Server Discovery.** Built-in defaults: `rust-analyzer`, `typescript-language-server` (TS and JS), `pyright-langserver` (Python), and `gopls`. A default server is used only if its binary is found in `PATH`. Custom servers are configured in `lsp.json` in the app settings directory, alongside `mcp.json`:
+**Server Discovery.** Built-in defaults: `rust-analyzer`, `typescript-language-server` (TS and JS), `pyright-langserver` (Python), and `gopls`. Yaca detects the project's languages from source files and manifests, skipping dependency and build folders. Missing servers appear in the LSP panel and raise an installation offer. Installed servers are found on `PATH` or in Yaca's managed tools directory. Custom servers are configured in `lsp.json` in the app settings directory, alongside `mcp.json`:
 
 ```json
 {
@@ -501,13 +501,15 @@ In addition to explicit queries, errors reported by the language server for newl
 }
 ```
 
-A matching entry replaces the built-in configuration completely; `disabled` deactivates the server. Servers start lazily on the first query targeting a file with a matching extension, rather than at chat startup. A crashed server triggers a "Language server not responding" warning banner, and subsequent queries attempt to relaunch it.
+A matching entry replaces the built-in configuration completely; `disabled` deactivates the server. Installed servers start with Yaca for remembered projects, and when a new project opens. Chats in the same working tree share servers; closing a chat does not stop them. The LSP panel's manual switch is remembered per project across application restarts. Exiting Yaca stops server processes without changing that preference. A crashed server triggers a "Language server not responding" warning banner, and subsequent queries attempt to relaunch it.
 
 Unlike MCP, projects cannot define LSP servers in their configuration: a stdio server executes arbitrary commands, and a cloned repository must not run unauthorized executables on the user's machine. Consequently, `.yaca/settings.json` has no `lspServers` section.
 
 Diagnostics come from the server's own publications (`publishDiagnostics`), or, from a server that declares pull diagnostics (`diagnosticProvider`), by asking it (`textDocument/diagnostic`) — some servers only answer when asked.
 
-**The `/lsp` panel** lists the chat's language servers with their state, the files each handles, and the reason a failed one gave; **Restart** stops a server and starts it again. A failed server's warning bar opens the panel.
+**The `/lsp` panel** shows server cards with their status, supported extensions, launch command and failure details. **Enable / Disable** controls automatic startup; **Restart** reconnects a server. **Install** shows the command before it runs and starts the server after installation. Node-based servers are installed inside Yaca's configuration directory, Go's `gopls` uses a managed `GOBIN`, and Rust uses `rustup component add rust-analyzer`. The corresponding Node.js, Go or Rustup toolchain must already be installed. Installation errors stay visible with a retry action.
+
+The CLI exposes the same controls: `yaca -p <project> lsp`, `lsp enable <server>`, `lsp disable <server>`, `lsp install <server>`, and `lsp restart <server>`.
 
 Not supported in LSP integration:
 
@@ -600,6 +602,20 @@ The wire is checked from both sides: `cargo test -p yaca-remote --test fixtures`
 - **Gap: no profile switch.** `SessionState` carries `profile` and the core takes `setProfile`, but the phone's composer only offers the modes, so a chat started there is about code. The field decodes and is ignored, so nothing on the phone is wrong — the switch simply is not there.
 
 ## Architecture
+
+`Send(path, title?, caption?, display_hint?)` delivers workspace files in desktop chat.
+The core validates workspace boundaries, copies the file into `.yaca/sent/<id>`,
+and journals MIME, size, SHA-256 and display metadata without placing file contents
+in the model context. Images have a lightbox, media use native players, PDF opens
+in the artifact panel, and HTML/Markdown/JSON/CSV offer Preview/Code tabs (CSV is sortable).
+HTML previews run in an isolated frame without application access; external
+subresource loads are blocked.
+Deliveries support files up to 1 GiB; text/office previews support up to 20 MiB.
+
+- **Gap: Office previews show extracted text and tables, not original page/slide layout.**
+  Download preserves the original DOCX/XLSX/PPTX bytes.
+- **Gap: file download and rich previews are desktop-only.** The phone receives delivery
+  metadata; its remote protocol does not yet transfer delivery bytes.
 
 ```
 crates/yaca-core/   core: agent loop, tools, permissions, checkpoints, model router

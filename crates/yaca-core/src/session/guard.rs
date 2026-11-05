@@ -4,7 +4,7 @@
 //! hard one: whatever the model is doing, a turn makes only so many requests.
 //! The repeat check is the early one: a small model that gets the same answer
 //! to the same call usually asks it again, and waiting for the ceiling to find
-//! that out costs a hundred requests.
+//! that out costs hundreds of requests.
 //!
 //! A repeat is the same tool with the same arguments *and* the same result,
 //! three times running. The result is part of it on purpose: a poll of

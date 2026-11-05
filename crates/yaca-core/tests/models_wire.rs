@@ -195,12 +195,12 @@ async fn anthropic_is_not_asked_about_residency() {
 #[tokio::test]
 async fn lm_studio_window_is_detected_for_the_whole_list_with_one_probe() {
     let (base, seen) = serve_all(vec![
-        json(r#"{"object":"list","data":[{"id":"qwen/qwen3-30b"},{"id":"gpt-oss-20b"}]}"#),
+        json(r#"{"object":"list","data":[{"id":"qwen/qwen3-30b"},{"id":"a-yaca-unreported-test-model"}]}"#),
         json(
             r#"{"object":"list","data":[
                 {"id":"qwen/qwen3-30b","max_context_length":262144,
                  "loaded_instances":[{"config":{"context_length":65536}}]},
-                {"id":"gpt-oss-20b"}]}"#,
+                {"id":"a-yaca-unreported-test-model"}]}"#,
         ),
     ])
     .await;
@@ -213,7 +213,7 @@ async fn lm_studio_window_is_detected_for_the_whole_list_with_one_probe() {
         models[1].context_source,
         yaca_core::usage::ContextSource::DetectedAllocated
     );
-    // No fields of its own: the guess stays a guess, visibly.
+    // A fixture absent from public catalogs keeps this test about the local probe.
     assert_eq!(
         models[0].context_source,
         yaca_core::usage::ContextSource::DefaultGuess
@@ -330,6 +330,9 @@ async fn a_refresh_writes_the_answer_into_the_file() {
     let saved = Providers::load(dir.path()).unwrap();
     assert_eq!(returned, saved);
     assert_eq!(saved.get("gateway").unwrap().models[0].id, "glm-4.6");
+    let poll = saved.polls.get("gateway").unwrap();
+    assert!(poll.checked_at > 0);
+    assert!(poll.error.is_none());
     assert!(seen
         .await
         .unwrap()
@@ -359,6 +362,33 @@ async fn a_refused_refresh_leaves_the_saved_list_alone() {
     assert!(err.contains("no such key"), "{err}");
     let saved = Providers::load(dir.path()).unwrap();
     assert_eq!(saved.get("gateway").unwrap().models[0].id, "kept");
+    let poll = saved.polls.get("gateway").unwrap();
+    assert!(poll.checked_at > 0);
+    assert!(poll.error.as_ref().unwrap().contains("no such key"));
+}
+
+#[tokio::test]
+async fn an_empty_refresh_clears_previous_models_and_the_previous_error() {
+    let (base, _seen) = serve(json(r#"{"data":[]}"#)).await;
+    let dir = TempProject::new();
+    let mut spec = keyless(base);
+    spec.models = vec![yaca_core::usage::unknown_model("old")];
+    let mut providers = Providers::default();
+    providers.put(spec);
+    providers.polls.insert(
+        "gateway".into(),
+        yaca_core::provider::registry::ProviderPoll {
+            checked_at: 1,
+            error: Some("previous failure".into()),
+        },
+    );
+    providers.save(dir.path()).unwrap();
+
+    let refreshed = refresh(dir.path(), "gateway").await.unwrap();
+    assert!(refreshed.get("gateway").unwrap().models.is_empty());
+    assert!(refreshed.polls["gateway"].error.is_none());
+    assert!(refreshed.polls["gateway"].checked_at > 1);
+    assert_eq!(refreshed, Providers::load(dir.path()).unwrap());
 }
 
 #[tokio::test]

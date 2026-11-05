@@ -38,10 +38,12 @@ import { Panel } from "./Panel";
 
 export function FilePanel({
   path,
+  location,
   feed,
   onRead,
 }: {
   path: string;
+  location?: { line: number } | null;
   feed: Feed;
   /** Asks the core for the whole file. */
   onRead: (path: string) => void;
@@ -78,6 +80,12 @@ export function FilePanel({
 
   // `null`: search is closed. An open search with an empty string finds nothing.
   const [query, setQuery] = useState<string | null>(null);
+  useEffect(() => {
+    if (location) {
+      setView("code");
+      setQuery(null);
+    }
+  }, [location]);
   const [step, setStep] = useState(0);
   const found = useMemo(() => find(lines, query ?? ""), [lines, query]);
   // A different query or a different file means a different list of hits; a step taken on the
@@ -225,6 +233,7 @@ export function FilePanel({
               hits,
               current: found.length > 0 ? found[step] : null,
             }}
+            location={location}
             path={path}
           />
         )}

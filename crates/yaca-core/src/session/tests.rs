@@ -600,6 +600,7 @@ async fn plan_mode_does_not_give_writing_tools_to_model() {
             "Grep",
             "Read",
             "ReadImage",
+            "Send",
             // Shows a file to the human and writes nothing.
             "SendText",
             // Read-only, so offered in plan as well as in agent.

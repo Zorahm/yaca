@@ -2,6 +2,7 @@ package com.yaca.core.protocol
 
 import com.yaca.core.model.Effort
 import com.yaca.core.model.Mode
+import com.yaca.core.model.Profile
 import com.yaca.core.model.SessionId
 import com.yaca.core.model.SessionMeta
 import com.yaca.core.model.SessionState
@@ -27,6 +28,7 @@ data class Startup(
     val provider: String,
     val model: String,
     val effort: Effort,
+    val profile: Profile = Profile.CODE,
 )
 
 /** The host's identity, sent with every handshake answer. */

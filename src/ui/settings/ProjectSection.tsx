@@ -26,7 +26,7 @@ import {
   type Settings,
 } from "../../core/client";
 import { t, type Key } from "../../i18n";
-import { plainPath } from "../format";
+import { ProjectFolders } from "../projects/ProjectEditor";
 
 const SCOPE: Record<SkillReport["skills"][number]["scope"], Key> = {
   project: "proj.skills_project",
@@ -36,10 +36,14 @@ const SCOPE: Record<SkillReport["skills"][number]["scope"], Key> = {
 
 export function ProjectSection({
   project,
+  entry,
+  onEdit,
   settings,
   onPatch,
 }: {
   project: string;
+  entry: import("../../core/client").ProjectEntry | null;
+  onEdit: () => void;
   settings: Settings;
   onPatch: (change: (settings: Settings) => Settings) => void;
 }) {
@@ -98,9 +102,14 @@ export function ProjectSection({
       <div className="set-head">
         <div>
           <h1 className="set-title">{t("proj.title")}</h1>
-          <p className="set-lede">{plainPath(project)}</p>
+          <p className="set-lede">{entry?.name}</p>
         </div>
+        <button type="button" className="btn btn-small" onClick={onEdit}>{t("project.edit")}</button>
       </div>
+      <div className="set-subhead"><span className="set-subname">{t("project.folders")}</span></div>
+      <ProjectFolders folders={entry?.folders ?? [project]} />
+      <p className="project-hint">{t("project.primary_hint")}</p>
+      {entry && entry.folders.length > 1 && <p className="project-hint">{t("project.rollback_hint")}</p>}
 
       <div className="set-subhead">
         <div>

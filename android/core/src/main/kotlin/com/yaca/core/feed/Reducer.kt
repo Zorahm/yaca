@@ -14,6 +14,7 @@ import com.yaca.core.model.AgentEventError
 import com.yaca.core.model.AgentEventFileChanged
 import com.yaca.core.model.AgentEventFileViewLoaded
 import com.yaca.core.model.AgentEventFilesFound
+import com.yaca.core.model.AgentEventFileSent
 import com.yaca.core.model.AgentEventHookReported
 import com.yaca.core.model.AgentEventLspUpdated
 import com.yaca.core.model.AgentEventMcpUpdated
@@ -87,6 +88,13 @@ private fun FeedDraft.applyEvent(event: AgentEvent) {
         is AgentEventSummaryEdited -> onSummaryEdited(event)
 
         is AgentEventTextShown -> onTextShown(event)
+        // The remote wire carries metadata only until it supports file transfer.
+        is AgentEventFileSent -> blocks.add(FeedBlock.Shown(
+            key = key("sent"), path = event.file.name, command = null,
+            firstLine = 1, lines = 1, total = 1,
+            text = listOfNotNull(event.file.title, event.file.caption, event.file.mime,
+                "${event.file.size} bytes", "SHA-256 ${event.file.sha256}").joinToString("\n"),
+        ))
         is AgentEventFileChanged -> onFileChanged(event)
         is AgentEventFileViewLoaded -> onFileViewLoaded(event)
         is AgentEventFilesFound -> onFilesFound(event)

@@ -16,4 +16,8 @@ reason: string | null,
 /**
  * How the server introduces itself: `name version`.
  */
-label: string | null, };
+label: string | null, 
+/**
+ * The built-in installation command, shown before the human starts it.
+ */
+installation: string | null, };

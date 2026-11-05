@@ -10,21 +10,22 @@
  * this is not a caveat but an ordinary case — a code block is closed by the end of
  * the text.
  *
- * Links are deliberately not parsed. There is nowhere to open them: the browser in
- * the window is driven by the shell, and until such a command exists, underlined
- * text that leads nowhere is an interface lying about the state (§0).
+ * Local file references open only when the reader supplies a file callback.
+ * External links stay as text until there is a supported way to open them.
  */
 
 import type { CSSProperties, ReactNode } from "react";
 
 import { CodeBlock } from "./CodeBlock";
 import { type Align, parseTable } from "./markdownTable";
+import { fileReference, referenceNode, referenceText, type OpenReference } from "./FileReferences";
 
-export function Markdown({ text }: { text: string }): ReactNode {
-  return <div className="agent">{blocks(text)}</div>;
+export function Markdown({ text, onOpenFile }: { text: string; onOpenFile?: OpenReference }): ReactNode {
+  return <div className="agent">{blocks(text, onOpenFile)}</div>;
 }
 
-function blocks(text: string): ReactNode[] {
+function blocks(text: string, onOpenFile?: OpenReference): ReactNode[] {
+  const inline = (value: string) => renderInline(value, onOpenFile);
   const lines = text.split("\n");
   const out: ReactNode[] = [];
   let paragraph: string[] = [];
@@ -154,7 +155,7 @@ function alignStyle(align: Align): CSSProperties | undefined {
 }
 
 /** Inline code, bold, italics. Everything else is text as it is. */
-function inline(text: string): ReactNode[] {
+function renderInline(text: string, onOpenFile?: OpenReference): ReactNode[] {
   const out: ReactNode[] = [];
   // The order matters: code first, so that `**` inside it stays as itself.
   const pattern = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*(?!\s)[^*\n]*[^*\s]\*)|((?<!\w)_(?!\s)[^_\n]*[^_\s]_(?!\w))/g;
@@ -162,23 +163,28 @@ function inline(text: string): ReactNode[] {
   let at = 0;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(text)) !== null) {
-    if (match.index > at) out.push(text.slice(at, match.index));
+    if (match.index > at) out.push(referenceText(text.slice(at, match.index), onOpenFile));
     const token = match[0];
 
     if (token.startsWith("`")) {
+      if (onOpenFile && fileReference(token.slice(1, -1))) {
+        out.push(<span key={out.length}>{referenceNode(token.slice(1, -1), onOpenFile)}</span>);
+        at = match.index + token.length;
+        continue;
+      }
       out.push(
         <code className="code-inline" key={out.length}>
           {token.slice(1, -1)}
         </code>,
       );
     } else if (token.startsWith("**")) {
-      out.push(<strong key={out.length}>{token.slice(2, -2)}</strong>);
+      out.push(<strong key={out.length}>{referenceText(token.slice(2, -2), onOpenFile)}</strong>);
     } else {
-      out.push(<em key={out.length}>{token.slice(1, -1)}</em>);
+      out.push(<em key={out.length}>{referenceText(token.slice(1, -1), onOpenFile)}</em>);
     }
     at = match.index + token.length;
   }
 
-  if (at < text.length) out.push(text.slice(at));
+  if (at < text.length) out.push(referenceText(text.slice(at), onOpenFile));
   return out;
 }

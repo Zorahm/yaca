@@ -1,20 +1,9 @@
-/**
- * Processes panel: background commands, their state, run time, and the output of the
- * selected row.
- *
- * The core sends the whole list in the `processesUpdated` event, so the panel is a function of
- * it and keeps no list of its own. Selecting a row sends `watchProcess`: the core answers
- * `processOutputReset` (the whole buffer) and then live chunks, and only for the selected row.
- *
- * The run time is counted by the interface: a core ticking an event every second would tell it
- * nothing new. While the panel is open and there are live processes, the time ticks; for
- * finished ones it is computed from `finishedAt`.
- */
-
-import { Circle } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+/** Background commands are separate disclosures; only the open output is watched. */
+import { CaretDown, CaretRight, Circle } from "@phosphor-icons/react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { ProcessId, ProcessState, ProcessSummary } from "../../core/client";
+import { processTitles } from "../../core/backgroundCommands";
 import type { Feed } from "../../core/feed";
 import { t, tp } from "../../i18n";
 import { durationOf } from "../format";
@@ -28,24 +17,12 @@ export function ProcessesPanel({
   onStop,
 }: {
   feed: Feed;
-  /** The selected row. The selection itself lives in the core; the panel needs it here
-      to restore the selection when the panel is reopened. */
   watched: ProcessId | null;
-  onWatch: (id: ProcessId) => void;
+  onWatch: (id: ProcessId | null) => void;
   onStop: (id: ProcessId) => void;
 }) {
-  const processes = feed.processes;
-  const selected = processes.find((p) => p.id === watched) ?? null;
-  const running = processes.some((p) => p.state.type === "running");
-
-  // Opening the panel should show output without requiring a second click.
-  useEffect(() => {
-    if (selected !== null || processes.length === 0) return;
-    const next = processes.find((p) => p.state.type === "running") ?? processes[processes.length - 1];
-    onWatch(next.id);
-  }, [selected, processes, onWatch]);
-
-  // Once a second while there are live ones: finished processes keep their time.
+  const running = feed.processes.some((process) => process.state.type === "running");
+  const titles = useMemo(() => processTitles(feed), [feed.blocks]);
   const [, setTick] = useState(0);
   useEffect(() => {
     if (!running) return;
@@ -53,72 +30,87 @@ export function ProcessesPanel({
     return () => window.clearInterval(timer);
   }, [running]);
 
-  // Show exactly the buffer that arrived for the selected row.
-  const output =
-    watched !== null && feed.processOutput?.id === watched
-      ? feed.processOutput
-      : null;
-
   return (
     <Panel>
-      {processes.length === 0 ? (
+      {feed.processes.length === 0 ? (
         <div className="panel-empty">{t("proc.empty")}</div>
       ) : (
         <div className="proc-list">
-          {processes.map((process) => (
-            <ProcessRow
+          {feed.processes.map((process) => (
+            <ProcessCard
               key={process.id}
               process={process}
-              selected={process.id === watched}
-              onSelect={() => onWatch(process.id)}
+              title={titles.get(process.id)}
+              open={process.id === watched}
+              output={feed.processOutput?.id === process.id ? feed.processOutput : null}
+              onToggle={() => onWatch(watched === process.id ? null : process.id)}
+              onStop={() => onStop(process.id)}
             />
           ))}
-        </div>
-      )}
-
-      {selected && (
-        <div className="proc-output">
-          <div className="proc-output-head">
-            {output !== null && output.dropped > 0 && (
-              <span className="proc-dropped">{tp("proc.dropped", output.dropped)}</span>
-            )}
-            <div className="composer-gap" />
-            <StopOrCopy
-              running={selected.state.type === "running"}
-              text={output?.text ?? ""}
-              onStop={() => onStop(selected.id)}
-            />
-          </div>
-          <pre className="proc-output-text">
-            {output?.text || t("row.no_output")}
-          </pre>
         </div>
       )}
     </Panel>
   );
 }
 
-function ProcessRow({
+function ProcessCard({
   process,
-  selected,
-  onSelect,
+  title,
+  open,
+  output,
+  onToggle,
+  onStop,
 }: {
   process: ProcessSummary;
-  selected: boolean;
-  onSelect: () => void;
+  title?: string;
+  open: boolean;
+  output: Feed["processOutput"];
+  onToggle: () => void;
+  onStop: () => void;
 }) {
-  const ended = process.finishedAt ?? Date.now();
+  const { copied, copy } = useCopy();
+  const running = process.state.type === "running";
+  const outputId = `process-output-${process.id}`;
   return (
-    <button
-      className="proc"
-      aria-pressed={selected}
-      onClick={onSelect}
-    >
-      <span className="proc-num">#{process.id}</span>
-      <span className="proc-cmd">{process.command}</span>
-      <ProcessStateView state={process.state} />
-      <span className="proc-time">{durationOf(ended - process.startedAt)}</span>
-    </button>
+    <article className="proc">
+      <div className="proc-info">
+        <div className="proc-heading">
+          {title && <div className="proc-title">{title}</div>}
+          <span className="proc-num">#{process.id}</span>
+        </div>
+        <code className="proc-cmd">{process.command}</code>
+        {process.cwd !== "." && <div className="proc-cwd">{process.cwd}</div>}
+        <div className="proc-meta">
+          <ProcessStateView state={process.state} />
+          <span className="proc-time">
+            {durationOf((process.finishedAt ?? Date.now()) - process.startedAt)}
+          </span>
+          {running && (
+            <button className="btn btn-row proc-stop" onClick={onStop}>{t("proc.stop")}</button>
+          )}
+        </div>
+      </div>
+      <button className="proc-toggle" aria-expanded={open} aria-controls={outputId} onClick={onToggle}>
+        {open ? <CaretDown size={12} /> : <CaretRight size={12} />}
+        {t(open ? "proc.hide" : "proc.watch")}
+      </button>
+      {open && (
+        <div className="proc-output" id={outputId}>
+          <div className="proc-output-head">
+            {output !== null && output.dropped > 0 && (
+              <span className="proc-dropped">{tp("proc.dropped", output.dropped)}</span>
+            )}
+            <div className="composer-gap" />
+            <button className="btn btn-row" disabled={!output?.text} onClick={() => copy(output?.text ?? "")}>
+              {t(copied ? "feed.copied" : "feed.copy")}
+            </button>
+          </div>
+          <pre className="proc-output-text">
+            {output === null ? t("proc.loading") : output.text || t("row.no_output")}
+          </pre>
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -126,42 +118,12 @@ function ProcessStateView({ state }: { state: ProcessState }) {
   if (state.type === "running") {
     return (
       <span className="proc-state proc-state-run">
-        <span className="pulse"><Circle size={7} weight="fill" /></span> {t("proc.state_running")}
+        <span className="pulse"><Circle size={7} weight="fill" /></span>
+        {t("proc.state_running")}
       </span>
     );
   }
-  if (state.type === "stopped") {
-    return <span className="proc-state">{t("proc.state_stopped")}</span>;
-  }
-  const failed = state.code !== null && state.code !== 0;
-  return (
-    <span className={failed ? "proc-state proc-state-fail" : "proc-state proc-state-ok"}>
-      {t("proc.state_exited", { code: state.code ?? "—" })}
-    </span>
-  );
-}
-
-function StopOrCopy({
-  running,
-  text,
-  onStop,
-}: {
-  running: boolean;
-  text: string;
-  onStop: () => void;
-}) {
-  const { copied, copy } = useCopy();
-  return (
-    <>
-      {running ? (
-        <button className="btn btn-small" onClick={onStop}>
-          {t("proc.stop")}
-        </button>
-      ) : (
-        <button className="btn btn-small" onClick={() => copy(text)}>
-          {copied ? t("feed.copied") : t("feed.copy")}
-        </button>
-      )}
-    </>
-  );
+  if (state.type === "stopped") return <span className="proc-state">{t("proc.state_stopped")}</span>;
+  if (state.code === 0) return <span className="proc-state proc-state-ok">{t("proc.state_completed")}</span>;
+  return <span className="proc-state proc-state-fail">{t("proc.state_failed", { code: state.code ?? "—" })}</span>;
 }

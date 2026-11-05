@@ -13,8 +13,12 @@ import { CaretDown, CaretRight } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import type { ActionRow } from "../core/feed";
+import { inProcessesPanel } from "../core/backgroundCommands";
 import { t, tp } from "../i18n";
 import { caption, fileChildren, isFileRow, rowCounts, rowFiles } from "./captions";
+import { ActionNotices } from "./ActionNotice";
+import { actionNotices, diagnosticsForPath, type ActionNotice } from "./editNotices";
+import { LspBadge } from "./LspBadge";
 import { CodeBlock } from "./CodeBlock";
 import { Diff } from "./Diff";
 import { plainPath } from "./format";
@@ -25,9 +29,11 @@ import { Thumb } from "./Thumb";
 export function ActionRowView({
   row,
   onOpenFile,
+  inheritedNotices = [],
 }: {
   row: ActionRow;
-  onOpenFile: (path: string) => void;
+  onOpenFile: (path: string, line?: number) => void;
+  inheritedNotices?: ActionNotice[];
 }) {
   const running = row.state === "running";
   const [open, setOpen] = useState(false);
@@ -49,9 +55,14 @@ export function ActionRowView({
   // list the tool wrote for the model: the rows are that list.
   const fileRows = fileChildren(row);
   const boxed = !file;
+  const path = row.fact?.path ?? row.target ?? "";
+  const notices = [...actionNotices(row), ...inheritedNotices.filter((notice) =>
+    notice.path === path || diagnosticsForPath([notice], path).length > 0)];
+
+  if (inProcessesPanel(row)) return null;
 
   return (
-    <div className={open ? "row row-open" : "row"}>
+    <div className={["row", open && "row-open"].filter(Boolean).join(" ")}>
       <button
         className={file ? "row-head row-head-file" : "row-head"}
         aria-expanded={open}
@@ -68,6 +79,7 @@ export function ActionRowView({
           </span>
         )}
         {files !== null && <span className="counts">{tp("row.files", files)}</span>}
+        <LspBadge notices={fileRows.length ? notices.filter((notice) => notice.kind !== "lsp-clean") : notices} />
         <span className="caret">{open ? <CaretDown size={12} /> : <CaretRight size={12} />}</span>
       </button>
 
@@ -97,11 +109,12 @@ export function ActionRowView({
           {fileRows.length > 0 ? (
             <div className="group-list">
               {fileRows.map((child) => (
-                <ActionRowView key={child.callId} row={child} onOpenFile={onOpenFile} />
+                <ActionRowView key={child.callId} row={child} onOpenFile={onOpenFile} inheritedNotices={notices} />
               ))}
             </div>
           ) : row.diff ? (
-            <Diff diff={row.diff} soft path={row.fact?.path ?? row.target ?? undefined} />
+            <Diff diff={row.diff} soft path={path || undefined}
+              diagnostics={diagnosticsForPath(notices, path)} />
           ) : read ? (
             <>
               <Diff
@@ -118,6 +131,15 @@ export function ActionRowView({
           ) : !running ? (
             <div className="row-target row-dim">{t("row.no_output")}</div>
           ) : null}
+
+          <ActionNotices
+            diff={row.diff}
+            path={path}
+            notices={fileRows.length ? notices.filter((notice) =>
+              notice.kind === "lsp-pending" || !fileRows.some((child) =>
+                notice.path === child.fact?.path || diagnosticsForPath([notice], child.fact?.path ?? "").length > 0)) : notices}
+            onOpenFile={onOpenFile}
+          />
 
           {/* The reason an action did not go through is shown in full: the caption
               cuts it to one line, and there is nothing to fix from a truncated text. */}

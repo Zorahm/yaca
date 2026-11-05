@@ -8,7 +8,7 @@ use serde::Deserialize;
 use super::{get, parse};
 use crate::error::ProviderError;
 use crate::provider::registry::ProviderSpec;
-use crate::usage::{unknown_model, ContextSource, ModelInfo, Pricing};
+use crate::usage::{unknown_model, ContextSource, ModelFacts, ModelInfo, Pricing};
 
 /// Chat Completions' `/v1/models`.
 ///
@@ -22,6 +22,8 @@ pub(super) async fn openai(
     spec: &ProviderSpec,
     key: Option<&str>,
 ) -> Result<Vec<ModelInfo>, ProviderError> {
+    // Catalogs enrich model facts after discovery; they cannot establish that
+    // this endpoint and these credentials actually work.
     let page: OpenAiPage = parse(get(client, spec, key, "/models").await?)?;
     Ok(openai_models(&page))
 }
@@ -87,6 +89,8 @@ struct OpenAiModel {
     /// Live state, so it is read by [`residency`] and never into `ModelInfo`.
     #[serde(default)]
     loaded: Option<bool>,
+    #[serde(default)]
+    expiration_date: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -104,6 +108,10 @@ struct OpenAiPricing {
     prompt: Option<String>,
     #[serde(default)]
     completion: Option<String>,
+    #[serde(default)]
+    input_cache_read: Option<String>,
+    #[serde(default)]
+    input_cache_write: Option<String>,
 }
 
 fn openai_model(m: &OpenAiModel) -> ModelInfo {
@@ -151,23 +159,50 @@ fn openai_model(m: &OpenAiModel) -> ModelInfo {
         .and_then(|a| a["input_modalities"].as_array())
     {
         info.supports_images = inputs.iter().any(|i| i == "image");
+        info.input_modalities = Some(
+            inputs
+                .iter()
+                .filter_map(|i| i.as_str().map(str::to_string))
+                .collect(),
+        );
     }
+    info.supported_parameters = m.supported_parameters.clone();
+    info.expiration_date = m.expiration_date.clone();
+    info.cache_read = m
+        .pricing
+        .as_ref()
+        .and_then(|p| super::price::per_million(p.input_cache_read.as_deref()));
+    info.cache_write = m
+        .pricing
+        .as_ref()
+        .and_then(|p| super::price::per_million(p.input_cache_write.as_deref()));
+    let mut facts = ModelFacts::of(&info);
+    facts.max_output = m
+        .top_provider
+        .as_ref()
+        .and_then(|p| p.max_completion_tokens);
+    facts.pricing = m.pricing.as_ref().and_then(per_million).or(facts.pricing);
+    facts.input_price = m
+        .pricing
+        .as_ref()
+        .and_then(|p| super::price::per_million(p.prompt.as_deref()));
+    facts.output_price = m
+        .pricing
+        .as_ref()
+        .and_then(|p| super::price::per_million(p.completion.as_deref()));
+    facts.supports_effort = m
+        .supported_parameters
+        .as_ref()
+        .map(|_| info.supports_effort);
+    info.fetched = Some(facts);
     info
 }
 
 /// Dollars per million, from dollars per token.
 fn per_million(pricing: &OpenAiPricing) -> Option<Pricing> {
-    let parse = |v: &Option<String>| v.as_ref()?.parse::<f64>().ok();
-    let input = parse(&pricing.prompt)?;
-    let output = parse(&pricing.completion)?;
-    // A negative price is not a price: OpenRouter answers `"-1"` for models
-    // whose cost it does not know itself.
-    if input < 0.0 || output < 0.0 {
-        return None;
-    }
     Some(Pricing {
-        input: input * 1e6,
-        output: output * 1e6,
+        input: super::price::per_million(pricing.prompt.as_deref())?,
+        output: super::price::per_million(pricing.completion.as_deref())?,
     })
 }
 
@@ -177,6 +212,37 @@ mod tests {
 
     fn openai_page(json: &str) -> Vec<ModelInfo> {
         openai_models(&serde_json::from_str(json).unwrap())
+    }
+
+    #[test]
+    fn explicit_zero_defaults_cache_and_capabilities_survive_the_wire() {
+        let models = openai_page(
+            r#"{"data":[{"id":"custom/free","context_length":null,
+            "top_provider":{"max_completion_tokens":8192},
+            "pricing":{"prompt":"0","completion":"0","input_cache_read":"0.00000015"},
+            "supported_parameters":["tools","structured_outputs"],
+            "architecture":{"input_modalities":["text","image"]},
+            "expiration_date":"2026-01-01"}]}"#,
+        );
+        let model = &models[0];
+        let facts = model.fetched.as_ref().unwrap();
+        assert_eq!(facts.context_max, None);
+        assert_eq!(facts.max_output, Some(8192));
+        assert_eq!(
+            facts.pricing,
+            Some(Pricing {
+                input: 0.0,
+                output: 0.0
+            })
+        );
+        assert_eq!(model.cache_read, Some(0.15));
+        assert_eq!(model.cache_write, None);
+        let wire = serde_json::to_value(model).unwrap();
+        assert_eq!(wire["supportedParameters"][0], "tools");
+        assert_eq!(wire["inputModalities"][1], "image");
+        assert_eq!(wire["expirationDate"], "2026-01-01");
+        assert!(wire["fetched"].get("contextMax").is_none());
+        assert!(wire.get("cacheWrite").is_none());
     }
 
     #[test]
@@ -192,7 +258,8 @@ mod tests {
         // Ordered by id: this shape has no order of its own.
         assert_eq!(models[0].id, "llama3.3");
         assert_eq!(models[0].display_name, "llama3.3");
-        assert_eq!(models[0], unknown_model("llama3.3"));
+        assert_eq!(models[0].context_source, ContextSource::DefaultGuess);
+        assert!(models[0].fetched.as_ref().unwrap().context_max.is_none());
         assert_eq!(models.len(), 2);
     }
 
@@ -276,10 +343,10 @@ mod tests {
     }
 
     #[test]
-    fn a_price_the_gateway_does_not_know_is_not_a_price() {
+    fn a_variable_route_retains_its_price_state() {
         // OpenRouter answers `-1` where the cost is unknown to it.
         let models =
             openai_page(r#"{"data":[{"id":"m","pricing":{"prompt":"-1","completion":"-1"}}]}"#);
-        assert_eq!(models[0].pricing.input, 0.0);
+        assert_eq!(models[0].pricing.input, -1.0);
     }
 }

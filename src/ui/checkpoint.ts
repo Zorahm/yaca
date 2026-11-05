@@ -10,6 +10,7 @@
  */
 
 import type { CheckpointChange, CheckpointSummary } from "../core/client";
+import type { Feed } from "../core/feed";
 import { t } from "../i18n";
 
 /** `before a message`, `before npm test`, `before a rollback`. */
@@ -34,4 +35,17 @@ export function willDo(file: CheckpointChange): string {
     default:
       return t("ckpt.will_modify");
   }
+}
+
+/** Message checkpoints sit beside the human card in both live and recorded feeds. */
+export function checkpointMessages(feed: Feed): Map<string, string> {
+  const messages = new Map<string, string>();
+  feed.blocks.forEach((block, index) => {
+    if (block.kind !== "checkpoint" || block.checkpoint.reason.type !== "message") return;
+    const before = feed.blocks[index - 1];
+    const after = feed.blocks[index + 1];
+    const human = before?.kind === "human" ? before : after?.kind === "human" ? after : null;
+    if (human) messages.set(block.checkpoint.id, human.text);
+  });
+  return messages;
 }

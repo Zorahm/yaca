@@ -8,6 +8,7 @@
  */
 
 import { flatRows, type Feed } from "../../core/feed";
+import { sentImage, sentImagePath } from "../../core/sentImage";
 
 const IMAGE = /\.(png|jpe?g|gif|webp|bmp)$/i;
 
@@ -27,12 +28,14 @@ export function galleryOf(feed: Feed | null): string[] {
   const out: string[] = [];
   const add = (path: string) => {
     // One path, one stop: a screenshot attached twice is the same file.
-    if (isImagePath(path) && !out.includes(path)) out.push(path);
+    if ((sentImage(path) !== null || isImagePath(path)) && !out.includes(path)) out.push(path);
   };
 
   for (const block of feed.blocks) {
     if (block.kind === "human") {
       block.attachments.forEach(add);
+    } else if (block.kind === "sent" && block.file.mime.startsWith("image/")) {
+      add(sentImagePath(block.file));
     } else if (block.kind === "actions") {
       for (const row of flatRows(block.rows)) {
         // Only what opened: a failed call has nothing to show.

@@ -54,6 +54,8 @@ import { timeOf } from "./format";
 import { tp } from "../i18n";
 import { shouldHold, shouldStick, type ScrollState } from "./feedScroll";
 import { Work } from "./Work";
+import { SentFile } from "./SentFile";
+import type { SentFile as FileDelivery } from "../core/bindings/SentFile";
 import { ProcessStatus, TurnLive, TurnTime } from "./TurnTime";
 
 /** The feed's end point, allowing for a lagging measurement (see the bottom hold). */
@@ -80,7 +82,8 @@ export type FeedActions = {
   openCheckpoints: () => void;
   openProcesses: () => void;
   editSummary: (text: string) => void;
-  openFile: (path: string) => void;
+  openFile: (path: string, line?: number) => void;
+  openArtifact: (file: FileDelivery) => void;
   /** Opens the agents panel on these subagents, by their `Task` call ids. */
   openAgents: (ids: string[]) => void;
   retry: () => void;
@@ -90,10 +93,12 @@ export function Feed({
   feed,
   actions,
   ref,
+  checkpointPreviewInPanel = false,
 }: {
   feed: FeedModel;
   actions: FeedActions;
   ref?: Ref<FeedJump>;
+  checkpointPreviewInPanel?: boolean;
 }) {
   const handle = useRef<VListHandle>(null);
   const [stuck, setStuck] = useState(true);
@@ -243,6 +248,7 @@ export function Feed({
             <Block
               block={block}
               feed={feed}
+              preview={checkpointPreviewInPanel ? null : feed.preview}
               actions={actions}
               live={isLiveWork(blocks, index, busy)}
               copyable={block.kind === "agent" && closesReply(blocks, index, busy)}
@@ -297,6 +303,7 @@ function startsAgent(blocks: FeedItem[], index: number): boolean {
 function Block({
   block,
   feed,
+  preview,
   actions,
   live,
   copyable,
@@ -304,6 +311,7 @@ function Block({
 }: {
   block: FeedItem;
   feed: FeedModel;
+  preview: FeedModel["preview"];
   actions: FeedActions;
   /** Only for the turn's work: the turn is still writing it. */
   live: boolean;
@@ -323,7 +331,7 @@ function Block({
         <Work
           steps={block.steps}
           live={live}
-          preview={feed.preview}
+          preview={preview}
           actions={actions}
         />
       );
@@ -363,7 +371,7 @@ function Block({
       return (
         <Checkpoint
           block={block}
-          preview={feed.preview}
+          preview={preview}
           onPreview={actions.previewCheckpoint}
           onRestore={actions.restoreCheckpoint}
           onCancel={actions.cancelPreview}
@@ -396,6 +404,9 @@ function Block({
 
     case "shown":
       return <ShownText block={block} onOpen={actions.openFile} />;
+
+    case "sent":
+      return <SentFile file={block.file} onOpen={actions.openArtifact} />;
 
     case "error":
       return (

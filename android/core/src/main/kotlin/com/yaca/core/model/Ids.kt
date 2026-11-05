@@ -16,6 +16,11 @@ value class BlockId(val value: String)
 @JvmInline
 value class CallId(val value: String)
 
+/** An immutable file delivery, independent of its source path. */
+@Serializable
+@JvmInline
+value class DeliveryId(val value: String)
+
 /** A checkpoint of the session's files. */
 @Serializable
 @JvmInline

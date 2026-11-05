@@ -39,6 +39,10 @@ fn info(id: &str, ctx: u32, out: u32, effort: bool) -> ModelInfo {
         supports_images: true,
         pricing_by_hand: false,
         by_hand: false,
+        fetched: None,
+        overrides: None,
+        enabled: true,
+        ..yaca_core::usage::unknown_model(id)
     }
 }
 
@@ -55,6 +59,7 @@ fn spec(id: &str, model: ModelInfo) -> ProviderSpec {
 
 fn providers() -> Providers {
     Providers {
+        polls: Default::default(),
         list: vec![
             spec("decider", info("judge", 8_000, 1_000, false)),
             spec("small", info("tiny", 8_000, 1_000, false)),

@@ -125,13 +125,17 @@ impl ProviderSpec {
 
     /// The model a session should actually ask for.
     ///
-    /// If empty, the provider's first model is picked. An unknown model is an
-    /// error: the model carries its provider, so there is no mismatch fallback.
+    /// If empty, the provider's first switched-on model is picked. An unknown
+    /// model is an error: the model carries its provider, so there is no
+    /// mismatch fallback. A model switched off in the panel is still resolved by
+    /// name: a project may have named it before it was switched off, and
+    /// answering with another model instead would be worse than either.
     pub fn resolve_model(&self, wanted: &str) -> Result<String, CoreError> {
         if wanted.is_empty() {
             return self
                 .models
-                .first()
+                .iter()
+                .find(|m| m.enabled)
                 .map(|m| m.id.clone())
                 .ok_or_else(|| CoreError::Config(format!("provider «{}» has no models", self.id)));
         }
@@ -246,12 +250,25 @@ fn protocol_headers(protocol: Protocol) -> &'static [(&'static str, &'static str
 #[serde(rename_all = "camelCase")]
 pub struct Providers {
     pub list: Vec<ProviderSpec>,
+    #[serde(default)]
+    pub polls: BTreeMap<String, ProviderPoll>,
+}
+
+/// The last completed model lookup, retained across settings visits and restarts.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderPoll {
+    #[ts(type = "number")]
+    pub checked_at: u64,
+    pub error: Option<String>,
 }
 
 impl Default for Providers {
     fn default() -> Self {
         Providers {
             list: presets::all(),
+            polls: BTreeMap::new(),
         }
     }
 }
@@ -353,10 +370,17 @@ impl Providers {
     }
 
     /// All models across all configured providers, with provider_id attached.
+    ///
+    /// Switched-off rows stay out: `providers.json` keeps them (a refresh would
+    /// otherwise bring them back switched on), while the switcher (§7.1) offers
+    /// only what a person left on.
     pub fn all_models(&self) -> Vec<ModelInfo> {
         let mut all = Vec::new();
         for spec in &self.list {
             for mut m in spec.models.clone() {
+                if !m.enabled {
+                    continue;
+                }
                 m.provider_id = spec.id.clone();
                 all.push(m);
             }
@@ -366,6 +390,13 @@ impl Providers {
 
     /// Adds or replaces by id, keeping the list ordered by insertion.
     pub fn put(&mut self, spec: ProviderSpec) {
+        if self.get(&spec.id).is_some_and(|previous| {
+            previous.base_url != spec.base_url
+                || previous.protocol != spec.protocol
+                || previous.headers != spec.headers
+        }) {
+            self.polls.remove(&spec.id);
+        }
         match self.list.iter_mut().find(|p| p.id == spec.id) {
             Some(slot) => *slot = spec,
             None => self.list.push(spec),
@@ -384,6 +415,7 @@ impl Providers {
             ));
         }
         self.list.retain(|p| p.id != id);
+        self.polls.remove(id);
         Ok(())
     }
 

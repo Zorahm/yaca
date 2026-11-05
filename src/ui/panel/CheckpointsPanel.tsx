@@ -1,46 +1,22 @@
-/**
- * Checkpoints panel: the list of this run's checkpoints and a diff from the selected one.
- *
- * The core sends the whole list in the `checkpointsUpdated` event, so the panel is a function
- * of it and keeps no list of its own. The diff works the same way: selecting a row sends
- * `previewCheckpoint`, the core answers `checkpointPreviewed`, and what is shown is exactly
- * what arrived. Recomputing it in the window would be a second version of the truth, and the
- * two diverge exactly when the tree moved between the question and the answer, which is when
- * the cost of a mistake is highest.
- *
- * Newest first: the panel is a way to go back, and one usually goes back not far. The feed runs
- * the other way round, but there a checkpoint sits in its place in the conversation, while here
- * it is a row of a list.
- *
- * The diff is the same list of files the confirmation in the feed shows: what the rollback
- * will do to each. The core does not give a line-by-line diff from a checkpoint, and there is
- * nothing here to draw one from.
- *
- * Checkpoints of earlier runs do not get here: their list lives in the session's memory and
- * does not outlive it (README). A session reopened starts with an empty panel, and that is
- * true — it cannot go back to yesterday's checkpoint.
- */
+/** Checkpoint cards keep inspection separate from the explicit rollback action. */
+import { CaretDown, CaretRight, ChatCircle, ClockCounterClockwise, Terminal } from "@phosphor-icons/react";
+import { useMemo } from "react";
 
 import type { CheckpointChange, CheckpointSummary } from "../../core/client";
 import type { Feed } from "../../core/feed";
-import { t } from "../../i18n";
-import { reasonText, willDo } from "../checkpoint";
-import { timeOf } from "../format";
+import { capitalize, locale, t, tp } from "../../i18n";
+import { checkpointMessages, reasonText, willDo } from "../checkpoint";
+import { dateTimeOf } from "../format";
 import { Panel } from "./Panel";
 
-export function CheckpointsPanel({
-  feed,
-  onPreview,
-  onRestore,
-  onCancel,
-}: {
+export function CheckpointsPanel({ feed, onPreview, onRestore, onCancel }: {
   feed: Feed;
   onPreview: (id: string) => void;
   onRestore: (id: string) => void;
-  /** Dismiss the question without rolling anything back. */
   onCancel: () => void;
 }) {
   const points = [...feed.checkpoints].reverse();
+  const messages = useMemo(() => checkpointMessages(feed), [feed.blocks]);
   const preview = feed.preview;
 
   return (
@@ -49,11 +25,13 @@ export function CheckpointsPanel({
         <div className="panel-empty">{t("ckpt.empty")}</div>
       ) : (
         <div className="ckpt-list">
-          {points.map((point) => (
-            <CheckpointRow
+          <div className="ckpt-order">{t("ckpt.order")}</div>
+          {points.map((point, index) => (
+            <CheckpointCard
               key={point.id}
               point={point}
-              asking={preview?.id === point.id}
+              message={messages.get(point.id)}
+              latest={index === 0}
               files={preview?.id === point.id ? preview.files : null}
               onPreview={() => onPreview(point.id)}
               onRestore={() => onRestore(point.id)}
@@ -66,59 +44,66 @@ export function CheckpointsPanel({
   );
 }
 
-function CheckpointRow({
-  point,
-  asking,
-  files,
-  onPreview,
-  onRestore,
-  onCancel,
-}: {
+function CheckpointCard({ point, message, latest, files, onPreview, onRestore, onCancel }: {
   point: CheckpointSummary;
-  asking: boolean;
+  message?: string;
+  latest: boolean;
   files: CheckpointChange[] | null;
   onPreview: () => void;
   onRestore: () => void;
   onCancel: () => void;
 }) {
-  return (
-    <div className="ckpt">
-      <button className="ckpt-row" aria-expanded={asking} onClick={onPreview}>
-        <span className={asking ? "ckpt-dot ckpt-dot-on" : "ckpt-dot"} />
-        <span className="ckpt-reason">
-          {reasonText(point.reason)} · {timeOf(point.at)}
-        </span>
-      </button>
+  const open = files !== null;
+  const command = point.reason.type === "command" ? point.reason.command : null;
+  const Icon = point.reason.type === "command" ? Terminal : point.reason.type === "message" ? ChatCircle : ClockCounterClockwise;
+  const date = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(point.at);
+  const outputId = `checkpoint-preview-${point.id}`;
+  const added = files?.reduce((sum, file) => sum + file.added, 0) ?? 0;
+  const removed = files?.reduce((sum, file) => sum + file.removed, 0) ?? 0;
 
-      {/* A rollback shows what it will touch and waits for confirmation, before
-          anything happens. */}
-      {asking && files !== null && (
-        <div className="confirm">
-          <div className="confirm-title">
-            {t("ckpt.confirm_title", { time: timeOf(point.at) })}
-          </div>
+  return (
+    <article className={open ? "ckpt ckpt-open" : "ckpt"}>
+      <div className="ckpt-info">
+        <div className="ckpt-heading">
+          <Icon size={16} aria-hidden="true" />
+          <div className="ckpt-title">{command !== null ? t("ckpt.before_command") : capitalize(reasonText(point.reason))}</div>
+          {latest && <span className="ckpt-latest">{t("ckpt.latest")}</span>}
+        </div>
+        <time className="ckpt-time" dateTime={new Date(point.at).toISOString()} title={dateTimeOf(point.at)}>{date}</time>
+        {command !== null && <code className="ckpt-command">{command}</code>}
+        {message?.trim() && <div className="ckpt-message" title={message}>{message}</div>}
+        <div className="ckpt-meta">{t("ckpt.snapshot", { files: tp("row.files", point.tracked) })}</div>
+      </div>
+      <button className="ckpt-toggle" aria-expanded={open} aria-controls={outputId} onClick={open ? onCancel : onPreview}>
+        {open ? <CaretDown size={12} /> : <CaretRight size={12} />}
+        {t(open ? "ckpt.hide_changes" : "ckpt.view_changes")}
+      </button>
+      {files !== null && (
+        <div className="ckpt-preview" id={outputId}>
           {files.length === 0 ? (
-            <div className="confirm-list">{t("ckpt.confirm_nothing")}</div>
+            <div className="ckpt-no-changes">{t("ckpt.confirm_nothing")}</div>
           ) : (
-            <div className="confirm-list">
-              {files.map((file) => (
-                <div className="confirm-file" key={file.path}>
-                  <span>{file.path}</span>
-                  <span className="confirm-what">{willDo(file)}</span>
-                </div>
-              ))}
-            </div>
+            <>
+              <div className="ckpt-preview-head">
+                <span>{t("ckpt.affected", { files: tp("row.files", files.length) })}</span>
+                <span className="counts"><span className="count-add">+{added}</span>{" "}<span className="count-del">−{removed}</span></span>
+              </div>
+              <div className="ckpt-files">
+                {files.map((file) => (
+                  <div className="ckpt-file" key={file.path}>
+                    <span className="ckpt-file-path">{file.path}</span>
+                    <span className={`ckpt-file-action ckpt-file-${file.kind}`}>{willDo(file)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="ckpt-restore">
+                <div className="ckpt-restore-question">{t("ckpt.confirm_title", { time: date })}</div>
+                <button className="btn btn-small btn-accent" onClick={onRestore}>{t("ckpt.restore_here")}</button>
+              </div>
+            </>
           )}
-          <div className="error-actions">
-            <button className="btn" onClick={onCancel}>
-              {t("ckpt.confirm_no")}
-            </button>
-            <button className="btn btn-accent" onClick={onRestore}>
-              {t("ckpt.confirm_yes")}
-            </button>
-          </div>
         </div>
       )}
-    </div>
+    </article>
   );
 }

@@ -144,6 +144,18 @@ fn conversation() -> Vec<AgentEvent> {
             total: 40,
             text: "running 2 tests\ntest greet ... ok\n".to_owned(),
         },
+        AgentEvent::FileSent {
+            file: yaca_core::sent::SentFile {
+                id: "delivery_449119a842404b059675aafc017f48bd".into(),
+                name: "report.csv".into(),
+                title: "Report".into(),
+                caption: Some("Ready".into()),
+                mime: "text/csv".into(),
+                size: 42,
+                sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".into(),
+                render_type: yaca_core::sent::RenderType::Artifact,
+            },
+        },
         AgentEvent::PlanProposed {
             plan: "1. Read src/greet.rs\n2. Change the greeting\n3. Run the tests".to_owned(),
         },

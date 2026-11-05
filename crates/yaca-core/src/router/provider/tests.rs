@@ -23,7 +23,6 @@ const CODE_NO: &str = r#"{"code": 0.1}"#;
 fn info(id: &str, ctx: u32, out: u32, effort: bool, thinking: bool) -> ModelInfo {
     ModelInfo {
         id: id.into(),
-        provider_id: String::new(),
         display_name: id.into(),
         context_max: ctx,
         max_output: out,
@@ -34,9 +33,7 @@ fn info(id: &str, ctx: u32, out: u32, effort: bool, thinking: bool) -> ModelInfo
         supports_effort: effort,
         supports_thinking: thinking,
         context_source: ContextSource::ProviderReported,
-        supports_images: true,
-        pricing_by_hand: false,
-        by_hand: false,
+        ..crate::usage::unknown_model(id)
     }
 }
 
@@ -55,6 +52,7 @@ fn spec(id: &str, model: ModelInfo) -> ProviderSpec {
 /// target with both. The default is the small one.
 fn providers() -> Providers {
     Providers {
+        polls: Default::default(),
         list: vec![
             spec("decider", info("judge", 8_000, 1_000, false, false)),
             spec("small", info("tiny", 8_000, 1_000, false, false)),

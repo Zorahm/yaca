@@ -17,6 +17,7 @@
  */
 
 import type { AgentEvent } from "./bindings/AgentEvent";
+import type { SentFile } from "./bindings/SentFile";
 import { missingOutcome } from "./turnOutcome";
 import type { CheckpointChange } from "./bindings/CheckpointChange";
 import type { CheckpointSummary } from "./bindings/CheckpointSummary";
@@ -100,6 +101,7 @@ export type QuestionStatus = "open" | "answered" | "dismissed" | "unanswered";
 export type ElicitationStatus = "open" | "accepted" | "declined" | "cancelled" | "expired";
 
 export type FeedBlock =
+  | { kind: "sent"; key: string; file: SentFile }
   | { kind: "human"; key: string; text: string; attachments: string[] }
   | { kind: "agent"; key: string; blockId: string; text: string }
   | { kind: "reasoning"; key: string; blockId: string; text: string }
@@ -451,6 +453,10 @@ function apply(feed: Feed, event: AgentEvent): void {
 
     case "planProposed":
       feed.blocks.push({ kind: "plan", key: key("plan"), plan: event.plan });
+      return;
+
+    case "fileSent":
+      feed.blocks.push({ kind: "sent", key: key("sent"), file: event.file });
       return;
 
     case "textShown":

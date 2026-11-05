@@ -172,6 +172,8 @@ pub fn lsp_statuses() -> Vec<LspStatus> {
         LspStatus::Ready,
         LspStatus::Failed,
         LspStatus::Disabled,
+        LspStatus::Missing,
+        LspStatus::Installing,
     ]
 }
 

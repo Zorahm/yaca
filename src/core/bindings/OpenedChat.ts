@@ -11,7 +11,7 @@ import type { SessionState } from "./SessionState";
  * by it from then on: there are many chats, and a command without the
  * session's name does not know who it is for.
  */
-export type OpenedChat = { id: SessionId, state: SessionState, 
+export type OpenedChat = { id: SessionId, additionalFolders: Array<string>, state: SessionState, 
 /**
  * The chat's MCP servers, for the same reason as the state: they start
  * connecting when the session does, before the window listens.

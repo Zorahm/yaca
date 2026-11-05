@@ -4,7 +4,7 @@
 //! own: the client under test starts a process and talks to its standard
 //! streams, and `cargo test` builds examples next to the test binaries.
 //!
-//! It "understands" one thing: a line containing `BROKEN` is an error. Every
+//! A line containing `BROKEN` is an error; `WARN` produces a warning. Every
 //! other answer is canned, and says enough about the request to check that the
 //! client asked what it meant to.
 //!
@@ -18,6 +18,7 @@
 //!   (pull diagnostics) and say so in its capabilities.
 //! * `--crash-on-hover` — exit when asked for a hover, mid-session.
 //! * `--crash` — say why on standard error and exit before the handshake.
+//! * `--stall-on-hover` — mark the request on disk and stop answering it.
 
 use std::io::{BufRead, Write};
 
@@ -117,6 +118,10 @@ fn main() {
                 { "uri": uri, "range": at(2, 4) },
             ]),
             "textDocument/hover" => {
+                if flag == "--stall-on-hover" {
+                    std::fs::write("hover-started", "").unwrap();
+                    std::thread::sleep(std::time::Duration::from_secs(60));
+                }
                 if flag == "--crash-on-hover" {
                     eprintln!("hover is not implemented");
                     std::process::exit(5);
@@ -181,18 +186,20 @@ fn publish(flag: &str, uri: &str, text: &str) {
     }));
 }
 
-/// An error on every line that says `BROKEN`.
+/// Error and warning reports let post-edit checks exercise both severities.
 fn broken(text: &str) -> Vec<Value> {
     text.lines()
         .enumerate()
-        .filter(|(_, line)| line.contains("BROKEN"))
+        .filter(|(_, line)| line.contains("BROKEN") || line.contains("WARN"))
         .map(|(n, line)| {
-            let character = line.find("BROKEN").unwrap_or(0);
+            let error = line.contains("BROKEN");
+            let token = if error { "BROKEN" } else { "WARN" };
+            let character = line.find(token).unwrap_or(0);
             json!({
                 "range": { "start": { "line": n, "character": character },
-                           "end": { "line": n, "character": character + 6 } },
-                "severity": 1, "source": "fixture", "code": "E1",
-                "message": "this line is BROKEN",
+                           "end": { "line": n, "character": character + token.len() } },
+                "severity": if error { 1 } else { 2 }, "source": "fixture", "code": if error { "E1" } else { "W1" },
+                "message": if error { "this line is BROKEN" } else { "this line has a warning" },
             })
         })
         .collect()

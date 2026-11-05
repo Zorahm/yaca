@@ -381,10 +381,11 @@ pub struct ShadowSettings {
 }
 
 impl Settings {
-    /// What a turn may spend when the project does not say. Matches the
-    /// subagent's ceiling: a task that needs more went round in circles or was
-    /// too wide to be one turn, and the human's "continue" costs one message.
-    pub const DEFAULT_MAX_STEPS: u32 = 100;
+    /// What a turn may spend when the project does not say: high enough that a
+    /// long task runs to the end without a "continue" every hundred steps. The
+    /// repeat check (`session/guard.rs`) is what stops a turn going round in
+    /// circles, so the ceiling does not have to be tight.
+    pub const DEFAULT_MAX_STEPS: u32 = 500;
 
     /// Reads the file, or returns the defaults when there is none.
     pub fn load(root: &Path) -> Result<Settings, CoreError> {

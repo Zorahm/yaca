@@ -13,6 +13,7 @@
 //! load-bearing: losing this file costs a list of remembered paths and a
 //! theme, and both are one click to set again.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -29,6 +30,7 @@ const FILE: &str = "settings.json";
 pub struct AppSettings {
     /// Projects the sidebar knows about, most recently opened first.
     projects: Vec<PathBuf>,
+    project_details: BTreeMap<PathBuf, crate::project_entries::ProjectDetails>,
     /// What the field above used to be: one remembered project, back when the
     /// shell held one at a time. Read once on load and folded into the list,
     /// never written again — an update should not cost the human the project
@@ -90,6 +92,19 @@ impl AppSettings {
     /// forgetting a project is a window action, not a change to the disk.
     pub fn forget_project(&mut self, path: &Path) {
         self.projects.retain(|known| known != path);
+        self.project_details.remove(path);
+    }
+
+    pub fn project_details(&self, path: &Path) -> crate::project_entries::ProjectDetails {
+        self.project_details.get(path).cloned().unwrap_or_default()
+    }
+
+    pub fn set_project_details(
+        &mut self,
+        path: PathBuf,
+        details: crate::project_entries::ProjectDetails,
+    ) {
+        self.project_details.insert(path, details);
     }
 
     pub fn prefs(&self) -> &Preferences {

@@ -8,8 +8,8 @@
  * Dialog behaviour belongs to Radix, as for the panels (§1.1): focus trap, `Esc`, roles (§14).
  * The zoom arithmetic is in `zoom.ts`; here there are only gestures.
  *
- * The picture comes from the core whole, as a `data:` address: 320-point thumbnails are too
- * small for looking closely, and the webview does not read the disk.
+ * Full images use core data addresses or bounded delivery URLs: thumbnails are too
+ * small for looking closely, and the webview has no general access to the disk.
  */
 
 import {
@@ -36,6 +36,7 @@ import {
 } from "react";
 
 import { imageFull } from "../../core/client";
+import { sentImage } from "../../core/sentImage";
 import { useBrowserCover } from "../browser/cover";
 import { t } from "../../i18n";
 import { plainPath } from "../format";
@@ -301,7 +302,7 @@ function Viewer({
           onKeyDown={onKeyDown}
         >
           <header className="viewer-head" onClick={closeOnBare}>
-            <Dialog.Title className="viewer-title">{plainPath(path)}</Dialog.Title>
+            <Dialog.Title className="viewer-title">{sentImage(path)?.name ?? plainPath(path)}</Dialog.Title>
             <Dialog.Close
               className="top-icon"
               aria-label={t("common.close")}

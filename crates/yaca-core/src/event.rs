@@ -126,6 +126,9 @@
 //! text travels in the event, so a reopened session shows what was shown then
 //! and not what the file holds now.
 //!
+//! `Send` adds [`AgentEvent::FileSent`]: a durable delivery with MIME, size,
+//! digest and display metadata. File bodies stay out of the model context.
+//!
 //! And the interface slice adds [`AgentEvent::UserMessage`]. §5.1 draws what
 //! the human said, and §9 reopens a session by replaying this journal: without
 //! it a reopened session is the agent talking to itself. The text is written
@@ -329,6 +332,9 @@ pub enum AgentEvent {
         total: u32,
         text: String,
     },
+
+    /// A file delivered by `Send`, replayable without the original source.
+    FileSent { file: crate::sent::SentFile },
 
     /// `exit_plan_mode`: show the plan and wait until the human picks a mode (§7.1).
     #[serde(rename_all = "camelCase")]
@@ -612,6 +618,7 @@ impl AgentEvent {
             AgentEvent::RetryScheduled { .. } => "retryScheduled",
             AgentEvent::StateChanged { .. } => "stateChanged",
             AgentEvent::HookReported { .. } => "hookReported",
+            AgentEvent::FileSent { .. } => "fileSent",
         }
     }
 }

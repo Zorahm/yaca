@@ -14,9 +14,11 @@ mod prefs;
 mod plugins;
 mod profile;
 mod project;
+mod project_entries;
 mod providers;
 mod remote;
 mod routing;
+mod sent;
 mod settings;
 mod startup;
 mod state;
@@ -99,12 +101,18 @@ fn chat_root() -> Result<String, String> {
 /// session's journal at once — otherwise the §9 list would pile up an empty
 /// entry for every project in which nothing was asked.
 #[tauri::command]
-fn add_project(path: String) -> Result<Vec<String>, String> {
+fn add_project(app: tauri::AppHandle, path: String) -> Result<Vec<String>, String> {
     let path = project_path(&path)?;
     let dir = config_dir()?;
     let mut settings = AppSettings::load(&dir);
-    settings.remember_project(path);
+    settings.remember_project(path.clone());
     settings.save(&dir).map_err(|e| e.to_string())?;
+    let lsps = app.state::<AppState>().lsps(&dir);
+    tauri::async_runtime::spawn_blocking(move || {
+        if let Err(why) = lsps.project(&path) {
+            eprintln!("warning: {why}");
+        }
+    });
     Ok(listed(&settings))
 }
 
@@ -112,13 +120,15 @@ fn add_project(path: String) -> Result<Vec<String>, String> {
 /// project is an action of the window, not an edit of the disk, and the §9
 /// journals stay in the app's chats folder.
 #[tauri::command]
-fn forget_project(path: String) -> Result<Vec<String>, String> {
+fn forget_project(app: tauri::AppHandle, path: String) -> Result<Vec<String>, String> {
     // Without `project_path`: a project whose folder is gone must be forgotten
     // too, or the vanished folder would stay in the list forever.
     let dir = config_dir()?;
     let mut settings = AppSettings::load(&dir);
-    settings.forget_project(&PathBuf::from(path));
+    let path = PathBuf::from(path);
+    settings.forget_project(&path);
     settings.save(&dir).map_err(|e| e.to_string())?;
+    app.state::<AppState>().lsps(&dir).forget(&path);
     Ok(listed(&settings))
 }
 
@@ -132,6 +142,7 @@ fn forget_project(path: String) -> Result<Vec<String>, String> {
 #[serde(rename_all = "camelCase")]
 pub struct OpenedChat {
     pub id: SessionId,
+    pub additional_folders: Vec<String>,
     pub state: SessionState,
     /// The chat's MCP servers, for the same reason as the state: they start
     /// connecting when the session does, before the window listens.
@@ -154,6 +165,7 @@ pub struct OpenedChat {
 #[serde(rename_all = "camelCase")]
 pub struct AttachedChat {
     pub id: SessionId,
+    pub additional_folders: Vec<String>,
     /// The project the window opened the chat in.
     pub project: String,
     /// The bridge this snapshot belongs to; frames of any other are not folded.
@@ -178,6 +190,10 @@ async fn open_project(
     // between is in one of the two: this list or the next frame.
     Ok(OpenedChat {
         id: handle.id().clone(),
+        additional_folders: handle
+            .meta()
+            .map(|meta| meta.additional_roots)
+            .unwrap_or_default(),
         state: handle.state(),
         mcp: handle.mcp(),
         lsp: handle.lsp(),
@@ -223,6 +239,11 @@ async fn attach_chats(
 
         attached.push(AttachedChat {
             id: chat.handle.id().clone(),
+            additional_folders: chat
+                .handle
+                .meta()
+                .map(|meta| meta.additional_roots)
+                .unwrap_or_default(),
             project: chat.project,
             epoch: chat.epoch,
             events: yaca_remote::frame::coalesce(events),
@@ -566,6 +587,20 @@ pub fn run() {
     profile::adopt(&context.config().identifier);
 
     tauri::Builder::default()
+        .register_asynchronous_uri_scheme_protocol("sent", |ctx, request, responder| {
+            if ctx.webview_label() != "main" {
+                responder.respond(
+                    tauri::http::Response::builder()
+                        .status(403)
+                        .body(Vec::<u8>::new())
+                        .unwrap_or_default(),
+                );
+                return;
+            }
+            tauri::async_runtime::spawn_blocking(move || {
+                responder.respond(sent::response(request))
+            });
+        })
         .plugin(tauri_plugin_opener::init())
         // The update itself: the check is the core's (`update`), the download,
         // the signature and the install are the plugin's.
@@ -592,6 +627,19 @@ pub fn run() {
             if let Ok(dir) = config_dir() {
                 app.state::<AppState>()
                     .set_prefs(AppSettings::load(&dir).prefs().clone());
+                let lsps = app.state::<AppState>().lsps(&dir);
+                let projects: Vec<_> = AppSettings::load(&dir)
+                    .projects()
+                    .into_iter()
+                    .map(std::path::Path::to_path_buf)
+                    .collect();
+                tauri::async_runtime::spawn_blocking(move || {
+                    for project in projects {
+                        if let Err(why) = lsps.project(&project) {
+                            eprintln!("warning: {why}");
+                        }
+                    }
+                });
                 // The office skills Yaca ships with, into the human's own
                 // folder. A folder that cannot be written is not a reason to
                 // refuse to start: the chats work, only without the guides.
@@ -610,6 +658,8 @@ pub fn run() {
         .on_window_event(tray::on_window_event)
         .invoke_handler(only_the_window(tauri::generate_handler![
             projects,
+            project_entries::project_entries,
+            project_entries::save_project_entry,
             chat_root,
             add_project,
             forget_project,
@@ -654,6 +704,8 @@ pub fn run() {
             attachment_look,
             installed_shells,
             image_full,
+            sent::sent_preview,
+            sent::save_sent_file,
             stash_image,
             providers::discover_models,
             providers::set_api_key,

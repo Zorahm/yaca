@@ -103,6 +103,7 @@ fn a_subagent_has_the_agents_tools_less_the_agents_own() {
                 "AskUser",
                 "SetTitle",
                 "SendText",
+                "Send",
                 "SearchMessage",
                 "ExtractMessage",
             ]
@@ -132,6 +133,17 @@ fn schema_order_is_stable_otherwise_prompt_cache_is_invalidated() {
     let mut sorted = a.clone();
     sorted.sort();
     assert_eq!(a, sorted);
+}
+
+#[test]
+fn send_is_capitalized_and_requires_only_a_path_in_both_profiles() {
+    let registry = ToolRegistry::standard();
+    for profile in Profile::ALL {
+        let schemas = registry.schemas(Intent::Agent, *profile);
+        let schema = schemas.iter().find(|s| s.name == "Send").unwrap();
+        assert_eq!(schema.input_schema["required"], json!(["path"]));
+        assert!(registry.get("send", Intent::Agent, *profile).is_none());
+    }
 }
 
 #[test]

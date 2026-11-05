@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
-use super::format::render_diagnostics;
+use super::format::{render_diagnostics, severity};
 use super::hub::Lsp;
 
 /// How long an edit waits for the server's verdict. Longer is a model idle
@@ -25,7 +25,7 @@ const MESSAGE_CHARS: usize = 300;
 
 impl Lsp {
     /// The note to add to an edit's result, or `None` when there is nothing
-    /// to say: no server for the file, no server up, no errors.
+    /// to say: no server for the file or no server up.
     ///
     /// `shown` is how the feed names the file.
     pub async fn after_edit(
@@ -46,19 +46,21 @@ impl Lsp {
         let wait = if changed { WAIT } else { Duration::ZERO };
         let (items, arrived) = client.diagnostics(&uri, before, wait, cancel).await;
 
-        if !arrived && changed {
+        if !arrived && (changed || before == 0) {
             return Some(format!(
                 "Diagnostics from {name} did not arrive within {} s: server has not replied yet. \
                  Request them via Lsp (action: diagnostics).",
                 WAIT.as_secs()
             ));
         }
-        let (listed, rest) = render_diagnostics(&items, shown, path, 1, MAX_LISTED, MESSAGE_CHARS);
-        if listed.is_empty() {
-            return None;
-        }
-        let total = listed.lines().count() + rest;
-        let mut note = format!("Diagnostics from {name}: {total} errors\n{listed}");
+        let errors = items.iter().filter(|item| severity(item) == 1).count();
+        let warnings = items.iter().filter(|item| severity(item) == 2).count();
+        let (listed, rest) = render_diagnostics(&items, shown, path, 2, MAX_LISTED, MESSAGE_CHARS);
+        // Counts describe the complete report, even when messages span several
+        // lines or the listing is capped. A clean report is evidence of a check.
+        let mut note = format!(
+            "Diagnostics from {name}: {errors} errors, {warnings} warnings in {shown}\n{listed}"
+        );
         if rest > 0 {
             note.push_str(&format!("[and {rest} more]\n"));
         }

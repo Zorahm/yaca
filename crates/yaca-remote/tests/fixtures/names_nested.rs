@@ -144,6 +144,8 @@ pub(crate) fn lsp_status_name(status: &LspStatus) -> &'static str {
         LspStatus::Ready => "ready",
         LspStatus::Failed => "failed",
         LspStatus::Disabled => "disabled",
+        LspStatus::Missing => "missing",
+        LspStatus::Installing => "installing",
     }
 }
 

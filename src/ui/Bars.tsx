@@ -72,9 +72,19 @@ export function Notices({
     names: lspFailed,
     note: "notice.lsp_failed",
   } as const;
+  const lspMissing = (feed.lsp ?? []).filter((server) => server.status === "missing").map((server) => server.name);
+  const installId = `lsp-install:${lspMissing.join(",")}`;
 
   return (
     <>
+      {lspMissing.length > 0 && !dismissed.has(installId) && (
+        <div className="bar">
+          <span className="bar-icon"><Warning size={15} /></span>
+          <span className="bar-note">{t("lsp.install_offer", { names: lspMissing.join(", ") })}</span>
+          <button className="btn btn-small" onClick={onOpenLsp}>{t("notice.open")}</button>
+          <button className="bar-close" onClick={() => hide(installId)} aria-label={t("notice.dismiss")}><X size={14} /></button>
+        </div>
+      )}
       {lspBar.names.length > 0 && !dismissed.has(lspBar.id) && (
         <div className="bar" key={lspBar.id}>
           <span className="bar-icon"><Warning size={15} /></span>

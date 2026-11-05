@@ -11,6 +11,8 @@ enum class LspStatus {
     @SerialName("ready") READY,
     @SerialName("failed") FAILED,
     @SerialName("disabled") DISABLED,
+    @SerialName("missing") MISSING,
+    @SerialName("installing") INSTALLING,
 }
 
 /** One language server of the session, as the interface lists it. */
@@ -25,4 +27,5 @@ data class LspServerSummary(
     val reason: String? = null,
     /** How the server introduces itself: `name version`. */
     val label: String? = null,
+    val installation: String? = null,
 )

@@ -1,32 +1,47 @@
-/**
- * Panel data and command calls for the providers panel (§10).
- *
- * Every shell command returns the whole `Providers` — the same "state leaves
- * the core whole" rule the event stream follows — so one list is kept and
- * replaced by whatever a call returns. `list()` is the call that can fail on
- * a broken `providers.json`, and the failure is kept, not swallowed: showing
- * an empty list would claim "no providers" while the truth is that the file
- * did not parse (§0).
- *
- * A save also asks a provider that has no models yet (`save_provider`), and so
- * does a row's own "Ask" (`ask_provider`). Its
- * refusal is not the save failing — the provider is in the file — so the save
- * reports success and the refusal is shown above the list, where the row it
- * is about says "not asked yet".
- */
+/** Provider state comes back whole; lookup failures belong to the provider row. */
 
 import { useCallback, useEffect, useState } from "react";
 
 import {
   providers as api,
+  apiKeySource,
   type ProviderSpec,
   type Providers,
 } from "../../core/client";
 import { t } from "../../i18n";
+import type { KeyState } from "./provider";
 
 export function useProviders() {
   const [data, setData] = useState<Providers | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [keySources, setKeySources] = useState<Record<string, KeyState>>({});
+  const [pollErrors, setPollErrors] = useState<Record<string, string | undefined>>({});
+
+  const reload = useCallback(async () => {
+    try {
+      setData(await api.list());
+      setPollErrors({});
+      setKeySources({});
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (data === null) return;
+    let live = true;
+    void Promise.all(data.list.map(async (spec) => {
+      try {
+        return [spec.id, { kind: await apiKeySource(spec.id) }] as const;
+      } catch {
+        return [spec.id, { kind: "unknown" }] as const;
+      }
+    })).then((sources) => {
+      if (live) setKeySources(Object.fromEntries(sources));
+    });
+    return () => { live = false; };
+  }, [data]);
 
   useEffect(() => {
     let live = true;
@@ -64,6 +79,7 @@ export function useProviders() {
     try {
       const asked = await api.save(spec);
       setData(asked.providers);
+      setPollErrors((now) => ({ ...now, [spec.id]: undefined }));
       setError(
         asked.pollError === null
           ? null
@@ -80,21 +96,15 @@ export function useProviders() {
   }, []);
   const remove = useCallback((id: string) => run(() => api.remove(id)), [run]);
 
-  // The row's own "Ask": the provider is polled where it is listed, and its
-  // refusal is said above the list, like a refusal after a save.
   const ask = useCallback(async (spec: ProviderSpec): Promise<void> => {
     try {
       const asked = await api.ask(spec.id);
       setData(asked.providers);
-      setError(
-        asked.pollError === null
-          ? null
-          : t("prov.ask_failed", { name: spec.displayName, error: asked.pollError }),
-      );
+      setPollErrors((now) => ({ ...now, [spec.id]: asked.pollError ?? undefined }));
     } catch (e) {
-      setError(String(e));
+      setPollErrors((now) => ({ ...now, [spec.id]: String(e) }));
     }
   }, []);
 
-  return { providers: data, error, save, remove, ask };
+  return { providers: data, error, keySources, pollErrors, reload, save, remove, ask };
 }

@@ -4,4 +4,4 @@
  * What state a server is in. The interface draws the list from this and
  * from nothing else.
  */
-export type LspStatus = "idle" | "starting" | "ready" | "failed" | "disabled";
+export type LspStatus = "idle" | "starting" | "ready" | "failed" | "disabled" | "missing" | "installing";

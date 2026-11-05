@@ -22,9 +22,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
-  addProject as rememberProject,
   chooseFiles,
-  chooseFolder,
   chatRoot as getChatRoot,
   enabledPlugins,
   commands,
@@ -34,8 +32,9 @@ import {
   onProviders,
   projectCommands,
   projectSkills,
-  projects as listProjects,
+  projectEntries as listProjects,
   sessions,
+  sendCommand,
   type Command,
   type Effort,
   type ModelInfo,
@@ -44,8 +43,10 @@ import {
   type Preferences,
   type ProcessId,
   type Profile,
+  type ProjectEntry,
 } from "./core/client";
-import { agentsOf } from "./core/agents";
+import { agentsOf, tally } from "./core/agents";
+import { retryAgentMessage } from "./ui/agentState";
 import { touchedFiles, visible } from "./core/feed";
 import { relativeTo } from "./ui/format";
 import { t } from "./i18n";
@@ -57,6 +58,7 @@ import { Composer, type ComposerActions } from "./ui/Composer";
 import { MODES } from "./ui/ModeMenu";
 import { mcpPrompts, withSkills, type MenuCommand } from "./ui/slash";
 import { Home } from "./ui/Home";
+import { ProjectEditor } from "./ui/projects/ProjectEditor";
 import { imageActions } from "./ui/images";
 import { galleryOf } from "./ui/viewer/gallery";
 import { Pictures } from "./ui/viewer/Viewer";
@@ -71,6 +73,8 @@ import { ownTitleBar } from "./core/frame";
 import { setHelpMenu } from "./core/menu";
 import { usePreferences } from "./ui/prefs";
 import { FilePanel } from "./ui/panel/FilePanel";
+import { ArtifactPanel } from "./ui/panel/ArtifactPanel";
+import type { SentFile } from "./core/bindings/SentFile";
 import { PanelFrameContext, type PanelKind } from "./ui/panel/Panel";
 import { CheckpointsPanel } from "./ui/panel/CheckpointsPanel";
 import { AgentsPanel } from "./ui/panel/AgentsPanel";
@@ -189,13 +193,17 @@ export default function App({ prefs }: { prefs: Preferences }) {
 
   const [error, setError] = useState<string | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
-  const [projects, setProjects] = useState<string[]>([]);
+  const [projects, setProjects] = useState<ProjectEntry[]>([]);
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [editingProject, setEditingProject] = useState<ProjectEntry | null>(null);
   const [slashCommands, setSlashCommands] = useState<MenuCommand[]>([]);
   const [draft, setDraft] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile>("code");
   const [chatRoot, setChatRoot] = useState<string | null>(null);
   const [panel, setPanel] = useState<PanelKind | null>(null);
   const [filePanelPath, setFilePanelPath] = useState<string | null>(null);
+  const [artifact, setArtifact] = useState<{ session: string; file: SentFile } | null>(null);
+  const [filePanelLocation, setFilePanelLocation] = useState<{ line: number } | null>(null);
   // The subagents the agents panel opens on: those of the plate last pressed.
   const [agentFocus, setAgentFocus] = useState<string[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -259,6 +267,22 @@ export default function App({ prefs }: { prefs: Preferences }) {
   const project = active?.project ?? homeProject;
   // The conversation's images in order — the viewer pages through them.
   const activeFeed = active?.feed ?? null;
+  const deliveryCursor = useRef<{ session: string | null; id: string | null }>({ session: null, id: null });
+  useEffect(() => {
+    const latest = activeFeed ? [...activeFeed.blocks].reverse().find((block) => block.kind === "sent") : undefined;
+    const file = latest?.kind === "sent" ? latest.file : null;
+    const session = active?.id ?? null;
+    const previous = deliveryCursor.current;
+    deliveryCursor.current = { session, id: file?.id ?? null };
+    // Reopening or switching a chat replays deliveries without stealing the panel.
+    if (!session || previous.session !== session || !file || previous.id === file.id) return;
+    if (file.renderType === "artifact") {
+      setArtifact({ session, file });
+      setFilePanelPath(file.name);
+      setFilePanelLocation(null);
+      setPanel("file");
+    }
+  }, [activeFeed, active?.id]);
   const gallery = useMemo(() => galleryOf(activeFeed), [activeFeed]);
   const refreshCommands = useCallback(() => {
     if (project === null) return setSlashCommands([]);
@@ -281,7 +305,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
     // no place to keep the list, and it is needed before any project is known.
     void listProjects().then((list) => {
       setProjects(list);
-      setDraft((now) => now ?? list[0] ?? null);
+      setDraft((now) => now ?? list[0]?.path ?? null);
     }, failed);
   }, [failed]);
 
@@ -320,7 +344,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
     if (panel !== null) lastPanel.current = panel;
   }, [panel]);
   const togglePanel = useCallback(
-    () => setPanel((now) => (now === null ? lastPanel.current : null)),
+    () => { setAgentFocus([]); setPanel((now) => (now === null ? lastPanel.current : null)); },
     [],
   );
 
@@ -342,26 +366,15 @@ export default function App({ prefs }: { prefs: Preferences }) {
     [chats],
   );
 
-  const addProject = useCallback(async () => {
-    const picked = await chooseFolder(t("home.pick_title"));
-    if (picked === null) return;
-    try {
-      const list = await rememberProject(picked);
-      setProjects(list);
-      // Added means this is where they were headed: the home screen opens in it.
-      setDraft(list[0] ?? picked);
-      chats.activate(null);
-    } catch (e) {
-      failed(e);
-    }
-  }, [chats, failed]);
+  const addProject = useCallback(() => setCreatingProject(true), []);
 
   const forgetProject = useCallback(
     async (project: string) => {
       try {
-        const list = await dropProject(project);
+        await dropProject(project);
+        const list = await listProjects();
         setProjects(list);
-        setDraft((now) => (now === project ? (list[0] ?? null) : now));
+        setDraft((now) => (now === project ? (list[0]?.path ?? null) : now));
       } catch (e) {
         failed(e);
       }
@@ -427,8 +440,17 @@ export default function App({ prefs }: { prefs: Preferences }) {
     },
     editSummary: (text) => send(commands.editSummary(text)),
     // The file panel also opens from a file name in the action row.
-    openFile: (path) => {
+    openFile: (path, line) => {
+      setArtifact(null);
       setFilePanelPath(path);
+      setFilePanelLocation(line === undefined ? null : { line });
+      setPanel("file");
+    },
+    openArtifact: (file) => {
+      if (!active) return;
+      setArtifact({ session: active.id, file });
+      setFilePanelPath(file.name);
+      setFilePanelLocation(null);
       setPanel("file");
     },
     openAgents: (ids) => {
@@ -503,6 +525,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
       const at = paths.indexOf(filePanelPath ?? "");
       const next = Math.min(paths.length - 1, Math.max(0, at === -1 ? 0 : at + delta));
       setFilePanelPath(paths[next]);
+      setFilePanelLocation(null);
     },
     [panel, filePanelPath, active],
   );
@@ -541,6 +564,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
   const sidebar = (collapsed: boolean) => (
     <Sidebar
       projects={projects}
+      onAddProject={addProject}
+      onEditProject={setEditingProject}
       profile={profile}
       chatRoot={chatRoot}
       onProfile={(next) => {
@@ -589,10 +614,22 @@ export default function App({ prefs }: { prefs: Preferences }) {
     />
   );
 
-  const settingsView = settingsAt !== null ? (
+  const settingsView = <>
+    {(creatingProject || editingProject !== null) && <ProjectEditor entry={editingProject} onClose={() => { setCreatingProject(false); setEditingProject(null); }} onSaved={(list, path) => {
+      setProjects(list);
+      if (creatingProject) {
+        setDraft(path);
+        chats.activate(null);
+      }
+    }} />}
+    {settingsAt !== null ? (
     <div className="settings-overlay">
       <Settings
         prefs={livePrefs}
+        projects={projects}
+        currentProject={project}
+        onProjectsChanged={setProjects}
+        currentProvider={active?.feed.state?.provider}
         section={settingsAt}
         onSection={setSettingsAt}
         onClose={closeSettings}
@@ -601,7 +638,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
         startOnList={settingsList}
       />
     </div>
-  ) : null;
+  ) : null}
+  </>;
 
   // The state arrives together with the open chat, so `null` here means exactly
   // one thing: there is no open chat and the window is on the home screen.
@@ -623,6 +661,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
           commands={slashCommands}
           onRefreshCommands={refreshCommands}
           project={homeProject}
+          projectEntry={projects.find((entry) => entry.path === homeProject) ?? null}
           profile={profile}
           error={error}
           onStart={(path, text, startup, attachments) =>
@@ -666,6 +705,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
         <TopBar
           title={active.title}
           projectRoot={state.projectRoot}
+          projectEntry={projects.find((entry) => entry.path === active.project) ?? null}
+          folders={[state.projectRoot, ...(active.additionalFolders ?? [])]}
           canGoBack={humanKeys.length > 0 && active.at !== 0}
           canGoForward={active.at >= 0 && active.at < humanKeys.length - 1}
           onBack={() => jumpTo(active.at <= 0 ? humanKeys.length - 1 : active.at - 1)}
@@ -694,7 +735,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
           }
         />
 
-        <Feed feed={active.feed} actions={feedActions} ref={feedJump} />
+        <Feed feed={active.feed} actions={feedActions} ref={feedJump} checkpointPreviewInPanel={panel === "checkpoints"} />
 
         <div className="bars">
           <Notices
@@ -750,8 +791,9 @@ export default function App({ prefs }: { prefs: Preferences }) {
             current: panel,
             filePath: filePanelPath,
             hasAgents: agentsOf(active.feed).length > 0,
-            onSwitch: setPanel,
-            onClose: () => setPanel(null),
+            agentsStatus: tally(agentsOf(active.feed)),
+            onSwitch: (next) => { setAgentFocus([]); setPanel(next); },
+            onClose: () => { setAgentFocus([]); setPanel(null); },
             width: panelWidth,
             bounds: panelLimits,
             initialWidth: panelInitial,
@@ -767,9 +809,13 @@ export default function App({ prefs }: { prefs: Preferences }) {
             />
           )}
 
-          {panel === "file" && filePanelPath !== null && (
+          {panel === "file" && artifact?.session === active.id && project !== null && (
+            <ArtifactPanel key={artifact.file.id} file={artifact.file} root={project} />
+          )}
+          {panel === "file" && artifact?.session !== active.id && filePanelPath !== null && (
             <FilePanel
               path={filePanelPath}
+              location={filePanelLocation}
               feed={active.feed}
               onRead={(path) => send(commands.readFileView(path))}
             />
@@ -790,14 +836,18 @@ export default function App({ prefs }: { prefs: Preferences }) {
             <LspPanel
               servers={active.feed.lsp}
               onRestart={(server) => send(commands.restartLspServer(server))}
+              onEnable={(server, enabled) => send(commands.setLspServerEnabled(server, enabled))}
+              onInstall={(server) => send(commands.installLspServer(server))}
             />
           )}
 
           {panel === "agents" && (
             <AgentsPanel
+              key={active.id}
               feed={active.feed}
               focus={agentFocus}
               onOpenFile={feedActions.openFile}
+              onRetry={(row) => sendCommand(active.id, commands.send(retryAgentMessage(row)))}
             />
           )}
 

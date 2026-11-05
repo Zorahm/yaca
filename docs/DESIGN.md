@@ -232,6 +232,13 @@ sidebar can be hidden, and the window stays pinned to the `1fr` track. The windo
 is a grid of top bar (48px), feed (`1fr`), then notification bars and the composer
 (`auto` rows, so a bar appearing does not move the feed).
 
+Project rows show the chosen name and a folder count when there is more than
+one. A visible settings button opens the same editor used by project settings;
+the projects heading has a create button. The editor groups the name and folder
+list, marks the primary folder, and keeps full paths readable on narrow screens.
+Settings select projects by name. The home screen lists all project folders;
+the chat header's count and tooltip use the folders recorded for that chat.
+
 The conversation column is `--measure`, 820px: messages, notices, the composer
 and its row share one edge. Row height is 34px, bars 40px, buttons 32px (28px
 small, 24px inside a row). An opened action row scrolls past 380px. The diff
@@ -248,8 +255,35 @@ button is labelled "Hide to system tray" to make its effect explicit.
 Once a chat has background commands, the end of the feed, beside the turn's
 working/worked status, shows a direct Processes button
 with the running count, or the finished count when none remain running. It stays
-visible after commands finish. Opening the process panel selects a running command
-or the latest finished one when no row was selected, so output is visible at once.
+visible after commands finish. The process panel shows spaced cards with the launch
+caption when available, the full command, status and duration. Output expands inside
+its own card on request; only that command's output is subscribed. Background launches
+and pending BashWait calls stay out of the feed's action groups.
+
+Checkpoint cards use the same spacing, newest first. Each shows its reason,
+date and time, the command or adjacent human message, and the snapshot's file
+count. Expanding a card previews the files a rollback would create, change or
+delete. The rollback button is separate from inspection and appears only when
+there are changes to restore.
+While the checkpoint panel is open, its preview is shown there without a second
+confirmation appearing in the feed.
+
+The LSP panel uses the same spaced cards, with server status, supported file
+extensions, the launch command and explicit install, restart and power controls.
+Missing servers for the project's languages raise an installation offer above
+the composer. Installation shows its command before it is started. Servers are
+shared by chats in the same working tree and start with the application for
+remembered projects; manual switches are remembered per project.
+
+The agents panel starts collapsed and opens one card at a time. Its summary and
+filters keep active work and failed reports easy to find; large lists also get
+search. A running card names its current child action. A completed card puts its
+report first, then folded actions and the original task. Actions are unframed log
+rows, limited to the most recent three until expanded. Failure reasons are
+localized, with technical output kept in a separate log. Retry submits the exact
+task and its agent/model options to the lead agent through the normal message
+path. The tab shows both active work and failure indicators, and report file-line
+references open the file panel at that line.
 
 **Narrow window** (below `NARROW` = 680px in `src/ui/resize.ts`, which the CSS
 repeats as `max-width: 679.98px`): a phone, or a window dragged that thin. The
@@ -295,6 +329,14 @@ a permission request. Scrollbars are 10px with an 8px-rounded thumb.
   answers. There is one confirmation, before the write.
 - **Action group and rows.** Collapsed rows of 34px; a pulsing mark while running,
   a tick when done. An opened row shows its content in a `sunk` well.
+  Post-edit LSP diagnostics use a counted badge: brick for errors, amber for
+  warnings, neutral for pending or confirmed clean checks. The row stays neutral.
+  Diagnostics sit in a framed well inside the expanded row, with copy and file-line
+  links. Messages wrap with a hanging indent and show the compiler code first;
+  diagnostics outside added lines are labelled without implying when they arose.
+  Affected new-side diff lines carry a separate severity dot and a wavy underline
+  at the reported column. A folded group keeps
+  the counted badge without a separate notice card.
 - **Wells.** Output, diff and inline code sit on `sunk`, mono, 6px radius.
 - **Diff.** 22px lines (20px compact), `add`/`del` washes, 52px gutter.
 - **Notices and bars.** `note-bg` with `note-line` for warnings; errors in `err`.
@@ -305,6 +347,14 @@ a permission request. Scrollbars are 10px with an 8px-rounded thumb.
 - **Focus.** A 2px accent outline with 2px offset on everything interactive.
 - **Preferences** applied as attributes on `<html>`: `data-theme="dark"` for
   night, `data-compact="on"`, `data-line-numbers="off"`.
+- **Providers.** Rows group configured connections above providers awaiting a
+  key. Each row names its readiness, key source, model count and last lookup
+  time; failures retain their reason beside the row. Protocol chips sit beside
+  names, hosts omit the scheme and path, and custom providers have a stable
+  initial avatar. Fixed action slots hold refresh or the next setup action,
+  a custom provider's menu and the details chevron. Deletion takes confirmation
+  in that menu. Search appears above ten providers, and Refresh all skips
+  connections missing a required key. Local addresses carry a server reminder.
 
 ## Do's and Don'ts
 

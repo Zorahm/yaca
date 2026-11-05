@@ -20,11 +20,13 @@ import { FileText, X } from "@phosphor-icons/react";
 import {
   createContext,
   useContext,
+  useEffect,
+  useRef,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
 
-import { t, type Key } from "../../i18n";
+import { t, tp, type Key } from "../../i18n";
 import { baseName } from "../format";
 import type { Bounds } from "../resize";
 import { Splitter } from "../Splitter";
@@ -41,6 +43,7 @@ export type PanelFrame = {
   filePath: string | null;
   /** The conversation has sent subagents: only then is there an `agents` tab. */
   hasAgents: boolean;
+  agentsStatus?: { running: number; failed: number };
   onSwitch: (kind: PanelKind) => void;
   onClose: () => void;
   width: number;
@@ -75,6 +78,10 @@ export function Panel({
   children: ReactNode;
 }) {
   const frame = useContext(PanelFrameContext);
+  const tabs = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    tabs.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [frame?.current]);
   // A file opened wide covers the browser's column too.
   useBrowserCover(full);
   // A panel is only ever drawn by the window, which provides the frame.
@@ -96,9 +103,14 @@ export function Panel({
         (kind === "file" ? " panel-tab-file" : "")
       }
       title={title}
+      aria-label={kind === "agents" ? [label, frame.agentsStatus?.running ? tp("agents.running", frame.agentsStatus.running) : "", frame.agentsStatus?.failed ? tp("agents.failed", frame.agentsStatus.failed) : ""].filter(Boolean).join(" · ") : undefined}
       onClick={() => kind !== frame.current && frame.onSwitch(kind)}
     >
       {label}
+      {kind === "agents" && frame.agentsStatus && <>
+        {frame.agentsStatus.running > 0 && <span className="spinner panel-agent-spinner" aria-hidden="true" />}
+        {frame.agentsStatus.failed > 0 && <span className="panel-agent-error" aria-hidden="true" />}
+      </>}
     </button>
   );
 
@@ -136,7 +148,7 @@ export function Panel({
       )}
       <div className="panel">
         <header className="panel-head">
-          <div className="panel-tabs" role="tablist">
+          <div className="panel-tabs" role="tablist" ref={tabs}>
             {TABS.filter(
               // The open tab stays listed even with nothing behind it: another
               // chat was switched to, and the panel says so itself.

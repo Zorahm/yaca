@@ -203,13 +203,49 @@ async fn an_edit_reports_what_it_broke_in_the_same_result() {
     let (text, is_error) = tool_result_of(&provider, "t2");
     assert!(!is_error, "{text}");
     assert!(
-        text.contains("Diagnostics from fixture: 1 errors"),
+        text.contains("Diagnostics from fixture: 1 errors, 0 warnings in b.zz"),
         "{text}"
     );
     assert!(
         text.contains("error b.zz:2:9 this line is BROKEN"),
         "{text}"
     );
+}
+
+#[tokio::test]
+async fn post_edit_checks_distinguish_clean_files_from_warnings() {
+    for (content, counts) in [
+        ("fine\n", "0 errors, 0 warnings"),
+        ("WARN\n", "0 errors, 1 warnings"),
+        ("BROKEN\nWARN\n", "1 errors, 1 warnings"),
+    ] {
+        let dir = source();
+        let provider = Arc::new(MockProvider::new(vec![
+            lsp(
+                "t1",
+                json!({ "action": "symbols", "path": "a.zz", "description": "Overview" }),
+            ),
+            Turn::Events(calls(&[(
+                "t2",
+                "Write",
+                json!({ "path": "b.zz", "content": content }),
+            )])),
+            Turn::Events(script_text("Done.")),
+        ]));
+        let handle = open(&dir, provider.clone(), Some(""));
+        let mut rx = handle.subscribe();
+        ask(&handle, "edit").await;
+        turn(&mut rx).await;
+        let (text, is_error) = tool_result_of(&provider, "t2");
+        assert!(!is_error, "{text}");
+        assert!(
+            text.contains(&format!("Diagnostics from fixture: {counts} in b.zz")),
+            "{text}"
+        );
+        if content.contains("WARN") {
+            assert!(text.contains("warning b.zz:"), "{text}");
+        }
+    }
 }
 
 #[tokio::test]

@@ -1,0 +1,22 @@
+.sent-file { display: grid; gap: 8px; }
+.sent-card { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-l); background: var(--surface); }
+.sent-details { display: grid; gap: 2px; flex: 1; min-width: 100px; overflow-wrap: anywhere; }
+.sent-details span, .sent-caption { font-size: 12px; color: var(--muted); }
+.sent-picture { display: block; max-width: 100%; padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-l); background: var(--sunk); cursor: zoom-in; }
+.sent-picture img { display: block; max-width: 100%; max-height: 480px; object-fit: contain; }
+.sent-file video { width: 100%; max-height: 480px; }
+.sent-file audio { width: 100%; }
+.sent-hash { font: 11px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.sent-error { color: var(--err); overflow-wrap: anywhere; }
+.sent-caption { margin: 0; white-space: pre-wrap; }
+.artifact-toolbar { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 10px; border-bottom: 1px solid var(--line); }
+.artifact-toolbar [role="tablist"] { display: flex; gap: 4px; }
+.artifact-toolbar [aria-selected="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+.artifact-body { display: flex; flex: 1; min-height: 0; flex-direction: column; overflow: auto; padding: 12px; gap: 12px; }
+.artifact-frame { flex: 1; min-height: 60vh; width: 100%; border: 1px solid var(--line); background: var(--surface); }
+.artifact-image { max-width: 100%; object-fit: contain; }
+.artifact-text { white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.6 var(--sans); }
+.artifact-table { overflow: auto; }
+.artifact-table table { border-collapse: collapse; width: 100%; }
+.artifact-table td, .artifact-table th { border: 1px solid var(--line); padding: 6px 10px; text-align: start; white-space: pre-wrap; }
+.artifact-table th button { color: var(--ink); background: var(--sunk); border: 0; cursor: pointer; font: inherit; width: 100%; text-align: start; }

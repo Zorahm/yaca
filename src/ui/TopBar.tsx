@@ -25,12 +25,14 @@ import { ArrowLeft, ArrowRight, Globe, List } from "@phosphor-icons/react";
 import { useState } from "react";
 
 import { t } from "../i18n";
-import { baseName } from "./format";
+import { baseName, plainPath } from "./format";
 import { PanelLeft, PanelRight } from "./yaca-icons";
 
 export function TopBar({
   title,
   projectRoot,
+  projectEntry,
+  folders,
   canGoBack,
   canGoForward,
   onBack,
@@ -46,6 +48,8 @@ export function TopBar({
 }: {
   title: string;
   projectRoot: string;
+  projectEntry?: import("../core/client").ProjectEntry | null;
+  folders?: string[];
   canGoBack: boolean;
   canGoForward: boolean;
   onBack: () => void;
@@ -133,8 +137,9 @@ export function TopBar({
         />
       )}
 
-      <span className="top-project" title={projectRoot}>
-        {baseName(projectRoot)}
+      <span className="top-project" title={(folders ?? [projectRoot]).map(plainPath).join("\n")}>
+        {projectEntry?.name ?? baseName(projectRoot)}
+        {folders && folders.length > 1 && <span className="side-project-count"> · {folders.length}</span>}
       </span>
 
       <div className="top-gap" />

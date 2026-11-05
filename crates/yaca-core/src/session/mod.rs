@@ -176,6 +176,9 @@ pub struct SessionConfig {
     /// the core happens to run on; the applications turn it on, like they
     /// fill `mcp_servers`.
     pub lsp_autodetect: bool,
+    /// Application lifetime language servers; also keeps worktree roots separate.
+    /// When present, reads global declarations itself instead of `lsp_servers`.
+    pub lsp_registry: Option<Arc<crate::lsp::runtime::Registry>>,
     /// The human's own skill directories (`skills::user_dirs`), scanned after
     /// the project's. Application-level like `mcp_servers`: the applications
     /// fill it, and a test session sees only the project's skills.
@@ -222,6 +225,7 @@ impl SessionConfig {
             mcp_approvals: None,
             lsp_servers: BTreeMap::new(),
             lsp_autodetect: false,
+            lsp_registry: None,
             user_skills: Vec::new(),
             user_agents: Vec::new(),
             mcp_tokens: crate::mcp::oauth::TokenStore::default(),
@@ -495,9 +499,9 @@ struct Shared {
     /// The MCP servers of this session (`mcp`). Shared: reconnecting is a
     /// command from the panel, and a tool call reaches its server through here.
     mcp: Mcp,
-    /// The language servers of this session (`lsp`). Started by the first
-    /// call that needs one.
+    /// The language servers for this session's working tree.
     lsp: Lsp,
+    _lsp_listener: Option<Arc<EventSink>>,
     /// Where this session's skills are found (`skills`). Scanned again by
     /// every `Skill` call and `/name`; the prompt's catalog is read once.
     skills: Arc<crate::skills::SkillRoots>,
@@ -760,13 +764,22 @@ pub fn spawn(
             config.mcp_tokens.clone(),
         )
     };
-    let lsp = Lsp::new(
-        crate::lsp::config::resolve(&config.lsp_servers, |program| {
-            config.lsp_autodetect && crate::lsp::config::on_path(program)
-        }),
-        ws.root(),
-        events.clone(),
-    );
+    let (lsp, lsp_listener) = if let Some(registry) = &config.lsp_registry {
+        let lsp = registry.project(ws.root())?;
+        let listener = lsp.listen(Arc::new(events.clone()));
+        (lsp, Some(listener))
+    } else {
+        (
+            Lsp::new(
+                crate::lsp::config::resolve(&config.lsp_servers, |program| {
+                    config.lsp_autodetect && crate::lsp::config::on_path(program)
+                }),
+                ws.root(),
+                events.clone(),
+            ),
+            None,
+        )
+    };
     let broker = Broker::new(ws.root());
     // Standing rules from the project (§5.7, §10). Neither "Always allow" nor
     // "Always deny" writes here — a rule granted in a hurry does not outlive
@@ -780,6 +793,7 @@ pub fn spawn(
     }
 
     let shared = Arc::new(Shared {
+        _lsp_listener: lsp_listener,
         processes: Processes::new(events.clone()),
         queue: queue::Queue::new(events.clone()),
         // Hard, not optional. §5.8 is not a nicety, and a session that cannot
@@ -1020,6 +1034,10 @@ async fn dispatch(mut rx: mpsc::Receiver<Command>, work: mpsc::Sender<Job>, shar
             // Both return at once: connecting happens in a task of its own.
             Command::ReconnectMcpServer { server } => shared.mcp.reconnect(&server),
             Command::RestartLspServer { server } => shared.lsp.restart(&server),
+            Command::SetLspServerEnabled { server, enabled } => {
+                shared.lsp.set_enabled(&server, enabled)
+            }
+            Command::InstallLspServer { server } => shared.lsp.install(&server),
             Command::LoginMcpServer { server } => shared.mcp.login(&server),
             Command::LogoutMcpServer { server } => shared.mcp.logout(&server),
             Command::AnswerElicitation { request_id, reply } => {

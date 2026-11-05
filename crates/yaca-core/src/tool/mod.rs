@@ -36,6 +36,7 @@ pub mod read_image;
 pub mod rename;
 pub(crate) mod robots;
 pub mod search_message;
+pub mod send;
 pub mod send_text;
 pub mod set_title;
 pub mod skill;
@@ -388,13 +389,14 @@ pub trait Tool: Send + Sync {
 }
 
 /// The tools a subagent is not given: see [`ToolRegistry::delegated`].
-pub(crate) const AGENT_ONLY: [&str; 8] = [
+pub(crate) const AGENT_ONLY: [&str; 9] = [
     "Task",
     "TodoWrite",
     "ExitPlanMode",
     "AskUser",
     "SetTitle",
     "SendText",
+    "Send",
     "SearchMessage",
     "ExtractMessage",
 ];
@@ -436,6 +438,7 @@ impl ToolRegistry {
             Arc::new(todo_write::TodoWrite),
             Arc::new(set_title::SetTitle),
             Arc::new(send_text::SendText),
+            Arc::new(send::Send),
             Arc::new(exit_plan_mode::ExitPlanMode),
             Arc::new(ask_user::AskUser),
             Arc::new(write_file::WriteFile),

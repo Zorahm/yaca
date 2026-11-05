@@ -17,7 +17,21 @@ enum class ContextSource {
     @SerialName("detected_allocated") DETECTED_ALLOCATED,
     /** The local server answered with the model's architectural maximum. */
     @SerialName("detected_maximum") DETECTED_MAXIMUM,
+    @SerialName("hand") HAND,
 }
+
+/** What one source says about a model's numbers: the provider's answer or a person's hand. */
+@Serializable
+data class ModelFacts(
+    val contextMax: Int? = null,
+    val maxOutput: Int? = null,
+    val pricing: Pricing? = null,
+    val supportsEffort: Boolean? = null,
+    val cacheRead: Double? = null,
+    val cacheWrite: Double? = null,
+    val inputPrice: Double? = null,
+    val outputPrice: Double? = null,
+)
 
 /** A model available in the switcher. */
 @Serializable
@@ -35,4 +49,17 @@ data class ModelInfo(
     val contextSource: ContextSource = ContextSource.DEFAULT_GUESS,
     /** Silence is a yes here: a model wrongly taken to see is refused once, while one wrongly taken to be blind never sees a screenshot. */
     val supportsImages: Boolean = true,
+    /** What the provider last answered, kept apart from the numbers above so a hand edit can be undone. */
+    val fetched: ModelFacts? = null,
+    /** What a person set by hand: the numbers above are `override ?? fetched ?? default`. */
+    val overrides: ModelFacts? = null,
+    /** Whether the model is offered in the model switcher. */
+    val enabled: Boolean = true,
+    val pricingByHand: Boolean = false,
+    val byHand: Boolean = false,
+    val supportedParameters: List<String>? = null,
+    val inputModalities: List<String>? = null,
+    val expirationDate: String? = null,
+    val cacheRead: Double? = null,
+    val cacheWrite: Double? = null,
 )

@@ -22,6 +22,7 @@ pub const AGENT_EVENTS: &[&str] = &[
     "todosUpdated",
     "titleSet",
     "textShown",
+    "fileSent",
     "planProposed",
     "fileChanged",
     "fileViewLoaded",
@@ -74,6 +75,8 @@ pub const COMMANDS: &[&str] = &[
     "loginMcpServer",
     "logoutMcpServer",
     "restartLspServer",
+    "setLspServerEnabled",
+    "installLspServer",
 ];
 
 pub const CLIENT_MESSAGES: &[&str] = &["pair", "hello", "request"];
@@ -170,7 +173,15 @@ pub const MCP_STATUSES: &[&str] = &[
     "loggingIn",
 ];
 
-pub const LSP_STATUSES: &[&str] = &["idle", "starting", "ready", "failed", "disabled"];
+pub const LSP_STATUSES: &[&str] = &[
+    "idle",
+    "starting",
+    "ready",
+    "failed",
+    "disabled",
+    "missing",
+    "installing",
+];
 
 pub const TODO_STATUSES: &[&str] = &["pending", "inProgress", "completed"];
 

@@ -44,6 +44,7 @@ struct Chat {
 }
 
 pub struct AppState {
+    lsps: Mutex<Option<Arc<yaca_core::lsp::runtime::Registry>>>,
     chats: Mutex<HashMap<SessionId, Chat>>,
     opened: AtomicU64,
     /// Counts every chat put in or taken out of `chats`. A watch and not a
@@ -69,6 +70,7 @@ pub struct AppState {
 impl AppState {
     pub fn new() -> Self {
         AppState {
+            lsps: Mutex::default(),
             chats: Mutex::default(),
             opened: AtomicU64::new(0),
             changed: watch::channel(0).0,
@@ -76,6 +78,16 @@ impl AppState {
             update: Mutex::default(),
             install: Mutex::default(),
         }
+    }
+
+    pub fn lsps(&self, config: &std::path::Path) -> Arc<yaca_core::lsp::runtime::Registry> {
+        self.lsps
+            .lock()
+            .unwrap()
+            .get_or_insert_with(|| {
+                Arc::new(yaca_core::lsp::runtime::Registry::new(config.to_path_buf()))
+            })
+            .clone()
     }
 
     /// Wakes whenever a chat is opened or closed, by the window or by the remote
