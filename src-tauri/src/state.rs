@@ -60,6 +60,10 @@ pub struct AppState {
     /// The last answer of the update check, so a window opened later (the
     /// settings one) sees what the first window was told.
     update: Mutex<Option<yaca_core::update::UpdateCheck>>,
+    /// How far the install of a newer release has got. Here for the same reason:
+    /// the window that asked is not the one that stays open, and a reload in
+    /// the middle of a download must not lose it.
+    install: Mutex<crate::update::UpdateInstall>,
 }
 
 impl AppState {
@@ -70,6 +74,7 @@ impl AppState {
             changed: watch::channel(0).0,
             prefs: Mutex::default(),
             update: Mutex::default(),
+            install: Mutex::default(),
         }
     }
 
@@ -105,6 +110,14 @@ impl AppState {
 
     pub fn set_update(&self, check: yaca_core::update::UpdateCheck) {
         *self.update.lock().unwrap() = Some(check);
+    }
+
+    pub fn install(&self) -> crate::update::UpdateInstall {
+        self.install.lock().unwrap().clone()
+    }
+
+    pub fn set_install(&self, install: crate::update::UpdateInstall) {
+        *self.install.lock().unwrap() = install;
     }
 
     pub fn chat(&self, id: &SessionId) -> Option<Arc<SessionHandle>> {

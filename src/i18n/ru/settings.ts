@@ -84,7 +84,7 @@ export const settings = {
     "Разговор идёт с тем провайдером, которого вы выбрали сами; ключи лежат в системном хранилище, а перед правками снимается состояние проекта, к которому можно вернуться.",
   "about.updates": "Обновления",
   "about.updates_hint":
-    "Смотрит релизы Yaca на GitHub. Ничего не скачивается и не ставится само.",
+    "Смотрит релизы Yaca на GitHub и по кнопке скачивает и ставит новую версию. Само оно ничего не меняет.",
   "about.update_check": "Проверить",
   "about.update_checking": "Проверяю…",
   "about.update_latest": "Установлена последняя версия.",
@@ -94,6 +94,21 @@ export const settings = {
   "about.update_no_changes": "У релиза нет описания.",
   "about.update_download": "Скачать",
   "about.update_page": "Страница релиза",
+  "about.update_install": "Обновить",
+  "about.update_downloading": "Скачиваю обновление…",
+  "about.update_downloading_percent": "Скачиваю обновление… {percent}%",
+  "about.update_installing": "Устанавливаю и перезапускаю…",
+  "about.update_install_failed": "Не удалось обновить",
+  "about.update_retry": "Повторить",
+  "about.update_busy": "Идёт ход. Обновление прервёт его.",
+  "about.update_busy_do": "Всё равно обновить",
+  "about.update_no_artifact":
+    "В этом релизе нет сборки для вашей системы. Скачайте её со страницы релиза.",
+  "about.update_signature":
+    "Файл обновления не прошёл проверку подписи и не был установлен.",
+  "about.update_dev": "В сборке для разработки обновление недоступно.",
+  "about.update_install_error":
+    "Установка не удалась. Проверьте свободное место и права на папку программы.",
   "about.update_offline": "Не удалось связаться с GitHub. Проверьте соединение.",
   "about.update_rate_limited":
     "GitHub ограничивает запросы с этого адреса. Попробуйте позже.",

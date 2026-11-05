@@ -22,7 +22,7 @@
  * it, shut again by the scrim, a swipe, Back, or by picking where to go.
  */
 
-import { ArrowCircleUp, Gear, Plus, X } from "@phosphor-icons/react";
+import { ArrowCircleUp, Gear, Plus, WarningCircle, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
 import { t } from "../../i18n";
@@ -34,8 +34,9 @@ import { ProjectGroup } from "./ProjectGroup";
 import { SessionList } from "./SessionList";
 import { PROFILES, PROFILE_KEY } from "../ProfileMenu";
 import { useSwipeShut } from "./useSwipeShut";
+import { installErrorKey, type UpdateNotice } from "../update";
 import type { Chat } from "../chats";
-import type { Profile, ReleaseInfo, SessionId } from "../../core/client";
+import type { Profile, SessionId } from "../../core/client";
 
 /** Search over the journals is linear in their size (README); the debounce
     keeps it to one pass per pause rather than one per keystroke. */
@@ -57,6 +58,7 @@ export function Sidebar({
   onOpenSettings,
   update = null,
   onInstallUpdate,
+  onForceInstallUpdate,
   onUpdateDetails,
   onDismissUpdate,
   width,
@@ -83,9 +85,12 @@ export function Sidebar({
   onForgetProject: (project: string) => void;
   /** The footer button opens the settings window, not a panel. */
   onOpenSettings: () => void;
-  /** A newer release than the running one, once the check has found it. */
-  update?: ReleaseInfo | null;
+  /** A newer release than the running one, once the check has found it, and how
+      far installing it has got. */
+  update?: UpdateNotice | null;
   onInstallUpdate: () => void;
+  /** Installs even though a turn is running, on the second press. */
+  onForceInstallUpdate: () => void;
   /** Leads to About, where the changelog is. */
   onUpdateDetails: () => void;
   /** Hides the card until the application is restarted. */
@@ -228,27 +233,13 @@ export function Sidebar({
       </div>
 
       {update !== null && (
-        <div className="side-update" role="status">
-          <span className="side-update-title">
-            <ArrowCircleUp size={15} aria-hidden="true" />
-            {t("about.update_available", { version: update.version })}
-          </span>
-          <button
-            className="side-update-close"
-            onClick={onDismissUpdate}
-            aria-label={t("notice.dismiss")}
-          >
-            <X size={14} />
-          </button>
-          <span className="side-update-actions">
-            <button className="btn btn-accent btn-small" onClick={onInstallUpdate}>
-              {t("side.update_do")}
-            </button>
-            <button className="btn btn-small" onClick={onUpdateDetails}>
-              {t("side.update_more")}
-            </button>
-          </span>
-        </div>
+        <UpdateCard
+          update={update}
+          onInstall={onInstallUpdate}
+          onForce={onForceInstallUpdate}
+          onDetails={onUpdateDetails}
+          onDismiss={onDismissUpdate}
+        />
       )}
 
       <div className="side-foot">
@@ -278,5 +269,98 @@ export function Sidebar({
       />
       {column}
     </>
+  );
+}
+
+/**
+ * A newer release, between the list and the footer.
+ *
+ * A card and not a bar because it waits on the human, and it changes shape with
+ * what it is doing: offered, downloading, installing, stopped. The download
+ * cannot be called off — `tauri-plugin-updater` has no such call — so while one
+ * runs there is no close button: a control that silently does nothing is not
+ * declared at all (§0).
+ */
+function UpdateCard({
+  update,
+  onInstall,
+  onForce,
+  onDetails,
+  onDismiss,
+}: {
+  update: UpdateNotice;
+  onInstall: () => void;
+  onForce: () => void;
+  onDetails: () => void;
+  onDismiss: () => void;
+}) {
+  const { phase, percent, error } = update;
+  const failed = phase === "failed";
+  const running = phase === "downloading" || phase === "installing";
+
+  const title = failed
+    ? t("about.update_install_failed")
+    : phase === "installing"
+      ? t("about.update_installing")
+      : phase === "downloading"
+        ? percent === null
+          ? t("about.update_downloading")
+          : t("about.update_downloading_percent", { percent })
+        : t("about.update_available", { version: update.release.version });
+
+  return (
+    <div className="side-update" role="status" data-phase={phase}>
+      <span className="side-update-title">
+        {failed ? (
+          <WarningCircle size={15} aria-hidden="true" />
+        ) : (
+          <ArrowCircleUp size={15} aria-hidden="true" />
+        )}
+        {title}
+      </span>
+
+      {!running && (
+        <button
+          className="side-update-close"
+          onClick={onDismiss}
+          aria-label={t("notice.dismiss")}
+        >
+          <X size={14} />
+        </button>
+      )}
+
+      {running && (
+        <span className="side-update-bar" aria-hidden="true">
+          <span style={{ width: `${phase === "installing" ? 100 : percent ?? 0}%` }} />
+        </span>
+      )}
+
+      {failed && (
+        <p className="side-update-text">{t(installErrorKey(error ?? "install_failed"))}</p>
+      )}
+
+      {!running && (
+        <span className="side-update-actions">
+          {failed ? (
+            error === "busy" ? (
+              <button className="btn btn-accent btn-small" onClick={onForce}>
+                {t("about.update_busy_do")}
+              </button>
+            ) : update.canInstall ? (
+              <button className="btn btn-accent btn-small" onClick={onInstall}>
+                {t("about.update_retry")}
+              </button>
+            ) : null
+          ) : (
+            <button className="btn btn-accent btn-small" onClick={onInstall}>
+              {update.canInstall ? t("side.update_do") : t("about.update_download")}
+            </button>
+          )}
+          <button className="btn btn-small" onClick={onDetails}>
+            {t("side.update_more")}
+          </button>
+        </span>
+      )}
+    </div>
   );
 }

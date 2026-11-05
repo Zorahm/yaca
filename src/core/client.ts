@@ -92,6 +92,8 @@ import type { ToolMeta } from "./bindings/ToolMeta";
 import type { UsageSnapshot } from "./bindings/UsageSnapshot";
 import type { ReleaseInfo } from "./bindings/ReleaseInfo";
 import type { UpdateCheck } from "./bindings/UpdateCheck";
+import type { UpdateInstall } from "./bindings/UpdateInstall";
+import type { InstallPhase } from "./bindings/InstallPhase";
 
 export type {
   BrowserState,
@@ -168,6 +170,8 @@ export type {
   UsageSnapshot,
   ReleaseInfo,
   UpdateCheck,
+  UpdateInstall,
+  InstallPhase,
 };
 
 /** The bridge sends events in batches per frame, not one by one (§12). */
@@ -1012,6 +1016,7 @@ export function checkForUpdates(): Promise<UpdateCheck> {
 const DEMO_UPDATE: UpdateCheck = {
   current: "1.0.0-beta",
   latest: {
+    tag: "v1.0.1-beta",
     version: "1.0.1-beta",
     name: "Yaca 1.0.1-beta",
     changelog: [
@@ -1042,6 +1047,47 @@ export function updateStatus(): Promise<UpdateCheck | null> {
 export function onUpdate(handler: (check: UpdateCheck) => void): Promise<UnlistenFn> {
   if (!inTauri) return Promise.resolve(() => undefined);
   return listen<UpdateCheck>(UPDATE_CHANNEL, (e) => handler(e.payload));
+}
+
+/**
+ * Whether this window can download and install an update by itself.
+ *
+ * The stand has no shell and nothing to replace on a disk it cannot see, so it
+ * offers the release page instead — a button with nothing behind it would be a
+ * control that silently does nothing (§0).
+ */
+export const canInstallUpdates = inTauri;
+
+/** The channel the install reports on. Both windows listen. */
+const UPDATE_INSTALL_CHANNEL = "yaca://update-install";
+
+/**
+ * Downloads the release the last check found, verifies its signature and
+ * installs it; the application restarts. `force` is the second press of someone
+ * who was told that a turn is running.
+ *
+ * A refusal is a code (`busy`, `nothing`, `dev_build`, `no_artifact`,
+ * `offline`, `signature`, `install_failed`), not a phrase.
+ */
+export function installAppUpdate(force = false): Promise<void> {
+  if (!inTauri) return Promise.reject("dev_build");
+  return invoke<void>("install_app_update", { force });
+}
+
+/** Nothing is downloading: what a fresh window starts from. */
+const IDLE_INSTALL: UpdateInstall = { phase: "idle", received: 0, total: null, error: null };
+
+/** How far the install has got; `idle` until something was started in this run. */
+export function updateInstallStatus(): Promise<UpdateInstall> {
+  return inTauri ? invoke<UpdateInstall>("install_status") : Promise.resolve(IDLE_INSTALL);
+}
+
+/** Every progress message of the install, from the window that started it or from the shell's own. */
+export function onUpdateInstall(
+  handler: (install: UpdateInstall) => void,
+): Promise<UnlistenFn> {
+  if (!inTauri) return Promise.resolve(() => undefined);
+  return listen<UpdateInstall>(UPDATE_INSTALL_CHANNEL, (e) => handler(e.payload));
 }
 
 // --- settings §10 ----------------------------------------------------------

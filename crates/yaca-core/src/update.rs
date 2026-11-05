@@ -113,6 +113,10 @@ impl Version {
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct ReleaseInfo {
+    /// The tag as published: `v1.0.1-beta`. The updater manifest of the release
+    /// lives under it, so it is taken from the answer rather than put together
+    /// from the version.
+    pub tag: String,
     /// The tag without a leading `v`: `1.0.1-beta`.
     pub version: String,
     /// The release title; the tag when GitHub has none.
@@ -233,6 +237,7 @@ fn pick(releases: Vec<GhRelease>, current: Version) -> Option<ReleaseInfo> {
         .filter(|(v, _)| v.channel >= current.channel && *v > current)
         .max_by_key(|(v, _)| *v)
         .map(|(_, r)| ReleaseInfo {
+            tag: r.tag_name.clone(),
             version: r.tag_name.trim_start_matches(['v', 'V']).to_string(),
             name: r
                 .name
@@ -379,6 +384,7 @@ mod tests {
             vec![release("v1.0.1-beta", "## New\r\n- one\r\n- two\r\n\r\n")],
         );
         let latest = got.latest.expect("a newer beta exists");
+        assert_eq!(latest.tag, "v1.0.1-beta");
         assert_eq!(latest.version, "1.0.1-beta");
         assert_eq!(latest.changelog, "## New\n- one\n- two");
         assert_eq!(latest.name, "Yaca v1.0.1-beta");

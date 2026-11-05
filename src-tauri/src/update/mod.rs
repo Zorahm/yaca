@@ -8,8 +8,13 @@
 //! screen lives in the settings window and the notice bar in the main one.
 //! They must show the same thing (§0), and neither can ask the other.
 //!
-//! Nothing is downloaded or installed. A new release is shown with its
-//! changelog and a link; the person decides what to do with it.
+//! A newer release is offered, not forced: the card in the sidebar says which one
+//! and what it changes, and installing it is one press. What that press does is
+//! in [`install`].
+
+pub(crate) mod install;
+
+pub use install::UpdateInstall;
 
 use std::time::Duration;
 
@@ -42,6 +47,19 @@ async fn ask(app: &AppHandle) -> Result<UpdateCheck, String> {
     Ok(check)
 }
 
+/// Where the updater manifest of a release lies.
+///
+/// `tauri-action` puts one into every release it builds, with the installer of
+/// each system listed under its own target name. It is addressed by tag, not by
+/// `releases/latest`: that page is the newest release, and a beta build is
+/// offered the next beta (`yaca_core::update`).
+pub fn manifest_url(tag: &str) -> String {
+    format!(
+        "https://github.com/{}/releases/download/{tag}/latest.json",
+        update::REPOSITORY
+    )
+}
+
 /// The button. Always asks, whatever the automatic-check setting says; the
 /// error is a code for the window to put in words (`UpdateError`).
 #[tauri::command]
@@ -71,4 +89,17 @@ pub fn watch(app: AppHandle) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_manifest_of_a_release_lies_under_its_tag() {
+        assert_eq!(
+            manifest_url("v1.0.1-beta"),
+            "https://github.com/Zorahm/yaca/releases/download/v1.0.1-beta/latest.json"
+        );
+    }
 }

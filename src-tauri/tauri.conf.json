@@ -25,6 +25,14 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJFNzI0NDNDNTY2Q0I4MjYKUldRbXVHeFdQRVJ5dm1DbnpGcW01WU1zR1lYODBuUFBiR0xGU2R0cCtlZ2tnT2ZTNXJId1pXSjUK",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

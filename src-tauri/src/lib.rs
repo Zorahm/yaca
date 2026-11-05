@@ -567,6 +567,9 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // The update itself: the check is the core's (`update`), the download,
+        // the signature and the install are the plugin's.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         // Geometry only. Decorations and visibility come from the config of
         // the platform the app runs on, and a saved value from another build
@@ -668,6 +671,8 @@ pub fn run() {
             tray::set_tray_labels,
             update::check_for_updates,
             update::update_status,
+            update::install::install_app_update,
+            update::install::install_status,
             project::project_settings,
             project::save_project_settings,
             project::project_instructions,

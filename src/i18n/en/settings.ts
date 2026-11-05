@@ -84,7 +84,7 @@ export const settings = {
     "The conversation goes to the provider you chose yourself; keys stay in the system keychain, and before edits the project's state is saved so you can go back to it.",
   "about.updates": "Updates",
   "about.updates_hint":
-    "Looks at the Yaca releases on GitHub. Nothing is downloaded or installed by itself.",
+    "Looks at the Yaca releases on GitHub and, on the button, downloads and installs a new version. It changes nothing by itself.",
   "about.update_check": "Check now",
   "about.update_checking": "Checking…",
   "about.update_latest": "You have the latest version.",
@@ -94,6 +94,21 @@ export const settings = {
   "about.update_no_changes": "This release has no description.",
   "about.update_download": "Download",
   "about.update_page": "Release page",
+  "about.update_install": "Update",
+  "about.update_downloading": "Downloading the update…",
+  "about.update_downloading_percent": "Downloading the update… {percent}%",
+  "about.update_installing": "Installing and restarting…",
+  "about.update_install_failed": "Could not update",
+  "about.update_retry": "Try again",
+  "about.update_busy": "A turn is running. The update will interrupt it.",
+  "about.update_busy_do": "Update anyway",
+  "about.update_no_artifact":
+    "This release has no build for your system. Download it from the release page.",
+  "about.update_signature":
+    "The update file did not pass the signature check and was not installed.",
+  "about.update_dev": "Updates are not available in a development build.",
+  "about.update_install_error":
+    "The install failed. Check free space and the permissions of the program's folder.",
   "about.update_offline": "Could not reach GitHub. Check the connection.",
   "about.update_rate_limited":
     "GitHub is limiting requests from this address. Try again later.",

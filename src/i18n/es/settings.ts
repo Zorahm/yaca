@@ -84,7 +84,7 @@ export const settings = {
     "La conversación va al proveedor que se ha elegido; las claves se guardan en el llavero del sistema, y antes de cada edición se guarda el estado del proyecto para poder volver a él.",
   "about.updates": "Actualizaciones",
   "about.updates_hint":
-    "Consulta las versiones de Yaca en GitHub. Nada se descarga ni se instala por sí solo.",
+    "Consulta las versiones de Yaca en GitHub y, con el botón, descarga e instala una nueva. Por sí solo no cambia nada.",
   "about.update_check": "Comprobar",
   "about.update_checking": "Comprobando…",
   "about.update_latest": "Tienes la última versión.",
@@ -94,6 +94,21 @@ export const settings = {
   "about.update_no_changes": "La versión no tiene descripción.",
   "about.update_download": "Descargar",
   "about.update_page": "Página de la versión",
+  "about.update_install": "Actualizar",
+  "about.update_downloading": "Descargando la actualización…",
+  "about.update_downloading_percent": "Descargando la actualización… {percent} %",
+  "about.update_installing": "Instalando y reiniciando…",
+  "about.update_install_failed": "No se pudo actualizar",
+  "about.update_retry": "Reintentar",
+  "about.update_busy": "Hay un turno en curso. La actualización lo interrumpirá.",
+  "about.update_busy_do": "Actualizar igualmente",
+  "about.update_no_artifact":
+    "Esta versión no tiene compilación para tu sistema. Descárgala desde la página de la versión.",
+  "about.update_signature":
+    "El archivo de actualización no superó la comprobación de firma y no se instaló.",
+  "about.update_dev": "Las actualizaciones no están disponibles en una compilación de desarrollo.",
+  "about.update_install_error":
+    "La instalación falló. Comprueba el espacio libre y los permisos de la carpeta del programa.",
   "about.update_offline": "No se pudo conectar con GitHub. Revisa la conexión.",
   "about.update_rate_limited":
     "GitHub limita las solicitudes desde esta dirección. Inténtalo más tarde.",

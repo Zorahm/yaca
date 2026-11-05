@@ -8,8 +8,9 @@
  *
  * The answer comes from the shell (`ui/update`), which also asks by itself in
  * the background when the setting is on. A found release is shown with its
- * changelog — the text of the release on GitHub — and two links; nothing is
- * downloaded or installed by the app.
+ * changelog — the text of the release on GitHub — and a button that downloads,
+ * checks and installs it, restarting the application; the release page stays
+ * for reading it in a browser.
  */
 
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -20,7 +21,7 @@ import { appVersion } from "../../core/menu";
 import { t } from "../../i18n";
 import { YacaMark } from "../Logo";
 import { MarkdownDoc } from "../MarkdownDoc";
-import { updateErrorKey, useUpdate } from "../update";
+import { installErrorKey, updateErrorKey, useUpdate, type UpdateView } from "../update";
 import { Row, Switch } from "./Row";
 
 export function AboutSection({
@@ -49,10 +50,18 @@ export function AboutSection({
   }, []);
 
   const release = update.check?.latest ?? null;
+  const running = update.installPhase === "downloading" || update.installPhase === "installing";
 
   let status: string | null = null;
-  if (update.checking) status = t("about.update_checking");
+  if (update.installPhase === "downloading") {
+    status =
+      update.percent === null
+        ? t("about.update_downloading")
+        : t("about.update_downloading_percent", { percent: update.percent });
+  } else if (update.installPhase === "installing") status = t("about.update_installing");
+  else if (update.checking) status = t("about.update_checking");
   else if (update.error !== null) status = t(updateErrorKey(update.error));
+  else if (update.installError !== null) status = t(installErrorKey(update.installError));
   else if (release !== null) status = t("about.update_available", { version: release.version });
   else if (update.check !== null) status = t("about.update_latest");
 
@@ -78,7 +87,13 @@ export function AboutSection({
               <span
                 className="about-value"
                 role="status"
-                data-state={update.error !== null ? "error" : release !== null ? "new" : "ok"}
+                data-state={
+                  update.error !== null || update.installError !== null
+                    ? "error"
+                    : release !== null
+                      ? "new"
+                      : "ok"
+                }
               >
                 {status}
               </span>
@@ -86,7 +101,7 @@ export function AboutSection({
             <button
               type="button"
               className="btn btn-small"
-              disabled={update.checking}
+              disabled={update.checking || running}
               onClick={update.run}
             >
               {update.checking ? t("about.update_checking") : t("about.update_check")}
@@ -105,18 +120,29 @@ export function AboutSection({
         </Row>
       </div>
 
-      {release !== null && <ReleaseCard release={release} />}
+      {release !== null && <ReleaseCard release={release} view={update} />}
     </>
   );
 }
 
-function ReleaseCard({ release }: { release: ReleaseInfo }) {
+function ReleaseCard({ release, view }: { release: ReleaseInfo; view: UpdateView }) {
   const open = (url: string) => void openUrl(url).catch(() => undefined);
   const published = release.publishedAt === null ? null : new Date(release.publishedAt);
   const date =
     published !== null && !Number.isNaN(published.getTime())
       ? published.toLocaleDateString()
       : null;
+
+  let action: string;
+  if (view.installPhase === "installing") action = t("about.update_installing");
+  else if (view.installPhase === "downloading")
+    action =
+      view.percent === null
+        ? t("about.update_downloading")
+        : t("about.update_downloading_percent", { percent: view.percent });
+  else if (view.installError === "busy") action = t("about.update_busy_do");
+  else if (view.installPhase === "failed") action = t("about.update_retry");
+  else action = t("about.update_install");
 
   return (
     <section className="about-release" aria-label={release.name}>
@@ -139,19 +165,34 @@ function ReleaseCard({ release }: { release: ReleaseInfo }) {
       </div>
 
       <div className="about-release-actions">
-        <button
-          type="button"
-          className="btn btn-accent btn-small"
-          onClick={() => open(release.downloadUrl ?? release.url)}
-        >
-          {t("about.update_download")}
-        </button>
-        {release.downloadUrl !== null && (
-          <button type="button" className="btn btn-small" onClick={() => open(release.url)}>
-            {t("about.update_page")}
+        {view.canInstall ? (
+          <button
+            type="button"
+            className="btn btn-accent btn-small"
+            disabled={view.installPhase === "downloading" || view.installPhase === "installing"}
+            onClick={() => view.install(view.installError === "busy")}
+          >
+            {action}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-accent btn-small"
+            onClick={() => open(release.downloadUrl ?? release.url)}
+          >
+            {t("about.update_download")}
           </button>
         )}
+        <button type="button" className="btn btn-small" onClick={() => open(release.url)}>
+          {t("about.update_page")}
+        </button>
       </div>
+
+      {view.installPhase === "failed" && view.installError !== null && (
+        <p className="about-value" data-state="error" role="alert">
+          {t(installErrorKey(view.installError))}
+        </p>
+      )}
     </section>
   );
 }

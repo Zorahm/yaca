@@ -84,7 +84,7 @@ export const settings = {
     "Das Gespräch geht an den selbst gewählten Anbieter; Schlüssel liegen im Systemschlüsselbund, und vor Änderungen wird der Stand des Projekts gesichert, zu dem man zurückkehren kann.",
   "about.updates": "Updates",
   "about.updates_hint":
-    "Sieht in den Yaca-Releases auf GitHub nach. Nichts wird von selbst geladen oder installiert.",
+    "Prüft die Yaca-Releases auf GitHub und lädt auf Knopfdruck eine neue Version herunter und installiert sie. Von selbst ändert es nichts.",
   "about.update_check": "Prüfen",
   "about.update_checking": "Prüfe …",
   "about.update_latest": "Die neueste Version ist installiert.",
@@ -94,6 +94,21 @@ export const settings = {
   "about.update_no_changes": "Das Release hat keine Beschreibung.",
   "about.update_download": "Herunterladen",
   "about.update_page": "Release-Seite",
+  "about.update_install": "Aktualisieren",
+  "about.update_downloading": "Update wird heruntergeladen…",
+  "about.update_downloading_percent": "Update wird heruntergeladen… {percent} %",
+  "about.update_installing": "Wird installiert und neu gestartet…",
+  "about.update_install_failed": "Aktualisierung fehlgeschlagen",
+  "about.update_retry": "Erneut versuchen",
+  "about.update_busy": "Ein Lauf ist aktiv. Die Aktualisierung bricht ihn ab.",
+  "about.update_busy_do": "Trotzdem aktualisieren",
+  "about.update_no_artifact":
+    "Für dieses Release gibt es keinen Build für dein System. Lade ihn von der Release-Seite.",
+  "about.update_signature":
+    "Die Updatedatei hat die Signaturprüfung nicht bestanden und wurde nicht installiert.",
+  "about.update_dev": "In einem Entwicklungsbuild ist keine Aktualisierung möglich.",
+  "about.update_install_error":
+    "Die Installation ist fehlgeschlagen. Prüfe freien Speicher und die Rechte des Programmordners.",
   "about.update_offline": "GitHub ist nicht erreichbar. Prüfe die Verbindung.",
   "about.update_rate_limited":
     "GitHub begrenzt die Anfragen von dieser Adresse. Versuche es später erneut.",
