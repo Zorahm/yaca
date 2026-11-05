@@ -17,6 +17,7 @@
 
 import type { ModelInfo, Settings } from "../../core/client";
 import { t } from "../../i18n";
+import { chatModels, modelLabel } from "../modelSearch";
 import { Row, Select } from "./Row";
 
 /**
@@ -34,7 +35,8 @@ export function ModelsSection({
   models: ModelInfo[];
   onPatch: (change: (settings: Settings) => Settings) => void;
 }) {
-  const known = models.length > 0;
+  const choices = chatModels(models);
+  const known = choices.length > 0;
 
   return (
     <>
@@ -53,12 +55,12 @@ export function ModelsSection({
             label={t("models.default")}
             unset={t("models.first_configured")}
             value={settings.model}
-            models={models}
+            models={choices}
             onChange={(model) => {
               // The provider travels with the model: §10 says a model brings its own
               // provider, and writing the model without it would leave a pair in the
               // file that may not match.
-              const provider = models.find((m) => m.id === model)?.providerId ?? null;
+              const provider = choices.find((m) => m.id === model)?.providerId ?? null;
               onPatch((now) => ({ ...now, model, provider }));
             }}
           />
@@ -69,7 +71,7 @@ export function ModelsSection({
             label={t("models.compact")}
             unset={t("models.compact_same")}
             value={settings.compactModel}
-            models={models}
+            models={choices}
             onChange={(compactModel) => onPatch((now) => ({ ...now, compactModel }))}
           />
         </Row>
@@ -79,7 +81,7 @@ export function ModelsSection({
             label={t("models.subagent")}
             unset={t("models.compact_same")}
             value={settings.subagentModel}
-            models={models}
+            models={choices}
             onChange={(subagentModel) => onPatch((now) => ({ ...now, subagentModel }))}
           />
         </Row>
@@ -110,7 +112,7 @@ function ModelSelect({
       value={value ?? NONE}
       options={[
         { value: NONE, label: unset },
-        ...models.map((model) => ({ value: model.id, label: model.displayName })),
+        ...models.map((model) => ({ value: model.id, label: modelLabel(model) })),
       ]}
       onChange={(next) => onChange(next === NONE ? null : next)}
     />

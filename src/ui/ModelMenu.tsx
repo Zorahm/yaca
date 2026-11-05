@@ -25,8 +25,10 @@ import {
 import { t } from "../i18n";
 import { ProviderMark } from "./brand";
 import {
+  chatModels,
   groupsOf,
   modelKey,
+  modelLabel,
   parseRecent,
   recentOf,
   withRecent,
@@ -67,10 +69,11 @@ export function ModelMenu({
   const [at, setAt] = useState(0);
   const list = useRef<HTMLDivElement>(null);
   const listId = useId();
+  const choices = useMemo(() => chatModels(models), [models]);
 
   // A string, not the array: the list arrives as a fresh array on every render
   // of the window, and each one would ask the servers again.
-  const providers = [...new Set(models.map((m) => m.providerId))].join("\n");
+  const providers = [...new Set(choices.map((m) => m.providerId))].join("\n");
 
   useEffect(() => {
     if (!open) return;
@@ -111,16 +114,16 @@ export function ModelMenu({
   const sections = useMemo(() => {
     const nameOf = (id: string) =>
       id === ROUTER_PROVIDER_ID ? t("routing.title") : (names.get(id) ?? id);
-    const found: ModelGroup[] = groupsOf(models, nameOf, query.trim());
+    const found: ModelGroup[] = groupsOf(choices, nameOf, query.trim());
     // The recent models are a shortcut past the search, not a result of it:
     // under a query they would only show the same model twice.
-    const picked = query.trim() === "" ? recentOf(models, recent) : [];
+    const picked = query.trim() === "" ? recentOf(choices, recent) : [];
     const all = picked.length > 0 ? [{ provider: "", models: picked }, ...found] : found;
     return all.map((group) => ({
       ...group,
       title: group.provider === "" ? t("composer.model_recent") : nameOf(group.provider),
     }));
-  }, [models, names, query, recent]);
+  }, [choices, names, query, recent]);
 
   const rows = sections.flatMap((section) => section.models);
 
@@ -161,7 +164,7 @@ export function ModelMenu({
   return (
     <div className="menu-anchor">
       <button className="chip chip-strong" onClick={onToggle}>
-        {active?.displayName ?? (model || t("composer.no_model"))}
+        {active ? modelLabel(active) : (model ? modelLabel({ displayName: model }) : t("composer.no_model"))}
       </button>
       {open && (
         // The composer closes its menus on a click anywhere in its band; a
@@ -209,7 +212,7 @@ export function ModelMenu({
                       title={m.id}
                       onClick={() => pick(m)}
                     >
-                      <span className="menu-model">{m.displayName}</span>
+                      <span className="menu-model">{modelLabel(m)}</span>
                       <span className="menu-note">
                         {/* Among the recent ones the heading does not say
                             who serves the model, so the row does. */}

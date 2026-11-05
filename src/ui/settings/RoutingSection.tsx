@@ -27,7 +27,7 @@ import {
 } from "../../core/client";
 import { DECISION_PROVIDER_ID } from "../../core/provider";
 import { t } from "../../i18n";
-import { modelKey } from "../modelSearch";
+import { modelKey, modelLabel } from "../modelSearch";
 import { Select } from "./Row";
 import { configText, emptyPicks, NO_MODEL, type Picks } from "./routingWizard";
 
@@ -188,7 +188,7 @@ export function RoutingSection({
                     { value: NO_MODEL, label: t("routing.wizard_pick") },
                     ...routable.map((m) => ({
                       value: modelKey(m),
-                      label: `${m.displayName} — ${m.providerId}`,
+                      label: `${modelLabel(m)} — ${m.providerId}`,
                     })),
                   ]}
                   onChange={(value) => setPicks((now) => ({ ...now, [field]: value }))}

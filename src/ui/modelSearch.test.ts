@@ -6,9 +6,11 @@ import { describe, expect, it } from "vitest";
 
 import type { ModelInfo } from "../core/client";
 import {
+  chatModels,
   groupsOf,
   matches,
   modelKey,
+  modelLabel,
   parseRecent,
   recentOf,
   withRecent,
@@ -50,6 +52,55 @@ const MODELS = [
 function ids(groups: ReturnType<typeof groupsOf>): string[] {
   return groups.map((g) => `${g.provider}: ${g.models.map((m) => m.id).join(", ")}`);
 }
+
+describe("chat models", () => {
+  it("excludes Decision from provider groups, search and recent picks", () => {
+    const decision = model("decision", "qwen3:1.7b");
+    const models = [...MODELS, decision, model("router", "auto")];
+    const choices = chatModels(models);
+    expect(choices.map((m) => m.providerId)).toEqual([
+      "openai", "openai", "openrouter", "openrouter", "local", "router",
+    ]);
+    expect(groupsOf(choices, nameOf, "decision")).toEqual([]);
+    expect(recentOf(choices, [modelKey(decision), modelKey(MODELS[0])])).toEqual([MODELS[0]]);
+    expect(models).toContain(decision);
+  });
+});
+
+describe("model labels", () => {
+  it.each([
+    ["C:\\Models\\Qwen3-Coder-Q4_K_M.gguf", "Qwen3-Coder-Q4_K_M"],
+    ["C:/Models/Qwen3-Coder.gguf", "Qwen3-Coder"],
+    ["\\\\server\\models\\Qwen3.gguf", "Qwen3"],
+    ["/home/user/models/Qwen3.safetensors", "Qwen3"],
+    ["/home/user/models/Qwen3/", "Qwen3"],
+    ["./models/Qwen3.bin", "Qwen3"],
+    ["../models/Qwen3.ggml", "Qwen3"],
+    ["~/models/Qwen3", "Qwen3"],
+    ["models/Qwen3.GGUF", "Qwen3"],
+    ["models\\Qwen3.gguf", "Qwen3"],
+    ["/", "/"],
+  ])("extracts a readable name from %s", (path, expected) => {
+    const local = model("local", path);
+    expect(modelLabel(local)).toBe(expected);
+    expect(local.id).toBe(path);
+    expect(local.displayName).toBe(path);
+  });
+
+  it.each([
+    "GPT-5 mini",
+    "anthropic/claude-sonnet-5",
+    "unsloth/Qwen3.5-0.8B-GGUF",
+    "qwen3-coder:30b",
+    "https://example.com/models/Qwen3.gguf",
+  ])("preserves names and remote model identifiers: %s", (name) => {
+    expect(modelLabel(model("gateway", name))).toBe(name);
+  });
+
+  it("keeps an explicit display name even when the id is a path", () => {
+    expect(modelLabel(model("local", "/models/Qwen3.gguf", "My Qwen"))).toBe("My Qwen");
+  });
+});
 
 describe("matches", () => {
   it("looks in the name, the id and the provider's name", () => {

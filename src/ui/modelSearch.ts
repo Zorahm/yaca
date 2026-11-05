@@ -13,6 +13,27 @@
  */
 
 import type { ModelInfo } from "../core/client";
+import { DECISION_PROVIDER_ID } from "../core/provider";
+
+/** Decision models classify requests for the router rather than carry a chat. */
+export function chatModels(models: ReadonlyArray<ModelInfo>): ModelInfo[] {
+  return models.filter((model) => model.providerId !== DECISION_PROVIDER_ID);
+}
+
+/** Keep server ids intact while making filesystem paths readable in selectors. */
+export function modelLabel(model: Pick<ModelInfo, "displayName">): string {
+  const name = model.displayName;
+  const path = name.trim();
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(path)) return name;
+  const isPath = /^(?:[a-z]:[/\\]|[/\\]|\.{1,2}[/\\]|~[/\\])/i.test(path)
+    || path.includes("\\")
+    || /[/\\][^/\\]+\.(?:gguf|ggml|safetensors|bin)$/i.test(path);
+  if (!isPath) return name;
+  const parts = path.split(/[/\\]/).filter(Boolean);
+  const filename = parts[parts.length - 1];
+  if (!filename) return name;
+  return filename.replace(/\.(?:gguf|ggml|safetensors|bin)$/i, "") || filename;
+}
 
 /** One model of one provider: the same id is served by several. */
 export function modelKey(model: ModelInfo): string {
