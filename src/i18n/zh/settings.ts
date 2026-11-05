@@ -4,7 +4,10 @@
 
 import type { settings as source } from "../ru/settings";
 
+import { pluginSettings } from "./pluginSettings";
+
 export const settings = {
+  ...pluginSettings,
   "project.create": "创建项目",
   "project.edit": "编辑项目",
   "project.description": "用一个名称组织相关文件夹。",
@@ -29,9 +32,9 @@ export const settings = {
 
   "tools.title": "工具",
   "plug.title": "插件",
-  "plug.lede": "Claude Code 与 Agent Plugins 格式的插件：自己的插件放在设置目录的 plugins 文件夹中，Claude Code 安装的会自动读取。开关从下一个对话开始生效。",
+  "plug.lede": "插件可添加技能、命令、MCP 服务器和钩子。自有插件放在 plugins 文件夹中，Claude Code 插件会自动发现。",
   "plug.none": "没有插件。",
-  "plug.enabled": "启用插件 {name}",
+  "plug.enabled": "在 Yaca 中启用：{name}",
   "plug.origin_yaca": "Yaca",
   "plug.origin_claude": "Claude Code",
   "plug.counts": "技能：{skills} · 命令：{commands} · MCP 服务器：{mcp} · 钩子：{hooks}",
@@ -95,7 +98,7 @@ export const settings = {
   "about.how":
     "对话会发送给你自己选择的提供商；密钥保存在系统钥匙串中。编辑前会保存项目状态，以便随时回退。",
   "about.updates": "更新",
-  "about.updates_hint": "查看 GitHub 上的 Yaca 发布版本。不会自动下载或安装任何内容。",
+  "about.updates_hint": "查看 GitHub 上的 Yaca 发布版本，点击按钮即下载并安装新版本。它不会自行更改任何内容。",
   "about.update_check": "检查",
   "about.update_checking": "正在检查…",
   "about.update_latest": "已是最新版本。",
@@ -105,6 +108,18 @@ export const settings = {
   "about.update_no_changes": "此版本没有说明。",
   "about.update_download": "下载",
   "about.update_page": "发布页面",
+  "about.update_install": "更新",
+  "about.update_downloading": "正在下载更新…",
+  "about.update_downloading_percent": "正在下载更新… {percent}%",
+  "about.update_installing": "正在安装并重启…",
+  "about.update_install_failed": "更新失败",
+  "about.update_retry": "重试",
+  "about.update_busy": "有正在进行的回合，更新会中断它。",
+  "about.update_busy_do": "仍然更新",
+  "about.update_no_artifact": "此版本没有适用于你的系统的安装包。请从发布页面下载。",
+  "about.update_signature": "更新文件未通过签名校验，未安装。",
+  "about.update_dev": "开发构建中无法更新。",
+  "about.update_install_error": "安装失败。请检查可用空间和程序文件夹的权限。",
   "about.update_offline": "无法连接到 GitHub，请检查网络。",
   "about.update_rate_limited": "GitHub 正在限制此地址的请求，请稍后再试。",
   "about.update_failed": "检查失败，请稍后再试。",

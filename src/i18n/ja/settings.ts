@@ -4,7 +4,10 @@
 
 import type { settings as source } from "../ru/settings";
 
+import { pluginSettings } from "./pluginSettings";
+
 export const settings = {
+  ...pluginSettings,
   "project.create": "プロジェクトを作成",
   "project.edit": "プロジェクトを編集",
   "project.description": "関連するフォルダーを1つの名前でまとめます。",
@@ -29,9 +32,9 @@ export const settings = {
 
   "tools.title": "ツール",
   "plug.title": "プラグイン",
-  "plug.lede": "Claude Code 形式と Agent Plugins 形式のプラグイン。自分のものは設定ディレクトリの plugins フォルダに置き、Claude Code でインストールしたものは自動で読み込まれます。切り替えは次のチャットから反映されます。",
+  "plug.lede": "プラグインはスキル、コマンド、MCP サーバー、フックを追加します。独自のものは plugins フォルダーに置き、Claude Code のものは自動検出されます。",
   "plug.none": "プラグインはありません。",
-  "plug.enabled": "プラグイン {name} を有効化",
+  "plug.enabled": "Yaca で有効にする: {name}",
   "plug.origin_yaca": "Yaca",
   "plug.origin_claude": "Claude Code",
   "plug.counts": "スキル: {skills} · コマンド: {commands} · MCP サーバー: {mcp} · フック: {hooks}",
@@ -95,7 +98,7 @@ export const settings = {
   "about.how":
     "会話はあなたが選んだプロバイダーに送られます。キーはシステムのキーチェーンに保存され、編集の前にはプロジェクトの状態が保存されるので、そこへ戻ることができます。",
   "about.updates": "アップデート",
-  "about.updates_hint": "GitHub の Yaca のリリースを確認します。自動でダウンロードやインストールはされません。",
+  "about.updates_hint": "GitHub の Yaca のリリースを確認し、ボタンで新しいバージョンをダウンロードしてインストールします。自動では何も変更しません。",
   "about.update_check": "確認",
   "about.update_checking": "確認中…",
   "about.update_latest": "最新バージョンです。",
@@ -105,6 +108,18 @@ export const settings = {
   "about.update_no_changes": "このリリースには説明がありません。",
   "about.update_download": "ダウンロード",
   "about.update_page": "リリースページ",
+  "about.update_install": "更新",
+  "about.update_downloading": "アップデートをダウンロードしています…",
+  "about.update_downloading_percent": "アップデートをダウンロードしています… {percent}%",
+  "about.update_installing": "インストールして再起動しています…",
+  "about.update_install_failed": "更新できませんでした",
+  "about.update_retry": "再試行",
+  "about.update_busy": "実行中のターンがあります。更新すると中断されます。",
+  "about.update_busy_do": "それでも更新",
+  "about.update_no_artifact": "このリリースにはお使いのシステム向けのビルドがありません。リリースページからダウンロードしてください。",
+  "about.update_signature": "アップデートファイルは署名の検証に失敗したため、インストールされませんでした。",
+  "about.update_dev": "開発ビルドでは更新できません。",
+  "about.update_install_error": "インストールに失敗しました。空き容量とプログラムフォルダーの権限を確認してください。",
   "about.update_offline": "GitHub に接続できません。接続を確認してください。",
   "about.update_rate_limited": "このアドレスからのリクエストを GitHub が制限しています。後でもう一度お試しください。",
   "about.update_failed": "確認に失敗しました。後でもう一度お試しください。",

@@ -53,7 +53,7 @@ import { t } from "./i18n";
 import { Feed, type FeedActions, type FeedJump } from "./ui/Feed";
 import { Notices } from "./ui/Bars";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useUpdate } from "./ui/update";
+import { useUpdate, type UpdateNotice } from "./ui/update";
 import { Composer, type ComposerActions } from "./ui/Composer";
 import { MODES } from "./ui/ModeMenu";
 import { mcpPrompts, withSkills, type MenuCommand } from "./ui/slash";
@@ -132,16 +132,40 @@ export default function App({ prefs }: { prefs: Preferences }) {
   }, []);
   const update = useUpdate();
   // Closing the card hides that version until the application restarts, and
-  // only that version: a newer release brings the card back.
+  // only that version: a newer release brings the card back. A download that is
+  // running is not hidden — that is where its progress is — and a new attempt
+  // brings the card back even if this one was closed.
   const [dismissedUpdate, setDismissedUpdate] = useState<string | null>(null);
   const latest = update.check?.latest ?? null;
-  const shownUpdate = latest !== null && latest.version !== dismissedUpdate ? latest : null;
-  // The app installs nothing itself: «Update» takes the person to the
-  // installer, or to the release page when the release has none for this system.
-  const installUpdate = useCallback(() => {
-    const release = update.check?.latest;
-    if (release) void openUrl(release.downloadUrl ?? release.url).catch(() => undefined);
-  }, [update.check]);
+  const updateRunning =
+    update.installPhase === "downloading" || update.installPhase === "installing";
+  const shownUpdate =
+    latest !== null && (updateRunning || latest.version !== dismissedUpdate) ? latest : null;
+  const notice: UpdateNotice | null =
+    shownUpdate === null
+      ? null
+      : {
+          release: shownUpdate,
+          phase: update.installPhase,
+          percent: update.percent,
+          error: update.installError,
+          canInstall: update.canInstall,
+        };
+  // Where the shell can install by itself, «Update» downloads, checks and
+  // restarts the application. The stand has nothing to install into, so there
+  // the same button opens the installer.
+  const installUpdate = useCallback(
+    (force = false) => {
+      if (update.canInstall) {
+        setDismissedUpdate(null);
+        update.install(force);
+        return;
+      }
+      const release = update.check?.latest;
+      if (release) void openUrl(release.downloadUrl ?? release.url).catch(() => undefined);
+    },
+    [update],
+  );
 
   // Where the window keeps the system's frame, Help is the system's menu
   // (`core/menu`); where it draws its own, Help is in the title bar below.
@@ -574,9 +598,10 @@ export default function App({ prefs }: { prefs: Preferences }) {
         setSettingsList(true);
         setSettingsAt("providers");
       }}
-      update={shownUpdate}
+      update={notice}
       onDismissUpdate={() => setDismissedUpdate(shownUpdate?.version ?? null)}
-      onInstallUpdate={installUpdate}
+      onInstallUpdate={() => installUpdate(false)}
+      onForceInstallUpdate={() => installUpdate(true)}
       onUpdateDetails={() => {
         shutDrawer();
         openAbout();
@@ -608,6 +633,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
         section={settingsAt}
         onSection={setSettingsAt}
         onClose={closeSettings}
+        onNewChat={(root) => { closeSettings(); newChat(root); }}
         narrow={narrow}
         startOnList={settingsList}
       />

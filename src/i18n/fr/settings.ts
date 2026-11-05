@@ -4,7 +4,10 @@
 
 import type { settings as source } from "../ru/settings";
 
+import { pluginSettings } from "./pluginSettings";
+
 export const settings = {
+  ...pluginSettings,
   "project.create": "Créer un projet",
   "project.edit": "Modifier le projet",
   "project.description": "Regroupez les dossiers liés sous un même nom.",
@@ -29,9 +32,9 @@ export const settings = {
 
   "tools.title": "Outils",
   "plug.title": "Plugins",
-  "plug.lede": "Plugins aux formats Claude Code et Agent Plugins : les vôtres vont dans le dossier plugins du répertoire des réglages, ceux installés dans Claude Code sont repris d'eux-mêmes. Un interrupteur s'applique dès le prochain chat.",
+  "plug.lede": "Les plugins ajoutent des compétences, des commandes, des serveurs MCP et des hooks. Les vôtres se trouvent dans le dossier plugins ; ceux de Claude Code sont détectés automatiquement.",
   "plug.none": "Aucun plugin.",
-  "plug.enabled": "Plugin {name} activé",
+  "plug.enabled": "Activer dans Yaca : {name}",
   "plug.origin_yaca": "Yaca",
   "plug.origin_claude": "Claude Code",
   "plug.counts": "compétences : {skills} · commandes : {commands} · serveurs MCP : {mcp} · hooks : {hooks}",
@@ -96,7 +99,7 @@ export const settings = {
     "La conversation passe par le fournisseur que vous avez choisi ; les clés restent dans le trousseau système, et avant les modifications, un instantané du projet est pris pour pouvoir y revenir.",
   "about.updates": "Mises à jour",
   "about.updates_hint":
-    "Consulte les versions de Yaca sur GitHub. Rien n'est téléchargé ni installé tout seul.",
+    "Consulte les versions de Yaca sur GitHub et, sur le bouton, télécharge et installe une nouvelle version. Seul, il ne change rien.",
   "about.update_check": "Vérifier",
   "about.update_checking": "Vérification…",
   "about.update_latest": "Vous avez la dernière version.",
@@ -106,6 +109,21 @@ export const settings = {
   "about.update_no_changes": "La version n'a pas de description.",
   "about.update_download": "Télécharger",
   "about.update_page": "Page de la version",
+  "about.update_install": "Mettre à jour",
+  "about.update_downloading": "Téléchargement de la mise à jour…",
+  "about.update_downloading_percent": "Téléchargement de la mise à jour… {percent} %",
+  "about.update_installing": "Installation et redémarrage…",
+  "about.update_install_failed": "Mise à jour impossible",
+  "about.update_retry": "Réessayer",
+  "about.update_busy": "Un tour est en cours. La mise à jour l'interrompra.",
+  "about.update_busy_do": "Mettre à jour quand même",
+  "about.update_no_artifact":
+    "Cette version n'a pas de build pour votre système. Téléchargez-le depuis la page de la version.",
+  "about.update_signature":
+    "Le fichier de mise à jour n'a pas passé la vérification de signature et n'a pas été installé.",
+  "about.update_dev": "Les mises à jour ne sont pas disponibles dans une version de développement.",
+  "about.update_install_error":
+    "L'installation a échoué. Vérifiez l'espace libre et les droits du dossier du programme.",
   "about.update_offline": "Impossible de joindre GitHub. Vérifiez la connexion.",
   "about.update_rate_limited":
     "GitHub limite les requêtes depuis cette adresse. Réessayez plus tard.",

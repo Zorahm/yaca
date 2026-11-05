@@ -41,6 +41,10 @@ tauri-plugin-opener = "2"
 tauri-plugin-window-state = "~2.4.1"
 # Toasts §15 — `notify-rust` directly, not a plugin: see the comment in `notify.rs`.
 notify-rust = "4.18"
+# The update itself: download, signature, install. 2.12 is the last release on
+# tauri 2.10; 2.13 needs 2.12, whose wry brings the `webview2-com` the browser
+# column is not built against (same reason as `tauri-plugin-window-state`).
+tauri-plugin-updater = "~2.12"
 tokio.workspace = true
 tokio-util.workspace = true
 # `Startup` goes to the webview, like the core's types, and must not drift from them.

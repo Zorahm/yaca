@@ -30,6 +30,20 @@ pub enum Action {
     Update { id: Option<String> },
     /// Remove a plugin Yaca installed. Its PLUGIN_DATA is kept.
     Uninstall { id: String },
+    /// Stage a catalog plugin and print its executable components for review.
+    Preview { id: String },
+    /// Install exactly the package staged by `preview`.
+    Confirm { token: String },
+    /// Discard a staged package without installing it.
+    Cancel { token: String },
+    /// Choose one discovered installation of a plugin by its reported path.
+    Prefer { name: String, path: String },
+    /// Hide or restore duplicate warnings for a plugin.
+    IgnoreDuplicates {
+        name: String,
+        #[arg(long)]
+        restore: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -53,6 +67,27 @@ pub fn run(action: Option<Action>, enable: Option<String>, disable: Option<Strin
     let installer = Installer::standard(&config_dir);
     match action {
         None => {}
+        Some(Action::Preview { id }) => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&installer.preview(&id)?)?
+            );
+            return Ok(());
+        }
+        Some(Action::Confirm { token }) => {
+            print_plugin(&installer.install_preview(&token)?);
+            return Ok(());
+        }
+        Some(Action::Cancel { token }) => {
+            installer.discard_preview(&token)?;
+            return Ok(());
+        }
+        Some(Action::Prefer { name, path }) => {
+            plugin::prefer_copy(&config_dir, &name, &path)?;
+        }
+        Some(Action::IgnoreDuplicates { name, restore }) => {
+            plugin::ignore_duplicates(&config_dir, &name, !restore)?;
+        }
         Some(Action::Marketplace { action }) => return market(&installer, action),
         Some(Action::Browse { marketplace, query }) => {
             let entries = installer.catalog(&marketplace)?;
@@ -227,5 +262,10 @@ fn print_plugin(p: &PluginSummary) {
     println!("  {}", p.path);
     for note in &p.notes {
         println!("  warning: {note}");
+    }
+    for duplicate in &p.duplicates {
+        if !duplicate.ignored {
+            println!("  duplicate: {} ({:?})", duplicate.path, duplicate.origin);
+        }
     }
 }

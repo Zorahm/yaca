@@ -4,7 +4,10 @@
 
 import type { settings as source } from "../ru/settings";
 
+import { pluginSettings } from "./pluginSettings";
+
 export const settings = {
+  ...pluginSettings,
   "project.create": "Criar projeto",
   "project.edit": "Editar projeto",
   "project.description": "Agrupe pastas relacionadas com um único nome.",
@@ -29,9 +32,9 @@ export const settings = {
 
   "tools.title": "Ferramentas",
   "plug.title": "Plugins",
-  "plug.lede": "Plugins nos formatos Claude Code e Agent Plugins: os seus ficam na pasta plugins do diretório de configurações, e os instalados no Claude Code são detectados sozinhos. Um interruptor vale a partir do próximo chat.",
+  "plug.lede": "Os plugins adicionam habilidades, comandos, servidores MCP e hooks. Os seus ficam na pasta plugins; os do Claude Code são detectados automaticamente.",
   "plug.none": "Nenhum plugin.",
-  "plug.enabled": "Plugin {name} ativado",
+  "plug.enabled": "Ativar no Yaca: {name}",
   "plug.origin_yaca": "Yaca",
   "plug.origin_claude": "Claude Code",
   "plug.counts": "skills: {skills} · comandos: {commands} · servidores MCP: {mcp} · hooks: {hooks}",
@@ -96,7 +99,7 @@ export const settings = {
     "A conversa vai para o provedor que você escolheu; as chaves ficam no chaveiro do sistema, e antes das edições é guardado um snapshot do estado do projeto, para o qual você pode voltar.",
   "about.updates": "Atualizações",
   "about.updates_hint":
-    "Consulta as versões do Yaca no GitHub. Nada é baixado nem instalado sozinho.",
+    "Consulta as versões do Yaca no GitHub e, no botão, baixa e instala uma nova versão. Sozinho, não muda nada.",
   "about.update_check": "Verificar",
   "about.update_checking": "Verificando…",
   "about.update_latest": "Você está com a versão mais recente.",
@@ -106,6 +109,21 @@ export const settings = {
   "about.update_no_changes": "A versão não tem descrição.",
   "about.update_download": "Baixar",
   "about.update_page": "Página da versão",
+  "about.update_install": "Atualizar",
+  "about.update_downloading": "Baixando a atualização…",
+  "about.update_downloading_percent": "Baixando a atualização… {percent}%",
+  "about.update_installing": "Instalando e reiniciando…",
+  "about.update_install_failed": "Não foi possível atualizar",
+  "about.update_retry": "Tentar de novo",
+  "about.update_busy": "Há um turno em andamento. A atualização vai interrompê-lo.",
+  "about.update_busy_do": "Atualizar mesmo assim",
+  "about.update_no_artifact":
+    "Esta versão não tem build para o seu sistema. Baixe-a na página da versão.",
+  "about.update_signature":
+    "O arquivo de atualização não passou na verificação de assinatura e não foi instalado.",
+  "about.update_dev": "Atualizações não estão disponíveis em uma build de desenvolvimento.",
+  "about.update_install_error":
+    "A instalação falhou. Verifique o espaço livre e as permissões da pasta do programa.",
   "about.update_offline": "Não foi possível conectar ao GitHub. Verifique a conexão.",
   "about.update_rate_limited":
     "O GitHub está limitando as requisições deste endereço. Tente novamente mais tarde.",

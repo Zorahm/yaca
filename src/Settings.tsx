@@ -118,6 +118,7 @@ export default function Settings({
   section,
   onSection,
   onClose,
+  onNewChat,
   narrow = false,
   startOnList = false,
   currentProvider,
@@ -131,6 +132,7 @@ export default function Settings({
   section: Section;
   onSection: (section: Section) => void;
   onClose: () => void;
+  onNewChat?: (project: string) => void;
   /** One screen at a time: the list, or a section (`isNarrow`). */
   narrow?: boolean;
   /** Opened as «Settings» rather than on a section: a narrow window shows the list first. */
@@ -262,7 +264,7 @@ export default function Settings({
               onSave={ownMcp.save}
             />
           )}
-          {shown === "plugins" && <PluginsSection />}
+          {shown === "plugins" && <PluginsSection onNewChat={project && onNewChat ? () => onNewChat(project) : undefined} />}
           {shown === "appearance" && <AppearanceSection prefs={prefs} onPatch={patchPrefs} />}
           {shown === "notices" && <NoticesSection prefs={prefs} onPatch={patchPrefs} />}
           {shown === "about" && <AboutSection prefs={prefs} onPatch={patchPrefs} />}

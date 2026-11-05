@@ -11,6 +11,7 @@ mod chats;
 mod mcp;
 mod notify;
 mod prefs;
+mod plugins;
 mod profile;
 mod project;
 mod project_entries;
@@ -601,6 +602,9 @@ pub fn run() {
             });
         })
         .plugin(tauri_plugin_opener::init())
+        // The update itself: the check is the core's (`update`), the download,
+        // the signature and the install are the plugin's.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         // Geometry only. Decorations and visibility come from the config of
         // the platform the app runs on, and a saved value from another build
@@ -682,6 +686,12 @@ pub fn run() {
             project_commands,
             project_skills,
             list_plugins,
+            plugins::preview_plugin,
+            plugins::install_reviewed_plugin,
+            plugins::discard_plugin_preview,
+            plugins::prefer_plugin_copy,
+            plugins::ignore_plugin_duplicates,
+            plugins::open_plugins_folder,
             set_plugin_enabled,
             list_marketplaces,
             add_marketplace,
@@ -713,6 +723,8 @@ pub fn run() {
             tray::set_tray_labels,
             update::check_for_updates,
             update::update_status,
+            update::install::install_app_update,
+            update::install::install_status,
             project::project_settings,
             project::save_project_settings,
             project::project_instructions,

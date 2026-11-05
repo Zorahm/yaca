@@ -277,7 +277,12 @@ fn the_first_plugin_of_a_name_wins() {
     claude_plugin(&config, "b-second", r#"{ "name": "same" }"#);
     let catalog = own(&config);
     assert!(only(&catalog).root.ends_with("a-first"));
-    assert!(catalog.diagnostics()[0].message.contains("already loaded"));
+    assert!(catalog.diagnostics().is_empty());
+    let report = catalog.report();
+    assert_eq!(report.plugins[0].duplicates.len(), 1);
+    assert!(report.plugins[0].duplicates[0]
+        .message
+        .contains("already loaded"));
 }
 
 /// A Claude Code home with `installs` (id → install path, scope) and its
@@ -458,4 +463,48 @@ fn the_report_counts_what_each_plugin_brings() {
     let report = own(&config).report();
     let s = &report.plugins[0];
     assert_eq!((s.skills, s.commands, s.mcp_servers, s.hooks), (2, 1, 0, 0));
+    assert_eq!(s.contents.skills, ["a", "b"]);
+    assert_eq!(s.contents.commands[0].name, "x:c");
+}
+
+#[test]
+fn reports_show_launch_commands_without_exposing_server_credentials() {
+    let config = TempDir::new();
+    claude_plugin(&config, "x", r#"{ "name": "x" }"#);
+    config.write("plugins/x/.mcp.json", r#"{"mcpServers":{"local":{"command":"node","args":["server.js"],"env":{"SECRET":"hidden-token"}}}}"#);
+    config.write(
+        "plugins/x/hooks/hooks.json",
+        r#"{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"echo review-me"}]}]}}"#,
+    );
+    let report = own(&config).report();
+    assert_eq!(report.plugins[0].contents.hooks[0].event, "SessionStart");
+    assert_eq!(
+        report.plugins[0].contents.hooks[0].command,
+        "echo review-me"
+    );
+    assert!(report.plugins[0].contents.mcp_servers[0]
+        .command
+        .contains("server.js"));
+    assert!(!serde_json::to_string(&report)
+        .unwrap()
+        .contains("hidden-token"));
+}
+
+#[test]
+fn choosing_a_duplicate_changes_the_loaded_copy_and_ignoring_is_persistent() {
+    let config = TempDir::new();
+    claude_plugin(&config, "first", r#"{"name":"x","version":"1.0.0"}"#);
+    claude_plugin(&config, "second", r#"{"name":"x","version":"2.0.0"}"#);
+    let first = own(&config).report();
+    let second_path = &first.plugins[0].duplicates[0].path;
+    let mut switches = state::Switches::load(config.path());
+    switches.prefer("x", second_path);
+    switches.ignore("x", true);
+    switches.save(config.path()).unwrap();
+    let next = own(&config);
+    assert!(next.diagnostics().is_empty());
+    assert_eq!(only(&next).version.as_deref(), Some("2.0.0"));
+    let next = next.report();
+    assert!(next.plugins[0].duplicates[0].path.ends_with("first"));
+    assert!(next.plugins[0].duplicates[0].ignored);
 }

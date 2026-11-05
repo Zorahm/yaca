@@ -5,6 +5,12 @@
  */
 export type ReleaseInfo = { 
 /**
+ * The tag as published: `v1.0.1-beta`. The updater manifest of the release
+ * lives under it, so it is taken from the answer rather than put together
+ * from the version.
+ */
+tag: string, 
+/**
  * The tag without a leading `v`: `1.0.1-beta`.
  */
 version: string, 

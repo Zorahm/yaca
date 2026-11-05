@@ -4,7 +4,10 @@
 
 import type { settings as source } from "../ru/settings";
 
+import { pluginSettings } from "./pluginSettings";
+
 export const settings = {
+  ...pluginSettings,
   "project.create": "Projekt erstellen",
   "project.edit": "Projekt bearbeiten",
   "project.description": "Verwandte Ordner unter einem Namen zusammenfassen.",
@@ -29,9 +32,9 @@ export const settings = {
 
   "tools.title": "Tools",
   "plug.title": "Plugins",
-  "plug.lede": "Plugins im Format von Claude Code und Agent Plugins: eigene liegen im Ordner plugins des Einstellungsverzeichnisses, in Claude Code installierte werden von selbst übernommen. Ein Schalter gilt ab dem nächsten Chat.",
+  "plug.lede": "Plugins ergänzen Skills, Befehle, MCP-Server und Hooks. Eigene liegen im Ordner plugins; Claude-Code-Plugins werden automatisch erkannt.",
   "plug.none": "Keine Plugins.",
-  "plug.enabled": "Plugin {name} aktiv",
+  "plug.enabled": "In Yaca aktivieren: {name}",
   "plug.origin_yaca": "Yaca",
   "plug.origin_claude": "Claude Code",
   "plug.counts": "Skills: {skills} · Befehle: {commands} · MCP-Server: {mcp} · Hooks: {hooks}",
@@ -96,7 +99,7 @@ export const settings = {
     "Das Gespräch geht an den selbst gewählten Anbieter; Schlüssel liegen im Systemschlüsselbund, und vor Änderungen wird der Stand des Projekts gesichert, zu dem man zurückkehren kann.",
   "about.updates": "Updates",
   "about.updates_hint":
-    "Sieht in den Yaca-Releases auf GitHub nach. Nichts wird von selbst geladen oder installiert.",
+    "Prüft die Yaca-Releases auf GitHub und lädt auf Knopfdruck eine neue Version herunter und installiert sie. Von selbst ändert es nichts.",
   "about.update_check": "Prüfen",
   "about.update_checking": "Prüfe …",
   "about.update_latest": "Die neueste Version ist installiert.",
@@ -106,6 +109,21 @@ export const settings = {
   "about.update_no_changes": "Das Release hat keine Beschreibung.",
   "about.update_download": "Herunterladen",
   "about.update_page": "Release-Seite",
+  "about.update_install": "Aktualisieren",
+  "about.update_downloading": "Update wird heruntergeladen…",
+  "about.update_downloading_percent": "Update wird heruntergeladen… {percent} %",
+  "about.update_installing": "Wird installiert und neu gestartet…",
+  "about.update_install_failed": "Aktualisierung fehlgeschlagen",
+  "about.update_retry": "Erneut versuchen",
+  "about.update_busy": "Ein Lauf ist aktiv. Die Aktualisierung bricht ihn ab.",
+  "about.update_busy_do": "Trotzdem aktualisieren",
+  "about.update_no_artifact":
+    "Für dieses Release gibt es keinen Build für dein System. Lade ihn von der Release-Seite.",
+  "about.update_signature":
+    "Die Updatedatei hat die Signaturprüfung nicht bestanden und wurde nicht installiert.",
+  "about.update_dev": "In einem Entwicklungsbuild ist keine Aktualisierung möglich.",
+  "about.update_install_error":
+    "Die Installation ist fehlgeschlagen. Prüfe freien Speicher und die Rechte des Programmordners.",
   "about.update_offline": "GitHub ist nicht erreichbar. Prüfe die Verbindung.",
   "about.update_rate_limited":
     "GitHub begrenzt die Anfragen von dieser Adresse. Versuche es später erneut.",

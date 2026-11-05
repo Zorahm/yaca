@@ -27,6 +27,8 @@ mod fetch;
 mod git;
 pub mod marketplace;
 mod registry;
+mod review;
+pub use review::PluginPreview;
 
 #[cfg(test)]
 mod tests;
@@ -34,65 +36,20 @@ mod tests;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use ts_rs::TS;
 
 use crate::error::CoreError;
 use crate::plugin::{read_package, set_enabled, PluginSources, PluginSummary};
 use crate::workspace::roots::plain;
 use marketplace::{Known, MarketplaceOrigin, MarketplaceSource};
+mod types;
 use registry::{From, Install, Registry};
+pub use types::{CatalogEntry, MarketplaceSummary, UpdateOutcome};
 
 pub use registry::installed;
 
 pub const CACHE_DIR: &str = "plugin-cache";
 /// The marketplace name of a plugin installed by address.
 pub const DIRECT: &str = "direct";
-
-/// A marketplace as the window and the CLI show it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-#[ts(export)]
-#[serde(rename_all = "camelCase")]
-pub struct MarketplaceSummary {
-    pub name: String,
-    pub source: String,
-    pub origin: MarketplaceOrigin,
-    /// Its `marketplace.json` is on disk: cloned, or a folder.
-    pub fetched: bool,
-    #[ts(type = "number | null")]
-    pub plugins: Option<u32>,
-    /// Why the fetched copy cannot be read.
-    pub error: Option<String>,
-}
-
-/// One plugin a marketplace offers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-#[ts(export)]
-#[serde(rename_all = "camelCase")]
-pub struct CatalogEntry {
-    /// `plugin@marketplace`.
-    pub id: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub version: Option<String>,
-    pub category: Option<String>,
-    pub homepage: Option<String>,
-    pub source: String,
-    /// Why Yaca cannot install it; `None` when it can.
-    pub unavailable: Option<String>,
-    /// The version installed, if it is.
-    pub installed: Option<String>,
-}
-
-/// What an update did.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-#[ts(export)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateOutcome {
-    pub id: String,
-    pub from: String,
-    pub to: String,
-    pub changed: bool,
-}
 
 pub struct Installer {
     config_dir: PathBuf,
@@ -152,6 +109,11 @@ impl Installer {
             fetched,
             plugins,
             error,
+            updated_at: std::fs::metadata(dir.join(marketplace::MANIFEST))
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs()),
         }
     }
 

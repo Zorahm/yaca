@@ -45,7 +45,9 @@ Yaca is in beta (`1.0.0-beta`). Installers (Windows NSIS `.exe`, macOS `.dmg`, L
 - **Interface in nine languages** (Russian, English, German, Spanish, French, Japanese, Korean, Portuguese, Chinese), following the system language by default, with a light and a dark theme.
 - **Browser.** A real page per chat in the browser column beside the feed: the model opens it, reads it, takes screenshots, clicks and types, and runs JavaScript in it, and the human watches and can click in the same page. Windows only for now; see [Browser](#browser).
 
-**Updates.** About → Updates checks the GitHub releases by hand, and the app does the same by itself shortly after start and every few hours (switch it off in the same place). A newer release is shown with its changelog, the text of the release, and a download link; nothing is installed automatically. A beta is told about the next beta and the release, a release only about releases (alpha < beta < rc < release, then the numbers). The menu item "Help → Check for Updates" opens "About", where this is explained.
+**Updates.** About → Updates checks the GitHub releases by hand, and the app does the same by itself shortly after start and every few hours (switch it off in the same place). A newer release appears quietly as a card in the sidebar — what it is, what it changes, and one button. The button downloads the build for this system, verifies its signature against the key in `src-tauri/tauri.conf.json`, installs it and restarts Yaca; nothing is installed without that press. A turn that is running is interrupted by the restart, so the button asks a second time when one is. A beta is told about the next beta and the release, a release only about releases (alpha < beta < rc < release, then the numbers). The menu item "Help → Check for Updates" opens "About", where the changelog is.
+
+The install itself is `tauri-plugin-updater`, pinned to 2.12: it is the last release that runs on Tauri 2.11, which the browser column is built against. On Windows the NSIS installer replaces the program and starts it again (`passive` mode: a progress bar, no questions); on macOS and Linux the new build is put in place and the app restarts itself. Linux `.deb` asks for the administrator password. Neither the macOS nor the Linux bundle has ever been built, so an update there is untested; a download cannot be called off once started.
 
 ## Getting Started
 
@@ -247,7 +249,7 @@ Plugin discovery locations:
 
 1. `plugins/<directory>/` in the app settings folder — user plugins installed manually.
 2. Installed by Yaca from a marketplace or direct URL; see [Installing Plugins](#installing-plugins).
-3. Installed in Claude Code for the user (`scope: user` in `~/.claude/plugins/installed_plugins.json`). Yaca only reads them and never writes to Claude Code directories. If the same plugin exists in both Yaca and Claude Code, the Yaca copy is loaded.
+3. Installed in Claude Code for the user (`scope: user` in `~/.claude/plugins/installed_plugins.json`). Yaca only reads them and never writes to Claude Code directories. If the same plugin exists in both Yaca and Claude Code, the Yaca copy is loaded by default. Duplicate copies appear as a warning on the active plugin's card; its expanded contents let you choose another discovered copy or ignore the warning. These choices are stored in Yaca's `plugins.json`.
 
 Toggles are stored in `plugins.json` in the settings directory and can be configured in the "Plugins" settings tab or via `yaca plugins --enable|--disable`. A plugin without an explicit toggle inherits its state from Claude Code's `enabledPlugins`, or defaults to enabled if local to Yaca. Changes apply to newly opened chats; an existing chat continues using the set it started with.
 
@@ -304,6 +306,11 @@ yaca plugins browse claude-plugins-official review
 yaca plugins install name@marketplace
 yaca plugins update
 yaca plugins uninstall name@marketplace
+yaca plugins preview name@marketplace
+yaca plugins confirm <preview-token>
+yaca plugins cancel <preview-token>
+yaca plugins prefer <plugin-name> <discovered-path>
+yaca plugins ignore-duplicates <plugin-name> [--restore]
 ```
 
 The marketplace list includes the official `anthropics/claude-plugins-official` by default, alongside marketplaces known to Claude Code (`~/.claude/plugins/known_marketplaces.json`). Custom marketplaces can be added as GitHub `owner/repo`, git URL, or local directory; local directories are read in place. Nothing is downloaded until a marketplace is browsed or "Update" is clicked, at which point Yaca clones it into its `marketplaces` directory (without using Claude Code's clone). Built-in or Claude Code-imported marketplaces can be removed to hide them.
@@ -317,7 +324,9 @@ Installation details:
 - Clones a single commit via git without history. Git is run non-interactively: if authentication is required, installation fails with a git error rather than hanging.
 - Downloaded content is first validated using the same loader used in sessions. Plugins that fail validation are not installed, leaving no leftover files.
 - Downloaded code is never run automatically: no `npm install`, no scripts. Plugin components (hooks, MCP servers) only run within a chat session under the same rules as manually installed plugins.
-- Installed plugins are enabled by default: installation implies consent, matching Claude Code. The number of hooks and servers is shown directly in the list.
+- Installed plugins are enabled by default: installation implies consent, matching Claude Code. Settings separate installed plugins from marketplaces. Cards show nonzero component counts and expand to list skills, commands, hook commands and MCP launch commands or addresses. Claude Code installations cannot be removed by Yaca.
+- Catalog installation first stages a package for review, including its executable components. Confirmation installs those exact files, verifies that they have not changed, and does not fetch another revision. Leaving the catalog or cancelling discards an unused preview. The CLI's `preview`, `confirm` and `cancel` commands use the same workflow; `install` remains a direct installation command.
+- Available version chips use version metadata in fetched marketplace catalogs. Refresh a marketplace to read newer metadata; plugins whose sources do not publish version metadata can still be updated from their action menu.
 - Updates are manual only. Updating re-fetches the plugin and replaces files if changed; a new marketplace commit without changes in the plugin itself is not treated as an update.
 - Uninstallation removes plugin files, the installation record, and the toggle. The plugin's `plugin-data` folder is preserved to protect user data.
 

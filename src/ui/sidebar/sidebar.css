@@ -116,6 +116,39 @@
   flex: none;
 }
 
+/* Stopped: the failure is what needs the eye, so the frame and the title take
+   the error colour and the reason is spelled out under them. */
+.side-update[data-phase="failed"] {
+  border-color: var(--err);
+}
+
+.side-update[data-phase="failed"] .side-update-title {
+  color: var(--err);
+}
+
+.side-update-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+/* The file arriving: one thin line, filled by the part that is already here. */
+.side-update-bar {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.side-update-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--dur-enter) var(--ease-enter);
+}
+
 .side-update-actions {
   display: flex;
   gap: 6px;
