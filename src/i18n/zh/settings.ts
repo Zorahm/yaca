@@ -4,7 +4,10 @@
 
 import type { settings as source } from "../ru/settings";
 
+import { pluginSettings } from "./pluginSettings";
+
 export const settings = {
+  ...pluginSettings,
   "set.title": "设置",
   "set.nav": "设置分区",
   "set.close": "返回对话",
@@ -14,9 +17,9 @@ export const settings = {
 
   "tools.title": "工具",
   "plug.title": "插件",
-  "plug.lede": "Claude Code 与 Agent Plugins 格式的插件：自己的插件放在设置目录的 plugins 文件夹中，Claude Code 安装的会自动读取。开关从下一个对话开始生效。",
+  "plug.lede": "插件可添加技能、命令、MCP 服务器和钩子。自有插件放在 plugins 文件夹中，Claude Code 插件会自动发现。",
   "plug.none": "没有插件。",
-  "plug.enabled": "启用插件 {name}",
+  "plug.enabled": "在 Yaca 中启用：{name}",
   "plug.origin_yaca": "Yaca",
   "plug.origin_claude": "Claude Code",
   "plug.counts": "技能：{skills} · 命令：{commands} · MCP 服务器：{mcp} · 钩子：{hooks}",

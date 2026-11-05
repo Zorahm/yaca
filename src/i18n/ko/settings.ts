@@ -4,7 +4,10 @@
 
 import type { settings as source } from "../ru/settings";
 
+import { pluginSettings } from "./pluginSettings";
+
 export const settings = {
+  ...pluginSettings,
   "set.title": "설정",
   "set.nav": "설정 섹션",
   "set.close": "대화로 돌아가기",
@@ -14,9 +17,9 @@ export const settings = {
 
   "tools.title": "도구",
   "plug.title": "플러그인",
-  "plug.lede": "Claude Code 형식과 Agent Plugins 형식의 플러그인입니다. 내 플러그인은 설정 디렉터리의 plugins 폴더에 두고, Claude Code에 설치된 것은 자동으로 읽힙니다. 스위치는 다음 채팅부터 적용됩니다.",
+  "plug.lede": "플러그인은 스킬, 명령, MCP 서버와 훅을 추가합니다. 직접 만든 플러그인은 plugins 폴더에 두며 Claude Code 플러그인은 자동으로 감지됩니다.",
   "plug.none": "플러그인이 없습니다.",
-  "plug.enabled": "플러그인 {name} 사용",
+  "plug.enabled": "Yaca에서 활성화: {name}",
   "plug.origin_yaca": "Yaca",
   "plug.origin_claude": "Claude Code",
   "plug.counts": "스킬: {skills} · 명령: {commands} · MCP 서버: {mcp} · 훅: {hooks}",

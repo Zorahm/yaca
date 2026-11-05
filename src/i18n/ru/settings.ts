@@ -3,7 +3,10 @@
  * of these keys: `../en/settings.ts` has to cover them.
  */
 
+import { pluginSettings } from "./pluginSettings";
+
 export const settings = {
+  ...pluginSettings,
   // --- settings window -------------------------------------------------
   "set.title": "Настройки",
   "set.nav": "Разделы настроек",
@@ -14,9 +17,9 @@ export const settings = {
 
   "tools.title": "Инструменты",
   "plug.title": "Плагины",
-  "plug.lede": "Плагины в формате Claude Code и Agent Plugins: свои лежат в папке plugins каталога настроек, установленные в Claude Code подхватываются сами. Переключатель действует с нового чата.",
+  "plug.lede": "Плагины добавляют навыки, команды, MCP-серверы и хуки. Свои лежат в папке plugins, плагины из Claude Code подхватываются автоматически.",
   "plug.none": "Плагинов нет.",
-  "plug.enabled": "Плагин {name} включён",
+  "plug.enabled": "Включить в Yaca: {name}",
   "plug.origin_yaca": "Yaca",
   "plug.origin_claude": "Claude Code",
   "plug.counts": "навыки: {skills} · команды: {commands} · серверы MCP: {mcp} · хуки: {hooks}",

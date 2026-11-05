@@ -442,10 +442,11 @@ fn yacas_install_comes_before_the_same_plugin_installed_by_claude_code() {
     let catalog = PluginSources::new(config.path(), Some(home.path().to_path_buf())).load();
     let p = catalog.get("p@market").unwrap();
     assert_eq!(p.origin, PluginOrigin::Marketplace);
-    assert!(catalog
-        .diagnostics()
-        .iter()
-        .any(|d| d.message.contains("already loaded")));
+    assert!(catalog.diagnostics().is_empty());
+    assert_eq!(
+        catalog.report().plugins[0].duplicates[0].origin,
+        PluginOrigin::ClaudeCode
+    );
 }
 
 #[test]

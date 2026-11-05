@@ -571,6 +571,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
         section={settingsAt}
         onSection={setSettingsAt}
         onClose={closeSettings}
+        onNewChat={(root) => { closeSettings(); newChat(root); }}
         narrow={narrow}
         startOnList={settingsList}
       />

@@ -21,9 +21,26 @@ const SWITCHES: &str = "plugins.json";
 pub(super) struct Switches {
     #[serde(default)]
     enabled: BTreeMap<String, bool>,
+    #[serde(default)]
+    preferred: BTreeMap<String, String>,
+    #[serde(default)]
+    ignored_duplicates: BTreeMap<String, bool>,
 }
 
 impl Switches {
+    pub(super) fn preferred(&self, name: &str) -> Option<&str> {
+        self.preferred.get(name).map(String::as_str)
+    }
+    pub(super) fn prefer(&mut self, name: &str, path: &str) {
+        self.preferred.insert(name.into(), path.into());
+        self.ignored_duplicates.remove(name);
+    }
+    pub(super) fn ignored(&self, name: &str) -> bool {
+        self.ignored_duplicates.get(name).copied().unwrap_or(false)
+    }
+    pub(super) fn ignore(&mut self, name: &str, ignored: bool) {
+        self.ignored_duplicates.insert(name.into(), ignored);
+    }
     /// A file that is missing or broken reads as no switches: every plugin
     /// then takes its default, which is the state before anything was set.
     pub(super) fn load(config_dir: &Path) -> Self {

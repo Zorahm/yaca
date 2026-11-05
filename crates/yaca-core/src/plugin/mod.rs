@@ -29,7 +29,9 @@ pub mod agent;
 pub mod claude;
 pub mod hooks;
 pub mod install;
+mod presentation;
 mod state;
+pub use presentation::{PluginContents, PluginDuplicate};
 
 #[cfg(test)]
 mod tests;
@@ -163,6 +165,8 @@ pub struct PluginSummary {
     pub mcp_servers: u32,
     pub hooks: u32,
     pub notes: Vec<String>,
+    pub contents: PluginContents,
+    pub duplicates: Vec<PluginDuplicate>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, TS)]
@@ -252,6 +256,7 @@ pub fn claude_home() -> Option<PathBuf> {
 pub struct PluginCatalog {
     plugins: Vec<Plugin>,
     diagnostics: Vec<PluginDiagnostic>,
+    duplicates: BTreeMap<String, Vec<PluginDuplicate>>,
 }
 
 impl PluginCatalog {
@@ -294,13 +299,45 @@ impl PluginCatalog {
             Ok(read) => read,
             Err(why) => return self.reject(&shown, why),
         };
-        if let Some(first) = self.plugins.iter().find(|p| p.name == contents.name) {
+        if let Some(at) = self.plugins.iter().position(|p| p.name == contents.name) {
+            let first = &self.plugins[at];
             let why = format!(
                 "plugin «{}» is already loaded from {}",
                 contents.name,
                 plain(&first.root)
             );
-            return self.reject(&shown, why);
+            let prefer_incoming = switches.preferred(&contents.name) == Some(plain(&root).as_str());
+            let duplicate = PluginDuplicate {
+                path: if prefer_incoming {
+                    plain(&first.root)
+                } else {
+                    plain(&root)
+                },
+                origin: if prefer_incoming {
+                    first.origin
+                } else {
+                    origin
+                },
+                id: if prefer_incoming {
+                    first.id.clone()
+                } else {
+                    installed
+                        .as_ref()
+                        .map(|(id, _)| id.clone())
+                        .unwrap_or_else(|| contents.name.clone())
+                },
+                message: why,
+                ignored: switches.ignored(&contents.name),
+            };
+            self.duplicates
+                .entry(contents.name.clone())
+                .or_default()
+                .push(duplicate);
+            if prefer_incoming {
+                self.plugins.remove(at);
+            } else {
+                return;
+            }
         }
 
         let (id, fallback) = match installed {
@@ -336,7 +373,15 @@ impl PluginCatalog {
 
     pub fn report(&self) -> PluginReport {
         PluginReport {
-            plugins: self.plugins.iter().map(summary).collect(),
+            plugins: self
+                .plugins
+                .iter()
+                .map(|p| {
+                    let mut s = presentation::summary(p);
+                    s.duplicates = self.duplicates.get(&p.name).cloned().unwrap_or_default();
+                    s
+                })
+                .collect(),
             diagnostics: self.diagnostics.clone(),
         }
     }
@@ -378,35 +423,33 @@ fn data_name(id: &str) -> String {
         .collect()
 }
 
-fn summary(p: &Plugin) -> PluginSummary {
-    let skills = p
-        .skill_dirs
-        .iter()
-        .filter_map(|d| std::fs::read_dir(d).ok())
-        .flat_map(|r| r.flatten())
-        .filter(|e| e.path().join(crate::skills::catalog::FILE).is_file())
-        .count();
-    PluginSummary {
-        id: p.id.clone(),
-        name: p.name.clone(),
-        version: p.version.clone(),
-        description: p.description.clone(),
-        origin: p.origin,
-        format: p.format,
-        enabled: p.enabled,
-        path: plain(&p.root),
-        skills: skills as u32,
-        commands: p.commands.len() as u32,
-        mcp_servers: p.mcp_servers.len() as u32,
-        hooks: p.hooks.len() as u32,
-        notes: p.notes.clone(),
-    }
-}
-
 /// Turns a plugin on or off for the sessions opened after this.
 pub fn set_enabled(config_dir: &Path, id: &str, enabled: bool) -> Result<(), CoreError> {
     let mut switches = state::Switches::load(config_dir);
     switches.set(id, enabled);
+    switches.save(config_dir)
+}
+
+/// Selects a discovered copy without modifying either installation.
+pub fn prefer_copy(config_dir: &Path, name: &str, path: &str) -> Result<(), CoreError> {
+    let catalog = PluginSources::standard(config_dir).load().report();
+    let valid = catalog
+        .plugins
+        .iter()
+        .any(|p| p.name == name && (p.path == path || p.duplicates.iter().any(|d| d.path == path)));
+    if !valid {
+        return Err(CoreError::Config(
+            "plugin copy is no longer available".into(),
+        ));
+    }
+    let mut switches = state::Switches::load(config_dir);
+    switches.prefer(name, path);
+    switches.save(config_dir)
+}
+
+pub fn ignore_duplicates(config_dir: &Path, name: &str, ignored: bool) -> Result<(), CoreError> {
+    let mut switches = state::Switches::load(config_dir);
+    switches.ignore(name, ignored);
     switches.save(config_dir)
 }
 

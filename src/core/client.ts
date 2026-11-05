@@ -70,6 +70,7 @@ import type { CatalogEntry } from "./bindings/CatalogEntry";
 import type { MarketplaceSummary } from "./bindings/MarketplaceSummary";
 import type { PluginReport } from "./bindings/PluginReport";
 import type { PluginSummary } from "./bindings/PluginSummary";
+import type { PluginPreview } from "./bindings/PluginPreview";
 import type { UpdateOutcome } from "./bindings/UpdateOutcome";
 import type { SkillDiagnostic } from "./bindings/SkillDiagnostic";
 import type { SkillInfo } from "./bindings/SkillInfo";
@@ -572,6 +573,30 @@ export function marketplaceCatalog(name: string): Promise<CatalogEntry[]> {
 /** Installs `plugin@marketplace`; it is on afterwards. */
 export function installPlugin(id: string): Promise<PluginSummary> {
   return inTauri ? invoke<PluginSummary>("install_plugin", { id }) : NO_STAND();
+}
+
+export function previewPlugin(id: string): Promise<PluginPreview> {
+  return inTauri ? invoke<PluginPreview>("preview_plugin", { id }) : NO_STAND();
+}
+
+export function installReviewedPlugin(token: string): Promise<PluginSummary> {
+  return inTauri ? invoke<PluginSummary>("install_reviewed_plugin", { token }) : NO_STAND();
+}
+
+export function discardPluginPreview(token: string): Promise<void> {
+  return inTauri ? invoke<void>("discard_plugin_preview", { token }) : Promise.resolve();
+}
+
+export function preferPluginCopy(name: string, path: string): Promise<PluginReport> {
+  return inTauri ? invoke<PluginReport>("prefer_plugin_copy", { name, path }) : NO_STAND();
+}
+
+export function ignorePluginDuplicates(name: string, ignored: boolean): Promise<PluginReport> {
+  return inTauri ? invoke<PluginReport>("ignore_plugin_duplicates", { name, ignored }) : NO_STAND();
+}
+
+export function openPluginsFolder(): Promise<void> {
+  return inTauri ? invoke<void>("open_plugins_folder") : NO_STAND();
 }
 
 export function updatePlugin(id: string): Promise<UpdateOutcome> {

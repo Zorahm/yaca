@@ -4,7 +4,10 @@
 
 import type { settings as source } from "../ru/settings";
 
+import { pluginSettings } from "./pluginSettings";
+
 export const settings = {
+  ...pluginSettings,
   "set.title": "Einstellungen",
   "set.nav": "Einstellungsbereiche",
   "set.close": "Zurück zum Gespräch",
@@ -14,9 +17,9 @@ export const settings = {
 
   "tools.title": "Tools",
   "plug.title": "Plugins",
-  "plug.lede": "Plugins im Format von Claude Code und Agent Plugins: eigene liegen im Ordner plugins des Einstellungsverzeichnisses, in Claude Code installierte werden von selbst übernommen. Ein Schalter gilt ab dem nächsten Chat.",
+  "plug.lede": "Plugins ergänzen Skills, Befehle, MCP-Server und Hooks. Eigene liegen im Ordner plugins; Claude-Code-Plugins werden automatisch erkannt.",
   "plug.none": "Keine Plugins.",
-  "plug.enabled": "Plugin {name} aktiv",
+  "plug.enabled": "In Yaca aktivieren: {name}",
   "plug.origin_yaca": "Yaca",
   "plug.origin_claude": "Claude Code",
   "plug.counts": "Skills: {skills} · Befehle: {commands} · MCP-Server: {mcp} · Hooks: {hooks}",

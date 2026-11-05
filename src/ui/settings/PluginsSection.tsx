@@ -1,192 +1,118 @@
-/**
- * Plugins in the settings window: what a new chat loads, the switches, and
- * the marketplaces new ones come from.
- *
- * Read from the core on every opening of the section — Yaca's own plugin
- * folder, what Yaca installed, what Claude Code installed — so a plugin
- * installed a minute ago is here. A plugin's files are not edited here: they
- * are someone else's, and the place to change them is not this window. What
- * Yaca installed it can update and remove; the rest only switch.
- *
- * A switch, an install or a removal reaches the chats opened after it. An open
- * chat keeps the plugins it started with, as it keeps its MCP servers.
- */
-
-import { ArrowsClockwise, X } from "@phosphor-icons/react";
+import { ArrowsClockwise, FolderOpen, Plus } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
-
 import {
-  listPlugins,
-  setPluginEnabled,
-  uninstallPlugin,
-  updatePlugin,
-  type PluginReport,
-  type PluginSummary,
+  listPlugins, listMarketplaces, marketplaceCatalog, openPluginsFolder,
+  setPluginEnabled, uninstallPlugin, updatePlugin, preferPluginCopy, ignorePluginDuplicates,
+  type PluginReport, type MarketplaceSummary,
 } from "../../core/client";
-import { t, type Key } from "../../i18n";
+import { t } from "../../i18n";
 import { Marketplaces } from "./Marketplaces";
-import { Switch } from "./Row";
+import { PluginCard } from "./PluginCard";
+import { PluginOriginal } from "./PluginParts";
+import { compactPluginPath, newerPluginVersion } from "./pluginPresentation";
+import { Segments } from "./Row";
+import "./plugins.css";
 
-const EMPTY: PluginReport = { plugins: [], diagnostics: [] };
-
-const ORIGIN: Record<PluginSummary["origin"], Key> = {
-  yaca: "plug.origin_yaca",
-  marketplace: "plug.origin_yaca",
-  claudeCode: "plug.origin_claude",
-};
-
-export function PluginsSection() {
+export function PluginsSection({ onNewChat }: { onNewChat?: () => void }) {
   const [report, setReport] = useState<PluginReport | null>(null);
+  const [markets, setMarkets] = useState<MarketplaceSummary[]>([]);
+  const [versions, setVersions] = useState<Record<string, string>>({});
+  const [tab, setTab] = useState<"installed" | "markets">("installed");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [pendingChat, setPendingChat] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState<string | null>(null);
 
-  const reload = useCallback(() => {
-    void listPlugins().then(setReport, (e: unknown) => {
-      setReport(EMPTY);
-      setError(String(e));
-    });
+  const reloadMarkets = useCallback(async () => {
+    const next = await listMarketplaces();
+    setMarkets(next);
+    // Read cached catalogs only: opening settings must not clone repositories.
+    const catalogs = await Promise.allSettled(next.filter((m) => m.fetched && !m.error).map((m) => marketplaceCatalog(m.name)));
+    const available: Record<string, string> = {};
+    for (const result of catalogs) if (result.status === "fulfilled") {
+      for (const entry of result.value) if (entry.version) available[entry.id] = entry.version;
+    }
+    setVersions(available);
   }, []);
-  useEffect(reload, [reload]);
 
-  const toggle = (id: string, on: boolean) => {
-    void setPluginEnabled(id, on).then(
-      (next) => {
-        setError(null);
-        setReport(next);
-      },
-      (e: unknown) => setError(String(e)),
-    );
+  const reload = useCallback(async () => {
+    const [plugins, marketplaces] = await Promise.allSettled([listPlugins(), reloadMarkets()]);
+    if (plugins.status === "fulfilled") setReport(plugins.value);
+    else setError(String(plugins.reason));
+    if (marketplaces.status === "rejected") setError(String(marketplaces.reason));
+  }, [reloadMarkets]);
+  useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    if (!pendingChat) return;
+    const timer = window.setTimeout(() => setPendingChat(false), 12000);
+    return () => window.clearTimeout(timer);
+  }, [pendingChat, report]);
+
+  const run = async (id: string, action: () => Promise<unknown>, changed = false) => {
+    if (busy !== null) return;
+    setBusy(id); setError(null); setNotice(null);
+    try {
+      await action();
+      if (changed) setPendingChat(true);
+    } catch (e) { setError(String(e)); }
+    finally { await reload(); setBusy(null); }
   };
 
-  const update = (id: string) => {
-    setBusy(id);
-    setError(null);
-    void updatePlugin(id)
-      .then((o) => {
-        setNotice(o.changed ? t("plug.updated", { id, from: o.from, to: o.to }) : t("plug.up_to_date", { id }));
-        reload();
-      }, (e: unknown) => setError(String(e)))
-      .finally(() => setBusy(null));
+  const update = async (id: string) => {
+    const outcome = await updatePlugin(id);
+    setNotice(outcome.changed ? t("plug.updated", { id, from: outcome.from, to: outcome.to }) : t("plug.up_to_date", { id }));
   };
+  const managed = report?.plugins.filter((p) => p.origin === "marketplace") ?? [];
 
-  const remove = (id: string) => {
-    setBusy(id);
-    setError(null);
-    void uninstallPlugin(id)
-      .then(reload, (e: unknown) => setError(String(e)))
-      .finally(() => setBusy(null));
-  };
-
-  return (
-    <>
-      <div className="set-head">
-        <div>
-          <h1 className="set-title">{t("plug.title")}</h1>
-          <p className="set-lede">{t("plug.lede")}</p>
-        </div>
+  return <div className="plugins-page">
+    <div className="plugin-page-heading">
+      <h1 className="set-title">{t("plug.title")}</h1>
+      <div className="plugin-actions">
+        <button type="button" className="btn btn-small btn-accent" onClick={() => setTab("markets")}><Plus size={14} />{t("mkt.install")}</button>
+        <button type="button" className="btn btn-small" onClick={() => void run("folder", openPluginsFolder)} disabled={busy !== null}><FolderOpen size={14} />{t("plug.folder")}</button>
+        <button type="button" className="btn btn-small" disabled={busy !== null || managed.length === 0}
+          title={t("plug.update_source")} onClick={() => void run("all", async () => {
+            const results: string[] = [];
+            for (const p of managed) {
+              try { await update(p.id); } catch (e) { results.push(`${p.name}: ${String(e)}`); }
+            }
+            setNotice(t("plug.update_all_done"));
+            if (results.length) throw new Error(results.join("\n"));
+          }, true)}><ArrowsClockwise size={14} className={busy === "all" ? "spin" : undefined} />{t("plug.update_all")}</button>
       </div>
-
-      {error !== null && <div className="set-error">{error}</div>}
-      {notice !== null && <div className="set-empty">{notice}</div>}
-
-      {report !== null && report.plugins.length === 0 && (
-        <div className="set-empty">{t("plug.none")}</div>
-      )}
-
-      {report !== null && report.plugins.length > 0 && (
-        <div className="prov-list">
-          {report.plugins.map((p) => (
-            <div className="prov plug" key={p.id} title={p.path}>
-              <div className="prov-main">
-                <span className="prov-name">
-                  {p.name}
-                  {p.version !== null && <span className="plug-version"> {p.version}</span>}
-                </span>
-                {p.description !== null && <span className="plug-desc">{p.description}</span>}
-                <span className="plug-note">
-                  {t("plug.counts", {
-                    skills: p.skills,
-                    commands: p.commands,
-                    mcp: p.mcpServers,
-                    hooks: p.hooks,
-                  })}
-                </span>
-                {p.notes.map((note) => (
-                  <span key={note} className="plug-note">
-                    {note}
-                  </span>
-                ))}
-              </div>
-
-              <span className="prov-proto">{t(ORIGIN[p.origin])}</span>
-
-              <div className="prov-actions">
-                <Switch on={p.enabled} label={t("plug.enabled", { name: p.id })} onChange={(on) => toggle(p.id, on)} />
-                {p.origin === "marketplace" && (
-                  <>
-                    <button
-                      type="button"
-                      className="btn btn-row"
-                      aria-label={t("plug.update")}
-                      title={t("plug.update")}
-                      disabled={busy !== null}
-                      onClick={() => update(p.id)}
-                    >
-                      <ArrowsClockwise size={14} className={busy === p.id ? "spin" : undefined} />
-                    </button>
-                    {confirming === p.id ? (
-                      <button
-                        type="button"
-                        className="btn btn-row btn-danger"
-                        onClick={() => {
-                          setConfirming(null);
-                          remove(p.id);
-                        }}
-                      >
-                        {t("plug.remove_confirm")}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn btn-row btn-danger"
-                        aria-label={t("plug.remove")}
-                        title={t("plug.remove")}
-                        disabled={busy !== null}
-                        onClick={() => setConfirming(p.id)}
-                        onBlur={() => setConfirming(null)}
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {report !== null && report.diagnostics.length > 0 && (
-        <>
-          <div className="set-subhead set-subhead-sep">
-            <div>
-              <span className="set-subname">{t("plug.problems")}</span>
-            </div>
-          </div>
-          <div className="set-list">
-            {report.diagnostics.map((d, at) => (
-              <div key={`${d.path}-${at}`} className="diag">
-                <span className="diag-message">{d.message}</span>
-                <span className="diag-path">{d.path}</span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      <Marketplaces onInstalled={reload} />
-    </>
-  );
+    </div>
+    <p className="plugin-lede">{t("plug.lede")}</p>
+    <Segments label={t("plug.title")} value={tab} onChange={setTab} options={[
+      { value: "installed", label: `${t("plug.installed_tab")} · ${report?.plugins.length ?? "…"}` },
+      { value: "markets", label: `${t("mkt.title")} · ${markets.length}` },
+    ]} />
+    {error && <div className="set-error" role="alert">{error}</div>}
+    {notice && <div className="plugin-notice" role="status">{notice}</div>}
+    {pendingChat && <div className="plugin-toast" role="status">
+      <span>{t("plug.next_chat")}</span>
+      {onNewChat && <button type="button" className="btn btn-small" onClick={onNewChat}>{t("plug.new_chat")}</button>}
+      <button type="button" className="link" onClick={() => setPendingChat(false)}>{t("common.close")}</button>
+    </div>}
+    {tab === "installed" && <>
+      {report === null && !error && <div className="set-empty">{t("mkt.loading")}</div>}
+      {report?.plugins.length === 0 && <div className="set-empty">{t("plug.none")}</div>}
+      {!!report?.diagnostics.length && <div className="plugin-errors" role="alert">
+        <strong>{t("plug.attention", { count: report.diagnostics.length })}</strong>
+        {report.diagnostics.map((d, i) => <div key={`${d.path}-${i}`}>
+          <p>{t("plug.load_failed")}</p><code title={d.path}>{compactPluginPath(d.path)}</code>
+          <PluginOriginal text={`${d.message}\n${d.path}`} />
+        </div>)}
+      </div>}
+      <div className="plugin-list">
+        {report?.plugins.map((p) => <PluginCard key={p.id} plugin={p} busy={busy !== null}
+          nextVersion={newerPluginVersion(p.version, versions[p.id] ?? null) ? versions[p.id] : null}
+          onToggle={(on) => void run(p.id, async () => { setReport(await setPluginEnabled(p.id, on)); }, true)}
+          onUpdate={() => void run(p.id, () => update(p.id), true)}
+          onRemove={() => void run(p.id, () => uninstallPlugin(p.id), true)}
+          onPrefer={(path) => void run(p.id, async () => { setReport(await preferPluginCopy(p.name, path)); }, true)}
+          onIgnore={(ignored) => void run(p.id, async () => { setReport(await ignorePluginDuplicates(p.name, ignored)); })} />)}
+      </div>
+    </>}
+    {tab === "markets" && <Marketplaces list={markets} onChanged={reloadMarkets} onInstalled={() => { setPendingChat(true); void reload(); }} />}
+  </div>;
 }

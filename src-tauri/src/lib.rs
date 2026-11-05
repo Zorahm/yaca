@@ -11,6 +11,7 @@ mod chats;
 mod mcp;
 mod notify;
 mod prefs;
+mod plugins;
 mod profile;
 mod project;
 mod providers;
@@ -632,6 +633,12 @@ pub fn run() {
             project_commands,
             project_skills,
             list_plugins,
+            plugins::preview_plugin,
+            plugins::install_reviewed_plugin,
+            plugins::discard_plugin_preview,
+            plugins::prefer_plugin_copy,
+            plugins::ignore_plugin_duplicates,
+            plugins::open_plugins_folder,
             set_plugin_enabled,
             list_marketplaces,
             add_marketplace,
