@@ -129,6 +129,18 @@ The update check picks the asset by file suffix and processor name
 Only the core was compiled and tested on Linux (Ubuntu 24.04); the macOS and
 Linux bundles, and the Tauri shell off Windows, have never been built.
 
+The app installs updates through `tauri-plugin-updater`, pinned to `~2.12` (the
+last release on Tauri 2.11; 2.13 needs 2.12 and its wry breaks the browser
+column). It reads `latest.json` of the release the check found, by tag, and
+nothing else: a release published without that file is offered with its page
+instead. The manifest and the `.sig` files come from
+`src-tauri/tauri.updater.conf.json` (`createUpdaterArtifacts`), which only CI
+merges in — a local `npx tauri build` needs no signing key. CI reads
+`TAURI_SIGNING_PRIVATE_KEY` from the repository secrets (the key has no
+password, so there is no password secret); its public half is
+`plugins.updater.pubkey` in `tauri.conf.json`. Changing that key means no
+installed build can verify anything published after it.
+
 ## Git
 
 The owner's rules apply (load the `zowork:solo-git` skill before any git action):
