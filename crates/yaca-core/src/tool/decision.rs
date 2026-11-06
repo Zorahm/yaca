@@ -1,12 +1,11 @@
 //! The `Decision` tool: the agent asks the small model of the Decision
-//! provider a question and gets its short answer back.
+//! provider a question and gets its answer back: typed probabilities from a
+//! decision server, or a short text answer from a chat server.
 //!
 //! The agent uses it for judgments that do not need its own full reasoning —
 //! which skill fits, which of three files to open, whether a request is a
-//! question or an edit. The question goes to the model as it is written; there
-//! is no template, no fixed set of questions and no typed answer. The caller
-//! knows what it is choosing between, and anything built in here would be a
-//! guess about that.
+//! question or an edit. The caller supplies the question, context and options;
+//! the tool never guesses options from prose or asks a scoring model to write.
 //!
 //! The tool exists only in a session that has a model to ask
 //! (`SessionConfig::decision`). A tool that could only answer "not configured"
@@ -33,6 +32,9 @@ use crate::message::Message;
 use crate::provider::systemone::SystemOne;
 use crate::provider::{Provider, ProviderEvent, ProviderRequest};
 
+mod question;
+use question::Question;
+
 /// Who answers: a provider that was built (its key from the keychain) and the
 /// model on it.
 #[derive(Clone)]
@@ -41,8 +43,8 @@ pub struct DecisionSetup {
     pub model: String,
     /// The same server's typed-decision route, when the session is built from a
     /// real provider. Decision models score rather than chat, so Auto's
-    /// reviewer asks this first and falls back to `provider` only when the
-    /// server has no such route.
+    /// reviewer and the Decision tool ask this first and fall back to
+    /// `provider` only when the server has no such route.
     pub systemone: Option<Arc<SystemOne>>,
 }
 
@@ -106,20 +108,35 @@ impl Tool for Decision {
     }
 
     fn description(&self) -> &'static str {
-        "Ask a small, fast side model a question and get its short answer. Use it for quick \
-         judgments that do not need your full reasoning: choosing one option from a list (which \
-         skill, which file, which approach), classifying a request, or a yes/no check. Put \
-         everything it needs into `question` — it cannot see this conversation, the files or \
-         your tools, so list the options with a line about each. Its answer is advice, not a \
-         result: weigh it, and verify before relying on it for anything that matters."
+        "Ask a small, fast side model for a quick judgment. Put the context in `state` and \
+         the question in `question`. For a selection or classification, always supply `choices` \
+         mapping option names to descriptions; otherwise ask a yes/no question. It cannot see \
+         this conversation, the files or your tools. A decision server returns a probability \
+         of yes or a choice with probabilities; a chat server returns a short text answer. \
+         Its answer is advice: weigh it and verify before relying on it for anything that matters."
     }
 
     fn properties(&self) -> Value {
         json!({
             "question": {
                 "type": "string",
-                "description": "The question, with everything needed to answer it. When \
-                                choosing, list the options and what each is for.",
+                "description": "What to judge: a yes/no question, or a selection question \
+                                with the options supplied separately in choices.",
+            },
+            "state": {
+                "type": "string",
+                "description": "Everything needed to judge: relevant context, facts or text. \
+                                If omitted, the question itself is used as the context.",
+            },
+            "choices": {
+                "type": "object",
+                "minProperties": 2,
+                "maxProperties": 255,
+                "additionalProperties": { "type": "string" },
+                "description": "For selection questions, map each option name to its description. \
+                                Do not supply for yes/no questions. Example: \
+                                {\"debugging\": \"Investigate a failing test\", \
+                                \"design\": \"Design a visual layout\"}.",
             },
         })
     }
@@ -144,17 +161,41 @@ impl Tool for Decision {
     }
 
     async fn run(&self, ctx: &ToolCtx, input: Value) -> Result<ToolOutput, ToolError> {
-        let question = input["question"]
-            .as_str()
-            .map(str::trim)
-            .filter(|q| !q.is_empty())
-            .ok_or_else(|| ToolError::failed("missing question"))?;
+        let question = Question::parse(&input)?;
         ctx.check_cancelled()?;
+
+        let answer = tokio::select! {
+            _ = ctx.cancel.cancelled() => return Err(ToolError::Cancelled),
+            answer = tokio::time::timeout(self.timeout, self.answer(&question, ctx)) => answer,
+        };
+
+        match answer {
+            Ok(Ok(text)) if !text.trim().is_empty() => Ok(ToolOutput::new(text.trim().to_string())),
+            Ok(Ok(_)) => Err(unanswered("the model replied with nothing")),
+            Ok(Err(e)) => Err(unanswered(&e.to_string())),
+            Err(_) => Err(unanswered("it did not answer in time")),
+        }
+    }
+}
+
+impl Decision {
+    async fn answer(&self, question: &Question, ctx: &ToolCtx) -> Result<String, ProviderError> {
+        if let Some(client) = &self.setup.systemone {
+            if let Some(reply) = client
+                .ask(&self.setup.model, question.state(), question.typed())
+                .await?
+            {
+                if let Some(ledger) = &ctx.aside_ledger {
+                    ledger.add(question::usage(&reply), ctx.decision_pricing, None);
+                }
+                return question.read_answer(&reply);
+            }
+        }
 
         let request = ProviderRequest {
             model: self.setup.model.clone(),
             system: SYSTEM.to_string(),
-            messages: vec![Message::user_text(capped(question))],
+            messages: vec![Message::user_text(question.chat())],
             // No tools: it answers from the text alone.
             tools: Vec::new(),
             max_tokens: MAX_TOKENS,
@@ -164,20 +205,13 @@ impl Tool for Decision {
             thinking: false,
         };
 
-        let answer = tokio::select! {
-            _ = ctx.cancel.cancelled() => return Err(ToolError::Cancelled),
-            answer = tokio::time::timeout(
-                self.timeout,
-                collect_text(self.setup.provider.as_ref(), request, ctx, ctx.decision_pricing),
-            ) => answer,
-        };
-
-        match answer {
-            Ok(Ok(text)) if !text.trim().is_empty() => Ok(ToolOutput::new(text.trim().to_string())),
-            Ok(Ok(_)) => Err(unanswered("the model replied with nothing")),
-            Ok(Err(e)) => Err(unanswered(&e.to_string())),
-            Err(_) => Err(unanswered("it did not answer in time")),
-        }
+        collect_text(
+            self.setup.provider.as_ref(),
+            request,
+            ctx,
+            ctx.decision_pricing,
+        )
+        .await
     }
 }
 
@@ -216,8 +250,7 @@ pub(crate) async fn collect_text(
     Ok(text)
 }
 
-/// A failure the agent can act on. The feed gets it in Russian, the model in
-/// English with what to do next: a side question that failed must not stall
+/// A failure the agent can act on, with what to do next: a side question that failed must not stall
 /// the work it was asked for.
 fn unanswered(why: &str) -> ToolError {
     ToolError::failed_with(

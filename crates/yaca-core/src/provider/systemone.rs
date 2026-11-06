@@ -12,8 +12,8 @@
 //! and answer `{"answers": {"id": {"type": "noul", "noul": 0.97}}}`, where
 //! `noul` is the probability that the statement is true.
 //!
-//! Only the yes/no question is spoken here. It is what Auto's reviewer needs;
-//! choices and scores are the router's business and go through its own path.
+//! Auto's reviewer reads a yes/no probability; the Decision tool also asks
+//! multiple-choice questions through the same authenticated transport.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -67,29 +67,43 @@ impl SystemOne {
 
     /// How likely is it that `statement` holds of `state`?
     pub async fn noul(&self, model: &str, state: &str, statement: &str) -> Outcome {
-        if self.is_absent() {
-            return Outcome::Absent;
+        let questions = json!({ QUESTION: { "type": "noul", "instructions": statement } });
+        match self.ask(model, state, questions).await {
+            Ok(Some(value)) => read_probability(&value),
+            Ok(None) => Outcome::Absent,
+            Err(e) => Outcome::Failed(e.to_string()),
         }
-        let headers = match http::header_map(&self.spec, self.key.as_deref()) {
-            Ok(headers) => headers,
-            Err(e) => return Outcome::Failed(e.to_string()),
-        };
+    }
+
+    /// Ask typed questions. `None` means the server has no decision route;
+    /// only that case permits the caller to fall back to chat.
+    pub async fn ask(
+        &self,
+        model: &str,
+        state: &str,
+        questions: Value,
+    ) -> Result<Option<Value>, ProviderError> {
+        if self.is_absent() {
+            return Ok(None);
+        }
+        let mut headers = http::header_map(&self.spec, self.key.as_deref())?;
+        headers.insert(
+            reqwest::header::ACCEPT,
+            reqwest::header::HeaderValue::from_static("application/json"),
+        );
         let body = json!({
             "model": model,
             "state": state,
-            "questions": { QUESTION: { "type": "noul", "instructions": statement } },
+            "questions": questions,
         });
-        let resp = match self
+        let resp = self
             .http
             .post(self.spec.api("/systemone"))
             .headers(headers)
             .json(&body)
             .send()
             .await
-        {
-            Ok(resp) => resp,
-            Err(e) => return Outcome::Failed(e.to_string()),
-        };
+            .map_err(http::network_error)?;
         let resp = match http::check_status(resp, &self.spec, self.key.as_deref()).await {
             Ok(resp) => resp,
             // A server without the route says so with one of these. A 400 is
@@ -100,14 +114,14 @@ impl SystemOne {
                 ..
             }) => {
                 self.absent.store(true, Ordering::Relaxed);
-                return Outcome::Absent;
+                return Ok(None);
             }
-            Err(e) => return Outcome::Failed(e.to_string()),
+            Err(e) => return Err(e),
         };
-        match resp.json::<Value>().await {
-            Ok(value) => read_probability(&value),
-            Err(e) => Outcome::Failed(e.to_string()),
-        }
+        resp.json::<Value>()
+            .await
+            .map(Some)
+            .map_err(|e| ProviderError::Protocol(e.without_url().to_string()))
     }
 }
 

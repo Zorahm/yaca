@@ -73,7 +73,7 @@ async fn a_refusing_model_tells_the_agent_to_carry_on() {
         .await
         .unwrap_err();
 
-    // What the model reads says what to do next; what the feed shows is Russian.
+    // A failed side question must not stall the agent's task.
     let for_model = err.for_model();
     assert!(for_model.contains("Decide it yourself"), "{for_model}");
     assert!(
@@ -133,4 +133,96 @@ fn it_is_offered_only_where_it_was_added() {
         .schemas(crate::intent::Intent::Plan, crate::profile::Profile::Code)
         .iter()
         .any(|s| s.name == "Decision"));
+}
+
+#[tokio::test]
+async fn invalid_choices_are_refused_before_the_model_is_asked() {
+    let mock = Arc::new(MockProvider::text("unused"));
+    let dir = TempDir::new();
+    let (ctx, _ws) = ctx_for(&dir);
+    for choices in [
+        json!({}),
+        json!({"only": "one option"}),
+        json!({"": "empty name", "other": "another option"}),
+        json!({"a": " ", "b": "another option"}),
+        json!({"a": 1, "b": "another option"}),
+        json!(["a", "b"]),
+    ] {
+        assert!(tool(mock.clone())
+            .run(
+                &ctx,
+                json!({
+                    "question": "Which option?", "choices": choices,
+                })
+            )
+            .await
+            .is_err());
+    }
+    assert!(mock.seen.lock().unwrap().is_empty());
+}
+
+#[test]
+fn an_invalid_choice_distribution_cannot_be_presented_as_advice() {
+    let question = Question::parse(&json!({
+        "question": "Which skill?",
+        "choices": {"debugging": "Investigate failures", "design": "Design a layout"},
+    }))
+    .unwrap();
+    for answer in [
+        json!({"choice": "unknown", "probabilities": {"debugging": 0.9, "design": 0.1}}),
+        json!({"choice": "debugging", "probabilities": {"debugging": 0.9}}),
+        json!({"choice": "debugging", "probabilities": {"debugging": 0.0, "design": 0.0}}),
+        json!({"choice": "debugging", "probabilities": {"debugging": 0.1, "design": 0.9}}),
+        json!({"choice": "debugging", "probabilities": {"debugging": 1.1, "design": -0.1}}),
+        json!({"choice": "debugging", "probabilities": {"debugging": "0.9", "design": 0.1}}),
+    ] {
+        assert!(question
+            .read_answer(&json!({"answers": {"q": answer}}))
+            .is_err());
+    }
+}
+
+#[tokio::test]
+async fn a_pending_typed_request_can_be_cancelled_or_time_out_without_chat_retry() {
+    use crate::provider::registry::{Protocol, ProviderSpec};
+
+    for cancel in [true, false] {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let chat = Arc::new(MockProvider::text("must not be asked"));
+        let setup = DecisionSetup {
+            provider: chat.clone(),
+            model: "jev".into(),
+            systemone: Some(Arc::new(SystemOne::new(
+                ProviderSpec {
+                    id: "decision".into(),
+                    display_name: "Decision".into(),
+                    protocol: Protocol::OpenAi,
+                    base_url: format!("http://{}", listener.local_addr().unwrap()),
+                    headers: Default::default(),
+                    models: Vec::new(),
+                },
+                None,
+            ))),
+        };
+        let tool = Decision::new(setup).with_timeout(Duration::from_millis(50));
+        let dir = TempDir::new();
+        let (ctx, _ws) = ctx_for(&dir);
+        let input = json!({"question":"Is this a test?"});
+        let peer = async {
+            let (_socket, _) = listener.accept().await.unwrap();
+            if cancel {
+                ctx.cancel.cancel();
+            }
+            // Keep the connection open beyond the tool's deadline.
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        };
+        let (result, ()) = tokio::join!(tool.run(&ctx, input), peer);
+        let err = result.unwrap_err();
+        if cancel {
+            assert!(matches!(err, ToolError::Cancelled));
+        } else {
+            assert!(err.for_model().contains("in time"), "{err}");
+        }
+        assert!(chat.seen.lock().unwrap().is_empty());
+    }
 }
