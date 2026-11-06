@@ -31,6 +31,10 @@ fn info(id: &str, ctx: u32, out: u32, effort: bool, thinking: bool) -> ModelInfo
             output: 2.0,
         },
         supports_effort: effort,
+        reasoning: effort.then(|| crate::reasoning::ReasoningCapabilities {
+            supported_efforts: Some(vec![Effort::Low, Effort::Medium, Effort::High]),
+            ..Default::default()
+        }),
         supports_thinking: thinking,
         context_source: ContextSource::ProviderReported,
         ..crate::usage::unknown_model(id)
@@ -343,6 +347,20 @@ async fn a_new_user_message_asks_again() {
     assert_eq!(first[0], routed(Some("code"), "big", "large", &["code"]));
     assert_eq!(second[0], routed(None, "small", "tiny", &[]));
     assert_eq!(seen(&rig.decider).len(), 2);
+}
+
+#[tokio::test]
+async fn a_routed_model_does_not_receive_an_unsupported_depth() {
+    let rig = Rig::new(
+        vec![judge(CODE_YES)],
+        vec![],
+        vec![Turn::Events(script_text("big"))],
+    );
+    let (router, _) = rig.router();
+    let mut req = request(vec![user("write a parser")]);
+    req.effort = Some(Effort::Max);
+    collect(&router, req).await;
+    assert_eq!(seen(&rig.big)[0].effort, None);
 }
 
 #[tokio::test]

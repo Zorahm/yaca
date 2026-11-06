@@ -50,20 +50,10 @@ pub(super) fn build_body(req: &ProviderRequest, max_field: MaxField) -> Value {
     if !req.tools.is_empty() {
         body["tools"] = wire_tools(&req.tools);
     }
-    if let Some(effort) = req.effort {
-        body["reasoning_effort"] = json!(reasoning_effort(effort));
+    if let Some(effort) = req.effort.filter(|effort| *effort != Effort::Auto) {
+        body["reasoning_effort"] = json!(effort.as_api());
     }
     body
-}
-
-/// This shape has three levels. `Extra` and `Max` go to the top one: there is nothing
-/// above it here, and nowhere to put a made-up fourth.
-fn reasoning_effort(effort: Effort) -> &'static str {
-    match effort {
-        Effort::Low => "low",
-        Effort::Medium => "medium",
-        Effort::High | Effort::Extra | Effort::Max => "high",
-    }
 }
 
 fn wire_tools(tools: &[ToolSchema]) -> Value {
@@ -223,10 +213,10 @@ mod tests {
     }
 
     #[test]
-    fn top_level_effort_maps_to_high() {
+    fn effort_is_sent_without_collapsing_distinct_levels() {
         assert_eq!(
             build_body(&req(), MaxField::default())["reasoning_effort"],
-            "high"
+            "xhigh"
         );
         let mut r = req();
         r.effort = Some(Effort::Low);

@@ -2,11 +2,12 @@
 import type { ContextSource } from "./ContextSource";
 import type { ModelFacts } from "./ModelFacts";
 import type { Pricing } from "./Pricing";
+import type { ReasoningCapabilities } from "./ReasoningCapabilities";
 
 /**
  * A model available in the switcher (§7.1).
  */
-export type ModelInfo = { id: string, providerId: string, displayName: string, contextMax: number, maxOutput: number, pricing: Pricing, 
+export type ModelInfo = { reasoning?: ReasoningCapabilities, id: string, providerId: string, displayName: string, contextMax: number, maxOutput: number, pricing: Pricing, 
 /**
  * User-provided price, retained when the model list is refreshed.
  */

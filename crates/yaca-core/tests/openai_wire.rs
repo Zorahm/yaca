@@ -143,7 +143,7 @@ async fn stream_passes_through_a_real_socket() {
     assert!(seen.has_header("content-type", "application/json"));
     assert_eq!(seen.body["stream_options"]["include_usage"], true);
     assert_eq!(seen.body["messages"][0]["role"], "system");
-    assert_eq!(seen.body["reasoning_effort"], "high");
+    assert_eq!(seen.body["reasoning_effort"], "max");
 }
 
 #[tokio::test]

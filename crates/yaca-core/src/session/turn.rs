@@ -708,7 +708,7 @@ impl Worker {
             // sending it to them gets a 400 instead of an answer. There are two flags,
             // because the provider reports them separately: there is a model
             // that reasons but does not understand effort.
-            effort: info.supports_effort.then_some(state.effort),
+            effort: info.request_effort(state.effort),
             thinking: info.supports_thinking,
         }
     }

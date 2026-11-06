@@ -111,6 +111,9 @@ export const composer = {
   "mode.bypass_off": "Выключить",
   "mode.bypass_confirm":
     "Разрешения будут обходиться до перезапуска. Инварианты остаются.",
+  "effort.auto": "По умолчанию",
+  "effort.none": "None",
+  "effort.minimal": "Minimal",
   "effort.low": "Low",
   "effort.medium": "Medium",
   "effort.high": "High",

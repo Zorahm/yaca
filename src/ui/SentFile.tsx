@@ -3,7 +3,7 @@ import { useContext, useState } from "react";
 import type { SentFile as FileDelivery } from "../core/bindings/SentFile";
 import { downloadSentFile, sentFileUrl } from "../core/client";
 import { t } from "../i18n";
-import { PreviewRoot, useOpenImage } from "./viewer/context";
+import { DeliveryRoot, useOpenImage } from "./viewer/context";
 import { sentImagePath } from "../core/sentImage";
 import { bytes } from "./format";
 import "./sent.css";
@@ -21,7 +21,7 @@ export function SentDownload({ file, root }: { file: FileDelivery; root: string 
 }
 
 export function SentFile({ file, onOpen }: { file: FileDelivery; onOpen: (file: FileDelivery) => void }) {
-  const root = useContext(PreviewRoot);
+  const root = useContext(DeliveryRoot);
   const openImage = useOpenImage();
   const [failed, setFailed] = useState(false);
   if (root === null) return <p role="alert">{t("file.unavailable")}</p>;

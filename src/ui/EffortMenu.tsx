@@ -3,25 +3,18 @@
 import { Check } from "@phosphor-icons/react";
 
 import type { Effort } from "../core/client";
-import { t, type Key } from "../i18n";
-
-const EFFORTS: Effort[] = ["low", "medium", "high", "extra", "max"];
-
-const EFFORT_KEY: Record<Effort, Key> = {
-  low: "effort.low",
-  medium: "effort.medium",
-  high: "effort.high",
-  extra: "effort.extra",
-  max: "effort.max",
-};
+import { t } from "../i18n";
+import { EFFORT_KEY } from "../core/reasoning";
 
 export function EffortMenu({
   effort,
+  levels,
   open,
   onToggle,
   onPick,
 }: {
   effort: Effort;
+  levels: Effort[];
   open: boolean;
   onToggle: () => void;
   onPick: (effort: Effort) => void;
@@ -33,7 +26,7 @@ export function EffortMenu({
       </button>
       {open && (
         <div className="menu">
-          {EFFORTS.map((level) => (
+          {(["auto", ...levels] as Effort[]).map((level) => (
             <button className="menu-item" key={level} onClick={() => onPick(level)}>
               <span>{t(EFFORT_KEY[level])}</span>
               <span className="menu-note" />

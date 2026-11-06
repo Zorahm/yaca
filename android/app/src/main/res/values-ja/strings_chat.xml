@@ -199,4 +199,7 @@
     <plurals name="work_failed">
         <item quantity="other">%d 件失敗</item>
     </plurals>
+    <string name="effort_auto">デフォルト</string>
+    <string name="effort_none">無効</string>
+    <string name="effort_minimal">最小</string>
 </resources>

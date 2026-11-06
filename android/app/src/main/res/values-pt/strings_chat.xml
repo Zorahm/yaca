@@ -210,4 +210,7 @@
         <item quantity="one">%d falhou</item>
         <item quantity="other">%d falharam</item>
     </plurals>
+    <string name="effort_auto">Padrão</string>
+    <string name="effort_none">Desativado</string>
+    <string name="effort_minimal">Mínimo</string>
 </resources>

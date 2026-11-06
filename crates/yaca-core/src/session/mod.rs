@@ -593,7 +593,11 @@ impl Shared {
     }
 
     fn emit_state(&self) {
-        let state = self.state.lock().unwrap().clone();
+        let state = {
+            let mut state = self.state.lock().unwrap();
+            state.effort = self.model_info(&state.model).normalize_effort(state.effort);
+            state.clone()
+        };
         self.emit(AgentEvent::StateChanged { state });
     }
 
@@ -864,11 +868,16 @@ pub fn spawn(
             // The project, not the worktree: the window files the chat under
             // the project it was opened in.
             project_root: ws.home().to_string_lossy().to_string(),
+            delivery_root: Some(crate::sent::root(&ws).to_string_lossy().into_owned()),
             provider: config.provider.clone(),
             model: config.model.clone(),
             mode: config.mode,
             profile: config.profile,
-            effort: config.effort,
+            effort: config
+                .models
+                .iter()
+                .find(|model| model.id == config.model)
+                .map_or(Effort::Auto, |model| model.normalize_effort(config.effort)),
             busy: false,
             bypass: false,
             isolation,

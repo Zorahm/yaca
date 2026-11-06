@@ -159,7 +159,9 @@ pub const CHECKPOINT_REASONS: &[&str] = &["message", "command", "rollback"];
 
 pub const MODES: &[&str] = &["plan", "manual", "auto", "edits"];
 
-pub const EFFORTS: &[&str] = &["low", "medium", "high", "extra", "max"];
+pub const EFFORTS: &[&str] = &[
+    "auto", "none", "minimal", "low", "medium", "high", "extra", "max",
+];
 
 pub const LINE_KINDS: &[&str] = &["context", "add", "del"];
 

@@ -91,6 +91,30 @@ fn anthropic_model(m: &AnthropicModel) -> ModelInfo {
     info.supports_effort = supported(&m.capabilities, &["effort"]).unwrap_or(false);
     info.supports_thinking =
         supported(&m.capabilities, &["thinking", "types", "adaptive"]).unwrap_or(false);
+    if info.supports_effort || supported(&m.capabilities, &["thinking"]) == Some(true) {
+        let supported_efforts = info.supports_effort.then(|| {
+            let mut levels = vec![
+                crate::intent::Effort::Low,
+                crate::intent::Effort::Medium,
+                crate::intent::Effort::High,
+            ];
+            for (name, level) in [
+                ("xhigh", crate::intent::Effort::Extra),
+                ("max", crate::intent::Effort::Max),
+            ] {
+                if supported(&m.capabilities, &["effort", name]) == Some(true) {
+                    levels.push(level);
+                }
+            }
+            levels
+        });
+        info.reasoning = Some(crate::reasoning::ReasoningCapabilities {
+            supported_efforts,
+            mandatory: supported(&m.capabilities, &["thinking", "types", "disabled"])
+                == Some(false),
+            ..Default::default()
+        });
+    }
     // The other way round: only a stated "no" turns images off (see
     // `ModelInfo::supports_images`).
     info.supports_images = supported(&m.capabilities, &["image_input"]).unwrap_or(true);
@@ -143,6 +167,16 @@ mod tests {
         assert_eq!(m.context_max, 1_000_000);
         assert_eq!(m.max_output, 128_000);
         assert!(m.supports_effort);
+        assert_eq!(
+            m.reasoning.as_ref().unwrap().supported_efforts,
+            Some(vec![
+                crate::intent::Effort::Low,
+                crate::intent::Effort::Medium,
+                crate::intent::Effort::High,
+                crate::intent::Effort::Max
+            ])
+        );
+        assert_eq!(m.request_effort(crate::intent::Effort::Extra), None);
         assert!(m.supports_thinking);
         // The Models API serves no price; the price list fills it in by id.
         assert_eq!(m.pricing.input, 5.0);

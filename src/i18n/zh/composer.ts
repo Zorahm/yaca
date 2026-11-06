@@ -110,6 +110,9 @@ export const composer = {
   "mode.bypass_off": "关闭",
   "mode.bypass_confirm":
     "权限将被绕过，直至重启。不变式保持生效。",
+  "effort.auto": "默认",
+  "effort.none": "None",
+  "effort.minimal": "Minimal",
   "effort.low": "Low",
   "effort.medium": "Medium",
   "effort.high": "High",

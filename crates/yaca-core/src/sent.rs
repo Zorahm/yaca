@@ -13,6 +13,15 @@ use crate::{ToolError, Workspace};
 
 const MAX_BYTES: u64 = 1024 * 1024 * 1024;
 
+/// Delivery readers reopen this root without the session's worktree mapping.
+pub fn root(ws: &Workspace) -> &Path {
+    if ws.is_chat() {
+        ws.root()
+    } else {
+        ws.home()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -249,6 +258,27 @@ mod tests {
             assert!(deliver(&ws, raw, None, None, "auto").is_err());
         }
         assert!(open(&ws, "../secret").is_err());
+    }
+
+    #[test]
+    fn delivery_root_reopens_snapshots_from_chat_and_isolated_workspaces() {
+        let project = TempDir::new();
+        let tree = TempDir::new();
+        fs::create_dir(project.path().join(".yaca")).unwrap();
+        tree.write("report.csv", "a,b\n1,2\n");
+        for chat in [false, true] {
+            let ws = Workspace::open(project.path())
+                .unwrap()
+                .in_tree(tree.path())
+                .unwrap();
+            let ws = if chat { ws.for_chat() } else { ws };
+            let file = deliver(&ws, "report.csv", None, None, "auto").unwrap();
+            let reader = Workspace::open(root(&ws)).unwrap();
+            let (saved, path) = open(&reader, file.id.as_str()).unwrap();
+            assert_eq!(saved, file);
+            assert_eq!(fs::read(path).unwrap(), b"a,b\n1,2\n");
+            assert_eq!(root(&ws), if chat { ws.root() } else { ws.home() });
+        }
     }
 
     #[test]

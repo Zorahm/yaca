@@ -210,4 +210,7 @@
         <item quantity="one">%d échec</item>
         <item quantity="other">%d échecs</item>
     </plurals>
+    <string name="effort_auto">Par défaut</string>
+    <string name="effort_none">Désactivé</string>
+    <string name="effort_minimal">Minimal</string>
 </resources>

@@ -22,6 +22,9 @@ enum class Profile {
 /** Reasoning effort, the bottom-right corner of the composer. */
 @Serializable
 enum class Effort {
+    @SerialName("auto") AUTO,
+    @SerialName("none") NONE,
+    @SerialName("minimal") MINIMAL,
     @SerialName("low") LOW,
     @SerialName("medium") MEDIUM,
     @SerialName("high") HIGH,
@@ -57,6 +60,8 @@ data class SessionState(
     val bypass: Boolean,
     /** Absent for a chat in the project's own tree. */
     val isolation: Isolation? = null,
+    /** Root that owns delivery snapshots; private for document chats. */
+    val deliveryRoot: String? = null,
 )
 
 /**

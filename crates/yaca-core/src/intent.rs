@@ -89,13 +89,16 @@ pub enum TrustMode {
 
 /// Reasoning effort level (§7.1, the bottom-right corner of the composer).
 ///
-/// Maps one to one onto the Messages API's `output_config.effort`. A fixed
-/// token budget (`thinking.budget_tokens`) has nothing to do with it: on Opus 5,
-/// Sonnet 5 and Opus 4.7+ it has been removed and returns 400.
+/// A model advertises the subset it accepts. `Auto` omits the effort field;
+/// `None` explicitly disables reasoning where the provider allows that.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "lowercase")]
 pub enum Effort {
+    /// Leave the model's reasoning configuration to the provider.
+    Auto,
+    None,
+    Minimal,
     Low,
     Medium,
     High,
@@ -106,9 +109,22 @@ pub enum Effort {
 }
 
 impl Effort {
+    pub const LEVELS: [Self; 7] = [
+        Self::None,
+        Self::Minimal,
+        Self::Low,
+        Self::Medium,
+        Self::High,
+        Self::Extra,
+        Self::Max,
+    ];
+
     /// The value for `output_config.effort`.
     pub fn as_api(self) -> &'static str {
         match self {
+            Effort::Auto => "auto",
+            Effort::None => "none",
+            Effort::Minimal => "minimal",
             Effort::Low => "low",
             Effort::Medium => "medium",
             Effort::High => "high",

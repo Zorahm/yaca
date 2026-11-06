@@ -5,6 +5,9 @@
 import type { providers as source } from "../ru/providers";
 
 export const providers = {
+  "prov.effort_enabled": "推論レベルの選択",
+  "prov.effort_unknown": "プロバイダーがレベルを報告していません",
+  "prov.effort_customize": "利用可能なレベルを設定",
   "prov.refresh_all": "すべて更新",
   "prov.refresh": "モデルを更新",
   "prov.group_connected": "接続済み",

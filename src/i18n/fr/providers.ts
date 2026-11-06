@@ -5,6 +5,9 @@
 import type { providers as source } from "../ru/providers";
 
 export const providers = {
+  "prov.effort_enabled": "Choix de l’effort",
+  "prov.effort_unknown": "Le fournisseur n’a pas indiqué de niveaux",
+  "prov.effort_customize": "Personnaliser les niveaux autorisés",
   "prov.refresh_all": "Tout actualiser",
   "prov.refresh": "Actualiser les modèles",
   "prov.group_connected": "Connectés",

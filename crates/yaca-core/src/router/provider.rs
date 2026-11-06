@@ -224,11 +224,9 @@ impl RouterProvider {
             // smaller target would refuse a request above its own limit.
             max_tokens: req.max_tokens.min(target.info.max_output),
             // Sent to a model that does not know them, these are a 400.
-            effort: if target.info.supports_effort {
-                req.effort
-            } else {
-                None
-            },
+            effort: req
+                .effort
+                .and_then(|effort| target.info.request_effort(effort)),
             thinking: req.thinking && target.info.supports_thinking,
         };
         let inner = target.backend.stream(forwarded).await?;
@@ -399,6 +397,7 @@ fn virtual_model(name: &str, targets: &[Target], default: usize) -> Result<Model
             .unwrap_or(default.info.max_output),
         pricing: default.info.pricing,
         supports_effort: targets.iter().any(|t| t.info.supports_effort),
+        reasoning: None,
         supports_thinking: targets.iter().any(|t| t.info.supports_thinking),
         supports_images: targets.iter().any(|t| t.info.supports_images),
         pricing_by_hand: false,

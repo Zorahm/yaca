@@ -4,6 +4,9 @@
  */
 
 export const providers = {
+  "prov.effort_enabled": "Выбор глубины",
+  "prov.effort_unknown": "Уровни не указаны провайдером",
+  "prov.effort_customize": "Настроить допустимые уровни",
   "prov.refresh_all": "Обновить все",
   "prov.refresh": "Обновить модели",
   "prov.group_connected": "Подключены",

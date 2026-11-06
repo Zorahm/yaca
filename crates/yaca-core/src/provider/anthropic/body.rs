@@ -35,7 +35,10 @@ pub(super) fn build_body(req: &ProviderRequest) -> serde_json::Value {
         // `display` set explicitly: by default the reasoning text arrives empty.
         body["thinking"] = json!({ "type": "adaptive", "display": "summarized" });
     }
-    if let Some(effort) = req.effort {
+    if let Some(effort) = req
+        .effort
+        .filter(|effort| *effort != crate::intent::Effort::Auto)
+    {
         body["output_config"] = json!({ "effort": effort.as_api() });
     }
     body

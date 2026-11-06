@@ -157,6 +157,9 @@ pub enum ContextSource {
 pub struct ModelFacts {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<crate::reasoning::ReasoningCapabilities>,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context_max: Option<u32>,
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -187,6 +190,7 @@ impl ModelFacts {
             && self.max_output.is_none()
             && self.pricing.is_none()
             && self.supports_effort.is_none()
+            && self.reasoning.is_none()
             && self.cache_read.is_none()
             && self.cache_write.is_none()
             && self.input_price.is_none()
@@ -210,6 +214,16 @@ impl ModelFacts {
         self.max_output = self.max_output.or(other.max_output);
         self.pricing = self.pricing.or(other.pricing);
         self.supports_effort = self.supports_effort.or(other.supports_effort);
+        if self.reasoning.is_none() {
+            self.reasoning = other.reasoning.clone();
+        } else if let (Some(ours), Some(theirs)) = (&mut self.reasoning, &other.reasoning) {
+            // A capability-only report may be enriched, but an explicit list wins.
+            if ours.supported_efforts.is_none() {
+                let budget = ours.supports_max_tokens;
+                *ours = theirs.clone();
+                ours.supports_max_tokens |= budget;
+            }
+        }
         self.cache_read = self.cache_read.or(other.cache_read);
         self.cache_write = self.cache_write.or(other.cache_write);
     }
@@ -230,6 +244,7 @@ impl ModelFacts {
             pricing: (model.pricing.input > 0.0 || model.pricing.output > 0.0)
                 .then_some(model.pricing),
             supports_effort: model.supports_effort.then_some(true),
+            reasoning: model.reasoning.clone(),
             cache_read: model.cache_read,
             cache_write: model.cache_write,
             input_price: None,
@@ -243,6 +258,9 @@ impl ModelFacts {
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelInfo {
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<crate::reasoning::ReasoningCapabilities>,
     pub id: String,
     #[serde(default)]
     pub provider_id: String,
@@ -331,6 +349,25 @@ pub struct ModelInfo {
 }
 
 impl ModelInfo {
+    /// Unsupported saved picks use provider defaults rather than another depth.
+    pub fn normalize_effort(&self, effort: crate::intent::Effort) -> crate::intent::Effort {
+        if self.supports_effort
+            && self
+                .reasoning
+                .as_ref()
+                .is_some_and(|caps| caps.allows(effort))
+        {
+            effort
+        } else {
+            crate::intent::Effort::Auto
+        }
+    }
+
+    pub fn request_effort(&self, effort: crate::intent::Effort) -> Option<crate::intent::Effort> {
+        let normalized = self.normalize_effort(effort);
+        (normalized != crate::intent::Effort::Auto).then_some(normalized)
+    }
+
     /// Lays the hand edits over the numbers, marking what they touched: the
     /// context source that keeps the ring from drawing a typed size as a
     /// guess, and the price flag a refresh reads.
@@ -360,6 +397,9 @@ impl ModelInfo {
         }
         if let Some(effort) = overrides.supports_effort {
             self.supports_effort = effort;
+        }
+        if let Some(reasoning) = overrides.reasoning {
+            self.reasoning = Some(reasoning);
         }
         if let Some(price) = overrides.cache_read {
             self.cache_read = Some(price);
@@ -436,6 +476,16 @@ pub fn catalog() -> Vec<ModelInfo> {
             output: 0.0,
         }),
         supports_effort: true,
+        reasoning: Some(crate::reasoning::ReasoningCapabilities {
+            supported_efforts: Some(vec![
+                crate::intent::Effort::Low,
+                crate::intent::Effort::Medium,
+                crate::intent::Effort::High,
+                crate::intent::Effort::Extra,
+                crate::intent::Effort::Max,
+            ]),
+            ..Default::default()
+        }),
         supports_thinking: true,
         // Written down, not answered — but a stated constant, not a guess.
         context_source: ContextSource::ProviderReported,
@@ -459,6 +509,7 @@ pub fn catalog() -> Vec<ModelInfo> {
         // `output_config.effort` nor adaptive reasoning, and answers 400.
         ModelInfo {
             supports_effort: false,
+            reasoning: None,
             supports_thinking: false,
             ..m("claude-haiku-4-5", "Haiku 4.5", 200_000, 64_000)
         },
@@ -486,6 +537,7 @@ pub fn unknown_model(id: &str) -> ModelInfo {
             output: 0.0,
         }),
         supports_effort: false,
+        reasoning: None,
         supports_thinking: false,
         context_source: ContextSource::DefaultGuess,
         supports_images: true,

@@ -3,9 +3,10 @@ import { ArrowClockwise, Check, Copy, Eye, EyeSlash, PencilSimple, Question } fr
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n";
 import { tokens } from "../format";
-import { editCache, editContext, editEffort, editMaxOutput, editPrice, extractDateAlias,
+import { editCache, editContext, editMaxOutput, editPrice, extractDateAlias,
   formatPrice, formatTokens, getModelCapabilities, getModelPriceStatus, hasEdits, isEdited,
   parsePriceInput, parseTokensInput, resetField, validContextSize, type ProviderModelItem } from "./provider";
+import { ReasoningEditor } from "./ReasoningEditor";
 
 export function ModelRow({
   model,
@@ -30,7 +31,7 @@ export function ModelRow({
   const isEditedContext = isEdited(model, "contextMax");
   const isEditedPrice = isEdited(model, "inputPrice") || isEdited(model, "outputPrice");
   const isEditedOutput = isEdited(model, "maxOutput");
-  const isEditedEffort = isEdited(model, "supportsEffort");
+  const isEditedEffort = isEdited(model, "supportsEffort") || isEdited(model, "reasoning");
   const hasAnyOverride = hasEdits(model);
 
   const priceStatus = getModelPriceStatus(model, isLocal);
@@ -258,29 +259,20 @@ export function ModelRow({
 
             {/* Effort */}
             <span className="prov-expanded-label">{t("prov.effort_title")}</span>
-            <div className="prov-effort-controls">
-              <button
-                type="button"
-                className={`prov-filter-pill ${model.supportsEffort ? "active" : ""}`}
-                onClick={() => onUpdate(editEffort(model, !model.supportsEffort))}
-              >
-                {t("prov.cap_reasoning")}
-              </button>
-              {model.supportsEffort && (["low", "medium", "high"] as const).map((level) => (
-                <span key={level} className="chip-cap">{t(`effort.${level}`)}</span>
-              ))}
+            <div className="prov-reasoning-fields">
+              <ReasoningEditor model={model} onUpdate={onUpdate} />
+              <FieldState
+                edited={isEditedEffort}
+                stated={
+                  model.fetched?.supportsEffort !== undefined
+                    ? model.fetched.supportsEffort
+                      ? t("prov.cap_reasoning")
+                      : "—"
+                    : undefined
+                }
+                onReset={() => onUpdate(resetField(resetField(model, "supportsEffort"), "reasoning"))}
+              />
             </div>
-            <FieldState
-              edited={isEditedEffort}
-              stated={
-                model.fetched?.supportsEffort !== undefined
-                  ? model.fetched.supportsEffort
-                    ? t("prov.cap_reasoning")
-                    : "—"
-                  : undefined
-              }
-              onReset={() => onUpdate(resetField(model, "supportsEffort"))}
-            />
           </div>
 
           {/* Expanded Bottom Actions */}

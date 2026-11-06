@@ -210,4 +210,7 @@
         <item quantity="one">%d failed</item>
         <item quantity="other">%d failed</item>
     </plurals>
+    <string name="effort_auto">Default</string>
+    <string name="effort_none">None</string>
+    <string name="effort_minimal">Minimal</string>
 </resources>

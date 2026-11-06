@@ -788,6 +788,12 @@ pub enum StopReason {
 #[serde(rename_all = "camelCase")]
 pub struct SessionState {
     pub project_root: String,
+    /// Root that owns `.yaca/sent`: the private workspace for document chats,
+    /// the project for ordinary and isolated code sessions. Older journals
+    /// omit it; the live session supplies it again when reopened.
+    #[serde(default)]
+    #[ts(optional)]
+    pub delivery_root: Option<String>,
     #[serde(default)]
     pub provider: String,
     pub model: String,

@@ -235,7 +235,7 @@ impl Subagents {
                 messages: shared.shown_to(&model, &history),
                 tools: me.registry.schemas(intent, state.profile),
                 max_tokens: model.max_output.min(MAX_OUTPUT_TOKENS),
-                effort: model.supports_effort.then_some(state.effort),
+                effort: model.request_effort(state.effort),
                 thinking: model.supports_thinking,
             };
             let done = self.complete(&me, request, cancel).await?;

@@ -141,6 +141,9 @@ pub fn modes() -> Vec<Mode> {
 
 pub fn efforts() -> Vec<Effort> {
     vec![
+        Effort::Auto,
+        Effort::None,
+        Effort::Minimal,
         Effort::Low,
         Effort::Medium,
         Effort::High,

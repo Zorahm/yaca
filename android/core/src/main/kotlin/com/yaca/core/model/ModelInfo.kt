@@ -23,6 +23,7 @@ enum class ContextSource {
 /** What one source says about a model's numbers: the provider's answer or a person's hand. */
 @Serializable
 data class ModelFacts(
+    val reasoning: ReasoningCapabilities? = null,
     val contextMax: Int? = null,
     val maxOutput: Int? = null,
     val pricing: Pricing? = null,
@@ -44,6 +45,7 @@ data class ModelInfo(
     val pricing: Pricing,
     /** Whether it takes `effort`. Older models do not. */
     val supportsEffort: Boolean,
+    val reasoning: ReasoningCapabilities? = null,
     /** Whether it reasons adaptively. Kept apart from effort: the provider reports them separately. */
     val supportsThinking: Boolean = false,
     val contextSource: ContextSource = ContextSource.DEFAULT_GUESS,
@@ -63,3 +65,18 @@ data class ModelInfo(
     val cacheRead: Double? = null,
     val cacheWrite: Double? = null,
 )
+
+@Serializable
+data class ReasoningCapabilities(
+    val supportedEfforts: List<Effort>? = null,
+    val defaultEffort: Effort? = null,
+    val defaultEnabled: Boolean? = null,
+    val mandatory: Boolean = false,
+    val supportsMaxTokens: Boolean = false,
+)
+
+fun ModelInfo.effortLevels(): List<Effort> =
+    if (!supportsEffort) emptyList() else Effort.entries.filter { level ->
+        level != Effort.AUTO && reasoning?.supportedEfforts?.contains(level) == true &&
+            !(level == Effort.NONE && reasoning.mandatory)
+    }

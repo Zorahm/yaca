@@ -47,6 +47,7 @@ pub mod profile;
 pub mod project;
 pub mod provider;
 pub mod question;
+pub mod reasoning;
 pub mod router;
 pub mod secrets;
 pub mod sent;

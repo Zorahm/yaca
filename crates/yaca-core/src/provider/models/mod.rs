@@ -42,6 +42,7 @@ mod local;
 mod models_dev;
 mod openai;
 mod price;
+mod reasoning;
 
 use anthropic::anthropic;
 use openai::openai;

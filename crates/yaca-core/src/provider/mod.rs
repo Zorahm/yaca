@@ -73,7 +73,7 @@ pub struct ProviderRequest {
     pub messages: Vec<Message>,
     pub tools: Vec<ToolSchema>,
     pub max_tokens: u32,
-    /// `output_config.effort`. `None` — the model does not support it, the field is not sent.
+    /// A validated model-specific depth. `None` leaves the provider's default intact.
     pub effort: Option<Effort>,
     /// Whether to ask for reasoning. The display is always `summarized`: §5.3 draws the text
     /// of the reasoning, and by default the API returns an empty one.

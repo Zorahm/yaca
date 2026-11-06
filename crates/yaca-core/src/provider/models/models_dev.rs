@@ -55,26 +55,14 @@ pub fn facts(model: &Value) -> ModelFacts {
             }
             _ => None,
         },
-        supports_effort: takes_effort(model),
+        supports_effort: super::reasoning::models_dev(model)
+            .and_then(|caps| caps.supported_efforts.map(|levels| !levels.is_empty())),
+        reasoning: super::reasoning::models_dev(model),
         cache_read: cost["cache_read"].as_f64(),
         cache_write: cost["cache_write"].as_f64(),
         input_price: cost["input"].as_f64().filter(|v| *v >= 0.0),
         output_price: cost["output"].as_f64().filter(|v| *v >= 0.0),
     }
-}
-
-/// `reasoning: true`, or an option of kind `effort`: either way it takes one.
-/// Silence says nothing, and `false` is not repeated — a capability is only
-/// ever switched on by a catalog.
-fn takes_effort(model: &Value) -> Option<bool> {
-    if model["reasoning"].as_bool() == Some(true) {
-        return Some(true);
-    }
-    let options = model["reasoning_options"].as_array()?;
-    options
-        .iter()
-        .any(|option| matches!(option["type"].as_str(), Some("effort") | Some("reasoning")))
-        .then_some(true)
 }
 
 /// A JSON number as a token count. `None` for anything that is not one — both
@@ -163,6 +151,7 @@ mod tests {
                 output: 0.6
             })
         );
-        assert_eq!(stated.supports_effort, Some(true));
+        assert_eq!(stated.supports_effort, None);
+        assert!(stated.reasoning.is_some());
     }
 }

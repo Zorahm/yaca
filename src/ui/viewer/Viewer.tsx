@@ -40,7 +40,7 @@ import { sentImage } from "../../core/sentImage";
 import { useBrowserCover } from "../browser/cover";
 import { t } from "../../i18n";
 import { plainPath } from "../format";
-import { OpenImage, PreviewRoot } from "./context";
+import { DeliveryRoot, OpenImage, PreviewRoot } from "./context";
 import {
   STEP,
   actual,
@@ -65,10 +65,12 @@ import {
  */
 export function Pictures({
   root,
+  deliveryRoot = root,
   gallery,
   children,
 }: {
   root: string | null;
+  deliveryRoot?: string | null;
   gallery: string[];
   children: ReactNode;
 }) {
@@ -86,18 +88,21 @@ export function Pictures({
 
   return (
     <PreviewRoot.Provider value={root}>
-      <OpenImage.Provider value={open}>
-        {children}
-        {at !== null && root !== null && (
-          <Viewer
-            root={root}
-            list={at.list}
-            index={at.index}
-            onIndex={(index) => setAt({ list: at.list, index })}
-            onClose={() => setAt(null)}
-          />
-        )}
-      </OpenImage.Provider>
+      <DeliveryRoot.Provider value={deliveryRoot}>
+        <OpenImage.Provider value={open}>
+          {children}
+          {at !== null && root !== null && (
+            <Viewer
+              root={root}
+              deliveryRoot={deliveryRoot ?? root}
+              list={at.list}
+              index={at.index}
+              onIndex={(index) => setAt({ list: at.list, index })}
+              onClose={() => setAt(null)}
+            />
+          )}
+        </OpenImage.Provider>
+      </DeliveryRoot.Provider>
     </PreviewRoot.Provider>
   );
 }
@@ -106,18 +111,21 @@ type Loaded = { src: string; size: Size };
 
 function Viewer({
   root,
+  deliveryRoot,
   list,
   index,
   onIndex,
   onClose,
 }: {
   root: string;
+  deliveryRoot: string;
   list: string[];
   index: number;
   onIndex: (index: number) => void;
   onClose: () => void;
 }) {
   const path = list[index];
+  const imageRoot = sentImage(path) === null ? root : deliveryRoot;
   const [image, setImage] = useState<Loaded | "failed" | null>(null);
   const [box, setBox] = useState<Size | null>(null);
   const [view, setView] = useState<View | null>(null);
@@ -137,7 +145,7 @@ function Viewer({
     let alive = true;
     setImage(null);
     setView(null);
-    imageFull(root, path).then(
+    imageFull(imageRoot, path).then(
       (src) => {
         // The size is needed before the first frame: without it "fitted" cannot be computed.
         const probe = new Image();
@@ -154,7 +162,7 @@ function Viewer({
     return () => {
       alive = false;
     };
-  }, [root, path]);
+  }, [imageRoot, path]);
 
   useLayoutEffect(() => {
     if (stage === null) return;

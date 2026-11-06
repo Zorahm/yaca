@@ -7,7 +7,13 @@ import type { Profile } from "./Profile";
 /**
  * Snapshot of the session settings for the composer's bottom row.
  */
-export type SessionState = { projectRoot: string, provider: string, model: string, mode: Mode, 
+export type SessionState = { projectRoot: string, 
+/**
+ * Root that owns `.yaca/sent`: the private workspace for document chats,
+ * the project for ordinary and isolated code sessions. Older journals
+ * omit it; the live session supplies it again when reopened.
+ */
+deliveryRoot?: string, provider: string, model: string, mode: Mode, 
 /**
  * What the chat is about: code, or documents (`profile`). Independent of
  * the mode, which is about trust. Absent from journals written before the

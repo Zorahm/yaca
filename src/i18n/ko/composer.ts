@@ -110,6 +110,9 @@ export const composer = {
   "mode.bypass_off": "끄기",
   "mode.bypass_confirm":
     "재시작할 때까지 권한을 우회합니다. 불변 규칙은 계속 적용됩니다.",
+  "effort.auto": "기본값",
+  "effort.none": "None",
+  "effort.minimal": "Minimal",
   "effort.low": "Low",
   "effort.medium": "Medium",
   "effort.high": "High",

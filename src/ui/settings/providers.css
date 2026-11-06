@@ -1,4 +1,12 @@
 .providers-head { flex-wrap: wrap; }
+.prov-reasoning-fields { grid-column: 2 / -1; }
+.prov-reasoning-fields > .prov-api-hint:not(:empty) { margin-top: 6px; }
+.prov-reasoning-editor .prov-effort-controls { flex-wrap: wrap; align-items: center; }
+.prov-reasoning-editor .prov-filter-pill { flex-shrink: 0; white-space: nowrap; }
+.prov-reasoning-editor details { margin-top: 8px; color: var(--muted); font-size: 12px; }
+.prov-reasoning-editor summary { cursor: pointer; width: fit-content; }
+.prov-reasoning-editor summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.prov-reasoning-editor details[open] .prov-effort-controls { margin-top: 8px; }
 .providers-toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
 .providers-toolbar .btn { white-space: nowrap; }
 .providers-search {

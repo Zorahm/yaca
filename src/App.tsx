@@ -699,7 +699,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
     : clamp(panelChosen, panelLimits ?? { min: PANEL.min, max: windowWidth });
 
   return frame(
-    <Pictures root={project} gallery={gallery}>
+    <Pictures root={project} deliveryRoot={state.deliveryRoot ?? project} gallery={gallery}>
     <div className="shell">
       {sidebar(!sidebarOpen)}
 
@@ -812,7 +812,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
           )}
 
           {panel === "file" && artifact?.session === active.id && project !== null && (
-            <ArtifactPanel key={artifact.file.id} file={artifact.file} root={project} />
+            <ArtifactPanel key={artifact.file.id} file={artifact.file} root={state.deliveryRoot ?? project} />
           )}
           {panel === "file" && artifact?.session !== active.id && filePanelPath !== null && (
             <FilePanel

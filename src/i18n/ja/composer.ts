@@ -110,6 +110,9 @@ export const composer = {
   "mode.bypass_off": "オフにする",
   "mode.bypass_confirm":
     "再起動するまで権限はバイパスされます。不変条件は有効のままです。",
+  "effort.auto": "デフォルト",
+  "effort.none": "None",
+  "effort.minimal": "Minimal",
   "effort.low": "Low",
   "effort.medium": "Medium",
   "effort.high": "High",

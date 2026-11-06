@@ -5,6 +5,9 @@
 import type { providers as source } from "../ru/providers";
 
 export const providers = {
+  "prov.effort_enabled": "추론 수준 선택",
+  "prov.effort_unknown": "제공업체가 수준을 보고하지 않았습니다",
+  "prov.effort_customize": "허용 수준 설정",
   "prov.refresh_all": "모두 새로고침",
   "prov.refresh": "모델 새로고침",
   "prov.group_connected": "연결됨",

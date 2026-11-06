@@ -50,6 +50,13 @@ pub fn model_infos() -> Vec<ModelInfo> {
         .into_iter()
         .enumerate()
         .map(|(i, context_source)| ModelInfo {
+            reasoning: (i == 0).then(|| yaca_core::reasoning::ReasoningCapabilities {
+                supported_efforts: Some(yaca_core::Effort::LEVELS.to_vec()),
+                default_effort: Some(yaca_core::Effort::Medium),
+                default_enabled: Some(true),
+                mandatory: false,
+                supports_max_tokens: true,
+            }),
             id: format!("model-{i}"),
             provider_id: "anthropic".to_owned(),
             display_name: format!("Model {i}"),
@@ -128,6 +135,7 @@ pub fn session_states() -> Vec<SessionState> {
             let isolated = i % 2 == 1;
             SessionState {
                 project_root: format!("C:/Projects/{PROJECT}"),
+                delivery_root: Some(format!("C:/Projects/{PROJECT}")),
                 provider: "anthropic".to_owned(),
                 model: format!("model-{i}"),
                 mode,

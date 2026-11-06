@@ -3,8 +3,7 @@
 /**
  * Reasoning effort level (§7.1, the bottom-right corner of the composer).
  *
- * Maps one to one onto the Messages API's `output_config.effort`. A fixed
- * token budget (`thinking.budget_tokens`) has nothing to do with it: on Opus 5,
- * Sonnet 5 and Opus 4.7+ it has been removed and returns 400.
+ * A model advertises the subset it accepts. `Auto` omits the effort field;
+ * `None` explicitly disables reasoning where the provider allows that.
  */
-export type Effort = "low" | "medium" | "high" | "extra" | "max";
+export type Effort = "auto" | "none" | "minimal" | "low" | "medium" | "high" | "extra" | "max";

@@ -31,6 +31,7 @@ import com.yaca.core.model.Effort
 import com.yaca.core.model.Mode
 import com.yaca.core.model.ModelInfo
 import com.yaca.core.model.SessionState
+import com.yaca.core.model.effortLevels
 
 /**
  * The composer's settings, as chips in one row that scrolls sideways: the mode, the model, and the
@@ -57,8 +58,10 @@ fun ComposerChips(
             models = models,
             onPick = actions.onModel,
         )
-        if (current?.supportsEffort == true) {
-            EffortChip(effort = state.effort, onPick = actions.onEffort)
+        val levels = current?.effortLevels().orEmpty()
+        if (levels.isNotEmpty()) {
+            EffortChip(effort = state.effort.takeIf { it in levels } ?: Effort.AUTO,
+                levels = listOf(Effort.AUTO) + levels, onPick = actions.onEffort)
         }
     }
 }
@@ -90,7 +93,7 @@ private fun ModeChip(mode: Mode, onPick: (Mode) -> Unit) {
 }
 
 @Composable
-private fun EffortChip(effort: Effort, onPick: (Effort) -> Unit) {
+private fun EffortChip(effort: Effort, levels: List<Effort>, onPick: (Effort) -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
     Box {
         AssistChip(
@@ -99,7 +102,7 @@ private fun EffortChip(effort: Effort, onPick: (Effort) -> Unit) {
             trailingIcon = { ChevronIcon() },
         )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            Effort.entries.forEach { choice ->
+            levels.forEach { choice ->
                 DropdownMenuItem(
                     text = { Text(effortLabel(choice)) },
                     onClick = {
@@ -160,6 +163,9 @@ fun modeLabel(mode: Mode): String = stringResource(
 @Composable
 fun effortLabel(effort: Effort): String = stringResource(
     when (effort) {
+        Effort.AUTO -> R.string.effort_auto
+        Effort.NONE -> R.string.effort_none
+        Effort.MINIMAL -> R.string.effort_minimal
         Effort.LOW -> R.string.effort_low
         Effort.MEDIUM -> R.string.effort_medium
         Effort.HIGH -> R.string.effort_high

@@ -109,6 +109,9 @@ pub(crate) fn mode_name(mode: &Mode) -> &'static str {
 
 pub(crate) fn effort_name(effort: &Effort) -> &'static str {
     match effort {
+        Effort::Auto => "auto",
+        Effort::None => "none",
+        Effort::Minimal => "minimal",
         Effort::Low => "low",
         Effort::Medium => "medium",
         Effort::High => "high",

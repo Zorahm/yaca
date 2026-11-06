@@ -10,6 +10,9 @@ import { createContext, useContext } from "react";
 /** The project root that paths in the feed and the composer are written relative to. */
 export const PreviewRoot = createContext<string | null>(null);
 
+/** Delivery snapshots can belong to a private chat workspace. */
+export const DeliveryRoot = createContext<string | null>(null);
+
 /** Open a picture in the viewer. Outside it, does nothing. */
 export const OpenImage = createContext<(path: string) => void>(() => {});
 

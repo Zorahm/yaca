@@ -121,7 +121,13 @@ pub async fn enrich(client: &reqwest::Client, spec: &ProviderSpec, models: &mut 
         if let Some(other) = catalog.get(&model.id) {
             facts.fill_missing(other);
         }
-        facts.context_max.is_none() || facts.max_output.is_none() || facts.pricing.is_none()
+        facts.context_max.is_none()
+            || facts.max_output.is_none()
+            || facts.pricing.is_none()
+            || facts
+                .reasoning
+                .as_ref()
+                .is_none_or(|caps| caps.supported_efforts.is_none())
     }) {
         if let Some(page) = get(client, OPENROUTER_MODELS_URL).await {
             absorb_openrouter(&mut catalog, &page);
@@ -135,7 +141,13 @@ pub async fn enrich(client: &reqwest::Client, spec: &ProviderSpec, models: &mut 
 fn needs_facts(model: &ModelInfo) -> bool {
     let facts = ModelFacts::of(model);
     !model.by_hand
-        && (facts.context_max.is_none() || facts.max_output.is_none() || facts.pricing.is_none())
+        && (facts.context_max.is_none()
+            || facts.max_output.is_none()
+            || facts.pricing.is_none()
+            || facts
+                .reasoning
+                .as_ref()
+                .is_none_or(|caps| caps.supported_efforts.is_none()))
 }
 
 /// Only silence may be filled by a catalog. A stated zero price or an output
@@ -168,6 +180,14 @@ fn apply(catalog: &Catalog, models: &mut [ModelInfo]) {
         }
         if let Some(effort) = facts.supports_effort {
             model.supports_effort = effort;
+        }
+        model.reasoning = facts.reasoning.clone();
+        if let Some(levels) = model
+            .reasoning
+            .as_ref()
+            .and_then(|caps| caps.supported_efforts.as_ref())
+        {
+            model.supports_effort = facts.supports_effort != Some(false) && !levels.is_empty();
         }
         model.cache_read = facts.cache_read;
         model.cache_write = facts.cache_write;
@@ -208,9 +228,25 @@ fn absorb_openrouter(catalog: &mut Catalog, page: &Value) {
         let pricing = &model["pricing"];
         catalog.insert_details(id, model.clone());
         let accepted = model["supported_parameters"].as_array();
+        let reasoning = super::reasoning::openrouter(&model["reasoning"]);
+        let supports_effort = reasoning
+            .as_ref()
+            .and_then(|caps| {
+                caps.supported_efforts
+                    .as_ref()
+                    .map(|levels| !levels.is_empty())
+            })
+            .or_else(|| {
+                accepted.map(|parameters| {
+                    parameters
+                        .iter()
+                        .any(|p| matches!(p.as_str(), Some("reasoning") | Some("reasoning_effort")))
+                })
+            });
         catalog.insert(
             id,
             ModelFacts {
+                reasoning,
                 context_max: u32_of(&model["context_length"]),
                 max_output: u32_of(&model["top_provider"]["max_completion_tokens"]),
                 pricing: match (
@@ -224,11 +260,7 @@ fn absorb_openrouter(catalog: &mut Catalog, page: &Value) {
                 cache_write: per_million(pricing["input_cache_write"].as_str()),
                 input_price: per_million(pricing["prompt"].as_str()),
                 output_price: per_million(pricing["completion"].as_str()),
-                supports_effort: accepted.map(|parameters| {
-                    parameters
-                        .iter()
-                        .any(|p| matches!(p.as_str(), Some("reasoning") | Some("reasoning_effort")))
-                }),
+                supports_effort,
             },
         );
     }
@@ -414,7 +446,7 @@ mod tests {
     }
 
     #[test]
-    fn a_row_whose_numbers_are_all_stated_is_not_asked_about() {
+    fn complete_numbers_do_not_prevent_fetching_missing_reasoning_controls() {
         let stated = ModelInfo {
             context_max: 128_000,
             context_source: ContextSource::ProviderReported,
@@ -425,7 +457,15 @@ mod tests {
             },
             ..info("m")
         };
-        assert!(!needs_facts(&stated));
+        assert!(needs_facts(&stated));
+        let complete = ModelInfo {
+            reasoning: Some(crate::reasoning::ReasoningCapabilities {
+                supported_efforts: Some(vec![]),
+                ..Default::default()
+            }),
+            ..stated
+        };
+        assert!(!needs_facts(&complete));
 
         let mut hand = info("m");
         hand.by_hand = true;

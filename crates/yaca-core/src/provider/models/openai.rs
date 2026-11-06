@@ -63,6 +63,8 @@ struct OpenAiPage {
 #[derive(Debug, Deserialize)]
 struct OpenAiModel {
     id: String,
+    #[serde(default)]
+    reasoning: Option<serde_json::Value>,
     /// OpenRouter says `name`, a local Unsloth studio says `display_name` —
     /// the same field under two names, and the Anthropic shape above uses the
     /// second. Without the alias the switcher (§7.1) shows a raw id like
@@ -147,6 +149,14 @@ fn openai_model(m: &OpenAiModel) -> ModelInfo {
             .iter()
             .any(|p| p == "reasoning" || p == "reasoning_effort");
     }
+    info.reasoning = m.reasoning.as_ref().and_then(super::reasoning::openrouter);
+    if let Some(levels) = info
+        .reasoning
+        .as_ref()
+        .and_then(|caps| caps.supported_efforts.as_ref())
+    {
+        info.supports_effort = !levels.is_empty();
+    }
     // Thinking blocks are never sent back in this shape (see `super::openai`),
     // so there is no point asking any model here for them.
     info.supports_thinking = false;
@@ -194,6 +204,13 @@ fn openai_model(m: &OpenAiModel) -> ModelInfo {
         .supported_parameters
         .as_ref()
         .map(|_| info.supports_effort);
+    if info
+        .reasoning
+        .as_ref()
+        .is_some_and(|caps| caps.supported_efforts.is_some())
+    {
+        facts.supports_effort = Some(info.supports_effort);
+    }
     info.fetched = Some(facts);
     info
 }
@@ -212,6 +229,29 @@ mod tests {
 
     fn openai_page(json: &str) -> Vec<ModelInfo> {
         openai_models(&serde_json::from_str(json).unwrap())
+    }
+
+    #[test]
+    fn reasoning_metadata_keeps_model_specific_levels_and_defaults() {
+        let models = openai_page(
+            r#"{"data":[{"id":"models/gemini-3.8-flash",
+            "reasoning":{"supported_efforts":["high","medium","low"],
+            "default_effort":"medium","default_enabled":true,"mandatory":true}}]}"#,
+        );
+        let info = &models[0];
+        assert!(info.supports_effort);
+        assert_eq!(info.request_effort(crate::intent::Effort::Max), None);
+        assert_eq!(
+            info.request_effort(crate::intent::Effort::Medium),
+            Some(crate::intent::Effort::Medium)
+        );
+        let caps = info.reasoning.as_ref().unwrap();
+        assert!(caps.mandatory);
+        assert_eq!(caps.default_effort, Some(crate::intent::Effort::Medium));
+        assert_eq!(
+            info.fetched.as_ref().unwrap().reasoning.as_ref(),
+            Some(caps)
+        );
     }
 
     #[test]

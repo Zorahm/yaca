@@ -19,6 +19,8 @@ import {
 import type { ModelInfo, Protocol, ProviderSpec } from "../../core/client";
 import type { ModelFacts } from "../../core/bindings/ModelFacts";
 import type { Pricing } from "../../core/bindings/Pricing";
+import type { ReasoningCapabilities } from "../../core/bindings/ReasoningCapabilities";
+import type { Effort } from "../../core/client";
 
 export type { Pricing };
 
@@ -125,6 +127,7 @@ export function getModelCapabilities(model: ModelInfo): string[] {
   if (hasVision) caps.push("vision");
 
   const hasReasoning =
+    model.reasoning !== undefined ||
     model.supportsEffort ||
     model.supportsThinking ||
     params.some((p) => p === "reasoning" || p === "reasoning_effort");
@@ -152,7 +155,7 @@ export function extractDateAlias(modelId: string): { base: string; date?: string
 }
 
 /** The fields of a row a hand may edit, and a reset puts back. */
-export const EDITABLE_FIELDS = ["contextMax", "maxOutput", "pricing", "supportsEffort", "cacheRead", "cacheWrite", "inputPrice", "outputPrice"] as const;
+export const EDITABLE_FIELDS = ["contextMax", "maxOutput", "pricing", "supportsEffort", "reasoning", "cacheRead", "cacheWrite", "inputPrice", "outputPrice"] as const;
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
 
 /** Does this field carry a hand edit right now? */
@@ -179,7 +182,7 @@ export function hasEdits(model: ModelInfo): boolean {
 function withOverride(
   model: ProviderModelItem,
   field: EditableField,
-  value: number | boolean | Pricing,
+  value: number | boolean | Pricing | ReasoningCapabilities,
 ): ProviderModelItem {
   const overrides: ModelFacts = { ...model.overrides, [field]: value };
   const edited: ProviderModelItem = { ...model, overrides };
@@ -191,7 +194,7 @@ function withOverride(
 function applyOverride(
   model: ProviderModelItem,
   field: EditableField,
-  value: number | boolean | Pricing,
+  value: number | boolean | Pricing | ReasoningCapabilities,
 ): void {
   switch (field) {
     case "contextMax":
@@ -207,6 +210,9 @@ function applyOverride(
       break;
     case "supportsEffort":
       model.supportsEffort = value as boolean;
+      break;
+    case "reasoning":
+      model.reasoning = value as ReasoningCapabilities;
       break;
     case "cacheRead":
     case "cacheWrite":
@@ -256,6 +262,16 @@ export function editEffort(
   return withOverride(model, "supportsEffort", supportsEffort);
 }
 
+/** A manual list replaces an unknown or incorrect catalog report. */
+export function editEffortLevels(model: ProviderModelItem, levels: Effort[]): ProviderModelItem {
+  return withOverride(editEffort(model, levels.length > 0), "reasoning", {
+    mandatory: false,
+    supportsMaxTokens: false,
+    ...model.reasoning,
+    supportedEfforts: levels,
+  });
+}
+
 export function editCache(model: ModelInfo, field: "cacheRead" | "cacheWrite", value: number): ModelInfo {
   return withOverride(model, field, value);
 }
@@ -290,6 +306,9 @@ export function resetField(model: ProviderModelItem, field: EditableField): Prov
     case "supportsEffort":
       reset.supportsEffort = facts?.supportsEffort ?? false;
       break;
+    case "reasoning":
+      reset.reasoning = facts?.reasoning;
+      break;
     case "cacheRead":
     case "cacheWrite":
       reset[field] = facts?.[field];
@@ -322,6 +341,7 @@ export function resetModelToProvider(model: ProviderModelItem): ProviderModelIte
     pricing: { input: facts?.inputPrice ?? facts?.pricing?.input ?? 0, output: facts?.outputPrice ?? facts?.pricing?.output ?? 0 },
     pricingByHand: false,
     supportsEffort: facts?.supportsEffort ?? false,
+    reasoning: facts?.reasoning,
     cacheRead: facts?.cacheRead,
     cacheWrite: facts?.cacheWrite,
   };
@@ -375,6 +395,7 @@ function factsOf(model: ModelInfo): ModelFacts {
     maxOutput: model.maxOutput !== DEFAULT_MAX_OUTPUT ? model.maxOutput : undefined,
     pricing: model.pricing.input > 0 || model.pricing.output > 0 ? model.pricing : undefined,
     supportsEffort: model.supportsEffort,
+    reasoning: model.reasoning,
     cacheRead: model.cacheRead,
     cacheWrite: model.cacheWrite,
   };

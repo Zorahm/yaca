@@ -110,6 +110,9 @@ export const composer = {
   "mode.bypass_off": "Desativar",
   "mode.bypass_confirm":
     "As permissões serão ignoradas até reiniciar. Os invariantes continuam valendo.",
+  "effort.auto": "Padrão",
+  "effort.none": "None",
+  "effort.minimal": "Minimal",
   "effort.low": "Low",
   "effort.medium": "Medium",
   "effort.high": "High",

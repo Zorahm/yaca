@@ -41,6 +41,7 @@ import type { Feed } from "../core/feed";
 import type { QueuedMessage } from "../core/bindings/QueuedMessage";
 import { t } from "../i18n";
 import { EffortMenu } from "./EffortMenu";
+import { effectiveEffort, effortLevels } from "../core/reasoning";
 import { ModeMenu, MODE_KEY } from "./ModeMenu";
 import { ModelMenu } from "./ModelMenu";
 import { MentionMenu, useMentions } from "./MentionMenu";
@@ -596,17 +597,10 @@ export function Composer({
             }}
           />
 
-          {/* §7.1 puts effort next to the model, but a model without reasoning has
-              nothing to choose: the core does not send the field at all, because
-              `reasoning_effort` where it is not expected is a 400. A chip that
-              switches and changes nothing lies about the state (§0).
-
-              It is hidden only by an explicit "no": a model that is not in the list
-              may have had effort available, and hiding an existing level silently is
-              worse than showing an extra chip. */}
-          {activeModel?.supportsEffort !== false && (
+          {effortLevels(activeModel).length > 0 && (
             <EffortMenu
-              effort={settings.effort}
+              effort={effectiveEffort(activeModel, settings.effort)}
+              levels={effortLevels(activeModel)}
               open={menu === "effort"}
               onToggle={() => setMenu(menu === "effort" ? null : "effort")}
               onPick={(effort) => {

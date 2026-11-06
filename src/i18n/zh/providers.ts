@@ -5,6 +5,9 @@
 import type { providers as source } from "../ru/providers";
 
 export const providers = {
+  "prov.effort_enabled": "推理强度选择",
+  "prov.effort_unknown": "提供商未报告推理等级",
+  "prov.effort_customize": "自定义允许的等级",
   "prov.refresh_all": "全部刷新",
   "prov.refresh": "刷新模型",
   "prov.group_connected": "已连接",

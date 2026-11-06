@@ -6,7 +6,7 @@
 //! keeps state — see [`events`].
 //!
 //! What this shape cannot do, and so what is lost: the reasoning signature, writing
-//! to the prompt cache, and effort levels above `high`. Each place is marked where
+//! to the prompt cache. Each place is marked where
 //! the translation drops them.
 //!
 //! One thing the provider tells us about itself — which field it takes the response

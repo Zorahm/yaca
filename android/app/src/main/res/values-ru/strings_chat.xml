@@ -232,4 +232,7 @@
         <item quantity="many">%d с ошибкой</item>
         <item quantity="other">%d с ошибкой</item>
     </plurals>
+    <string name="effort_auto">По умолчанию</string>
+    <string name="effort_none">Отключено</string>
+    <string name="effort_minimal">Минимальное</string>
 </resources>

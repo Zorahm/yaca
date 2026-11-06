@@ -5,6 +5,9 @@
 import type { providers as source } from "../ru/providers";
 
 export const providers = {
+  "prov.effort_enabled": "Denkaufwand wählen",
+  "prov.effort_unknown": "Anbieter meldet keine Aufwandsstufen",
+  "prov.effort_customize": "Zulässige Stufen anpassen",
   "prov.refresh_all": "Alle aktualisieren",
   "prov.refresh": "Modelle aktualisieren",
   "prov.group_connected": "Verbunden",
