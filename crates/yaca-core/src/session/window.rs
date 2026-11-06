@@ -44,6 +44,7 @@ impl Worker {
             self.memory.as_deref(),
             self.skills.as_deref(),
         );
+        let system = prompt::with_commit_attribution(system, self.shared.co_author_commits);
         let system = prompt::with_mcp(system, self.agents_section.as_deref());
         // After the project's own sections, ahead of the MCP servers': it is
         // the human's setup speaking, not an external program.

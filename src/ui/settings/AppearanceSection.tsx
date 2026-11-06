@@ -1,19 +1,9 @@
-/**
- * Appearance (§10): theme, accent, gutter and diff row height.
- *
- * Everything here is app-level, and everything applies at once in every window:
- * `setPreferences` writes the file and broadcasts the settings, and
- * `usePreferences` in each window sets the attributes on `<html>`. A theme that
- * changed only where it was picked would be an interface lying about its state (§0).
- *
- * There is no font size here, though §10 names it: the typography in §2 is written
- * in pixel sizes, not a scale, so a "Text size" row would change nothing — see
- * README.
- */
+/** Application appearance and language, with a live preview of visual choices. */
 
-import type { Preferences, Theme } from "../../core/client";
-import { t } from "../../i18n";
-import { Row, Segments, Switch } from "./Row";
+import type { Language, Preferences, Theme } from "../../core/client";
+import { LOCALES, LOCALE_CODES, t } from "../../i18n";
+import { Row, Segments, Select, Switch } from "./Row";
+import { AppearancePreview } from "./AppearancePreview";
 
 export function AppearanceSection({
   prefs,
@@ -26,12 +16,12 @@ export function AppearanceSection({
     <>
       <div className="set-head">
         <div>
-          <h1 className="set-title">{t("look.title")}</h1>
-          <p className="set-lede">{t("look.lede")}</p>
+          <h1 className="set-title">{t("settings.general")}</h1>
+          <p className="set-lede">{t("settings.general_hint")}</p>
         </div>
       </div>
 
-      <div className="set-rows">
+      <div className="set-general-layout"><div className="set-rows">
         <Row name={t("look.theme")} hint={t("look.theme_hint")}>
           <Segments<Theme>
             label={t("look.theme")}
@@ -43,6 +33,12 @@ export function AppearanceSection({
             ]}
             onChange={(theme) => onPatch({ theme })}
           />
+        </Row>
+
+        <Row name={t("notices.language")}>
+          <Select<Language> label={t("notices.language")} value={prefs.language}
+            options={[{ value: "system", label: t("notices.language_system") }, ...LOCALE_CODES.map((code) => ({ value: code, label: LOCALES[code].name }))]}
+            onChange={(language) => onPatch({ language })} />
         </Row>
 
         <Row name={t("look.line_numbers")} hint={t("look.line_numbers_hint")}>
@@ -60,7 +56,10 @@ export function AppearanceSection({
             onChange={(compact) => onPatch({ compact })}
           />
         </Row>
-      </div>
+        <Row name={t("notices.toasts")}>
+          <Switch on={prefs.notifications} label={t("notices.toasts")} onChange={(notifications) => onPatch({ notifications })} />
+        </Row>
+      </div><AppearancePreview prefs={prefs} /></div>
     </>
   );
 }

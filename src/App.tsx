@@ -596,7 +596,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
       onOpenSettings={() => {
         shutDrawer();
         setSettingsList(true);
-        setSettingsAt("providers");
+        setSettingsAt("appearance");
       }}
       update={notice}
       onDismissUpdate={() => setDismissedUpdate(shownUpdate?.version ?? null)}

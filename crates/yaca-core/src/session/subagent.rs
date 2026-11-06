@@ -218,17 +218,20 @@ impl Subagents {
             let request = ProviderRequest {
                 model: model.id.clone(),
                 system: prompt::with_mcp(
-                    with_agent(
-                        system_prompt(
-                            me.ws.root(),
-                            intent,
-                            state.profile,
-                            me.instructions.as_deref(),
-                            me.skills.as_deref(),
-                            me.memory.as_deref(),
-                            shared.shell,
+                    prompt::with_commit_attribution(
+                        with_agent(
+                            system_prompt(
+                                me.ws.root(),
+                                intent,
+                                state.profile,
+                                me.instructions.as_deref(),
+                                me.skills.as_deref(),
+                                me.memory.as_deref(),
+                                shared.shell,
+                            ),
+                            def.as_ref(),
                         ),
-                        def.as_ref(),
+                        shared.co_author_commits,
                     ),
                     me.mcp_notes.as_deref(),
                 ),

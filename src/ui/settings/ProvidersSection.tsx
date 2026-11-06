@@ -2,20 +2,18 @@
 import { ArrowClockwise, CaretLeft, Plus, MagnifyingGlass } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
-import type { ModelInfo, ProviderSpec } from "../../core/client";
+import type { ProviderSpec } from "../../core/client";
 import { t } from "../../i18n";
 import { ProviderForm } from "./ProviderForm";
 import { ProviderRow } from "./ProviderRow";
 import { draftFromSpec, emptyDraft, type ProviderDraft } from "./provider";
 import { providerStatus, STATUS_ORDER } from "./providerStatus";
-import { RoutingSection } from "./RoutingSection";
 import { useProviders } from "./useProviders";
 import "./providers.css";
 
 type Editing = { draft: ProviderDraft; isNew: boolean; focusKey?: boolean };
 
-export function ProvidersSection({ models, onChanged, currentProvider }: {
-  models: ModelInfo[];
+export function ProvidersSection({ onChanged, currentProvider }: {
   onChanged: () => void;
   currentProvider?: string;
 }) {
@@ -114,7 +112,7 @@ export function ProvidersSection({ models, onChanged, currentProvider }: {
     {error !== null && <div className="set-error" role="alert">{error}</div>}
     {providers === null && error === null && <p className="set-empty" role="status">{t("prov.loading")}</p>}
     {providers !== null && <>
-      {(providers.list.length > 10 || search.length > 0) && <label className="providers-search">
+      {<label className="providers-search">
         <MagnifyingGlass size={15} aria-hidden="true" />
         <input type="search" value={search} placeholder={t("prov.search_providers")}
           aria-label={t("prov.search_providers")} onChange={(event) => setSearch(event.target.value)} />
@@ -132,6 +130,5 @@ export function ProvidersSection({ models, onChanged, currentProvider }: {
       </section>)}
       {visible.length === 0 && <p className="set-empty" role="status">{t("prov.search_empty")}</p>}
     </>}
-    <RoutingSection models={models} onChanged={onChanged} />
   </>;
 }

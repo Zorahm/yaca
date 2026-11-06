@@ -94,6 +94,9 @@ pub struct Preferences {
     /// file it has no business reading.
     pub respect_robots: bool,
     pub summarize_web_fetch: bool,
+    /// Ask the model to credit Yaca in commits. Fixed when a chat opens so its
+    /// cached system prompt stays stable; older settings keep this opt-in off.
+    pub co_author_commits: bool,
     /// Which shell the agent's commands run through (§10). Windows only:
     /// elsewhere there is one shell and nothing to choose.
     ///
@@ -118,6 +121,7 @@ impl Default for Preferences {
             notifications: true,
             respect_robots: true,
             summarize_web_fetch: false,
+            co_author_commits: false,
             shell: ShellChoice::default(),
             check_updates: true,
         }
@@ -181,6 +185,7 @@ mod tests {
         assert!(!prefs.compact);
         assert!(prefs.notifications);
         assert!(prefs.respect_robots);
+        assert!(!prefs.co_author_commits);
         assert_eq!(prefs.shell, ShellChoice::Auto);
         assert!(prefs.check_updates);
     }
@@ -193,6 +198,18 @@ mod tests {
         assert!(prefs.line_numbers, "an unnamed field is not an off field");
         assert!(prefs.notifications);
         assert!(prefs.respect_robots);
+        assert!(!prefs.co_author_commits);
+    }
+
+    #[test]
+    fn commit_attribution_survives_a_settings_round_trip() {
+        let prefs = Preferences {
+            co_author_commits: true,
+            ..Preferences::default()
+        };
+        let json = serde_json::to_string(&prefs).unwrap();
+        assert!(json.contains(r#""coAuthorCommits":true"#));
+        assert_eq!(serde_json::from_str::<Preferences>(&json).unwrap(), prefs);
     }
 
     /// A file from the build that had an accent picker still loads: the key

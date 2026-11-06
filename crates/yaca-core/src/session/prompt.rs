@@ -355,6 +355,22 @@ pub fn build_with_memory(
     s
 }
 
+/// Shared by the lead and subagent prompts so delegated commits get the same credit.
+pub(super) fn with_commit_attribution(mut system: String, enabled: bool) -> String {
+    if enabled {
+        system.push_str(
+            "\n<commit_attribution>\n\
+             When you create a Git commit, include exactly one trailer with this exact text, \
+             separated from the commit message body by a blank line:\n\
+             Co-Authored-By: yaca-agent <yaca@zorahm.com>\n\
+             This preference does not authorize creating commits or amending existing commits; \
+             follow the human's instructions about when to commit.\n\
+             </commit_attribution>\n",
+        );
+    }
+    system
+}
+
 /// Adds what the session's MCP servers say to a finished prompt.
 ///
 /// Last, after the project's own sections: a server's instructions are an

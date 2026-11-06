@@ -37,6 +37,7 @@ pub mod lsp;
 pub mod mcp;
 pub mod mention;
 pub mod message;
+pub mod model_defaults;
 pub mod office;
 pub mod pending;
 pub mod permission;

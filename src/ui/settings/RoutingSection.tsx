@@ -186,7 +186,7 @@ export function RoutingSection({
                   value={picks[field]}
                   options={[
                     { value: NO_MODEL, label: t("routing.wizard_pick") },
-                    ...routable.map((m) => ({
+                    ...routable.filter((m) => field === "decider" || m.providerId !== DECISION_PROVIDER_ID).map((m) => ({
                       value: modelKey(m),
                       label: `${modelLabel(m)} — ${m.providerId}`,
                     })),

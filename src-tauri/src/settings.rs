@@ -123,6 +123,10 @@ impl AppSettings {
         self.last_startup = Some(startup);
     }
 
+    pub fn clear_last_startup(&mut self) {
+        self.last_startup = None;
+    }
+
     /// Written through a temporary file: a half-written settings file is a
     /// file that does not parse, and the next launch would forget the list.
     pub fn save(&self, dir: &Path) -> io::Result<()> {
@@ -240,6 +244,7 @@ mod tests {
         let prefs = Preferences {
             theme: Theme::Night,
             notifications: false,
+            co_author_commits: true,
             ..Preferences::default()
         };
         settings.set_prefs(prefs.clone());

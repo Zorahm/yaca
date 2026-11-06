@@ -29,7 +29,6 @@ import type { Protocol, ProviderSpec } from "../../core/client";
 import { t } from "../../i18n";
 import { PROTOCOL_NAME, ProtocolMark } from "../brand";
 import { HeadersEditor } from "./HeadersEditor";
-import { ModelsList } from "./ModelsList";
 import { useProviderForm } from "./useProviderForm";
 import { isPreset, type ProviderDraft } from "./provider";
 
@@ -193,24 +192,6 @@ export function ProviderForm({
 
       {keyState.kind === "not_needed" && (
         <div className="prov-hint">{t("prov.key_not_needed")}</div>
-      )}
-
-      {(
-        <section className="prov-section">
-          <span className="prov-label">{t("prov.form_models")}</span>
-          <ModelsList
-            models={draft.models}
-            busy={form.modelsBusy || form.keyBusy}
-            answered={form.modelsAnswered}
-            error={form.modelsError}
-            isLocal={draft.baseUrl.includes("localhost") || draft.baseUrl.includes("127.0.0.1")}
-            onAsk={form.askForModels}
-            onModelsChange={form.changeModels}
-            saveState={form.modelsSaveState}
-            canAsk={!isNew}
-            checkedAt={form.modelsCheckedAt}
-          />
-        </section>
       )}
 
       {preset && (

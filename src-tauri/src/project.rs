@@ -36,8 +36,60 @@ pub fn project_settings(project: String) -> Result<Settings, String> {
 /// a patch API would have to answer what happens when two windows patch at
 /// once. One project, one settings window, one write.
 #[tauri::command]
-pub fn save_project_settings(project: String, settings: Settings) -> Result<(), String> {
-    settings.save(&root(&project)?).map_err(|e| e.to_string())
+pub fn save_project_settings(
+    app: tauri::AppHandle,
+    project: String,
+    settings: Settings,
+) -> Result<(), String> {
+    settings.save(&root(&project)?).map_err(|e| e.to_string())?;
+    crate::providers::announce(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn global_models() -> Result<yaca_core::model_defaults::ModelDefaults, String> {
+    yaca_core::model_defaults::ModelDefaults::load(&crate::config_dir()?).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn save_global_models(
+    app: tauri::AppHandle,
+    defaults: yaca_core::model_defaults::ModelDefaults,
+) -> Result<(), String> {
+    let dir = crate::config_dir()?;
+    let previous =
+        yaca_core::model_defaults::ModelDefaults::load(&dir).map_err(|e| e.to_string())?;
+    defaults.save(&dir).map_err(|e| e.to_string())?;
+    if previous.model != defaults.model || previous.provider != defaults.provider {
+        // An older composer pick must not silently defeat a newly chosen default.
+        let mut settings = crate::settings::AppSettings::load(&dir);
+        settings.clear_last_startup();
+        settings.save(&dir).map_err(|e| e.to_string())?;
+    }
+    crate::providers::announce(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn project_instructions_preview(project: String) -> Result<Option<(String, String)>, String> {
+    let ws = yaca_core::Workspace::open(root(&project)?).map_err(|e| e.to_string())?;
+    Ok(yaca_core::instructions::load(&ws)
+        .and_then(|found| found.root)
+        .map(|file| (file.path, file.text)))
+}
+
+#[tauri::command]
+pub fn open_project_instructions(app: tauri::AppHandle, project: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let base = root(&project)?;
+    let path = project_instructions(project)?.ok_or("instructions file not found")?;
+    #[cfg(target_os = "windows")]
+    let editor = Some("notepad.exe");
+    #[cfg(not(target_os = "windows"))]
+    let editor = None::<&str>;
+    app.opener()
+        .open_path(base.join(path).to_string_lossy().as_ref(), editor)
+        .map_err(|e| e.to_string())
 }
 
 /// Directories the snapshot walk never enters, whatever the project says

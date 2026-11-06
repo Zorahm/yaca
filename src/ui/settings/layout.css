@@ -1,0 +1,53 @@
+/* Keep navigation and About reachable independently of content height. */
+.set-nav { overflow: hidden; }
+.set-close, .set-nav-footer { flex: none; }
+.set-nav-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+.set-nav-scroll .set-project { width: calc(100% - 16px); }
+.set-nav-group { display: flex; flex-direction: column; gap: 3px; margin-bottom: 18px; }
+.set-nav-footer { padding-top: 10px; border-top: 1px solid var(--line); }
+.set-update-dot { flex: none; width: 7px; height: 7px; margin-left: auto; border-radius: 50%; background: var(--accent); }
+.set-scope-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 20px; }
+.set-scope-bar .select { max-width: 260px; }
+.set-model-override { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 16px; }
+.set-model-override summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.set-model-override .set-rows { margin-top: 12px; }
+.set-local-models { margin-top: 24px; }
+.set-model-catalog { margin-top: 24px; }
+.set-model-catalog > .select { margin-bottom: 12px; }
+.set-local-name { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, 240px) auto; gap: 10px; align-items: center; padding: 10px 0; }
+.set-local-name code { overflow-wrap: anywhere; color: var(--muted); font: 11.5px var(--mono); }
+.set-instructions-preview { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--sunk); color: var(--ink); font: 12px/1.6 var(--mono); }
+.set-general-layout { display: grid; gap: 18px; }
+.set-preview { margin: 0; max-width: 520px; }
+.set-preview figcaption { margin-bottom: 8px; color: var(--muted); font-size: 12px; }
+.set-preview-window { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-l); background: var(--surface); }
+.set-preview-bar { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11.5px; }
+.set-preview-message { margin: 12px; font-size: 12px; }
+.set-preview-diff { margin: 0 12px 12px; border-radius: var(--radius-s); background: var(--sunk); overflow: auto; font-size: 11px; }
+.set-preview-diff > div { display: flex; white-space: pre; padding: 0 8px; }
+.set-preview-diff [data-change="add"] { background: var(--add); }
+.set-preview-diff [data-change="del"] { background: var(--del); }
+.set-preview-number { flex: none; width: 36px; color: var(--muted); text-align: right; padding-right: 12px; font-family: var(--mono); }
+.set-preview-toast { margin: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-m); font-size: 12px; color: var(--accent-ink); }
+@media (min-width: 1180px) {
+  .set-general-layout { grid-template-columns: minmax(480px, 1fr) minmax(260px, 360px); align-items: start; }
+}
+@media (max-width: 679.98px) {
+  .set-local-name { grid-template-columns: minmax(0, 1fr) auto; }
+  .set-local-name code { grid-column: 1 / -1; }
+}
+
+.set-permissions-table-wrap { margin-top: 22px; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-m); }
+.set-permissions-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.set-permissions-table th, .set-permissions-table td { text-align: left; padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.set-permissions-table tr:last-child > * { border-bottom: 0; }
+.set-permissions-table th { color: var(--muted); font-weight: 500; }
+.set-permissions-table thead { background: var(--sunk); }
+.set-permissions-table td { width: 38%; }
+.set-permissions-table td:empty::after { content: "—"; color: var(--muted); }
+.set-permissions-table .rule { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0; border: 0; }
+.set-permissions-table .rule-kind, .set-permissions-table .rule-reason { display: none; }
+.set-permissions-table .rule-value { flex: 1; min-width: 60px; overflow-wrap: anywhere; white-space: normal; }
+
+.set-permissions-table .rule-deny .rule-reason { display: block; flex-basis: 100%; font-size: 11px; overflow-wrap: anywhere; }
+.set-permissions-table-wrap ~ .rule-add + .rule-add { margin-top: 10px; }

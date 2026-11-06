@@ -47,6 +47,7 @@ pub(crate) async fn open_chat(
     // file: it reaches the core as a config field, like the mode and the effort.
     config.respect_robots = state.prefs().respect_robots;
     config.summarize_web_fetch = state.prefs().summarize_web_fetch;
+    config.co_author_commits = state.prefs().co_author_commits;
     config.web_fetch_model = yaca_core::router::attach::web_fetch_setup(&config_dir()?, &providers);
     config.web_fetch_pricing = config
         .web_fetch_model

@@ -14,7 +14,7 @@
 import { Plus, X } from "@phosphor-icons/react";
 import { useState } from "react";
 
-import { refusal, type Refusal, type ScopeKey, type Settings } from "../../core/client";
+import { refusal, type ScopeKey, type Settings } from "../../core/client";
 import { t, type Key } from "../../i18n";
 import type { Mode, Profile } from "../../core/client";
 import { Row, Segments } from "./Row";
@@ -88,7 +88,7 @@ export function RulesSection({
     <>
       <div className="set-head">
         <div>
-          <h1 className="set-title">{t("rules.title")}</h1>
+          <h1 className="set-title">{t("settings.permissions")}</h1>
           <p className="set-lede">{t("rules.lede")}</p>
         </div>
       </div>
@@ -97,7 +97,7 @@ export function RulesSection({
         <Row name={t("rules.profile")} hint={t("rules.profile_hint")}>
           <Segments<Profile | "">
             label={t("rules.profile")}
-            value={settings.profile ?? ""}
+            value={settings.profile ?? "code"}
             options={[
               { value: "code", label: t("profile.code") },
               { value: "chat", label: t("profile.chat") },
@@ -111,7 +111,7 @@ export function RulesSection({
         <Row name={t("rules.mode")} hint={t("rules.mode_hint")}>
           <Segments<Mode | "">
             label={t("rules.mode")}
-            value={settings.mode ?? ""}
+            value={settings.mode ?? "manual"}
             options={[
               { value: "auto", label: t("mode.auto") },
               { value: "manual", label: t("mode.manual") },
@@ -125,121 +125,21 @@ export function RulesSection({
         </Row>
       </div>
 
-      <div className="set-subhead">
-        <div>
-          <span className="set-subname">{t("rules.allowed")}</span>
-          <span className="set-subhint">{t("rules.allowed_hint")}</span>
-        </div>
-        {rules.length > 0 && (
-          <button
-            type="button"
-            className="btn btn-row"
-            onClick={() =>
-              onPatch((now) => ({
-                ...now,
-                permissions: { ...now.permissions, rules: [] },
-              }))
-            }
-          >
-            {t("rules.reset")}
-          </button>
-        )}
+      <div className="set-permissions-table-wrap">
+        <table className="set-permissions-table">
+          <thead><tr><th>{t("rules.kind")}</th><th>{t("rules.allowed")}</th><th>{t("rules.denied")}</th></tr></thead>
+          <tbody>{KINDS.map((kind) => <tr key={kind}>
+            <th scope="row">{t(KIND_NAMES[kind])}</th>
+            <td>{rules.filter((scope) => scope.type === kind).map((scope) => <RuleRow key={valueOf(scope)} scope={scope}
+              onRemove={() => onPatch((now) => ({ ...now, permissions: { ...now.permissions, rules: now.permissions.rules.filter((other) => !same(other, scope)) } }))} />)}</td>
+            <td>{denies.filter((deny) => deny.scope.type === kind).map((deny) => <RuleRow key={valueOf(deny.scope)} scope={deny.scope} reason={deny.reason} deny
+              onRemove={() => onPatch((now) => ({ ...now, permissions: { ...now.permissions, denies: now.permissions.denies.filter((other) => !same(other.scope, deny.scope)) } }))} />)}</td>
+          </tr>)}</tbody>
+        </table>
       </div>
-
-      <div className="set-list">
-        {rules.length === 0 && <div className="set-empty">{t("rules.allowed_empty")}</div>}
-        {rules.map((scope, index) => (
-          <RuleRow
-            key={`${scope.type}:${valueOf(scope)}:${index}`}
-            scope={scope}
-            onRemove={() =>
-              onPatch((now) => ({
-                ...now,
-                permissions: {
-                  ...now.permissions,
-                  rules: now.permissions.rules.filter((other) => !same(other, scope)),
-                },
-              }))
-            }
-          />
-        ))}
-      </div>
-
-      <AddRule
-        submit={t("rules.allow")}
-        onAdd={(scope) =>
-          onPatch((now) => ({
-            ...now,
-            permissions: {
-              ...now.permissions,
-              rules: [...now.permissions.rules.filter((o) => !same(o, scope)), scope],
-            },
-          }))
-        }
-      />
-
-      <div className="set-subhead set-subhead-sep">
-        <div>
-          <span className="set-subname">{t("rules.denied")}</span>
-          <span className="set-subhint">{t("rules.denied_hint")}</span>
-        </div>
-        {denies.length > 0 && (
-          <button
-            type="button"
-            className="btn btn-row"
-            onClick={() =>
-              onPatch((now) => ({
-                ...now,
-                permissions: { ...now.permissions, denies: [] },
-              }))
-            }
-          >
-            {t("rules.reset")}
-          </button>
-        )}
-      </div>
-
-      <div className="set-list">
-        {denies.length === 0 && <div className="set-empty">{t("rules.denied_empty")}</div>}
-        {denies.map((deny, index) => (
-          <RuleRow
-            key={`${deny.scope.type}:${valueOf(deny.scope)}:${index}`}
-            scope={deny.scope}
-            reason={deny.reason}
-            deny
-            onRemove={() =>
-              onPatch((now) => ({
-                ...now,
-                permissions: {
-                  ...now.permissions,
-                  denies: now.permissions.denies.filter(
-                    (other: Refusal) => !same(other.scope, deny.scope),
-                  ),
-                },
-              }))
-            }
-          />
-        ))}
-      </div>
-
-      <AddRule
-        submit={t("rules.deny")}
-        withReason
-        onAdd={(scope, reason) =>
-          onPatch((now) => ({
-            ...now,
-            permissions: {
-              ...now.permissions,
-              // A repeat of the same scope replaces the reason rather than adding a
-              // second line: the last word on it is what the agent will read.
-              denies: [
-                ...now.permissions.denies.filter((o: Refusal) => !same(o.scope, scope)),
-                refusal(scope, reason),
-              ],
-            },
-          }))
-        }
-      />
+      <p className="set-subhint">{t("rules.denied_hint")}</p>
+      <AddRule submit={t("rules.allow")} onAdd={(scope) => onPatch((now) => ({ ...now, permissions: { ...now.permissions, rules: [...now.permissions.rules.filter((other) => !same(other, scope)), scope] } }))} />
+      <AddRule submit={t("rules.deny")} withReason onAdd={(scope, reason) => onPatch((now) => ({ ...now, permissions: { ...now.permissions, denies: [...now.permissions.denies.filter((other) => !same(other.scope, scope)), refusal(scope, reason)] } }))} />
     </>
   );
 }
@@ -257,7 +157,7 @@ function RuleRow({
 }) {
   const kind = scope.type as Kind;
   return (
-    <div className={deny ? "rule rule-deny" : "rule"}>
+    <div className={deny ? "rule rule-deny" : "rule"} title={reason ?? undefined}>
       <span className="rule-kind">{t(KIND_NAMES[kind])}</span>
       <span className="rule-value">{valueOf(scope)}</span>
       <span className="rule-reason">

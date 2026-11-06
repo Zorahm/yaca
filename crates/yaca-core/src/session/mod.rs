@@ -127,6 +127,9 @@ pub struct SessionConfig {
     pub respect_robots: bool,
     /// Summarize fetched pages.
     pub summarize_web_fetch: bool,
+    /// Ask the model to add Yaca's co-author trailer to commits it creates.
+    /// Opt-in application preference, fixed for the lifetime of the session.
+    pub co_author_commits: bool,
     /// Router model used for page summaries.
     pub web_fetch_model: Option<crate::tool::decision::DecisionSetup>,
     /// Pricing for the configured router summary model.
@@ -214,6 +217,7 @@ impl SessionConfig {
             resume: None,
             respect_robots: true,
             summarize_web_fetch: false,
+            co_author_commits: false,
             web_fetch_model: None,
             web_fetch_pricing: None,
             decision: None,
@@ -248,7 +252,7 @@ impl SessionConfig {
         let mut config = SessionConfig::new(root);
         config.provider.clear();
         config.model.clear();
-        let settings = Settings::load(&config.root)?;
+        let settings = crate::model_defaults::effective_settings(&config.root)?;
         if let Some(mode) = settings.mode {
             config.mode = mode;
         }
@@ -489,6 +493,7 @@ struct Shared {
     /// project file: an application setting.
     respect_robots: bool,
     summarize_web_fetch: bool,
+    co_author_commits: bool,
     web_fetch_model: Option<crate::tool::decision::DecisionSetup>,
     web_fetch_pricing: Option<Pricing>,
     /// What `Decision` asks, when there is something to ask.
@@ -652,7 +657,7 @@ pub fn spawn(
     // Settings first: the workspace needs the project's snapshot exclusions
     // before it is shared, so that the permission questions see them (§8).
     let root = Workspace::open(&config.root)?;
-    let settings = Settings::load(root.root())?;
+    let settings = crate::model_defaults::effective_settings(root.root())?;
     let root = root.with_shadow_exclude(&settings.shadow.exclude);
     let store = config
         .journal
@@ -832,6 +837,7 @@ pub fn spawn(
         questions: Pending::default(),
         respect_robots: config.respect_robots,
         summarize_web_fetch: config.summarize_web_fetch,
+        co_author_commits: config.co_author_commits,
         web_fetch_model: config.web_fetch_model.clone(),
         web_fetch_pricing: config.web_fetch_pricing,
         decision: config.decision.clone(),

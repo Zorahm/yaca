@@ -1,8 +1,8 @@
 /**
  * Tools (§10).
  *
- * Today the section has three real rows: the command shell, `robots.txt` and the
- * web search key. The shell is chosen only where there is a choice: on Windows,
+ * Application preferences for commands, commit attribution and web tools.
+ * The shell is chosen only where there is a choice: on Windows,
  * between PowerShell 7 and Windows PowerShell. Where there is only one, there is no row.
  * Tool toggles, the command timeout and the spending limit §10 also names, but
  * nothing in the core stands behind them: the tool set is the fixed
@@ -90,13 +90,14 @@ export function ToolsSection({
     <>
       <div className="set-head">
         <div>
-          <h1 className="set-title">{t("tools.title")}</h1>
-          <p className="set-lede">{t("tools.lede")}</p>
+          <h1 className="set-title">{t("settings.environment")}</h1>
+          <p className="set-lede">{t("settings.environment_hint")}</p>
         </div>
       </div>
 
       {error !== null && <div className="set-error">{error}</div>}
 
+      <h2 className="set-subname">{t("settings.terminal_git")}</h2>
       <div className="set-rows">
         {shells.length > 0 && (
           <Row name={t("tools.shell")} hint={t("tools.shell_hint")}>
@@ -112,6 +113,16 @@ export function ToolsSection({
           </Row>
         )}
 
+        <Row name={t("tools.co_author_commits")} hint={t("tools.co_author_commits_hint")}>
+          <Switch
+            on={prefs.coAuthorCommits}
+            label={t("tools.co_author_commits")}
+            onChange={(coAuthorCommits) => onPatch({ coAuthorCommits })}
+          />
+        </Row>
+      </div>
+      <h2 className="set-subname set-subhead-sep">{t("settings.web_access")}</h2>
+      <div className="set-rows">
         <Row name={t("tools.web_summary")} hint={t("tools.web_summary_hint")}><Switch on={prefs.summarizeWebFetch} label={t("tools.web_summary")} onChange={(summarizeWebFetch) => onPatch({ summarizeWebFetch })} /></Row>
         <Row name={t("tools.robots")} hint={t("tools.robots_hint")}>
           <Switch

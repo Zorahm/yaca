@@ -434,7 +434,13 @@ export function userName(): Promise<string | null> {
 export function projectStartup(path: string): Promise<Startup> {
   if (!inTauri) {
     const { mode, profile, provider, model, effort } = demoState;
-    return Promise.resolve({ mode, profile, provider, model, effort });
+    return Promise.resolve({
+      mode: demoSettings.mode ?? mode,
+      profile: demoSettings.profile ?? profile,
+      provider: demoSettings.provider ?? demoModelDefaults.provider ?? provider,
+      model: demoSettings.model ?? demoModelDefaults.model ?? model,
+      effort,
+    });
   }
   return invoke<Startup>("project_startup", { path });
 }
@@ -902,7 +908,7 @@ export function apiKeySource(provider: string): Promise<KeySource> {
 }
 
 export function models(): Promise<ModelInfo[]> {
-  if (!inTauri) return Promise.resolve(demoModels);
+  if (!inTauri) return Promise.resolve(demoRegistry.list.flatMap((spec) => spec.models.filter((model) => model.enabled).map((model) => ({ ...model, providerId: spec.id, displayName: demoModelDefaults.names?.[`${spec.id}\n${model.id}`] ?? model.displayName }))));
   return invoke<ModelInfo[]>("models");
 }
 
@@ -1281,6 +1287,7 @@ export const DEFAULT_PREFS: Preferences = {
   notifications: true,
   respectRobots: true,
   summarizeWebFetch: false,
+  coAuthorCommits: false,
   shell: "auto",
   checkUpdates: true,
 };
@@ -1346,6 +1353,28 @@ export function emptySettings(): Settings {
 /** In the stand the project settings live in the page's memory, like the project list. */
 let demoSettings: Settings = emptySettings();
 
+export type ModelDefaults = Pick<Settings, "provider" | "model" | "compactModel" | "subagentModel"> & { names?: Record<string, string> };
+let demoModelDefaults: ModelDefaults = { provider: null, model: null, compactModel: null, subagentModel: null };
+
+export function globalModels(): Promise<ModelDefaults> {
+  return inTauri ? invoke<ModelDefaults>("global_models") : Promise.resolve(structuredClone(demoModelDefaults));
+}
+
+export function saveGlobalModels(defaults: ModelDefaults): Promise<void> {
+  if (inTauri) return invoke<void>("save_global_models", { defaults });
+  demoModelDefaults = structuredClone(defaults);
+  demoProvidersHandler?.();
+  return Promise.resolve();
+}
+
+export function projectInstructionsPreview(project: string): Promise<[string, string] | null> {
+  return inTauri ? invoke("project_instructions_preview", { project }) : Promise.resolve(["CLAUDE.md", "# Project instructions\n\nFollow the project conventions."]);
+}
+
+export function openProjectInstructions(project: string): Promise<void> {
+  return inTauri ? invoke<void>("open_project_instructions", { project }) : Promise.reject(new Error("Opening local files requires the desktop app"));
+}
+
 /** Project settings (§10). A broken file arrives as a refusal, not as an empty result. */
 export function projectSettings(project: string): Promise<Settings> {
   if (!inTauri) return Promise.resolve(structuredClone(demoSettings));
@@ -1356,6 +1385,7 @@ export function projectSettings(project: string): Promise<Settings> {
 export function saveProjectSettings(project: string, settings: Settings): Promise<void> {
   if (!inTauri) {
     demoSettings = structuredClone(settings);
+    demoProvidersHandler?.();
     return Promise.resolve();
   }
   return invoke<void>("save_project_settings", { project, settings });

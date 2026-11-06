@@ -212,6 +212,12 @@ pub fn models() -> Result<Vec<ModelInfo>, String> {
     let providers = Providers::load(&config_dir()?).map_err(|e| e.to_string())?;
     let mut all = providers.all_models();
     all.extend(crate::routing::offered());
+    let defaults = yaca_core::model_defaults::ModelDefaults::load(&config_dir()?).map_err(|e| e.to_string())?;
+    for model in &mut all {
+        if let Some(name) = defaults.names.get(&format!("{}\n{}", model.provider_id, model.id)) {
+            model.display_name.clone_from(name);
+        }
+    }
     Ok(all)
 }
 

@@ -1,120 +1,83 @@
-/**
- * Project models (§10): what a new session starts with and what the history is
- * compacted with.
- *
- * The section is per project, not global: §10 lists "Models" in one list with the
- * providers, but they live in different places — providers in the app config, and
- * the model choice in `.yaca/settings.json`. Mixing them would mean changing the
- * model "for everyone" without saying so.
- *
- * §10 also names "For subagents" and "limits" — they are not here: there are no
- * subagents in the core at all, and no limit that anyone reads exists.
- *
- * The choice is made from the models of configured providers, and only from them.
- * A provider without models does not appear in §7.1, and offering it here would
- * suggest starting a conversation that will not start (§10).
- */
-
-import type { ModelInfo, Settings } from "../../core/client";
+import { useState } from "react";
+import type { ModelDefaults, ModelInfo } from "../../core/client";
 import { t } from "../../i18n";
-import { chatModels, modelLabel } from "../modelSearch";
+import { chatModels, modelKey, modelLabel } from "../modelSearch";
 import { Row, Select } from "./Row";
+import { RoutingSection } from "./RoutingSection";
+import { ModelCatalog } from "./ModelCatalog";
 
-/**
- * The "not set" value in the list. Not an empty string: its `Select` takes that for
- * "nothing selected", and angle brackets never occur in model identifiers.
- */
 const NONE = "<none>";
 
-export function ModelsSection({
-  settings,
-  models,
-  onPatch,
-}: {
-  settings: Settings;
+export function ModelChoices({ values, models, inherited = false, onPatch }: {
+  values: ModelDefaults;
   models: ModelInfo[];
-  onPatch: (change: (settings: Settings) => Settings) => void;
+  inherited?: boolean;
+  onPatch: (change: Partial<ModelDefaults>) => void;
 }) {
   const choices = chatModels(models);
-  const known = choices.length > 0;
-
-  return (
-    <>
-      <div className="set-head">
-        <div>
-          <h1 className="set-title">{t("models.title")}</h1>
-          <p className="set-lede">{t("models.lede")}</p>
-        </div>
-      </div>
-
-      {!known && <div className="set-empty">{t("models.none")}</div>}
-
-      <div className="set-rows">
-        <Row name={t("models.default")} hint={t("models.default_hint")}>
-          <ModelSelect
-            label={t("models.default")}
-            unset={t("models.first_configured")}
-            value={settings.model}
-            models={choices}
-            onChange={(model) => {
-              // The provider travels with the model: §10 says a model brings its own
-              // provider, and writing the model without it would leave a pair in the
-              // file that may not match.
-              const provider = choices.find((m) => m.id === model)?.providerId ?? null;
-              onPatch((now) => ({ ...now, model, provider }));
-            }}
-          />
-        </Row>
-
-        <Row name={t("models.compact")} hint={t("models.compact_hint")}>
-          <ModelSelect
-            label={t("models.compact")}
-            unset={t("models.compact_same")}
-            value={settings.compactModel}
-            models={choices}
-            onChange={(compactModel) => onPatch((now) => ({ ...now, compactModel }))}
-          />
-        </Row>
-
-        <Row name={t("models.subagent")} hint={t("models.subagent_hint")}>
-          <ModelSelect
-            label={t("models.subagent")}
-            unset={t("models.compact_same")}
-            value={settings.subagentModel}
-            models={choices}
-            onChange={(subagentModel) => onPatch((now) => ({ ...now, subagentModel }))}
-          />
-        </Row>
-      </div>
-    </>
-  );
+  const selected = choices.find((m) => m.id === values.model && (!values.provider || m.providerId === values.provider));
+  const mainValue = selected ? modelKey(selected) : values.model ? `${values.provider ?? ""}\n${values.model}` : NONE;
+  const mainOptions = choices.map((m) => ({ value: modelKey(m), label: `${modelLabel(m)} · ${m.providerId}` }));
+  if (mainValue !== NONE && !mainOptions.some((o) => o.value === mainValue)) mainOptions.unshift({ value: mainValue, label: values.model! });
+  return <div className="set-rows">
+    <Row name={t("models.default")} hint={t("models.default_hint")}>
+      <Select label={t("models.default")} value={mainValue}
+        options={[{ value: NONE, label: t(inherited ? "settings.inherit" : "models.first_configured") }, ...mainOptions]}
+        onChange={(value) => {
+          const model = choices.find((m) => modelKey(m) === value);
+          onPatch({ model: model?.id ?? null, provider: model?.providerId ?? null });
+        }} />
+    </Row>
+    {(["compactModel", "subagentModel"] as const).map((field) => {
+      const label = t(field === "compactModel" ? "models.compact" : "models.subagent");
+      const options = Array.from(new Map(choices.map((m) => [m.id, { value: m.id, label: modelLabel(m) }])).values());
+      const value = values[field];
+      if (value && !options.some((o) => o.value === value)) options.unshift({ value, label: value });
+      return <Row key={field} name={label} hint={t(field === "compactModel" ? "models.compact_hint" : "models.subagent_hint")}>
+        <Select label={label} value={value ?? NONE}
+          options={[{ value: NONE, label: t(inherited ? "settings.inherit" : "models.compact_same") }, ...options]}
+          onChange={(next) => onPatch({ [field]: next === NONE ? null : next })} />
+      </Row>;
+    })}
+  </div>;
 }
 
-/** A model or "not set": the section's three rows differ only in their labels. */
-function ModelSelect({
-  label,
-  unset,
-  value,
-  models,
-  onChange,
-}: {
-  label: string;
-  /** What "not set" is called — each row means something different by it. */
-  unset: string;
-  value: string | null;
+export function ModelsSection({ values, models, onPatch, onChanged }: {
+  values: ModelDefaults;
   models: ModelInfo[];
-  onChange: (model: string | null) => void;
+  onPatch: (change: Partial<ModelDefaults>) => void;
+  onChanged: () => void;
 }) {
-  return (
-    <Select
-      mono
-      label={label}
-      value={value ?? NONE}
-      options={[
-        { value: NONE, label: unset },
-        ...models.map((model) => ({ value: model.id, label: modelLabel(model) })),
-      ]}
-      onChange={(next) => onChange(next === NONE ? null : next)}
-    />
-  );
+  const local = chatModels(models).filter((m) => /^(?:[a-z]:[/\\]|[/\\]|~[/\\])/i.test(m.id) || /\.(?:gguf|ggml|safetensors|bin)$/i.test(m.id));
+  return <>
+    <div className="set-head"><div>
+      <h1 className="set-title">{t("settings.models")}</h1>
+      <p className="set-lede">{t("settings.models_hint")}</p>
+    </div></div>
+    <h2 className="set-subname">{t("settings.defaults")}</h2>
+    <ModelChoices values={values} models={models} onPatch={onPatch} />
+    <RoutingSection models={models} onChanged={onChanged} />
+    <section className="set-local-models">
+      <h2 className="set-subname">{t("settings.local_models")}</h2>
+      <p className="set-subhint">{t("settings.local_models_hint")}</p>
+      {local.length === 0 && <p className="set-empty">{t("settings.local_none")}</p>}
+      {local.map((model) => <LocalName key={modelKey(model)} model={model}
+        onSave={(name) => {
+          const names = { ...values.names };
+          if (name) names[modelKey(model)] = name;
+          else delete names[modelKey(model)];
+          onPatch({ names });
+        }} />)}
+    </section>
+    <ModelCatalog onChanged={onChanged} />
+  </>;
+}
+
+function LocalName({ model, onSave }: { model: ModelInfo; onSave: (name: string) => void }) {
+  const [name, setName] = useState(modelLabel(model));
+  return <form className="set-local-name" onSubmit={(event) => { event.preventDefault(); onSave(name.trim()); }}>
+    <code title={model.id}>{model.providerId} · {model.id}</code>
+    <input className="prov-input" aria-label={t("settings.model_name")} value={name} onChange={(e) => setName(e.target.value)} />
+    <button type="submit" className="btn btn-small">{t("project.save")}</button>
+  </form>;
 }

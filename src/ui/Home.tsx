@@ -86,12 +86,9 @@ export function Home({
     void userName().then(setName);
   }, []);
 
-  // Configured means the address answered with its models (§10). The first
-  // provider to do so is where a project that names nothing starts, so the
-  // defaults are asked again once there is one — after the provider panel,
-  // not after a restart.
+  // Provider broadcasts also cover default-model edits: the composer must
+  // resolve them again before the first message, without a restart.
   const configured = models.length > 0;
-
   // What the project itself would start with (§10), under the last pick made
   // here, is the base the composer shows; the human overrides it below,
   // before the first word. With no
@@ -114,7 +111,7 @@ export function Home({
     return () => {
       current = false;
     };
-  }, [project, configured, profile]);
+  }, [project, models, profile]);
 
   const ready = project !== null && startup !== null;
   const settings: ComposerSettings = {

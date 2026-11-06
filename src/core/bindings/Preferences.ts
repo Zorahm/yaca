@@ -41,6 +41,11 @@ notifications: boolean,
  */
 respectRobots: boolean, summarizeWebFetch: boolean, 
 /**
+ * Ask the model to credit Yaca in commits. Fixed when a chat opens so its
+ * cached system prompt stays stable; older settings keep this opt-in off.
+ */
+coAuthorCommits: boolean, 
+/**
  * Which shell the agent's commands run through (§10). Windows only:
  * elsewhere there is one shell and nothing to choose.
  *

@@ -1,18 +1,4 @@
-/**
- * MCP servers in the settings window (§10): one list, shown twice.
- *
- * The same section stands in both halves of the navigation — the human's own
- * servers, for every project, and one project's. They differ in where the list
- * is kept, which the caller knows, and in nothing the section draws.
- *
- * A server is a document, like a provider: it has Save and Cancel, because a
- * half-typed command must not reach a file the next chat starts programs from.
- * The switch on a row is the one thing applied at once.
- *
- * What is declared here is not what is running. A chat reads these lists when
- * it opens and keeps the servers it started with; their state — connecting,
- * ready, failed and why — is in the chat, under `/mcp`.
- */
+/** Shared MCP editor, scoped by the hub to global or project configuration. */
 
 import { CaretLeft, PencilSimple, Plus, X } from "@phosphor-icons/react";
 import { useState } from "react";

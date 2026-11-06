@@ -1,37 +1,8 @@
-/**
- * Settings §10, over the main window.
- *
- * Not a separate window: it was created by a shell command, and on Windows it
- * hung the whole program and also hid the conversation. Now it is a layer over
- * the window, and it closes with the button in the navigation or with Esc.
- *
- * The navigation is split in two: the application and the project. §10 lists
- * the sections in one list, but that list mixes two levels of truth: providers,
- * appearance and notices are common to everything, while models, mode, rules and
- * snapshot exclusions belong to this project. With a flat list a person would
- * change "Mode" without knowing which one it was, so the project group has a
- * folder chip, and it is also the switcher.
- *
- * There are eight sections, not nine: there are no language servers, because
- * nothing in the core stands behind them, and a section that changes nothing is
- * an interface lying about the state (§0). MCP is in both groups — its own
- * servers for the application, its own for the project — and it is one and the
- * same section over two lists.
- *
- * Settings apply at once, without a "Save" button: it would let the window show
- * one thing while the disk held another. The exception is the provider's
- * description and the project's name and folders: unfinished edits stay in
- * their forms until saved.
- *
- * In a narrow window the two columns are two screens, as Android's own
- * settings are: the list of sections, and a section over it. The arrow over a
- * section goes up to the list; the system Back goes back to where the person
- * was, which is the list only if they came from it.
- */
+/** Settings apply immediately; project files retain only explicit overrides. */
 
 import {
   ArrowLeft,
-  Bell,
+  BookOpen,
   Cube,
   FolderSimple,
   Info,
@@ -60,12 +31,14 @@ import { usePreferences } from "./ui/prefs";
 import { AboutSection } from "./ui/settings/AboutSection";
 import { AppearanceSection } from "./ui/settings/AppearanceSection";
 import { McpSection, type McpServers } from "./ui/settings/McpSection";
-import { ModelsSection } from "./ui/settings/ModelsSection";
-import { NoticesSection } from "./ui/settings/NoticesSection";
+import { ContextSection } from "./ui/settings/ContextSection";
+import { useModelDefaults } from "./ui/settings/useModelDefaults";
+import { useUpdate } from "./ui/update";
+import { ModelChoices, ModelsSection } from "./ui/settings/ModelsSection";
 import { PluginsSection } from "./ui/settings/PluginsSection";
 import { ProjectSection } from "./ui/settings/ProjectSection";
 import { ProvidersSection } from "./ui/settings/ProvidersSection";
-import { Select } from "./ui/settings/Row";
+import { Segments, Select } from "./ui/settings/Row";
 import { RulesSection } from "./ui/settings/RulesSection";
 import { ToolsSection } from "./ui/settings/ToolsSection";
 import { useProjectSettings } from "./ui/settings/useProjectSettings";
@@ -76,6 +49,7 @@ import "./ui/tokens.css";
 import "./ui/app.css";
 import "./ui/popmenu.css";
 import "./ui/settings/settings.css";
+import "./ui/settings/layout.css";
 
 export type Section =
   | "providers"
@@ -88,26 +62,29 @@ export type Section =
   | "models"
   | "rules"
   | "projectMcp"
-  | "project";
+  | "project"
+  | "context";
 
 type Item = { id: Section; name: Key; icon: ReactNode };
 
-const APP_SECTIONS: Item[] = [
-  { id: "providers", name: "prov.title", icon: <Plugs size={15} /> },
-  { id: "tools", name: "tools.title", icon: <Wrench size={15} /> },
-  { id: "mcp", name: "mcp.title", icon: <McpMark size={15} /> },
-  { id: "plugins", name: "plug.title", icon: <PuzzlePiece size={15} /> },
-  { id: "appearance", name: "look.title", icon: <Palette size={15} /> },
-  { id: "notices", name: "notices.title", icon: <Bell size={15} /> },
-  { id: "about", name: "about.title", icon: <Info size={15} /> },
+const GROUPS: { name: Key; items: Item[] }[] = [
+  { name: "settings.general_group", items: [{ id: "appearance", name: "settings.general", icon: <Palette size={15} /> }] },
+  { name: "settings.ai_group", items: [
+    { id: "providers", name: "prov.title", icon: <Plugs size={15} /> },
+    { id: "models", name: "settings.models", icon: <Cube size={15} /> },
+  ] },
+  { name: "settings.tools_group", items: [
+    { id: "tools", name: "settings.environment", icon: <Wrench size={15} /> },
+    { id: "mcp", name: "mcp.title", icon: <McpMark size={15} /> },
+    { id: "plugins", name: "plug.title", icon: <PuzzlePiece size={15} /> },
+  ] },
 ];
-
 const PROJECT_SECTIONS: Item[] = [
-  { id: "models", name: "models.title", icon: <Cube size={15} /> },
-  { id: "rules", name: "rules.title", icon: <ShieldCheck size={15} /> },
-  { id: "projectMcp", name: "mcp.title", icon: <McpMark size={15} /> },
-  { id: "project", name: "proj.title", icon: <FolderSimple size={15} /> },
+  { id: "project", name: "settings.configuration", icon: <FolderSimple size={15} /> },
+  { id: "context", name: "settings.context", icon: <BookOpen size={15} /> },
+  { id: "rules", name: "settings.permissions", icon: <ShieldCheck size={15} /> },
 ];
+const ABOUT: Item = { id: "about", name: "about.title", icon: <Info size={15} /> };
 
 function isProjectSection(section: Section): boolean {
   return PROJECT_SECTIONS.some((item) => item.id === section);
@@ -189,12 +166,17 @@ export default function Settings({
   );
 
   const projectSettings = useProjectSettings(project);
+  const defaults = useModelDefaults(refreshModels);
+  const update = useUpdate();
+  const [mcpScope, setMcpScope] = useState<"global" | "project">("global");
   const ownMcp = useOwnMcp();
   const mcpFile = useMcpFile(project);
 
   // A project section has nothing to show without a project: the list is empty
   // until a folder has been opened.
-  const shown = project === null && isProjectSection(section) ? "providers" : section;
+  const normalized = section === "notices" ? "appearance" : section === "projectMcp" ? "mcp" : section;
+  const shown = project === null && isProjectSection(normalized) ? "appearance" : normalized;
+  useEffect(() => { if (section === "projectMcp") setMcpScope("project"); }, [section]);
 
   return (
     <><div
@@ -211,14 +193,15 @@ export default function Settings({
           <ArrowLeft size={15} aria-hidden="true" />
           <span>{t("set.close")}</span>
         </button>
-        <div className="set-group">{t("set.group_app")}</div>
-        {APP_SECTIONS.map((item) => (
-          <NavItem key={item.id} item={item} active={shown} onPick={setSection} />
-        ))}
+        <div className="set-nav-scroll">
+        {GROUPS.map((group) => <div className="set-nav-group" key={group.name}>
+          <div className="set-group">{t(group.name)}</div>
+          {group.items.map((item) => <NavItem key={item.id} item={item} active={shown} onPick={setSection} />)}
+        </div>)}
 
         {project !== null && (
           <>
-            <div className="set-group">{t("set.group_project")}</div>
+            <div className="set-group">{t("settings.project_group")}</div>
             {/* The switcher names the project whose repository settings are being edited. */}
             <Select
               align="start"
@@ -236,6 +219,10 @@ export default function Settings({
             ))}
           </>
         )}
+        </div>
+        <div className="set-nav-footer">
+          <NavItem item={ABOUT} active={shown} onPick={setSection} update={update.check?.latest != null} />
+        </div>
       </nav>
 
       <main className="set-pane">
@@ -253,21 +240,29 @@ export default function Settings({
           </header>
         )}
         <div className="set-scroll">
-          {shown === "providers" && <ProvidersSection models={models} onChanged={refreshModels} currentProvider={currentProvider} />}
+          {shown === "providers" && <ProvidersSection onChanged={refreshModels} currentProvider={currentProvider} />}
           {shown === "tools" && <ToolsSection prefs={prefs} onPatch={patchPrefs} />}
-          {shown === "mcp" && (
-            <McpSection
-              title={t("mcp.title")}
-              lede={t("mcp.lede_app")}
-              servers={ownMcp.servers}
-              error={ownMcp.error}
-              onSave={ownMcp.save}
-            />
-          )}
+          {shown === "mcp" && <>
+            <div className="set-scope-bar">
+              <Segments label={t("settings.mcp_scope")} value={project ? mcpScope : "global"}
+                options={[{ value: "global", label: t("settings.mcp_global") }, ...(project ? [{ value: "project", label: t("settings.mcp_project") }] : [])]}
+                onChange={(scope) => setMcpScope(scope as "global" | "project")} />
+              {project && <Select label={t("set.project")} value={project} options={projects.map((entry) => ({ value: entry.path, label: entry.name }))} onChange={setProject} />}
+            </div>
+            {mcpScope === "global" || !project ? <McpSection key="global" title={t("mcp.title")} lede={t("mcp.lede_app")}
+              servers={ownMcp.servers} error={ownMcp.error} onSave={ownMcp.save} /> :
+              <McpSection key={project} title={t("mcp.title")} lede={t("mcp.lede_project")}
+                servers={projectSettings.settings?.mcpServers ?? null} error={projectSettings.error} inherited={mcpFile}
+                onSave={(mcpServers) => projectSettings.patch((now) => ({ ...now, mcpServers }))} />}
+          </>}
+          {shown === "models" && <>
+            {defaults.error && <div className="set-error" role="alert">{defaults.error}</div>}
+            {defaults.values && <ModelsSection values={defaults.values} models={models} onPatch={defaults.patch} onChanged={refreshModels} />}
+          </>}
           {shown === "plugins" && <PluginsSection onNewChat={project && onNewChat ? () => onNewChat(project) : undefined} />}
           {shown === "appearance" && <AppearanceSection prefs={prefs} onPatch={patchPrefs} />}
-          {shown === "notices" && <NoticesSection prefs={prefs} onPatch={patchPrefs} />}
           {shown === "about" && <AboutSection prefs={prefs} onPatch={patchPrefs} />}
+          {shown === "context" && project && <ContextSection key={project} project={project} />}
 
           {isProjectSection(shown) && project !== null && (
             <>
@@ -276,30 +271,15 @@ export default function Settings({
               )}
               {projectSettings.settings !== null && (
                 <>
-                  {shown === "models" && (
-                    <ModelsSection
-                      settings={projectSettings.settings}
-                      models={models}
-                      onPatch={projectSettings.patch}
-                    />
-                  )}
                   {shown === "rules" && (
-                    <RulesSection
+                    <><RulesSection
                       settings={projectSettings.settings}
                       onPatch={projectSettings.patch}
                     />
-                  )}
-                  {shown === "projectMcp" && (
-                    <McpSection
-                      title={t("mcp.title")}
-                      lede={t("mcp.lede_project")}
-                      servers={projectSettings.settings.mcpServers}
-                      error={null}
-                      inherited={mcpFile}
-                      onSave={(mcpServers) =>
-                        projectSettings.patch((now) => ({ ...now, mcpServers }))
-                      }
-                    />
+                    <details className="set-model-override"><summary>{t("settings.override")}</summary>
+                      <p className="set-subhint">{t("settings.override_hint")}</p>
+                      <ModelChoices inherited values={projectSettings.settings} models={models} onPatch={(change) => projectSettings.patch((now) => ({ ...now, ...change }))} />
+                    </details></>
                   )}
                   {shown === "project" && (
                     <ProjectSection
@@ -374,10 +354,12 @@ function NavItem({
   item,
   active,
   onPick,
+  update = false,
 }: {
   item: Item;
   active: Section;
   onPick: (section: Section) => void;
+  update?: boolean;
 }) {
   return (
     <button
@@ -390,6 +372,7 @@ function NavItem({
         {item.icon}
       </span>
       <span className="set-nav-name">{t(item.name)}</span>
+      {update && <span className="set-update-dot" role="img" aria-label={t("settings.update_available")} />}
     </button>
   );
 }
