@@ -1,12 +1,9 @@
 /**
- * A Markdown document parser for the file panel: CommonMark plus the GFM
+ * A Markdown parser for the chat and file panel: CommonMark plus the GFM
  * parts people actually write (tables, task lists, strikethrough, autolinks).
  *
- * Unlike `Markdown.tsx` — which renders a streaming agent reply and keeps to a
- * small subset — this one reads a whole file, so it handles nested lists,
- * block quotes holding other blocks, setext headings, rules, reference links
- * and hard breaks. It produces a plain tree, not HTML: the renderer builds
- * React nodes from it, so raw HTML in the file is never injected.
+ * It produces a tree that the renderer can turn into React nodes without
+ * injecting HTML. A fenced block can end at EOF while a reply streams in.
  */
 
 import { type Align, parseTable } from "./markdownTable";
@@ -36,13 +33,11 @@ export type Block =
 
 type Refs = Map<string, { href: string; title: string }>;
 
-/** Parse a whole document. */
 export function parseMarkdown(source: string): Block[] {
   const lines = source.replace(/\r\n?/g, "\n").replace(/^\uFEFF/, "").split("\n");
   const refs: Refs = new Map();
-  const body = lines.map((line) => line.replace(/^(\s*)\t/g, "$1    "));
   const slugs = new Map<string, number>();
-  return parseBlocks(stripDefinitions(body, refs), refs, slugs);
+  return parseBlocks(stripDefinitions(lines, refs), refs, slugs);
 }
 
 // --- blocks ---------------------------------------------------------------
@@ -55,23 +50,30 @@ const MARKER = /^( *)([-*+]|\d{1,9}[.)])( +|$)(.*)$/;
 const SETEXT = /^ {0,3}(=+|-+)[ \t]*$/;
 const DEFINITION = /^ {0,3}\[([^\]]+)\]:\s*<?([^\s>]+)>?(?:\s+(?:"([^"]*)"|'([^']*)'|\(([^)]*)\)))?\s*$/;
 
+function fenceEnd(marker: string): RegExp {
+  return new RegExp(`^ {0,3}${marker[0]}{${marker.length},}\\s*$`);
+}
+
 /** Pull `[label]: url "title"` lines out of the text and into `refs`. */
 function stripDefinitions(lines: string[], refs: Refs): string[] {
   const out: string[] = [];
-  let fence: string | null = null;
+  let close: RegExp | null = null;
   for (const line of lines) {
-    const open = FENCE.exec(line);
-    if (open) {
-      if (fence === null) fence = open[2][0];
-      else if (open[2][0] === fence) fence = null;
+    if (close) {
+      out.push(line);
+      if (close.test(line)) close = null;
+      continue;
     }
-    const def = fence === null ? DEFINITION.exec(line) : null;
+    const normalized = line.replace(/^(\s*)\t/g, "$1    ");
+    const open = FENCE.exec(normalized);
+    if (open) close = fenceEnd(open[2]);
+    const def = DEFINITION.exec(normalized);
     if (def) {
       const key = def[1].trim().toLowerCase();
       if (!refs.has(key)) refs.set(key, { href: def[2], title: def[3] ?? def[4] ?? def[5] ?? "" });
       continue;
     }
-    out.push(line);
+    out.push(normalized);
   }
   return out;
 }
@@ -108,8 +110,7 @@ function parseBlocks(lines: string[], refs: Refs, slugs: Map<string, number>): B
     // A fenced block runs to its closing fence, or to the end of the text.
     const fence = FENCE.exec(line);
     if (fence) {
-      const ticks = fence[2];
-      const close = new RegExp(`^ {0,3}${ticks[0] === "`" ? "`" : "~"}{${ticks.length},}\\s*$`);
+      const close = fenceEnd(fence[2]);
       const body: string[] = [];
       i += 1;
       while (i < lines.length && !close.test(lines[i])) {
@@ -295,18 +296,16 @@ function parseList(
     }
     const nextMarker = i < lines.length ? MARKER.exec(lines[i]) : null;
     if (trailing > 0 && nextMarker && nextMarker[1].length >= base) loose = true;
-    if (body.some((row, k) => row === "" && k > 0 && k < body.length - 1)) {
-      // A blank line between two blocks of one item makes the list loose too.
-      if (parseBlocks(body, refs, slugs).length > 1) loose = true;
-    }
-
     let task: boolean | null = null;
     const box = /^\[([ xX])\]\s+/.exec(body[0]);
     if (box) {
       task = box[1] !== " ";
       body[0] = body[0].slice(box[0].length);
     }
-    items.push({ task, blocks: parseBlocks(body, refs, slugs) });
+    const blocks = parseBlocks(body, refs, slugs);
+    // Parsing a second time would also register every heading in the item twice.
+    if (blocks.length > 1 && body.slice(1, -1).includes("")) loose = true;
+    items.push({ task, blocks });
 
     // Blank lines between items are skipped; anything else ends the list.
     if (trailing > 0 && !(nextMarker && nextMarker[1].length >= base)) break;

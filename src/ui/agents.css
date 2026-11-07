@@ -257,12 +257,6 @@
 .subagent-result .agent p, .subagent-result .agent ul, .subagent-result .agent ol {
   margin: 0 0 8px;
 }
-.subagent-result .agent ul, .subagent-result .agent ol {
-  padding-left: 17px;
-}
-.subagent-result .agent li {
-  margin-bottom: 8px;
-}
 .subagent-result .code-inline {
   padding: 1px 3px;
   font-size: 11px;

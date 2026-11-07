@@ -254,27 +254,56 @@
 .agent ul,
 .agent ol {
   margin: 0 0 10px;
-  padding-left: 22px;
+  padding-inline-start: 1.5em;
+}
+
+.agent ol {
+  padding-inline-start: 2em;
 }
 
 .agent li {
-  margin-bottom: 4px;
-  padding-left: 2px;
+  padding-inline-start: 2px;
+}
+
+.agent li + li,
+.agent li > :is(ul, ol) {
+  margin-block-start: 0.24em;
+}
+
+.agent .md-loose > li + li {
+  margin-block-start: 0.65em;
+}
+
+.agent :is(li, blockquote) > :last-child {
+  margin-block-end: 0;
 }
 
 .agent li::marker {
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent li.md-task {
+  list-style: none;
+  position: relative;
+}
+
+.agent .md-task > input {
+  position: absolute;
+  inset-inline-end: calc(100% + 0.25em);
+  inset-block-start: 0.36em;
+  inline-size: 0.9em;
+  block-size: 0.9em;
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 .agent strong {
-  font-weight: 650;
+  font-weight: 600;
 }
 
-.agent a {
-  color: var(--accent-ink);
-  text-decoration-line: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
+.agent .md-link-target {
+  color: var(--muted);
 }
 
 .agent blockquote {
@@ -282,6 +311,18 @@
   padding: 1px 0 1px 12px;
   border-left: 2px solid var(--line-strong);
   color: var(--muted);
+}
+
+.agent hr {
+  margin: 14px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.agent code.code-inline {
+  padding: 1px 4px;
+  border-radius: 4px;
+  box-decoration-break: clone;
 }
 
 /* A code block inside the text stands apart from it on both sides — and from
