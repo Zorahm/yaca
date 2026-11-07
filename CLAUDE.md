@@ -2,7 +2,7 @@
 
 Yaca is a desktop coding agent: a headless Rust core (`yaca-core`) wrapped by a
 Tauri 2 shell (`src-tauri`) with a React 19 + TypeScript UI (`src`). The UI is a
-pure function of the core's event stream. Current version: `1.0.7-beta`.
+pure function of the core's event stream. Current version: `1.0.8`.
 
 The project was renamed from **edoC** to **Yaca**. The old name survives only in
 the migration of data written by earlier builds: `crates/yaca-core/src/legacy.rs`
@@ -119,7 +119,8 @@ these are legacy names, do not rename them without a data migration.
 
 `.github/workflows/release.yml` runs on a `v*` tag, checks that the tag equals
 `src-tauri/tauri.conf.json` `version`, runs `npm test`, builds and creates a
-**draft** pre-release. Versions live in `Cargo.toml` (workspace), `package.json`,
+**draft** release. Tags with a suffix are marked as pre-releases.
+Versions live in `Cargo.toml` (workspace), `package.json`,
 `package-lock.json`, `Cargo.lock` and `tauri.conf.json`; bump them together.
 The matrix builds Windows (NSIS), macOS (dmg, Apple silicon and Intel, unsigned)
 and Linux (deb, AppImage) into one draft release. Linux needs `libdbus-1-dev`
