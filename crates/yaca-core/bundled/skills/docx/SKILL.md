@@ -1,15 +1,25 @@
 ---
 name: docx
-description: "Use when the user wants to create, read, edit, or convert Word documents (.docx). Triggers: 'Word doc', '.docx', a report/memo/letter/template deliverable, extracting or reorganizing content from a Word file, adding headings/tables/images/page numbers/table of contents, find-and-replace in a Word file, or converting Markdown/text to .docx (or .doc to .docx). Do NOT use for PDFs, spreadsheets, or presentations."
-version: "1.1.0"
-author: Yaca
+description: "Use for creating, reading, editing, or converting Word documents and templates (.docx, .dotx), including styled reports, tables, page numbers, find and replace, comments, and tracked changes."
+metadata:
+  version: "1.2.0"
+  author: Yaca
 ---
 
 # Word documents (.docx)
 
-Create, read, and edit `.docx` files with the open-source **python-docx**
-library, plus `pandoc`/LibreOffice for conversions. Adapted for Yaca from the
-AgentChat office skills.
+Adapted for Yaca from [Anthropic's Word skill](https://github.com/anthropics/skills/tree/main/skills/docx)
+and the existing Yaca/AgentChat workflow. See [Apache-2.0](../ANTHROPIC-LICENSE.txt)
+for the Anthropic material.
+
+Use **python-docx** for new documents and ordinary edits, and pandoc or
+LibreOffice for conversions. For features the library cannot represent, modify
+only the affected OOXML parts and preserve the rest of the package.
+
+If the project already uses the npm `docx` package, it can generate new
+documents but cannot load a Word file for editing. For fixed-width tables in
+that library, set both the table's column widths and each cell's width in DXA.
+Use the library's numbering configuration for lists so Word can renumber them.
 
 ## Hard rule: generate with code, never write the file as text
 
@@ -139,8 +149,9 @@ section.footer.paragraphs[0].text = "Confidential"
 doc.add_page_break()
 ```
 
-For automatic page numbers in the footer, python-docx needs a raw field — add a
-`PAGE` field run; for most reports a static footer is enough.
+Use a `PAGE` field for automatic page numbers. A table of contents needs real
+heading styles or styles with outline levels; verify the fields after updating
+them in a compatible editor.
 
 ## Editing an existing document
 
@@ -163,6 +174,10 @@ does not point at it.
 
 ### Other edits in Python
 
+Edit individual runs when a paragraph's inline styling or links matter.
+Assigning `paragraph.text` rebuilds the runs, so use it only when replacing the
+whole paragraph is appropriate.
+
 ```python
 from docx import Document
 doc = Document("input.docx")
@@ -170,6 +185,13 @@ doc.paragraphs[0].text = "New title"
 doc.add_paragraph("Appended note.")
 doc.save("output.docx")
 ```
+
+For redlines, use Word-compatible tracked changes. If writing OOXML directly,
+wrap inserted/deleted runs in `w:ins`/`w:del` with distinct IDs and the requested
+author. Deleted text uses `w:delText`. Preserve existing revisions and check
+that rejecting your changes restores the original text. For comments, use
+`Document.add_comment` when available and anchor the comment to the relevant
+runs; check that the comment appears on the intended passage in the editor.
 
 ## Converting Markdown → .docx
 
@@ -181,23 +203,18 @@ pandoc notes.md -o notes.docx
 pandoc notes.md --reference-doc=template.docx -o notes.docx
 ```
 
-## Export to PDF (optional)
+## Check the result
 
-```powershell
-soffice --headless --convert-to pdf report.docx --outdir .
-```
+Use `Read` to check structure and text. For layout-sensitive work, render a
+temporary PDF with `soffice --headless --convert-to pdf report.docx --outdir .`,
+then rasterize it with Poppler or PyMuPDF and inspect pages with `ReadImage`.
+Look for split tables, clipped text, unexpected page breaks, and missing
+glyphs. If rendering tools are unavailable, say what you could verify.
 
 ## Finish
 
-- **Save in the person's folder.** Write the final document to the working
-  folder with a relative path (e.g. `report.docx`); the feed shows it as a
-  changed file, which is how they open it.
-- **Read the result back** with `Read` before saying it is done: a heading
-  level, a table or an image that did not land is cheap to notice now and
-  expensive after the user opens the file.
+- Save the final file at the requested path and deliver it with `Send`.
 - **Dependencies:** Python with **`python-docx`**. Optional: **pandoc** (rich
-  read / Markdown→docx), **LibreOffice** (`.doc`→`.docx` and PDF export). If a
-  tool is missing, say so and let the person install it — do not install it
-  yourself.
+  read / Markdown→docx), **LibreOffice** (`.doc`→`.docx` and PDF export).
 - **Fix the script, not the file.** When the document is wrong, change the
   generator and run it again; that is the whole point of writing one.

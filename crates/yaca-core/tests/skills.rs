@@ -12,7 +12,7 @@ use yaca_core::event::AgentEvent;
 use yaca_core::message::{ContentBlock, Message};
 use yaca_core::provider::mock::{script_text, MockProvider, Turn};
 use yaca_core::session::compact::{KEPT_SKILLS_HEADER, SUMMARY_HEADER};
-use yaca_core::{Command, Mode, SessionConfig, SessionHandle};
+use yaca_core::{Command, Mode, Profile, SessionConfig, SessionHandle};
 
 use common::{ask, calls, is_turn_over, session, tool_result_of, until_within, TempProject};
 
@@ -79,6 +79,40 @@ async fn the_catalog_is_in_the_prompt_the_model_is_sent() {
         system.contains("- release — Release a new version"),
         "{system}"
     );
+}
+
+#[tokio::test]
+async fn both_profiles_offer_the_bundled_office_skills_to_the_model() {
+    let dir = TempProject::new();
+    let user = TempProject::new();
+    yaca_core::skills::bundled::install(user.path()).unwrap();
+
+    for &profile in Profile::ALL {
+        let provider = Arc::new(MockProvider::new(vec![
+            Turn::Events(calls(&[("pdf", "Skill", json!({ "name": "pdf" }))])),
+            Turn::Events(script_text("got it")),
+        ]));
+        let mut cfg = SessionConfig::new(dir.path());
+        cfg.mode = Mode::Auto;
+        cfg.profile = profile;
+        cfg.journal = None;
+        cfg.user_skills = vec![user.path().to_path_buf()];
+        let handle = yaca_core::spawn(cfg, provider.clone()).unwrap();
+
+        one_turn(&handle, "Extract the tables from the PDF.").await;
+
+        let (text, is_error) = tool_result_of(&provider, "pdf");
+        assert!(!is_error, "{profile:?}: {text}");
+        assert!(text.starts_with("<skill_content name=\"pdf\">"), "{text}");
+        let sent = provider.seen.lock().unwrap();
+        let system = &sent[0].system;
+        for name in ["docx", "xlsx", "pptx", "pdf"] {
+            assert!(
+                system.contains(&format!("- {name} — ")),
+                "{name} missing in {profile:?}"
+            );
+        }
+    }
 }
 
 #[tokio::test]

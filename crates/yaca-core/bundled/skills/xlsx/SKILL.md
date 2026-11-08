@@ -1,15 +1,19 @@
 ---
 name: xlsx
-description: "Use when a spreadsheet is the input or output: open/read/edit/fix an existing .xlsx, .xlsm, .csv, or .tsv (add columns, compute formulas, format, chart, clean messy data), create a spreadsheet from scratch or from data, or convert between tabular formats. Trigger when the user references a spreadsheet by name or wants a spreadsheet deliverable. Do NOT use when the deliverable is a Word doc, presentation, or plain script."
-version: "1.1.0"
-author: Yaca
+description: "Use when a spreadsheet (.xlsx, .xlsm, .xltx, .csv, or .tsv) is a primary input or deliverable, including workbook editing, formulas, formatting, charts, data cleaning, and tabular conversion."
+metadata:
+  version: "1.2.0"
+  author: Yaca
 ---
 
 # Spreadsheets (.xlsx / .csv)
 
-Create, read, and edit spreadsheets with the open-source **openpyxl** (formatting
-and formulas) and **pandas** (bulk data). Adapted for Yaca from the AgentChat
-office skills.
+Adapted for Yaca from [Anthropic's spreadsheet skill](https://github.com/anthropics/skills/tree/main/skills/xlsx)
+and the existing Yaca/AgentChat workflow. See [Apache-2.0](../ANTHROPIC-LICENSE.txt)
+for the Anthropic material.
+
+Use **openpyxl** for workbook structure, formulas, and formatting and
+**pandas** for bulk data.
 
 ## Hard rule: generate with code, never write the file as text
 
@@ -74,9 +78,9 @@ ws = wb.active
 print(ws["B2"].value)                       # e.g. "=A1*1.2"
 ```
 
-> `data_only=True` returns the value **cached by the app that last saved the
-> file**. A file written by openpyxl has no cached values until recalculated
-> (see below).
+Use `data_only=True` only for inspection. It exposes cached values and drops
+formulas if you save that loaded workbook. Saving with openpyxl clears formula
+caches; a compatible spreadsheet app must recalculate to restore them.
 
 ## Creating a spreadsheet
 
@@ -149,29 +153,39 @@ wb.save("report.xlsx")
 
 ## Editing an existing file
 
-`load_workbook` → change cells → `save`. openpyxl preserves existing formatting,
-formulas, and other sheets:
+Load the workbook with formulas, edit only the intended cells, and preserve
+the existing style and other sheets. Write merged cells through their top-left
+anchor. For `.xlsm`, use `keep_vba=True` and retain the extension. Check
+advanced features such as embedded controls before choosing a round trip.
 
 ```python
 from openpyxl import load_workbook
 wb = load_workbook("input.xlsx")
 ws = wb["Sheet1"]
 ws["C2"] = "=A2*B2"
-ws.insert_rows(2)                      # insert a blank row
 wb.save("output.xlsx")
 ```
 
-## Recalculating formula values (optional)
+Structural edits need special care: inserting rows with openpyxl does not
+update all dependent formulas, tables, or chart ranges. Verify affected
+references explicitly. For cross-sheet formulas, quote sheet names containing
+spaces, as in `='Sales Inputs'!$B$5`.
 
-openpyxl writes formula *strings* but does not compute them. If the user needs
-the calculated values baked in (e.g. for `data_only` reads or downstream tools),
-recalculate with LibreOffice headless:
+## Recalculating and checking formulas
+
+Put derived values in formulas, with editable assumptions in labeled cells.
+Check representative rows and boundary cases against independent expected
+results. To verify cached results, recalculate a copy with Excel or LibreOffice:
 
 ```powershell
-soffice --headless --convert-to xlsx --calc input.xlsx --outdir recalced/
+soffice --headless --convert-to xlsx --outdir recalced output.xlsx
 ```
 
-(LibreOffice opens, recalculates, and re-saves. Requires LibreOffice installed.)
+Reopen the recalculated copy in both formula and `data_only` modes and check for
+errors such as `#REF!`, `#DIV/0!`, and `#NAME?`. Avoid recalculating workbooks
+with unavailable external links or unsupported formulas in LibreOffice; it
+can replace valid cached values with errors or change the workbook. If a
+compatible engine is unavailable, report that cached results were not verified.
 
 ## Cleaning messy data (pandas)
 
@@ -186,13 +200,11 @@ df.to_excel("clean.xlsx", index=False)
 
 ## Finish
 
-- **Save in the person's folder** with a relative path (e.g. `report.xlsx`);
-  the feed shows it as a changed file, which is how they open it.
+- Save the final file at the requested path and deliver it with `Send`.
 - **Read the result back** with `Read` before saying it is done: a sheet name,
   a header row or a formula that did not land is cheap to notice now.
 - **Dependencies:** Python with **`openpyxl`**, and **`pandas`** for bulk data.
-  Optional: **LibreOffice** for recalculating formula values. If a tool is
-  missing, say so and let the person install it — do not install it yourself.
+  Optional: **LibreOffice** for recalculating compatible workbooks.
 - Use real **number formats** (`'"$"#,##0.00'`, `'0.0%'`, `'yyyy-mm-dd'`) instead
   of pre-formatting numbers into strings — keeps cells numeric.
 - Use a consistent professional font; bold the header row and `freeze_panes`.

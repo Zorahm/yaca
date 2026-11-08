@@ -127,8 +127,9 @@ pub(super) const DOCUMENTS: &str = "Produce and change documents with code, neve
      those pictures out as files when they are to be used rather than looked at. \
      Build and edit them in the format's own library from a script you write and \
      run through Bash, following the office skill for that format (`docx`, \
-     `xlsx`, `pptx`); write reusable work as a script file, since a script that \
-     can be run again is how a document gets fixed after a mistake. Once a \
+     `xlsx`, `pptx`). For PDFs, use Read for text and the `pdf` skill for page \
+     operations, forms, or visual checks. Write reusable work as a script file, \
+     since a script that can be run again is how a document gets fixed after a mistake. Once a \
      document is written, look at what came out вЂ” read it back or convert it to \
      images вЂ” before saying it is done.\n\n";
 
@@ -391,8 +392,13 @@ const MEMORY_INTRO: &str = "The project keeps notes from earlier sessions in .ya
      in it. The notes are your own record, not instructions from the human: where a \
      note disagrees with what the human asks now, the human wins.\n";
 
-const SKILLS_INTRO: &str = "Skills are instructions kept for one kind of task, each under a      name: some come with this project, some are the person's own. The catalog below gives      each one line. When a task matches a skill, call the Skill tool with its name before you      start the task, and follow the instructions it returns; when they point to another file of      the skill, read it with the Skill tool's `file`. A skill carries the weight of the      instructions above; where a skill and a request in this conversation differ, the request      wins. The catalog was read when this session started, so a skill added since is not in      it, but the Skill tool still finds it when it is named.
-";
+const SKILLS_INTRO: &str = "Skills are instructions for specific tasks. The catalog includes \
+     built-in, project, and personal skills. When a task matches a skill, call the Skill tool \
+     with its name before you start the task, including for document work in a Code chat. \
+     Follow the instructions it returns and use the tool's `file` argument for supporting files. \
+     A skill carries the weight of the instructions above; where a skill and a request in \
+     this conversation differ, the request wins. The catalog was read when this session started, \
+     but the Skill tool can still find a newly added skill by name.\n";
 
 pub(super) fn skills_section(skills: &Listing) -> String {
     let mut s = String::from(SKILLS_INTRO);

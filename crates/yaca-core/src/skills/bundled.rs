@@ -1,4 +1,4 @@
-//! The office skills Yaca ships with: Word, Excel and PowerPoint.
+//! The office skills Yaca ships with: Word, Excel, PowerPoint and PDF.
 //!
 //! A chat about documents is only half done without them. What a model gets
 //! wrong about an office file is not the library — it is the shape of the
@@ -15,19 +15,19 @@
 //!
 //! An installed file is rewritten when the bundled text changes and left alone
 //! otherwise, so a skill added by a later version arrives without an update
-//! script and the folder is not touched on every start. A person who wants
-//! their own version of `docx` copies it under another name: the project's
-//! `.yaca/skills` and the human's own skills shadow these by name, which is
-//! how the catalog resolves a name.
+//! script and the folder is not touched on every start. A project skill of
+//! the same name overrides the bundled copy in that project.
 
 use std::path::Path;
 
 /// The version of the bundled set. A file written by an older version is
 /// replaced; the same version is not written again.
-const VERSION: &str = "1.1.0";
+const VERSION: &str = "1.2.0";
 
 /// The marker naming the version installed in a folder.
 const MARKER: &str = ".yaca-bundled";
+
+const LICENSE: &str = "ANTHROPIC-LICENSE.txt";
 
 /// One file of a bundled skill, relative to its directory.
 struct File {
@@ -69,6 +69,13 @@ const BUNDLED: &[Bundled] = &[
             text: include_str!("../../bundled/skills/pptx/SKILL.md"),
         }],
     },
+    Bundled {
+        name: "pdf",
+        files: &[File {
+            path: "SKILL.md",
+            text: include_str!("../../bundled/skills/pdf/SKILL.md"),
+        }],
+    },
 ];
 
 /// Writes the bundled skills into `skills_dir` (the human's skills folder),
@@ -83,31 +90,32 @@ pub fn install(skills_dir: &Path) -> Result<usize, String> {
         return Ok(0);
     }
 
-    let mut written = 0;
+    let mut written = usize::from(install_file(
+        &skills_dir.join(LICENSE),
+        include_str!("../../bundled/skills/ANTHROPIC-LICENSE.txt"),
+    )?);
     for skill in BUNDLED {
         for file in skill.files {
             let path = skills_dir.join(skill.name).join(file.path);
-            // The same text is not rewritten: a timestamp of the file is not
-            // something to move on every start. Compared with line endings
-            // flattened, because the checkout that compiled this binary decides
-            // whether the embedded text has CRLF.
-            if std::fs::read_to_string(&path).is_ok_and(|current| same_text(&current, file.text)) {
-                continue;
-            }
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| format!("could not create {}: {e}", parent.display()))?;
-            }
-            std::fs::write(&path, file.text)
-                .map_err(|e| format!("could not write {}: {e}", path.display()))?;
-            written += 1;
+            written += usize::from(install_file(&path, file.text)?);
         }
     }
-    std::fs::create_dir_all(skills_dir)
-        .map_err(|e| format!("could not create {}: {e}", skills_dir.display()))?;
     std::fs::write(&marker, VERSION)
         .map_err(|e| format!("could not write {}: {e}", marker.display()))?;
     Ok(written)
+}
+
+fn install_file(path: &Path, text: &str) -> Result<bool, String> {
+    // Keep the timestamp when only the checkout's line endings changed.
+    if std::fs::read_to_string(path).is_ok_and(|current| same_text(&current, text)) {
+        return Ok(false);
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("could not create {}: {e}", parent.display()))?;
+    }
+    std::fs::write(path, text).map_err(|e| format!("could not write {}: {e}", path.display()))?;
+    Ok(true)
 }
 
 /// The names of the bundled skills, for a message that says what arrived.
@@ -135,13 +143,15 @@ mod tests {
         let dir = TempDir::new();
         let folder = skills_dir(&dir);
 
-        assert_eq!(install(&folder).unwrap(), 4);
+        assert_eq!(install(&folder).unwrap(), 6);
         let docx = std::fs::read_to_string(folder.join("docx/SKILL.md")).unwrap();
         assert!(docx.replace("\r\n", "\n").starts_with("---\nname: docx\n"));
         assert!(folder.join("docx/scripts/replace.py").is_file());
         assert!(folder.join("xlsx/SKILL.md").is_file());
         assert!(folder.join("pptx/SKILL.md").is_file());
-        assert_eq!(names(), ["docx", "xlsx", "pptx"]);
+        assert!(folder.join("pdf/SKILL.md").is_file());
+        assert!(folder.join(LICENSE).is_file());
+        assert_eq!(names(), ["docx", "xlsx", "pptx", "pdf"]);
     }
 
     #[test]
@@ -158,11 +168,12 @@ mod tests {
         let folder = skills_dir(&dir);
         std::fs::create_dir_all(folder.join("docx")).unwrap();
         std::fs::write(folder.join("docx/SKILL.md"), "old text").unwrap();
-        std::fs::write(folder.join(MARKER), "0.1").unwrap();
+        std::fs::write(folder.join(MARKER), "1.1.0").unwrap();
 
         assert!(install(&folder).unwrap() > 0);
         let docx = std::fs::read_to_string(folder.join("docx/SKILL.md")).unwrap();
         assert!(docx.contains("name: docx"));
+        assert!(folder.join("pdf/SKILL.md").is_file());
     }
 
     #[test]
@@ -173,7 +184,7 @@ mod tests {
         install(&folder).unwrap();
 
         let catalog = crate::skills::SkillRoots::new(dir.path(), vec![folder]).scan();
-        for name in ["docx", "xlsx", "pptx"] {
+        for name in ["docx", "xlsx", "pptx", "pdf"] {
             assert!(catalog.get(name).is_some(), "{name} missing");
         }
         let listing = catalog.listing().unwrap();

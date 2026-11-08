@@ -1,15 +1,23 @@
 ---
 name: pptx
-description: "Use whenever a .pptx is involved — input, output, or both: creating slide decks / pitch decks / presentations, reading or extracting text from a .pptx, editing or restyling an existing deck, adding slides, images, tables, charts, or speaker notes, and exporting slides to PDF or images. Trigger when the user mentions 'deck', 'slides', 'presentation', or a .pptx filename. Do NOT use for Word docs, spreadsheets, or PDFs as the primary deliverable."
-version: "1.1.0"
-author: Yaca
+description: "Use for creating, reading, editing, or exporting PowerPoint decks (.pptx), including template-based slides, native charts, images, and speaker notes."
+metadata:
+  version: "1.2.0"
+  author: Yaca
 ---
 
 # Presentations (.pptx)
 
-Create, read, and edit PowerPoint decks with the open-source **python-pptx**
-library, plus LibreOffice for PDF/image export. Adapted for Yaca from the
-AgentChat office skills.
+Adapted for Yaca from [Anthropic's presentation skill](https://github.com/anthropics/skills/tree/main/skills/pptx)
+and the existing Yaca/AgentChat workflow. See [Apache-2.0](../ANTHROPIC-LICENSE.txt)
+for the Anthropic material.
+
+Use **python-pptx** for creating and editing decks, and LibreOffice for PDF
+export. If the project already uses PptxGenJS, it is also suitable for
+generating new decks, but it cannot open an existing presentation for editing.
+With PptxGenJS, set the slide layout before positioning shapes; the default
+16:9 canvas is smaller than `LAYOUT_WIDE`. Pass six-digit colors without
+`#` and create a fresh options object for each shape or chart.
 
 ## Hard rule: generate with code, never write the file as text
 
@@ -68,6 +76,11 @@ reused rather than looked at.
 
 Work from the built-in layouts of the default template (indexes are stable for
 the default template: 0 = Title, 1 = Title+Content, 5 = Title Only, 6 = Blank).
+
+Give each slide one job. Use a chart for a trend, a comparison layout for
+alternatives, and a diagram for a process. Choose a consistent visual style
+with readable type and room around the content. Keep ordinary charts native
+so the user can edit the data.
 
 ```python
 from pptx import Presentation
@@ -168,9 +181,14 @@ prs.save("output.pptx")
 ```
 
 To start from the user's branded template, open *their* `.pptx` and add slides to
-it — new slides inherit its theme, fonts, and colors.
+its layouts; inspect the actual layout names and placeholders rather than
+assuming the default indexes. Remove unused placeholder groups, including
+their images. Edit individual text runs to keep formatting; replacements
+spanning multiple runs need a run-aware edit. To duplicate an existing slide,
+use an OOXML-aware method that maintains its relationships and check whether
+chart and media parts are shared before editing them.
 
-## Export to PDF / images (optional)
+## Verify layout and content
 
 ```powershell
 soffice --headless --convert-to pdf deck.pptx --outdir .
@@ -187,18 +205,15 @@ for i, page in enumerate(doc, start=1):
 ```
 
 Use the images to **visually verify** the deck — look at them with `ReadImage`
-— then fix any overflowing text or overlaps before presenting the `.pptx`.
+and fix clipped or overflowing text, overlaps, and missing visuals. Check
+whether the renderer substituted any fonts before trusting a tight fit.
+Use `Read` to confirm slide order, notes, and the absence of template text.
+If you cannot render the deck, report what you could verify.
 
 ## Finish
 
-- **Save in the person's folder** with a relative path (e.g. `deck.pptx`); the
-  feed shows it as a changed file, which is how they open it.
-- **Read the result back** with `Read`, and look at the exported images before
-  saying it is done.
+- Save the final file at the requested path and deliver it with `Send`.
 - **Dependencies:** Python with **`python-pptx`**. Optional: **LibreOffice** for
-  PDF export, **PyMuPDF** for slide images. If a tool is missing, say so and let
-  the person install it — do not install it yourself.
-- Keep one idea per slide; large readable type (titles ≥ 28pt, body ≥ 18pt).
+  PDF export, **PyMuPDF** for slide images.
 - Reuse layout placeholders instead of free text boxes where possible — they keep
   the deck's theme and alignment consistent.
-- Render data as a native chart or a pre-made image, not a wall of numbers.
