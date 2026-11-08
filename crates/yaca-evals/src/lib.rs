@@ -25,6 +25,7 @@
 //!   "check": { "command": "cargo test --quiet", "cwd": "." },
 //!   "expect": [
 //!     { "path": "src/lib.rs", "contains": "fn median" },
+//!     { "path": "tests/median.rs", "unchanged": true },
 //!     { "path": "old.rs", "absent": true }
 //!   ]
 //! }

@@ -33,12 +33,16 @@ pub enum Expect {
     Contains { path: String, text: String },
     /// The file does not exist.
     Absent { path: String },
+    /// The file still matches the bytes captured from the starting tree.
+    Unchanged { path: String, original: Vec<u8> },
 }
 
 impl Expect {
     pub fn path(&self) -> &str {
         match self {
-            Expect::Contains { path, .. } | Expect::Absent { path } => path,
+            Expect::Contains { path, .. }
+            | Expect::Absent { path }
+            | Expect::Unchanged { path, .. } => path,
         }
     }
 }
@@ -96,6 +100,8 @@ struct RawExpect {
     contains: Option<String>,
     #[serde(default)]
     absent: Option<bool>,
+    #[serde(default)]
+    unchanged: Option<bool>,
 }
 
 /// Every task under `root`, in name order. `only` narrows the set; a name that
@@ -191,24 +197,18 @@ fn validate(id: &str, raw: RawTask, dir: PathBuf, repo: PathBuf) -> Result<Task>
     let mut expect = Vec::with_capacity(raw.expect.len());
     for e in raw.expect {
         safe_relative(&e.path).map_err(|why| fail(format!("expect path {why}")))?;
-        expect.push(match (e.contains, e.absent) {
-            (Some(text), None) => Expect::Contains { path: e.path, text },
-            (None, Some(true)) => Expect::Absent { path: e.path },
-            (None, Some(false)) => {
-                return Err(fail(format!(
-                    "expect for `{}`: `absent: false` says nothing; use `contains`",
-                    e.path
-                )))
+        expect.push(match (e.contains, e.absent, e.unchanged) {
+            (Some(text), None, None) => Expect::Contains { path: e.path, text },
+            (None, Some(true), None) => Expect::Absent { path: e.path },
+            (None, None, Some(true)) => {
+                let original = std::fs::read(repo.join(&e.path)).map_err(|err| {
+                    fail(format!("cannot read original file `{}`: {err}", e.path))
+                })?;
+                Expect::Unchanged { path: e.path, original }
             }
-            (Some(_), Some(_)) => {
+            _ => {
                 return Err(fail(format!(
-                    "expect for `{}` has both `contains` and `absent`",
-                    e.path
-                )))
-            }
-            (None, None) => {
-                return Err(fail(format!(
-                    "expect for `{}` needs `contains` or `absent`",
+                    "expect for `{}` needs exactly one of `contains`, `absent: true`, or `unchanged: true`",
                     e.path
                 )))
             }
@@ -325,7 +325,10 @@ mod tests {
             &root,
             r#"{ "prompt": "p", "expect": [ {"path": "a", "contains": "x", "absent": true} ] }"#,
         );
-        assert!(load_task(&both).unwrap_err().to_string().contains("both"));
+        assert!(load_task(&both)
+            .unwrap_err()
+            .to_string()
+            .contains("exactly one"));
     }
 
     #[test]

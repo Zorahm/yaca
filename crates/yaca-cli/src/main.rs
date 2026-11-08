@@ -8,9 +8,9 @@
 use std::io::Write;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use yaca_core::event::AgentEvent;
+use yaca_core::event::{AgentEvent, StopReason};
 use yaca_core::id::SessionId;
 use yaca_core::mcp::McpStatus;
 use yaca_core::process::ProcessState;
@@ -233,7 +233,11 @@ async fn main() -> Result<()> {
     };
 
     let mut out = std::io::stdout().lock();
-    while let Ok(event) = events.recv().await {
+    loop {
+        let event = events
+            .recv()
+            .await
+            .context("cannot read the turn's event stream")?;
         if args.jsonl {
             serde_json::to_writer(&mut out, &event)?;
             out.write_all(b"\n")?;
@@ -280,15 +284,18 @@ async fn main() -> Result<()> {
                 .await?;
         }
 
-        if matches!(
-            event,
-            AgentEvent::TurnFinished { .. } | AgentEvent::TurnCancelled { .. }
-        ) {
-            break;
+        match event {
+            AgentEvent::TurnFinished {
+                stop_reason: StopReason::EndTurn | StopReason::StopSequence,
+                ..
+            } => return Ok(()),
+            AgentEvent::TurnFinished { stop_reason, .. } => {
+                bail!("turn ended with {stop_reason:?}")
+            }
+            AgentEvent::TurnCancelled { .. } => bail!("turn cancelled"),
+            _ => {}
         }
     }
-
-    Ok(())
 }
 
 fn parse_profile(s: &str) -> Result<Profile> {
@@ -403,7 +410,10 @@ fn human(event: &AgentEvent) -> Option<String> {
         }
         AgentEvent::PlanProposed { plan } => format!("\n--- plan ---\n{plan}\n"),
         AgentEvent::TextShown { path, text, .. } => format!("\n--- {path} ---\n{text}\n"),
-        AgentEvent::FileSent { file } => format!("\n[file] {} · {} · {} bytes · SHA-256 {}\n", file.title, file.name, file.size, file.sha256),
+        AgentEvent::FileSent { file } => format!(
+            "\n[file] {} · {} · {} bytes · SHA-256 {}\n",
+            file.title, file.name, file.size, file.sha256
+        ),
         AgentEvent::FileChanged { fact, .. } => format!(
             "\x1b[2m  {} +{} −{}\x1b[0m",
             fact.path, fact.added, fact.removed

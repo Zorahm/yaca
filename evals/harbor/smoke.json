@@ -1,0 +1,46 @@
+{
+  "jobs_dir": ".superpowers/harbor-jobs",
+  "n_attempts": 1,
+  "n_concurrent_trials": 1,
+  "environment": {"type": "docker"},
+  "agents": [
+    {
+      "import_path": "yaca_harbor:YacaAgent",
+      "model_name": "huggingface/deepseek-ai/DeepSeek-V4.1-Flash:deepinfra",
+      "kwargs": {"effort": "low"},
+      "extra_allowed_hosts": ["router.huggingface.co"]
+    }
+  ],
+  "tasks": [
+    {
+      "path": "tasks/configure-git-webserver",
+      "git_url": "https://github.com/harbor-framework/terminal-bench-2-1.git",
+      "git_commit_id": "d49e28f1e4ddd13d289e85a5f312a66750951932"
+    },
+    {
+      "path": "tasks/portfolio-optimization",
+      "git_url": "https://github.com/harbor-framework/terminal-bench-2-1.git",
+      "git_commit_id": "d49e28f1e4ddd13d289e85a5f312a66750951932"
+    },
+    {
+      "path": "tasks/rstan-to-pystan",
+      "git_url": "https://github.com/harbor-framework/terminal-bench-2-1.git",
+      "git_commit_id": "d49e28f1e4ddd13d289e85a5f312a66750951932"
+    },
+    {
+      "path": "tasks/eicrud-keyset-pagination-cursor",
+      "git_url": "https://github.com/datacurve-ai/deep-swe.git",
+      "git_commit_id": "0b9fabbb63b9104d678fe965e1632f2dd9eaa2ea"
+    },
+    {
+      "path": "tasks/httpx-streaming-json-iteration",
+      "git_url": "https://github.com/datacurve-ai/deep-swe.git",
+      "git_commit_id": "0b9fabbb63b9104d678fe965e1632f2dd9eaa2ea"
+    },
+    {
+      "path": "tasks/tengo-destructuring-bindings",
+      "git_url": "https://github.com/datacurve-ai/deep-swe.git",
+      "git_commit_id": "0b9fabbb63b9104d678fe965e1632f2dd9eaa2ea"
+    }
+  ]
+}

@@ -26,7 +26,7 @@ const OUTPUT_TAIL_CHARS: usize = 4_000;
 #[serde(rename_all = "camelCase")]
 pub struct ExpectReport {
     pub path: String,
-    /// `contains` or `absent`, as the task wrote it.
+    /// `contains`, `absent`, or `unchanged`, as the task wrote it.
     pub kind: &'static str,
     pub passed: bool,
     pub detail: String,
@@ -109,6 +109,19 @@ pub fn evaluate_expect(root: &Path, expect: &Expect) -> ExpectReport {
                 path: path.clone(),
                 kind: "absent",
                 passed: !present,
+                detail,
+            }
+        }
+        Expect::Unchanged { path, original } => {
+            let (passed, detail) = match std::fs::read(root.join(path)) {
+                Ok(bytes) if &bytes == original => (true, "unchanged".into()),
+                Ok(_) => (false, format!("{path} differs from the starting tree")),
+                Err(err) => (false, format!("cannot read {path}: {err}")),
+            };
+            ExpectReport {
+                path: path.clone(),
+                kind: "unchanged",
+                passed,
                 detail,
             }
         }

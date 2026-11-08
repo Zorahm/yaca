@@ -137,6 +137,27 @@ async fn each_run_starts_from_the_fixture_not_from_the_last_run() {
 }
 
 #[tokio::test]
+async fn editing_a_protected_test_fails_even_if_the_check_passes() {
+    let task = make_task(
+        "protected-test",
+        r#"{ "prompt": "p", "check": { "command": "exit 0" },
+             "expect": [ { "path": "tests/check.rs", "unchanged": true } ] }"#,
+        &[(
+            "tests/check.rs",
+            "fn verifies_behavior() { assert!(false); }",
+        )],
+    );
+    let mut turns = read_then_write("w", "tests/check.rs", "fn verifies_behavior() {}");
+    turns.push(Turn::Events(script_text("Done.")));
+    let (result, _) = run(&task, &plan(MockProvider::new(turns))).await;
+
+    assert!(!result.solved);
+    assert!(result.checks.command.unwrap().passed);
+    assert_eq!(result.checks.expects[0].kind, "unchanged");
+    assert!(!result.checks.expects[0].passed);
+}
+
+#[tokio::test]
 async fn an_agent_that_changes_nothing_is_not_solved() {
     let task = make_task("idle", SOLVED_BY_FILE, &[("answer.txt", "old\n")]);
     let mock = plan(MockProvider::new(vec![Turn::Events(script_text(
