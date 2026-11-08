@@ -11,10 +11,11 @@
 
 mod cdp;
 mod events;
+mod chrome;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -25,10 +26,11 @@ use tauri::{LogicalPosition, LogicalSize, Webview, WebviewUrl, Window};
 use tokio::sync::{mpsc, watch};
 
 use self::cdp::Cdp;
-use super::engine::{Area, Button, Engine, Evaluated, Load, Location, Result, Shot, Step};
+use super::engine::{Area, Button, Engine, Evaluated, Load, Location, PageError, Result, Shot, Step};
 use super::keys::Press;
 use super::layout::{Emulation, Rect};
 use super::logs::Logs;
+use super::Browser;
 
 /// The page's helpers (`page.js`), loaded into an isolated world per document.
 const PAGE_JS: &str = include_str!("../page.js");
@@ -39,6 +41,7 @@ const EVENTS: &[&str] = &[
     "Page.navigatedWithinDocument",
     "Page.frameStartedLoading",
     "Page.frameStoppedLoading",
+    "Page.frameRequestedNavigation",
     "Page.javascriptDialogOpening",
     "Runtime.executionContextsCleared",
     "Runtime.consoleAPICalled",
@@ -46,6 +49,7 @@ const EVENTS: &[&str] = &[
     "Network.requestWillBeSent",
     "Network.responseReceived",
     "Network.loadingFailed",
+    "Fetch.requestPaused",
 ];
 
 /// Chromium's switches for a page that has to keep drawing while it is out
@@ -80,8 +84,15 @@ pub(crate) struct Shared {
     pub world: Mutex<Option<i64>>,
     pub started: AtomicU64,
     pub stopped: watch::Sender<u64>,
-    /// Told whenever the location changes, so the column can follow.
-    pub changed: Box<dyn Fn() + Send + Sync>,
+    pub browser: Weak<Browser>,
+}
+
+impl Shared {
+    fn changed(&self) {
+        if let Some(browser) = self.browser.upgrade() {
+            browser.emit();
+        }
+    }
 }
 
 impl WebView2 {
@@ -91,22 +102,30 @@ impl WebView2 {
         label: String,
         profile: PathBuf,
         bounds: Rect,
-        changed: Box<dyn Fn() + Send + Sync>,
+        browser: Weak<Browser>,
     ) -> Result<Arc<WebView2>> {
         let (tx, rx) = mpsc::unbounded_channel::<cdp::Event>();
         let blank = "about:blank".parse().map_err(|e| format!("{e}"))?;
         let opens = tx.clone();
         let downloads = tx.clone();
         let titles = tx.clone();
+        let blocked = tx.clone();
+        let owner = browser.clone();
         let builder = WebviewBuilder::new(label, WebviewUrl::External(blank))
             .data_directory(profile)
             .additional_browser_args(BROWSER_ARGS)
             .devtools(true)
             .focused(false)
-            .on_navigation(super::allowed)
+            .on_navigation(move |url| {
+                let allowed = super::allowed(url);
+                if !allowed {
+                    let _ = blocked.send(("yaca.blocked", json!({ "url": url.as_str() })));
+                }
+                allowed
+            })
             .on_new_window(move |url, _| {
-                // One page per chat: a link to a new window opens here.
-                let _ = opens.send(("yaca.open", json!({ "url": url.as_str() })));
+                let agent = owner.upgrade().is_some_and(|b| b.busy.load(Ordering::SeqCst));
+                let _ = opens.send(("yaca.open", json!({ "url": url.as_str(), "agent": agent })));
                 NewWindowResponse::Deny
             })
             .on_download(move |_, event| {
@@ -132,7 +151,8 @@ impl WebView2 {
         .map_err(|e| format!("the browser could not be opened: {e}"))?;
 
         let cdp = Cdp::new(webview.clone());
-        cdp.subscribe(EVENTS, tx)?;
+        cdp.subscribe(EVENTS, tx.clone())?;
+        chrome::watch(&webview, tx)?;
         let shared = Arc::new(Shared {
             location: Mutex::new(Location::default()),
             logs: Logs::default(),
@@ -140,7 +160,7 @@ impl WebView2 {
             world: Mutex::new(None),
             started: AtomicU64::new(0),
             stopped: watch::channel(0).0,
-            changed,
+            browser,
         });
         tokio::spawn(events::follow(Arc::downgrade(&shared), cdp.clone(), rx));
         for domain in [
@@ -155,6 +175,14 @@ impl WebView2 {
         let tree = cdp.call("Page.getFrameTree", json!({})).await?;
         if let Some(id) = tree["frameTree"]["frame"]["id"].as_str() {
             *shared.main_frame.lock().unwrap() = id.to_string();
+        }
+        if let Err(error) = cdp.call("Fetch.enable", json!({ "patterns": [
+            { "resourceType": "Document" },
+            { "resourceType": "XHR" },
+            { "resourceType": "Fetch" }
+        ] })).await {
+            let _ = webview.close();
+            return Err(error);
         }
         Ok(Arc::new(WebView2 {
             webview,
@@ -257,12 +285,19 @@ fn png_size(png: &[u8]) -> (u32, u32) {
 #[async_trait]
 impl Engine for WebView2 {
     async fn navigate(&self, url: &str, limit: Duration) -> Result<Load> {
+        if tauri::Url::parse(url).is_ok_and(|url| !super::allowed(&url)) {
+            events::fail(&self.shared, url, PageError::Policy);
+            return Err("the address is blocked by browser policy".into());
+        }
         let since = self.loads();
         let answer = self
             .cdp
             .call("Page.navigate", json!({ "url": url }))
             .await?;
         if let Some(why) = answer["errorText"].as_str().filter(|text| !text.is_empty()) {
+            if why != "net::ERR_ABORTED" {
+                events::fail(&self.shared, url, events::classify(why));
+            }
             return Err(format!("{url} did not open: {why}"));
         }
         Ok(
@@ -593,6 +628,17 @@ impl Engine for WebView2 {
 
     fn logs(&self) -> &Logs {
         &self.shared.logs
+    }
+
+    fn zoom(&self, percent: u32) -> Result<()> {
+        self.webview.set_zoom(f64::from(percent) / 100.0).map_err(|e| e.to_string())?;
+        self.shared.location.lock().unwrap().zoom = percent;
+        self.shared.changed();
+        Ok(())
+    }
+
+    fn focus(&self) -> Result<()> {
+        self.webview.set_focus().map_err(|e| e.to_string())
     }
 
     fn open_devtools(&self) {

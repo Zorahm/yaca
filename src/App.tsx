@@ -54,7 +54,7 @@ import { Feed, type FeedActions, type FeedJump } from "./ui/Feed";
 import { Notices } from "./ui/Bars";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useUpdate, type UpdateNotice } from "./ui/update";
-import { Composer, type ComposerActions } from "./ui/Composer";
+import { Composer, type ComposerActions, type ComposerDraft } from "./ui/Composer";
 import { MODES } from "./ui/ModeMenu";
 import { mcpPrompts, withSkills, type MenuCommand } from "./ui/slash";
 import { Home } from "./ui/Home";
@@ -198,6 +198,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
   const [editingProject, setEditingProject] = useState<ProjectEntry | null>(null);
   const [slashCommands, setSlashCommands] = useState<MenuCommand[]>([]);
   const [draft, setDraft] = useState<string | null>(null);
+  const composerDraft = useRef<ComposerDraft>(null);
   const [profile, setProfile] = useState<Profile>("code");
   const [chatRoot, setChatRoot] = useState<string | null>(null);
   const [panel, setPanel] = useState<PanelKind | null>(null);
@@ -229,6 +230,8 @@ export default function App({ prefs }: { prefs: Preferences }) {
   const failed = useCallback((e: unknown) => setError(String(e)), []);
   const chats = useChats(failed);
   const active = chats.active;
+  const currentSession = useRef(active?.id);
+  currentSession.current = active?.id;
 
   const closePanel = useCallback(() => setPanel(null), []);
   const closeSettings = useCallback(() => setSettingsAt(null), []);
@@ -749,6 +752,7 @@ export default function App({ prefs }: { prefs: Preferences }) {
         </div>
 
         <Composer
+          ref={composerDraft}
           settings={{
             mode: state.mode,
             profile: state.profile,
@@ -777,7 +781,13 @@ export default function App({ prefs }: { prefs: Preferences }) {
 
       {browserColumn.open && (
         <BrowserColumn
+          key={active.id}
           session={active.id}
+          project={active.project === chatRoot ? null : state.projectRoot}
+          onDocument={feedActions.openFile}
+          onChatContext={(text) => {
+            if (currentSession.current === active.id) composerDraft.current?.append(text);
+          }}
           state={browserColumn.state}
           width={browserColumn.width}
           bounds={browserColumn.bounds}

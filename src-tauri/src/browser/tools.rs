@@ -46,7 +46,7 @@ const EVAL_LIMIT: usize = 20_000;
 /// image is shrunk until nothing in it can be read.
 const FULL_PAGE_VIEWPORTS: f64 = 3.0;
 
-pub const INSTRUCTIONS: &str = "This is the browser of the Yaca window: one page per chat, shown \
+pub const INSTRUCTIONS: &str = "This is the browser of the Yaca window. Tools target the active tab \
 in the browser column next to the conversation. The human sees what you do there and may click \
 in the page too, so look at the url at the top of each result before you act: if it is not the \
 page you left, the human moved it.\n\
@@ -65,12 +65,12 @@ pub fn list() -> Value {
     json!([
         {
             "name": "navigate",
-            "description": "Open a URL in the browser, or go back, forward or reload. Waits for the page to load and returns its URL and title; read_page or screenshot show what is on it. A bare host:port such as localhost:5173 opens over http.",
+            "description": "Open a URL in the active tab, go back, forward or reload, or use action new_tab with a URL to open it in a new tab. Waits for the page to load and returns its URL and title. A bare host:port such as localhost:5173 opens over http.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "url": { "type": "string", "description": "The address to open." },
-                    "action": { "type": "string", "enum": ["back", "forward", "reload"], "description": "Instead of url: a step through history, or a reload." },
+                    "action": { "type": "string", "enum": ["back", "forward", "reload", "new_tab"], "description": "A history step, a reload, or a new tab. Supply a URL with new_tab to open a page in it." },
                 },
             },
             "annotations": changes,
@@ -227,9 +227,20 @@ fn string<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
 }
 
 async fn navigate(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String> {
-    let engine = browser.engine().await?;
     let load = match (string(args, "url"), string(args, "action")) {
-        (Some(url), None) => engine.navigate(&super::normalize(url)?, LOAD_LIMIT).await?,
+        (Some(url), None | Some("new_tab")) => {
+            let url = super::normalize(url)?;
+            if string(args, "action") == Some("new_tab") {
+                browser.new_tab()?;
+                browser.apply().await;
+            }
+            browser.engine().await?.navigate(&url, LOAD_LIMIT).await?
+        }
+        (None, Some("new_tab")) => {
+            browser.new_tab()?;
+            browser.apply().await;
+            return Ok(Reply::text("Opened a blank tab.".into()));
+        }
         (None, Some(action)) => {
             let step = match action {
                 "back" => Step::Back,
@@ -237,7 +248,7 @@ async fn navigate(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String>
                 "reload" => Step::Reload,
                 other => return Err(format!("unknown action {other}")),
             };
-            engine.step(step, LOAD_LIMIT).await?
+            open_page(browser)?.step(step, LOAD_LIMIT).await?
         }
         _ => return Err("give either url or action".into()),
     };

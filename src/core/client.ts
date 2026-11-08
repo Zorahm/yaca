@@ -355,8 +355,19 @@ export function sentPreview(project: string, id: string): Promise<string> {
   return invoke<string>("sent_preview", { project, id });
 }
 
-export async function downloadSentFile(project: string, id: string, name: string): Promise<void> {
-  const destination = await save({ defaultPath: name });
+export function sentImageData(project: string, id: string): Promise<string> {
+  return invoke<string>("sent_image_data", { project, id });
+}
+
+export async function saveImage(project: string, path: string, title: string): Promise<void> {
+  const delivery = sentImage(path);
+  if (delivery !== null) return downloadSentFile(project, delivery.id, delivery.name, title);
+  const destination = await save({ defaultPath: path.split(/[/\\]/).pop(), title });
+  if (destination !== null) await invoke("save_image", { project, path, destination });
+}
+
+export async function downloadSentFile(project: string, id: string, name: string, title?: string): Promise<void> {
+  const destination = await save({ defaultPath: name, title });
   if (destination !== null) await invoke("save_sent_file", { project, id, destination });
 }
 
@@ -1499,8 +1510,30 @@ export const browser = {
     inTauri ? invoke<void>("browser_external", { session }) : NO_BROWSER(),
   devtools: (session: SessionId): Promise<void> =>
     inTauri ? invoke<void>("browser_devtools", { session }) : NO_BROWSER(),
-  resetViewport: (session: SessionId): Promise<void> =>
-    inTauri ? invoke<void>("browser_reset_viewport", { session }) : NO_BROWSER(),
+  viewport: (session: SessionId, preset: string): Promise<void> =>
+    invoke("browser_viewport", { session, preset }),
+  tab: (session: SessionId, action: "new" | "select" | "close", id: number | null = null): Promise<void> =>
+    invoke("browser_tab", { session, action, id }),
+  control: (session: SessionId, mode: "pause" | "take" | "resume"): Promise<void> =>
+    invoke("browser_control", { session, mode }),
+  decide: (session: SessionId, id: number, allow: boolean): Promise<void> =>
+    invoke("browser_decide", { session, id, allow }),
+  origins: (text: string | null = null): Promise<string[]> =>
+    invoke("browser_origins", { text }),
+  projectDocs: (project: string): Promise<string[]> =>
+    invoke("browser_project_docs", { project }),
+  zoom: (session: SessionId, percent: number): Promise<void> =>
+    invoke("browser_zoom", { session, percent }),
+  screenshot: async (session: SessionId, title: string): Promise<void> => {
+    const destination = await save({
+      title,
+      defaultPath: "screenshot.png",
+      filters: [{ name: "PNG", extensions: ["png"] }],
+    });
+    if (destination !== null) await invoke("browser_screenshot", { session, destination });
+  },
+  chatContext: (session: SessionId): Promise<string> =>
+    invoke("browser_chat_context", { session }),
   onState: (handler: (state: BrowserState) => void): Promise<UnlistenFn> =>
     inTauri
       ? listen<BrowserState>(BROWSER_CHANNEL, (event) => handler(event.payload))

@@ -51,6 +51,7 @@ tokio-util.workspace = true
 ts-rs.workspace = true
 async-trait.workspace = true
 base64.workspace = true
+tempfile = "3"
 # The browser's `read_page` as Markdown, the same converter `WebFetch` uses.
 htmd.workspace = true
 

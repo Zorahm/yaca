@@ -11,6 +11,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
+use serde::Serialize;
 use serde_json::Value;
 
 use super::keys::Press;
@@ -76,13 +77,46 @@ pub struct Evaluated {
 }
 
 /// What a page is, as the header of the column and every tool result say.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub enum PageError {
+    Network,
+    Certificate,
+    Policy,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Location {
     pub url: String,
     pub title: String,
     pub loading: bool,
     pub can_go_back: bool,
     pub can_go_forward: bool,
+    pub error: Option<PageError>,
+    pub favicon: Option<String>,
+    pub zoom: u32,
+}
+
+impl Default for Location {
+    fn default() -> Self {
+        Self {
+            url: String::new(),
+            title: String::new(),
+            loading: false,
+            can_go_back: false,
+            can_go_forward: false,
+            error: None,
+            favicon: None,
+            zoom: 100,
+        }
+    }
+}
+
+impl Location {
+    pub fn hides_page(&self) -> bool {
+        self.error.is_some() || self.url.is_empty() || self.url == "about:blank"
+    }
 }
 
 #[async_trait]
@@ -127,6 +161,8 @@ pub trait Engine: Send + Sync {
 
     fn location(&self) -> Location;
     fn logs(&self) -> &Logs;
+    fn zoom(&self, percent: u32) -> Result<()>;
+    fn focus(&self) -> Result<()>;
 
     fn open_devtools(&self);
     fn close(&self);

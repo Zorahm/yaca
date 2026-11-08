@@ -31,6 +31,7 @@ export function useBrowsers(onFirstUse: (session: SessionId) => void): Browsers 
     const off = browser.onState((state) => {
       if (!live) return;
       setStates((now) => new Map(now).set(state.session, state));
+      if (state.request !== null) firstUse.current(state.session);
       if (state.opened && !seen.current.has(state.session)) {
         seen.current.add(state.session);
         if (state.busy) firstUse.current(state.session);

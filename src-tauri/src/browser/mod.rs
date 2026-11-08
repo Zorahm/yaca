@@ -1,20 +1,22 @@
 //! The browser of a chat: a real page the model works in through MCP tools
 //! and the human watches, and may click in, in the browser column.
 //!
-//! One per chat, made the first time the page is needed: a chat that never
-//! browses costs nothing. All of them share one profile, so a login made in
+//! One tab set per chat, with webviews made when a page is needed. They
+//! share one profile, so a login made in
 //! one chat holds in the others, and none of them shares anything with the
 //! window's own webview.
 //!
 //! The model reaches the browser through an MCP server of the application
 //! (`server`), the human through the commands at the bottom of this file. The
-//! two are equals: there is no mode in which one of them is locked out.
+//! agent and the human share a page until the human pauses agent access.
 //!
 //! Windows only for now. The tools and the layout are the same everywhere;
 //! what is missing elsewhere is an engine (`engine`), and until there is one
 //! the window offers no browser at all rather than one that cannot open.
 
+mod access;
 mod act;
+mod commands;
 mod engine;
 mod keys;
 pub mod layout;
@@ -26,15 +28,19 @@ mod webview2;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, State, Url};
+use tauri::{AppHandle, Emitter, Url};
+#[cfg(windows)]
+use tauri::Manager;
 use yaca_core::id::SessionId;
 use yaca_core::mcp::AppServerSpec;
 
-use engine::{Engine, Step, LOAD_LIMIT};
+use access::{Access, BrowserRequest};
+pub(crate) use commands::*;
+use engine::{Engine, PageError};
 use layout::{Emulation, Forced, Plan, Rect, ViewportSource};
 
 /// What the column hears about a browser. One channel for all of them: the
@@ -68,16 +74,55 @@ pub struct BrowserState {
     pub source: ViewportSource,
     /// A tool call of the model is running.
     pub busy: bool,
+    pub paused: bool,
+    pub taken: bool,
+    pub request: Option<BrowserRequest>,
+    pub error: Option<PageError>,
+    pub console_errors: u32,
+    pub zoom: u32,
+    pub tabs: Vec<BrowserTab>,
+    pub active_tab: u32,
+    pub recent: Vec<String>,
 }
 
-/// Where the column wants the page, and the size the model asked for.
+#[derive(Debug, Clone, Serialize, ts_rs::TS)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserTab {
+    pub id: u32,
+    pub title: String,
+    pub url: String,
+    pub favicon: Option<String>,
+}
+
 #[derive(Default)]
 struct Place {
     shown: Option<Rect>,
     forced: Option<Forced>,
-    /// The emulation last sent, so a column being dragged does not resend it
-    /// on every pixel.
+}
+
+#[derive(Default)]
+struct Tab {
+    id: u32,
+    live: Option<Arc<dyn Engine>>,
     applied: Option<Option<Emulation>>,
+}
+
+#[derive(Default)]
+struct Tabs {
+    active: usize,
+    next: u32,
+    pages: Vec<Tab>,
+    recent: Vec<String>,
+    closed: bool,
+}
+
+impl Tabs {
+    fn add(&mut self) {
+        self.pages.push(Tab { id: self.next, ..Tab::default() });
+        self.next += 1;
+        self.active = self.pages.len() - 1;
+    }
 }
 
 pub struct Browser {
@@ -87,9 +132,13 @@ pub struct Browser {
     session: Mutex<Option<SessionId>>,
     /// Held while the page is being made, so two first calls make one.
     making: tokio::sync::Mutex<()>,
-    live: Mutex<Option<Arc<dyn Engine>>>,
+    tabs: Mutex<Tabs>,
     place: Mutex<Place>,
-    busy: AtomicUsize,
+    placing: tokio::sync::Mutex<()>,
+    busy: AtomicBool,
+    paused: AtomicBool,
+    taken: AtomicBool,
+    access: Access,
     /// One tool call at a time (`server`).
     calls: tokio::sync::Mutex<()>,
 }
@@ -102,9 +151,13 @@ impl Browser {
             label,
             session: Mutex::new(None),
             making: tokio::sync::Mutex::new(()),
-            live: Mutex::new(None),
+            tabs: Mutex::new(Tabs { next: 1, pages: vec![Tab::default()], ..Tabs::default() }),
             place: Mutex::new(Place::default()),
-            busy: AtomicUsize::new(0),
+            placing: tokio::sync::Mutex::new(()),
+            busy: AtomicBool::new(false),
+            paused: AtomicBool::new(false),
+            taken: AtomicBool::new(false),
+            access: Access::default(),
             calls: tokio::sync::Mutex::new(()),
         })
     }
@@ -119,7 +172,8 @@ impl Browser {
     }
 
     pub fn live(&self) -> Option<Arc<dyn Engine>> {
-        self.live.lock().unwrap().clone()
+        let tabs = self.tabs.lock().unwrap();
+        tabs.pages.get(tabs.active)?.live.clone()
     }
 
     pub fn plan(&self) -> Plan {
@@ -133,44 +187,67 @@ impl Browser {
         if let Some(engine) = self.live() {
             return Ok(engine);
         }
-        let engine = self.make(self.plan()).await?;
-        *self.live.lock().unwrap() = Some(engine.clone());
-        self.place.lock().unwrap().applied = None;
+        let id = {
+            let tabs = self.tabs.lock().unwrap();
+            tabs.pages.get(tabs.active).ok_or("the browser is closed")?.id
+        };
+        let engine = self.make(layout::plan(None, None), id).await?;
+        {
+            let mut tabs = self.tabs.lock().unwrap();
+            if let Some(tab) = tabs.pages.iter_mut().find(|tab| tab.id == id) {
+                tab.live = Some(engine.clone());
+            } else {
+                engine.close();
+                return Err("the browser tab is closed".into());
+            }
+        }
         self.apply().await;
         Ok(engine)
     }
 
     #[cfg(windows)]
-    async fn make(&self, plan: Plan) -> Result<Arc<dyn Engine>, String> {
-        let window = self.app.get_window("main").ok_or("the window is gone")?;
-        let me = self.me.clone();
-        let changed = Box::new(move || {
-            if let Some(browser) = me.upgrade() {
-                browser.emit();
-            }
-        });
-        let engine =
-            webview2::WebView2::open(window, self.label.clone(), profile()?, plan.bounds, changed)
-                .await?;
-        Ok(engine)
+    fn make(&self, plan: Plan, id: u32) -> std::pin::Pin<Box<
+        dyn std::future::Future<Output = Result<Arc<dyn Engine>, String>> + Send + '_,
+    >> {
+        // The WebView2 popup callback can create another page through this factory.
+        Box::pin(async move {
+            let window = self.app.get_window("main").ok_or("the window is gone")?;
+            let engine = webview2::WebView2::open(
+                window, format!("{}-{id}", self.label), profile()?, plan.bounds, self.me.clone(),
+            ).await?;
+            Ok(engine as Arc<dyn Engine>)
+        })
     }
 
     #[cfg(not(windows))]
-    async fn make(&self, _plan: Plan) -> Result<Arc<dyn Engine>, String> {
+    async fn make(&self, _plan: Plan, _id: u32) -> Result<Arc<dyn Engine>, String> {
         Err("this build has no browser engine".into())
     }
 
     /// Puts the page where the plan says, and tells the column.
     async fn apply(&self) {
+        let _placing = self.placing.lock().await;
         let plan = self.plan();
-        if let Some(engine) = self.live() {
+        let changes = {
+            let mut tabs = self.tabs.lock().unwrap();
+            let active = tabs.active;
+            let away = layout::plan(None, None);
+            tabs.pages.iter_mut().enumerate().filter_map(|(index, tab)| {
+                let engine = tab.live.clone()?;
+                let plan = if index == active && !engine.location().hides_page() { plan } else { away };
+                let resend = tab.applied != Some(plan.emulate);
+                tab.applied = Some(plan.emulate);
+                Some((index == active, engine, plan, resend))
+            }).collect::<Vec<_>>()
+        };
+        // Move the outgoing view first so it cannot cover the new active tab.
+        for (_, engine, plan, _) in changes.iter().filter(|(active, ..)| !active) {
             let _ = engine.set_bounds(plan.bounds);
-            let resend = {
-                let mut place = self.place.lock().unwrap();
-                let resend = place.applied != Some(plan.emulate);
-                place.applied = Some(plan.emulate);
-                resend
-            };
+        }
+        for (active, engine, plan, resend) in changes {
+            if active {
+                let _ = engine.set_bounds(plan.bounds);
+            }
             if resend {
                 let _ = engine.emulate(plan.emulate).await;
             }
@@ -200,7 +277,7 @@ impl Browser {
 
     /// Counts a tool call as running until the guard drops.
     fn busy(&self) -> Busy<'_> {
-        self.busy.fetch_add(1, Ordering::SeqCst);
+        self.busy.store(true, Ordering::SeqCst);
         self.emit();
         Busy(self)
     }
@@ -208,7 +285,27 @@ impl Browser {
     pub fn state(&self) -> Option<BrowserState> {
         let session = self.session.lock().unwrap().clone()?;
         let plan = self.plan();
-        let location = self.live().map(|engine| engine.location());
+        let mut tabs = self.tabs.lock().unwrap();
+        let tab = tabs.pages.get(tabs.active)?;
+        let active_tab = tab.id;
+        let location = tab.live.as_ref().map(|engine| engine.location());
+        let console_errors = tab.live.as_ref().map_or(0, |engine| engine.logs().error_count());
+        if let Some(page) = &location {
+            if !page.loading && page.error.is_none() {
+                if let Ok(mut url) = Url::parse(&page.url) {
+                    if access::origin(&url).is_some() {
+                        let _ = url.set_username("");
+                        let _ = url.set_password(None);
+                        url.set_query(None);
+                        url.set_fragment(None);
+                        let url = url.to_string();
+                        tabs.recent.retain(|entry| entry != &url);
+                        tabs.recent.insert(0, url);
+                        tabs.recent.truncate(8);
+                    }
+                }
+            }
+        }
         Some(BrowserState {
             session: session.to_string(),
             opened: location.is_some(),
@@ -223,7 +320,19 @@ impl Browser {
             width: plan.viewport.width,
             height: plan.viewport.height,
             source: plan.source,
-            busy: self.busy.load(Ordering::SeqCst) > 0,
+            busy: self.busy.load(Ordering::SeqCst),
+            paused: self.paused.load(Ordering::SeqCst),
+            taken: self.taken.load(Ordering::SeqCst),
+            request: self.access.pending(),
+            error: location.as_ref().and_then(|location| location.error),
+            console_errors,
+            zoom: location.as_ref().map_or(100, |location| location.zoom),
+            tabs: tabs.pages.iter().map(|tab| {
+                let page = tab.live.as_ref().map(|engine| engine.location()).unwrap_or_default();
+                BrowserTab { id: tab.id, title: page.title, url: page.url, favicon: page.favicon }
+            }).collect(),
+            active_tab,
+            recent: tabs.recent.clone(),
         })
     }
 
@@ -234,9 +343,26 @@ impl Browser {
     }
 
     fn close(&self) {
-        if let Some(engine) = self.live.lock().unwrap().take() {
-            engine.close();
+        self.access.deny_all();
+        let pages = {
+            let mut tabs = self.tabs.lock().unwrap();
+            tabs.closed = true;
+            std::mem::take(&mut tabs.pages)
+        };
+        for tab in pages {
+            if let Some(engine) = tab.live {
+                engine.close();
+            }
         }
+    }
+
+    fn new_tab(&self) -> Result<(), String> {
+        let mut tabs = self.tabs.lock().unwrap();
+        if tabs.closed || tabs.pages.len() >= 16 {
+            return Err("tab_limit".into());
+        }
+        tabs.add();
+        Ok(())
     }
 }
 
@@ -250,8 +376,21 @@ struct Busy<'a>(&'a Browser);
 
 impl Drop for Busy<'_> {
     fn drop(&mut self) {
-        self.0.busy.fetch_sub(1, Ordering::SeqCst);
+        self.0.busy.store(false, Ordering::SeqCst);
+        if self.0.taken.load(Ordering::SeqCst) {
+            self.0.focus_page();
+        }
         self.0.emit();
+    }
+}
+
+impl Browser {
+    fn focus_page(&self) {
+        if self.place.lock().unwrap().shown.is_some() {
+            if let Some(engine) = self.live().filter(|engine| !engine.location().hides_page()) {
+                let _ = engine.focus();
+            }
+        }
     }
 }
 
@@ -265,6 +404,7 @@ fn profile() -> Result<PathBuf, String> {
 pub struct Browsers {
     chats: Mutex<HashMap<SessionId, Arc<Browser>>>,
     made: AtomicU64,
+    placement: tokio::sync::Mutex<()>,
 }
 
 impl Browsers {
@@ -369,111 +509,6 @@ pub fn allowed(url: &Url) -> bool {
         "about" | "data" | "blob" | "file" => true,
         _ => false,
     }
-}
-
-// --- the column's commands -------------------------------------------------
-
-#[tauri::command]
-pub fn browser_supported() -> bool {
-    supported()
-}
-
-/// Every chat's browser, for a window that was reloaded.
-#[tauri::command]
-pub fn browser_states(browsers: State<'_, Browsers>) -> Vec<BrowserState> {
-    browsers.all().iter().filter_map(|b| b.state()).collect()
-}
-
-/// The column shows `session`'s page at `rect`; every other page goes out of
-/// sight. Both `None`: the column is closed.
-#[tauri::command]
-pub async fn browser_place(
-    browsers: State<'_, Browsers>,
-    session: Option<String>,
-    rect: Option<Rect>,
-) -> Result<(), String> {
-    let shown = session.zip(rect);
-    for browser in browsers.all() {
-        let mine = match (&shown, browser.session.lock().unwrap().as_ref()) {
-            (Some((session, rect)), Some(id)) if id.to_string() == *session => Some(*rect),
-            _ => None,
-        };
-        browser.show(mine).await;
-    }
-    Ok(())
-}
-
-/// The address field: opens the page, making it if this is the first.
-///
-/// Fails with a code the column words for the human: `bad_address` for what
-/// is not an address, `failed: <why>` for a page that did not open.
-#[tauri::command]
-pub async fn browser_open(
-    browsers: State<'_, Browsers>,
-    session: String,
-    url: String,
-) -> Result<(), String> {
-    let browser = browsers.get(&session)?;
-    let url = normalize(&url).map_err(|_| "bad_address".to_string())?;
-    let engine = browser
-        .engine()
-        .await
-        .map_err(|why| format!("failed: {why}"))?;
-    engine
-        .navigate(&url, LOAD_LIMIT)
-        .await
-        .map(drop)
-        .map_err(|why| format!("failed: {why}"))
-}
-
-#[tauri::command]
-pub async fn browser_go(
-    browsers: State<'_, Browsers>,
-    session: String,
-    step: String,
-) -> Result<(), String> {
-    let step = match step.as_str() {
-        "back" => Step::Back,
-        "forward" => Step::Forward,
-        "reload" => Step::Reload,
-        "stop" => Step::Stop,
-        other => return Err(format!("unknown step {other}")),
-    };
-    let engine = tools::open_page(&*browsers.get(&session)?)?;
-    engine.step(step, LOAD_LIMIT).await.map(drop)
-}
-
-/// Opens the page in the system's own browser.
-#[tauri::command]
-pub fn browser_external(
-    app: AppHandle,
-    browsers: State<'_, Browsers>,
-    session: String,
-) -> Result<(), String> {
-    use tauri_plugin_opener::OpenerExt;
-    let engine = tools::open_page(&*browsers.get(&session)?)?;
-    let url = engine.location().url;
-    if !url.starts_with("http://") && !url.starts_with("https://") {
-        return Err("only a web page opens in another browser".into());
-    }
-    app.opener()
-        .open_url(url, None::<&str>)
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub fn browser_devtools(browsers: State<'_, Browsers>, session: String) -> Result<(), String> {
-    tools::open_page(&*browsers.get(&session)?)?.open_devtools();
-    Ok(())
-}
-
-/// The cross in the header: the page follows the column again.
-#[tauri::command]
-pub async fn browser_reset_viewport(
-    browsers: State<'_, Browsers>,
-    session: String,
-) -> Result<(), String> {
-    browsers.get(&session)?.force(None).await
 }
 
 #[cfg(test)]

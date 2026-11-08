@@ -277,5 +277,20 @@
     };
   };
 
-  globalThis.__yaca = { snapshot, html, point, focus, choose, present, box };
+  function chatContext() {
+    const selected = window.getSelection()?.toString().trim();
+    return {
+      url: location.href,
+      title: document.title.slice(0, 300),
+      text: (selected || document.body?.innerText || "").slice(0, 12000),
+    };
+  }
+
+  function focusedBox() {
+    const element = document.activeElement;
+    if (!element || element === document.body) return null;
+    return element.getBoundingClientRect().toJSON();
+  }
+
+  globalThis.__yaca = { snapshot, html, point, focus, choose, present, box, chatContext, focusedBox };
 })();

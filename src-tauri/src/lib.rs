@@ -525,6 +525,38 @@ async fn stash_image(project: String, data: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn save_image(project: String, path: String, destination: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let source = project_path(&project)?.join(path);
+        if !source.is_file() || !yaca_core::picture::is_picture(&source) {
+            return Err("The source is not an image".into());
+        }
+        save_copy(&source, &destination).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn save_copy(source: &std::path::Path, destination: &str) -> std::io::Result<()> {
+    let destination = std::path::Path::new(destination);
+    let parent = destination
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .ok_or_else(|| std::io::Error::other("The destination must have a parent folder"))?;
+    if source
+        .canonicalize()
+        .is_ok_and(|path| destination.canonicalize().is_ok_and(|target| target == path))
+    {
+        return Ok(());
+    }
+    // A failed copy must leave any existing destination intact, even if it aliases the source.
+    let temporary = tempfile::NamedTempFile::new_in(parent)?.into_temp_path();
+    std::fs::copy(source, &temporary)?;
+    temporary.persist(destination)?;
+    Ok(())
+}
+
+#[tauri::command]
 async fn send_command(
     state: State<'_, AppState>,
     session: String,
@@ -704,6 +736,8 @@ pub fn run() {
             attachment_look,
             installed_shells,
             image_full,
+            save_image,
+            sent::sent_image_data,
             sent::sent_preview,
             sent::save_sent_file,
             stash_image,
@@ -744,7 +778,15 @@ pub fn run() {
             browser::browser_go,
             browser::browser_external,
             browser::browser_devtools,
-            browser::browser_reset_viewport,
+            browser::browser_viewport,
+            browser::browser_tab,
+            browser::browser_control,
+            browser::browser_decide,
+            browser::browser_origins,
+            browser::browser_project_docs,
+            browser::browser_zoom,
+            browser::browser_screenshot,
+            browser::browser_chat_context,
             remote::remote_status,
             remote::set_remote,
             remote::remote_pairing,

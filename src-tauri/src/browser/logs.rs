@@ -40,6 +40,7 @@ impl NetworkEntry {
 #[derive(Default)]
 struct Book {
     console: VecDeque<ConsoleEntry>,
+    errors: u32,
     network: VecDeque<NetworkEntry>,
     /// Things that happened to the page between two tool calls and that the
     /// next result should mention: a dialog answered, a download refused.
@@ -54,11 +55,15 @@ impl Logs {
     pub fn new_page(&self) {
         let mut book = self.0.lock().unwrap();
         book.console.clear();
+        book.errors = 0;
         book.network.clear();
     }
 
     pub fn console(&self, level: &str, text: String) {
         let mut book = self.0.lock().unwrap();
+        if matches!(level, "error" | "exception" | "assert") {
+            book.errors = book.errors.saturating_add(1);
+        }
         push(
             &mut book.console,
             ConsoleEntry {
@@ -97,6 +102,10 @@ impl Logs {
 
     pub fn console_entries(&self) -> Vec<ConsoleEntry> {
         self.0.lock().unwrap().console.iter().cloned().collect()
+    }
+
+    pub fn error_count(&self) -> u32 {
+        self.0.lock().unwrap().errors
     }
 
     pub fn network_entries(&self) -> Vec<NetworkEntry> {

@@ -25,7 +25,7 @@
  */
 
 import { ArrowUp, Plus, Stop } from "@phosphor-icons/react";
-import { useEffect, useRef, useState, type ClipboardEvent } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type ClipboardEvent, type Ref } from "react";
 import { createPortal } from "react-dom";
 
 import type {
@@ -150,6 +150,10 @@ export type ComposerSettings = {
   bypass: boolean;
 };
 
+export type ComposerDraft = {
+  append: (text: string) => void;
+};
+
 export function Composer({
   settings,
   busy,
@@ -162,6 +166,7 @@ export function Composer({
   mcp = null,
   disabled = false,
   draftKey,
+  ref,
 }: {
   settings: ComposerSettings;
   busy: boolean;
@@ -186,6 +191,7 @@ export function Composer({
   disabled?: boolean;
   /** The draft is remembered per session and survives a restart (§7.4). */
   draftKey: string;
+  ref?: Ref<ComposerDraft>;
 }) {
   const [text, setText] = useState(() => localStorage.getItem(draftKey) ?? "");
   const [menu, setMenu] = useState<
@@ -265,6 +271,12 @@ export function Composer({
     }
   }
   const field = useRef<HTMLTextAreaElement>(null);
+  useImperativeHandle(ref, () => ({
+    append: (context: string) => {
+      setText((draft) => [draft.trimEnd(), context].filter(Boolean).join("\n\n"));
+      field.current?.focus();
+    },
+  }), []);
 
   // What is known about the selected model: the name for the chip and whether it
   // takes effort (§7.1). `undefined` — the model is not in the provider's list, and

@@ -84,6 +84,12 @@ async fn serve(browser: Weak<Browser>, mut end: ServerEnd) {
 
 async fn run(browser: &Arc<Browser>, name: &str, args: &Value) -> tools::Reply {
     let _turn = browser.calls.lock().await;
+    if browser.paused.load(std::sync::atomic::Ordering::SeqCst) {
+        return tools::Reply::failed("The user paused browser access. Wait for them to resume it.".into());
+    }
+    if browser.access.pending().is_some() {
+        return tools::Reply::failed("A browser request is waiting for the user's decision.".into());
+    }
     let _busy = browser.busy();
     tools::call(browser, name, args).await
 }

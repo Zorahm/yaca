@@ -74,7 +74,10 @@ pub async fn act(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String> 
                     ring(&*engine, rect(&focused["rect"])).await;
                     label
                 }
-                None => "the focused element".to_string(),
+                None => {
+                    ring_focus(&*engine).await;
+                    "the focused element".to_string()
+                }
             };
             engine.insert_text(text).await?;
             if args["submit"].as_bool() == Some(true) {
@@ -90,6 +93,8 @@ pub async fn act(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String> 
             if let Some(target) = target(args) {
                 let focused = engine.helper(&format!("focus({target}, false)")).await?;
                 ring(&*engine, rect(&focused["rect"])).await;
+            } else {
+                ring_focus(&*engine).await;
             }
             engine.press(&press).await?;
             format!("Pressed {key}.")
@@ -109,12 +114,14 @@ pub async fn act(browser: &Arc<Browser>, args: &Value) -> Result<Reply, String> 
                     format!("Scrolled {} into view.", aim.label)
                 }
                 Some(aim) => {
+                    ring(&*engine, aim.ring).await;
                     engine.wheel(aim.x, aim.y, dx, dy).await?;
                     format!("Scrolled {} by {dx}, {dy}.", aim.label)
                 }
                 None => {
                     let plan = browser.plan();
                     let (x, y) = (plan.viewport.width / 2.0, plan.viewport.height / 2.0);
+                    ring(&*engine, point_ring(x, y)).await;
                     engine.wheel(x, y, dx, dy).await?;
                     format!("Scrolled the page by {dx}, {dy}.")
                 }
@@ -195,6 +202,18 @@ async fn ring(engine: &dyn Engine, rect: Rect) {
     let _ = engine.highlight(rect).await;
 }
 
+async fn ring_focus(engine: &dyn Engine) {
+    if let Ok(focused) = engine.helper("focusedBox()").await {
+        if focused.is_object() {
+            ring(engine, rect(&focused)).await;
+        }
+    }
+}
+
+fn point_ring(x: f64, y: f64) -> Rect {
+    Rect { x: x - POINT_RING / 2.0, y: y - POINT_RING / 2.0, width: POINT_RING, height: POINT_RING }
+}
+
 /// Where the arguments point. `None` when they point nowhere.
 async fn aim(engine: &dyn Engine, args: &Value) -> Result<Option<Aim>, String> {
     if let Some(target) = target(args) {
@@ -221,12 +240,7 @@ async fn aim(engine: &dyn Engine, args: &Value) -> Result<Option<Aim>, String> {
         (Some(x), Some(y)) => Ok(Some(Aim {
             x,
             y,
-            ring: Rect {
-                x: x - POINT_RING / 2.0,
-                y: y - POINT_RING / 2.0,
-                width: POINT_RING,
-                height: POINT_RING,
-            },
+            ring: point_ring(x, y),
             label: format!(
                 "the point ({x}, {y}) [{}]",
                 args["element"].as_str().unwrap_or("no element named")
