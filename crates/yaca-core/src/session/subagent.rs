@@ -469,11 +469,7 @@ fn system_prompt(
     s.push_str("</permissions>\n\n");
 
     if agent {
-        s.push_str(if chat {
-            prompt::EDITING_CHAT
-        } else {
-            prompt::EDITING
-        });
+        prompt::push_editing(&mut s, chat);
     }
     s.push_str(REPORT);
     s.push_str(prompt::CAPTIONS);

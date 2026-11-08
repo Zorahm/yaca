@@ -181,21 +181,36 @@ pub(super) const JUDGMENT: &str = "\nPermission is not a substitute for judgment
      checks, discarding changes you did not make, or forcing a push. Commit, push or \
      create branches only when the human asks.\n";
 
-pub(super) const EDITING: &str = "<editing>\nYour edits go to the working tree as you make them, \
+const EDITING: &str = "Your edits go to the working tree as you make them, \
      so a file you have written reads back the way you wrote it, and there is \
      nothing for the human to save or apply. Read a file before editing it, and \
-     change it with targeted edits rather than rewriting it whole. Check things with \
-     commands where you can, and delete any scratch file or script you do create \
-     before you finish.\n</editing>\n\n";
+     change it with targeted edits rather than rewriting it whole. Preserve the names, \
+     paths and other concrete inputs the human specified unless the request or project \
+     identifies them as placeholders. When you can, verify the requested workflow end \
+     to end with those inputs. Say which required checks you could not run.\n";
 
 /// The same rules for a chat about documents, where a file is usually a document
 /// rather than source, and where the person's own files are at stake.
-pub(super) const EDITING_CHAT: &str = "<editing>\nYour edits go to the person's folder as you \
+const EDITING_CHAT: &str = "Your edits go to the person's folder as you \
      make them, so a file you have written reads back the way you wrote it, and there \
      is nothing for them to save or apply. Read a document before replacing it, and \
      keep a generator in a script file you can run again instead of retyping the \
-     whole document. Check things with commands where you can, and delete any scratch \
-     file or script you do create before you finish.\n</editing>\n\n";
+     whole document. Check things with commands where you can.\n";
+
+const SCRATCH_FILES: &str = "Follow the user's instructions about where to put files. \
+     By default, save final deliverables in the working folder and put temporary files \
+     in a fresh session-specific subdirectory under the working folder's `.yaca/tmp/`. \
+     This includes temporary copies of inputs, helper scripts, logs, caches and preview \
+     renders. Use absolute scratch paths with both file tools and shell commands so they \
+     address the same files. Before finishing, clean up only the exact temporary paths \
+     you created or the dedicated scratch directory you created for them.\n";
+
+pub(super) fn push_editing(s: &mut String, chat: bool) {
+    s.push_str("<editing>\n");
+    s.push_str(if chat { EDITING_CHAT } else { EDITING });
+    s.push_str(SCRATCH_FILES);
+    s.push_str("</editing>\n\n");
+}
 
 const COMMUNICATION: &str = "<communication>\nWrite to the human in the language they \
      write to you in. Be direct: no preamble, and no restating of what their feed \
@@ -327,7 +342,7 @@ pub fn build_with_memory(
     // In plan there are no writing tools at all, so explaining how writing
     // works would be noise in the cached prefix.
     if agent {
-        s.push_str(if chat { EDITING_CHAT } else { EDITING });
+        push_editing(&mut s, chat);
     }
     s.push_str(COMMUNICATION);
     s.push_str(CAPTIONS);
@@ -556,6 +571,18 @@ mod tests {
         // would be noise in the cached prefix.
         assert!(!plain(Intent::Plan).contains("working tree"));
         assert!(plain(Intent::Agent).contains("working tree"));
+        for profile in [Profile::Code, Profile::Chat] {
+            let plan = build_with_memory(
+                Path::new("/p"),
+                Intent::Plan,
+                profile,
+                None,
+                Shell::default(),
+                None,
+                None,
+            );
+            assert!(!plan.contains(".yaca/tmp/"));
+        }
     }
 
     #[test]
@@ -664,7 +691,12 @@ mod tests {
         assert!(code.contains("Project root"));
         // Everything that is about how work is done rather than about code
         // stays in both.
-        for shared in ["<permissions>", "<communication>", "<action_captions>"] {
+        for shared in [
+            "<permissions>",
+            "<communication>",
+            "<action_captions>",
+            SCRATCH_FILES,
+        ] {
             assert!(chat.contains(shared), "{shared}");
             assert!(code.contains(shared), "{shared}");
         }
