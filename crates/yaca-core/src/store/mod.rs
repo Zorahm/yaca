@@ -160,8 +160,9 @@ impl SessionStore {
         Ok(())
     }
 
-    /// §9: delete. All the files, and no complaint about the ones that were
-    /// already gone — the goal was that the session not be there.
+    /// §9: delete. Every file and folder of the chat, and no complaint about
+    /// the ones that were already gone — the goal was that the session not be
+    /// there.
     ///
     /// The saved checkpoint list goes with them, which is what frees its
     /// snapshots: the next sweep no longer finds anything that names them.
@@ -171,6 +172,16 @@ impl SessionStore {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(CoreError::Io(e)),
+        }
+        // The `workspaces` folder is shared by the project's chats; an empty
+        // one is nobody's, and the next chat makes it again.
+        let _ = std::fs::remove_dir(self.root.join("workspaces"));
+        // An isolated chat's checkout is a folder in the project, and git's
+        // record of it has to go too or a later `git worktree add` sees a
+        // worktree that is no longer there. The branch stays: the commits on it
+        // are the chat's work, and merging them is the human's call.
+        if let Some(project) = self.project.as_deref() {
+            crate::isolation::remove(project, id)?;
         }
         for path in [
             events_path(&self.root, id),
@@ -188,6 +199,8 @@ impl SessionStore {
         // conversation they were cut from, and nothing else reads them.
         if let Some(drafts) = self.drafts_dir() {
             let _ = std::fs::remove_dir_all(drafts.join(id.to_string()));
+            // The project's `drafts` container is shared; an empty one is gone.
+            let _ = std::fs::remove_dir(&drafts);
         }
         Ok(())
     }

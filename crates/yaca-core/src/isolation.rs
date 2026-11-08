@@ -62,11 +62,14 @@ impl Isolation {
     }
 }
 
+/// Where the chat worktrees of the project at `home` are.
+fn worktrees_dir(home: &Path) -> PathBuf {
+    crate::project::dir(home).join("worktrees")
+}
+
 /// Where the worktree of `id` is.
 fn worktree_of(home: &Path, id: &SessionId) -> PathBuf {
-    crate::project::dir(home)
-        .join("worktrees")
-        .join(id.as_str())
+    worktrees_dir(home).join(id.as_str())
 }
 
 fn branch_of(id: &SessionId) -> String {
@@ -133,6 +136,28 @@ pub fn open(home: &Path, id: &SessionId, create: bool) -> Result<Option<Isolatio
         branch: branch_of(id),
         path: tree.to_string_lossy().into_owned(),
     }))
+}
+
+/// Deletes the chat's checkout and git's record of it. Its branch stays: the
+/// commits on it are the chat's work, and merging them is the human's call.
+pub fn remove(home: &Path, id: &SessionId) -> Result<(), CoreError> {
+    let worktree = worktree_of(home, id);
+    if !worktree.exists() {
+        // A checkout removed by hand leaves git's registration behind, and the
+        // registration is a folder in `.git/worktrees` too.
+        let _ = git(home, &["worktree", "prune"]);
+        return Ok(());
+    }
+    let target = format!("{}/worktrees/{id}", crate::project::DIR);
+    // Git takes the folder together with its bookkeeping in `.git/worktrees`.
+    if git(home, &["worktree", "remove", "--force", &target]).is_err() {
+        // No git to ask, or it refused a file: the folder is still the chat's.
+        std::fs::remove_dir_all(&worktree)?;
+        let _ = git(home, &["worktree", "prune"]);
+    }
+    // The container is shared by the project's chats; an empty one is nobody's.
+    let _ = std::fs::remove_dir(worktrees_dir(home));
+    Ok(())
 }
 
 /// Commits what the chat changed in `tree`. `Ok(false)`: nothing to commit.
@@ -308,6 +333,54 @@ mod tests {
         let back = open(dir.path(), &id, true).unwrap().unwrap();
         let seen = std::fs::read_to_string(Path::new(&back.path).join("b.txt")).unwrap();
         assert_eq!(seen.replace("\r\n", "\n"), "kept\n");
+    }
+
+    #[test]
+    fn deleting_a_chat_takes_its_checkout_and_gits_record_of_it() {
+        let dir = repo();
+        let id = SessionId::new();
+        let iso = open(dir.path(), &id, true).unwrap().unwrap();
+        let tree = PathBuf::from(&iso.path);
+        std::fs::write(tree.join("b.txt"), "work\n").unwrap();
+        commit_all(&tree, "keep").unwrap();
+
+        remove(dir.path(), &id).unwrap();
+
+        assert!(!tree.exists());
+        assert!(!dir
+            .path()
+            .join(crate::project::DIR)
+            .join("worktrees")
+            .exists());
+        let listed = git(dir.path(), &["worktree", "list", "--porcelain"]).unwrap();
+        assert!(!listed.contains(&id.to_string()), "{listed}");
+        // The branch is the chat's work and stays for a merge.
+        assert!(git(
+            dir.path(),
+            &["rev-parse", "--verify", "--quiet", &iso.branch]
+        )
+        .is_ok());
+        // And the chat had no checkout before, so this removes nothing again.
+        remove(dir.path(), &id).unwrap();
+    }
+
+    #[test]
+    fn a_chat_that_was_never_isolated_has_nothing_to_remove() {
+        let dir = repo();
+        remove(dir.path(), &SessionId::new()).unwrap();
+    }
+
+    #[test]
+    fn a_checkout_removed_by_hand_leaves_no_registration() {
+        let dir = repo();
+        let id = SessionId::new();
+        let iso = open(dir.path(), &id, true).unwrap().unwrap();
+        std::fs::remove_dir_all(&iso.path).unwrap();
+
+        remove(dir.path(), &id).unwrap();
+
+        let listed = git(dir.path(), &["worktree", "list", "--porcelain"]).unwrap();
+        assert!(!listed.contains(&id.to_string()), "{listed}");
     }
 
     #[test]
