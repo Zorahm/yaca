@@ -19,512 +19,125 @@
 
 ---
 
-The current release is `1.0.8`. Installers (Windows NSIS `.exe`, macOS `.dmg`, Linux `.deb` and `.AppImage`) are built by the release workflow and published on the GitHub Releases page. Only Windows has been run so far; the macOS and Linux builds are untested, and the browser column is Windows only.
+The current release is `1.0.8`. Installers (Windows NSIS, macOS dmg, Linux deb and AppImage) come from the release workflow and the GitHub Releases page. Only Windows has been run so far. The macOS and Linux builds are untested, and the browser column is Windows only.
 
 ## Features
 
-- **Conversations with models about code.** Streaming responses, thinking/reasoning, task lists, token and cost tracking.
-- **Project manipulation.** Read, search, edit, and delete files, including the text of PDFs, Word, Excel and PowerPoint files, and the cells of Jupyter notebooks; see [PDFs and Notebooks](#pdfs-and-notebooks) and [Chat mode and Office documents](#chat-mode-and-office-documents). Run shell commands and background processes, and wait for a line of their output or for them to end with `BashWait` instead of polling.
-- **Permissions.** Modes: "Plan", "Manual", "Auto", and "Edits" — ranging from read-only to editing without confirmation. Git commands follow the same rules as other shell commands. In Auto, the Decision model or the session model reviews commands that require approval.
-- **Two kinds of chat.** *Code* is the coding agent; *Documents* is a chat about the person's files, with a prompt about Word, Excel, PowerPoint and PDF. Both have access to Yaca's [Office skills](#office-skills).
-- **Checkpoints.** Snapshots project state before edits and commands, allowing you to roll back changes. The list of points is saved with the session, so it survives a window reload, closing and reopening the chat, and a restart.
-- **Reloading the window does not stop the agent.** Ctrl+R (or a hot reload in development) only redraws the window: running turns, background commands and open questions carry on in the app, and the window picks the chats up again where they are. Restarting the application itself still ends them.
-- **Background command results resume the agent.** The model can keep working after starting a background command. When that command exits on its own, its status and unread output are delivered at the next agent step, or wake an idle model in a new turn. Explicitly stopped commands do not trigger a new turn. The output included in the notification is bounded; the full output file remains available when provided.
-- **Sessions.** Project conversation history, search, Markdown export, and resumption from where you left off.
-- **Providers.** Ready to use by just entering an API key: OpenAI, Anthropic, Google AI Studio, OpenRouter, DeepSeek, z.ai (coding plan). Plus **Decision**, a ready entry for the small model that answers the router's questions: point it at a local server (Ollama's address is filled in) or a cloud one. Plus any custom servers compatible with OpenAI or Anthropic API formats, including local ones. After saving a key, models are queried automatically.
-- **Model router.** A small decision model answers typed questions about each message, and rules pick which model answers it; see [Model Router](#model-router).
-- **Decision tool.** The agent can put a quick question to the small Decision model — which skill fits, which of three files to open — and read its short answer; see [Asking the Decision model](#asking-the-decision-model).
-- **Isolation.** Chats can run in their own git worktree without touching your working tree.
-- **Skills** in the [Agent Skills](https://agentskills.io) format, including skills already installed for Claude Code; see [Skills](#skills).
-- **Plugins** from Claude Code and [Agent Plugins](https://agent-plugins.org): skills, commands, MCP servers, and hooks, including plugins already installed in Claude Code; see [Plugins](#plugins).
-- **Subagents**, plain or named, with their own instructions, tools and model; see [Named Subagents](#named-subagents).
-- **Hooks** around tool calls and at the session's moments; see [Project Hooks](#project-hooks).
-- **Project memory** and custom slash commands from `.yaca/commands/`.
-- **MCP.** Tools and resources from external Model Context Protocol servers alongside built-in ones; see [MCP Servers](#mcp-servers).
-- **LSP.** Definitions, references, types, diagnostics, and project-wide renames from language servers; see [Language Servers (LSP)](#language-servers-lsp).
-- **Interface in nine languages** (Russian, English, German, Spanish, French, Japanese, Korean, Portuguese, Chinese), following the system language by default, with a light and a dark theme.
-- **Browser.** A real page per chat in the browser column beside the feed: the model opens it, reads it, takes screenshots, clicks and types, and runs JavaScript in it, and the human watches and can click in the same page. Windows only for now; see [Browser](#browser).
-
-**Updates.** About → Updates checks the GitHub releases by hand, and the app does the same by itself shortly after start and every few hours (switch it off in the same place). A newer release appears quietly as a card in the sidebar — what it is, what it changes, and one button. The button downloads the build for this system, verifies its signature against the key in `src-tauri/tauri.conf.json`, installs it and restarts Yaca; nothing is installed without that press. A turn that is running is interrupted by the restart, so the button asks a second time when one is. A beta is told about the next beta and the release, a release only about releases (alpha < beta < rc < release, then the numbers). The menu item "Help → Check for Updates" opens "About", where the changelog is.
-
-The install itself is `tauri-plugin-updater`, pinned to 2.12: it is the last release that runs on Tauri 2.11, which the browser column is built against. On Windows the NSIS installer replaces the program and starts it again (`passive` mode: a progress bar, no questions); on macOS and Linux the new build is put in place and the app restarts itself. Linux `.deb` asks for the administrator password. Neither the macOS nor the Linux bundle has ever been built, so an update there is untested; a download cannot be called off once started.
+- **Conversations about code.** Streaming answers, thinking, task lists, token and cost tracking, one history per project.
+- **Work in the project.** Read, search, edit and delete files — including PDFs, Word, Excel, PowerPoint and Jupyter notebooks — run shell commands and background processes, and wait for their output instead of polling.
+- **Permissions.** Plan, Manual, Auto and Edits modes, from read-only to editing without confirmation. Git commands follow the same rules as other shell commands. In Auto, the Decision model or the session model reviews commands that require approval.
+- **Checkpoints.** Snapshots before edits and commands, with rollback; the list survives reloads and restarts.
+- **Two profiles.** *Code* for repositories, *Documents* for Word, Excel, PowerPoint and PDF work. Both profiles have access to the bundled document skills.
+- **Sessions.** Search, Markdown export and resumption of past conversations.
+- **Providers.** OpenAI, Anthropic, Google AI Studio, OpenRouter, DeepSeek, z.ai, a small **Decision** model, and any OpenAI- or Anthropic-compatible server, local ones included. Keys live in the system keyring.
+- **Model router.** A small model answers typed questions about each message, and rules pick the model that answers it.
+- **Isolation.** A chat can run in its own git worktree without touching your working tree.
+- **Extensible.** Skills, Claude Code and Agent Plugins plugins, named subagents, hooks, MCP servers, language servers, project memory and slash commands.
+- **Browser column** (Windows only). A real page per chat that the model can open, read, click, type in and screenshot, with the human watching and clicking in the same page.
+- **Nine languages** (ru, en, de, es, fr, ja, ko, pt, zh), light and dark themes.
+- **Signed updates** from GitHub releases, installed only when you press the button.
 
 ## Getting Started
 
 **Windows:** download `Yaca_<version>_x64-setup.exe` from the [Releases](../../releases) page and run it. It installs per user and needs no administrator rights.
 
-**From source** (all platforms) requires [Node.js](https://nodejs.org/) 20+ and [Rust](https://rustup.rs/).
-
-From the project root:
+**From source** (all platforms) needs [Node.js](https://nodejs.org/) 20+ and [Rust](https://rustup.rs/). From the project root:
 
 ```bash
 npm install
 npm run tauri dev
 ```
 
-`npm run tauri dev` starts the Vite dev server (`npm run dev`) and opens the desktop window. `npm run dev` alone serves only the frontend, without the window.
+`npm run tauri dev` starts Vite and opens the desktop window; `npm run dev` alone serves the frontend without it. The first build takes a while while cargo compiles the core.
 
-The initial build takes a while as cargo compiles the core from scratch.
-
-Provider keys can be set in the Settings window or via the command line. Keys are stored in the system keyring and read from standard input:
+Provider keys can be set in Settings → Providers, or from the command line (the key is read from standard input):
 
 ```bash
 yaca key set --provider anthropic
 ```
 
-In Settings → Providers, edit a provider to set each model's context window in
-tokens. Save the provider, then start or reopen a chat to use the new size for
-the context meter and automatic compaction. Manual sizes survive model-list
-refreshes. Models whose context size cannot be detected use 1,000,000 tokens.
-
-## Data Storage
-
-Application settings and chats are stored in a single directory. On Windows, this is `%LOCALAPPDATA%\Yaca` — the same folder where the installer places the app and uninstaller:
-
-```text
-%LOCALAPPDATA%\Yaca\
-├─ settings.json, providers.json, routing.json, mcp.json, lsp.json, mcp-approved.json, plugins.json
-├─ marketplaces.json, installed_plugins.json
-├─ skills\, plugins\       user skills and plugins placed manually
-├─ marketplaces\<name>\    cloned marketplaces
-├─ plugin-cache\           installed plugins
-├─ plugin-data\<plugin>\   PLUGIN_DATA for plugins
-├─ browser\               the browser column's profile: its cookies and site storage
-└─ chats\<project>-<path-hash>\
-   ├─ project.json         identifies the project
-   ├─ workspaces\<hash>\    files a document chat made, and its attachments
-   └─ <id>.jsonl, <id>.messages.jsonl, <id>.meta.json, <id>.checkpoints.json
-```
-
-On macOS, this is `~/Library/Application Support/Yaca`; on Linux, `$XDG_CONFIG_HOME/Yaca`. Both the desktop app and `yaca-cli` read and write to the same location, so a session started in one can be resumed in the other.
-
-The project's own `.yaca` directory holds its local settings, commands, shadow repository for checkpoints, worktrees, and drafts. Chat sessions are no longer stored there. Deleting a chat removes its folder in `workspaces`, its journals, its drafts and, for an isolated chat, its worktree in `.yaca/worktrees`; the branch `yaca/<id>` stays, so the commits on it can still be merged.
-
-The shadow repository holds what the snapshots contain; `<id>.checkpoints.json` says which snapshots belong to which chat and in what order. Snapshots a chat's list names are kept for as long as the chat exists, and deleting the chat frees them. A point whose snapshot has gone missing is left out of the list rather than offered as a rollback that cannot work.
-
-When uninstalling the application, checking "Delete the application data" will display a warning and delete the entire `%LOCALAPPDATA%\Yaca` folder along with chats, as well as provider keys (`<provider>.Yaca`) from Windows Credential Manager. It does not touch `.yaca` folders inside projects.
-
-Not supported:
-
-- **Migration of old chats.** Sessions saved by older builds in `<project>/.yaca/sessions` and settings from `%APPDATA%\Yaca` are not migrated automatically. The uninstaller removes that folder as well.
-- **Custom chat storage directories.**
+Each model's context window, in tokens, is set in Settings → Providers. Save the provider and reopen the chat for the context meter and automatic compaction to use the new size; unknown sizes default to 1,000,000 tokens.
 
 ## Command Line
 
-The same core runs headless without a GUI:
+The same core runs headless without a window:
 
 ```bash
 cargo run -p yaca-cli -- --project . "what does the build_body function do?"
 ```
 
-Useful flags:
-
-| Flag | Description |
+| Flag | Meaning |
 |---|---|
 | `--mode plan\|manual\|auto\|edits` | permission mode |
 | `--permissions allow\|deny` | how to answer permission prompts (defaults to deny) |
-| `--add-dir <path>` | additional directory allowed for operations |
+| `--add-dir <path>` | one more directory allowed for operations |
 | `--isolate` | run in an isolated git worktree |
 | `--resume <id>` | resume a recorded session |
-| `--jsonl` | output raw event stream |
+| `--jsonl` | output the raw event stream |
 
-Project sessions: `yaca sessions`, `yaca search "query"`, `yaca export <id>`. Project MCP servers: `yaca mcp`, `yaca mcp --approve <name>`, `yaca mcp --login <name>` (OAuth in the browser), `yaca mcp --logout <name>`. Skills and file diagnostics: `yaca skills`. Plugins and their toggles: `yaca plugins`, `yaca plugins --enable <id>`, `yaca plugins --disable <id>`; for installation, see [Installing Plugins](#installing-plugins).
+Sessions: `yaca sessions`, `yaca search "query"`, `yaca export <id>`. Servers and extensions: `yaca mcp`, `yaca skills`, `yaca plugins`, `yaca lsp`.
 
-**`yaca serve`** lets a phone reach this machine's projects with no window open: `yaca serve [PROJECT...] [--port <PORT>] [--bind <ADDR>] [--pair]`. Each `PROJECT` is a folder the phone may open chats in; without any, the folder given with `-p` is served. The port defaults to the one in the remote settings (47820), and `--bind` to `0.0.0.0`, so the phone on the same network can reach it. It runs until Ctrl+C. A pairing code is shown as a QR code at start when no phone is paired yet, or always with `--pair`; the phone app pairs by scanning it, and the code works once and expires after five minutes. While it runs, the terminal takes these commands: `pair` (a fresh code), `devices` (the paired phones), `revoke <id>` (unpair one), `help`, and `quit`. Chats it starts are recorded in the same chats folder as the window's. Running the command is the consent to listen, so the `enabled` switch in the remote settings is not read by it.
+**`yaca serve`** lets a phone reach this machine's projects with no window open: `yaca serve [PROJECT...] [--port <PORT>] [--bind <ADDR>] [--pair]`. Each project is a folder the phone may open chats in; without any, the one given with `-p` is served. The port defaults to the remote setting (47820) and the bind address to `0.0.0.0`. A pairing QR code is shown at start when no phone is paired yet, or always with `--pair`; a code works once and expires after five minutes. The terminal also takes `pair`, `devices`, `revoke <id>`, `help` and `quit`. Chats started there are recorded in the same chats folder as the window's.
 
-## Shell commands
+## Data Storage
 
-Shell commands use the project as their default working directory. `Bash` can
-select any existing `cwd`, absolute or relative to the project, including outside
-it. Installed interpreters and tools can be invoked by name or by their full path.
-Use `background: true` for commands that should keep running while the agent
-continues: the top bar shows their count and opens the process panel with status
-and output. The button remains available after commands finish.
+Settings and chats live in one directory: `%LOCALAPPDATA%\Yaca` on Windows, `~/Library/Application Support/Yaca` on macOS, `$XDG_CONFIG_HOME/Yaca` on Linux. The desktop app and `yaca-cli` share it, so a session started in one can be resumed in the other.
 
-## Skills
-
-A skill is a directory containing a `SKILL.md` file in the [Agent Skills](https://agentskills.io/specification) format: a YAML frontmatter with `name` and `description`, followed by instructions. It can also include `scripts/`, `references/`, and any other files.
-
-```markdown
----
-name: release
-description: Release a new version. Use when asked for a release or tag.
----
-
-Tag first, then build. Steps are in references/steps.md.
+```text
+%LOCALAPPDATA%\Yaca\
+├─ settings.json, providers.json, routing.json, mcp.json, lsp.json, plugins.json
+├─ skills\, plugins\, plugin-cache\, plugin-data\, marketplaces\   extensions
+├─ browser\                                                         browser profile
+└─ chats\<project>-<path-hash>\
+   ├─ project.json
+   ├─ workspaces\<hash>\    files a document chat made, and its attachments
+   └─ <id>.jsonl, <id>.messages.jsonl, <id>.meta.json, <id>.checkpoints.json
 ```
 
-Where Yaca looks for skills, in descending order of precedence:
+The project's own `.yaca` directory holds local settings, commands, the checkpoint shadow repository, worktrees and drafts. Chat sessions are not stored there. Deleting a chat removes its journals, drafts and document workspace. For an isolated chat it also removes the worktree in `.yaca/worktrees` and keeps the branch `yaca/<id>` so its commits can still be merged.
 
-| Scope | Directories |
+Uninstalling with "Delete the application data" removes the whole folder, chats and provider keys from Windows Credential Manager; `.yaca` folders inside projects are left alone. Chats saved by older builds in `<project>/.yaca/sessions` and settings in `%APPDATA%\Yaca` are not migrated, and the uninstaller removes that folder too. Custom chat storage directories are not supported.
+
+## Project Configuration
+
+| What | Where |
 |---|---|
-| Project | `.yaca/skills/`, `.agents/skills/`, `.claude/skills/` in the project root |
-| User | `skills/` in the app settings directory, `~/.agents/skills/`, `~/.claude/skills/` |
-| Plugins | skills from enabled [plugins](#plugins), named `plugin:skill` |
+| Project settings, hooks, MCP servers, profile | `.yaca/settings.json` |
+| Slash commands | `.yaca/commands/` |
+| Project skills | `.yaca/skills/`, `.agents/skills/`, `.claude/skills/` |
+| User skills | `<config>/skills/`, `~/.agents/skills/`, `~/.claude/skills/` |
+| Named subagents | `.yaca/agents/`, `.claude/agents/`, `<config>/agents/`, `~/.claude/agents/` |
+| Project MCP servers | `.mcp.json` |
+| User MCP servers | `mcp.json` in the app settings directory |
+| Providers, router, language servers, plugins | `providers.json`, `routing.json`, `lsp.json`, `plugins.json` in the app settings directory |
 
-A project skill overrides a user skill with the same name; within the same scope, `.yaca` overrides `.agents`, which in turn overrides `.claude`. Yaca only reads these directories, so skills from Claude Code and other clients work without copying.
+Project settings override user-wide ones. Yaca only reads the `.claude` and `.agents` folders, so skills, subagents and plugins already installed for Claude Code work without copying.
 
-Yaca writes to one of them: the `docx`, `xlsx`, `pptx` and `pdf` skills it ships with are installed into `skills/` in the app settings directory on start and updated when the bundled version changes. They are ordinary skills from then on — editable, shadowed by a project skill of the same name, visible in `yaca skills` and in Settings. See [Office skills](#office-skills).
+## Extending Yaca
 
-The model sees a catalog: the name and description of each skill. It loads a matching skill using the `Skill` tool, and reads skill files using the same tool (`file`), even if the skill is located outside the project. Skill scripts run via standard `Bash` with the usual permission prompt. Skills can also be invoked manually via `/name arguments`. A command with the same name in `.yaca/commands/` takes precedence over the skill there too. The list in the prompt is read when opening a chat, while the skill content is read upon invocation, so skill edits take effect immediately, while newly added skills appear in the list starting with the next chat.
+**Skills.** A skill is a directory with a `SKILL.md` in the [Agent Skills](https://agentskills.io) format: a `name` and `description` in YAML frontmatter, then instructions and any scripts or references. The model sees a catalog of names and descriptions, loads a matching skill when the task calls for it, and you can also run one with `/name`. Yaca installs its bundled `docx`, `xlsx`, `pptx` and `pdf` skills into `<config>/skills/` on start and updates them when the bundled version changes. The skills build on [Anthropic's Agent Skills](https://github.com/anthropics/skills/tree/main/skills) and Yaca's existing [AgentChat](https://github.com/Zorahm/AgentChat/tree/master/skills) workflows. The `docx` skill includes `scripts/replace.py` for text split across Word runs. A project skill of the same name takes precedence.
 
-During context compaction, previously loaded skills are re-read from disk and placed immediately after the summary, preventing the agent from silently losing their instructions.
+**Named subagents.** `Task` can hand work to a subagent stored in Claude Code's format in one of the folders above. Its file sets the instructions, a subset of tools (never more than a subagent may have) and a model; the subagent reports back to the conversation that sent it.
 
-Parsing is lenient because most skills are written for other clients. Non-standard names, folder name mismatches, or overly long descriptions produce warnings while the skill is still loaded. Skills lacking a `description` or having a frontmatter that fails YAML parsing are skipped. These issues are surfaced by `yaca skills` and the "Project" section in Settings.
+**Hooks.** Commands in `.yaca/settings.json` run around tool calls and at session moments: `preToolUse`, `postToolUse`, `sessionStart`, `userPromptSubmit`, `stop`, `subagentStop`, `preCompact`, `sessionEnd` and `notification`. They can refuse or annotate, never grant permissions. A project hook that fails refuses the call, except `stop` and `subagentStop`, which only add a note.
 
-Claude Code fields supported: `disable-model-invocation` (skill excluded from the model catalog, only accessible via `/name`) and `user-invocable: false` (hidden from the slash menu).
-
-Not supported in skills:
-
-- **`allowed-tools`.** The field is parsed but grants no permissions: a skill from a cloned repository should not be able to self-approve commands.
-- **Skills from parent directories** up to the git root, or custom skill paths in settings.
-- **Claude Code fields `model` and `argument-hint`.** `context: fork` and `agent` are supported: such a skill runs in a subagent of its own (as the named agent `agent`, when given), and the model gets the subagent's report rather than the skill's text. A human's `/name` of a forked skill asks the model to run it that way.
-- **Deduplication on reload.** Calling a skill a second time sends the full content to the model again.
-
-## Named Subagents
-
-`Task` hands a task to a subagent: a conversation of its own that reports back. A named subagent is one kept in a file, in Claude Code's format:
-
-```markdown
----
-name: reviewer
-description: Reviews a diff for real bugs. Use after a change, before committing.
-tools: Read, Grep, Glob
-model: claude-haiku-4-5
----
-
-You review code. Report only bugs that would break something, with path:line.
-```
-
-Where Yaca looks, in precedence order: `.yaca/agents/` and `.claude/agents/` in the project, then `agents/` in the app settings directory and `~/.claude/agents/`, then the `agents/` of enabled plugins (named `plugin:agent`). The first file with a name wins. The list goes into the system prompt when the chat opens, and the model sends one with `Task`'s `agent` parameter.
-
-- **Instructions.** The file's body is added to the subagent's system prompt, after Yaca's own.
-- **`tools`** narrows the subagent's tools and never widens them: a file cannot hand a subagent what subagents never get (`Task`, `AskUser`, the task list). Claude Code's names are understood (`MultiEdit` is `Edit`, `PowerShell` is `Bash`), and `mcp__server` covers that server's tools. Without `tools`, the subagent has the usual set.
-- **`model`**: the id of any model the chat's provider lists, whoever made it (case does not matter), or `inherit` for the chat's own model. There are no family aliases: Claude Code's `sonnet`, `opus` and `haiku` name nothing here. An id the provider does not list runs on the default subagent model, and the `Task` row says so.
-
-`Task` also takes a `model` of its own, for when the human names one ("check this with gpt-5.1"): the same ids, and it outranks the agent's. There the model passes on the human's id, so an id the provider does not list fails the call and names the ids there are, rather than running on another model.
-
-A name nobody has fails the call and lists the agents there are.
-
-## Project Hooks
-
-Commands in `.yaca/settings.json` that run around tool calls and at the session's moments. The human wrote them, so they run without a permission question; they can refuse or annotate, never grant.
-
-```json
-{
-  "hooks": {
-    "preToolUse": [{ "match": "Bash", "command": "./scripts/guard.sh" }],
-    "postToolUse": [{ "match": "Edit", "command": "cargo fmt" }],
-    "stop": [{ "command": "cargo test -q" }],
-    "notification": [{ "command": "notify-send Yaca 'waiting for you'" }]
-  }
-}
-```
-
-| Key | When | What it can do |
-|---|---|---|
-| `preToolUse` | Before a call, ahead of the permission question | Exit 0 lets it run; anything else refuses it. `{"updatedInput": {...}}` on stdout rewrites the call's arguments, and the permission question is asked about the rewritten call |
-| `postToolUse` | After a call | Its output is added to the result the model reads |
-| `sessionStart` | When the chat opens | Its output is standing context in the system prompt |
-| `userPromptSubmit` | Before each message reaches the model | Exit 0 adds its output to the message; anything else keeps the message from the model |
-| `stop` | When the model finishes its turn | A non-zero exit sends the model back to work with the hook's output, up to 3 times per turn |
-| `subagentStop` | When a subagent is about to report | The same, for the subagent |
-| `preCompact` | Before history is compacted (`trigger`: `manual` or `auto`) | Told only |
-| `sessionEnd` | When the chat closes | Told only |
-| `notification` | When Yaca starts waiting for the human: a permission question, a question, an MCP server's form | Told only, and not waited for |
-
-Tool hooks take `match` (`*` or one tool name); the others do not. Each hook gets a JSON description of the event on stdin, `YACA_PROJECT_ROOT` in its environment, and `YACA_TOOL` or `YACA_HOOK_EVENT`. `timeoutSecs` defaults to 30.
-
-Project hooks fail closed: a hook that cannot start or does not finish in time refuses the call, and keeps a message from the model. `stop` and `subagentStop` are the exception: sending the model back to work because a check could not start would give it something it cannot fix, so that is a note instead.
-
-## Plugins
-
-A plugin is a directory containing skills, commands, MCP servers, and hooks. Two formats are supported:
-
-- **Claude Code**: `.claude-plugin/plugin.json`, components in `skills/`, `agents/`, `commands/`, `.mcp.json`, `hooks/hooks.json`, plus paths added by the manifest. Parsed leniently, matching Claude Code: only `name` is required; without a manifest, a plugin installed in Claude Code takes the name under which it was installed.
-- **[Agent Plugins](https://agent-plugins.org/specification) 1.0**: `plugin.json` at the root, `skills/`, and `mcp.json`. Parsed strictly according to the specification: an invalid manifest rejects the entire plugin, an invalid `mcp.json` disables the plugin's servers, and an invalid entry disables only itself.
-
-If a plugin contains both manifests, it is loaded as a Claude Code plugin.
-
-Plugin discovery locations:
-
-1. `plugins/<directory>/` in the app settings folder — user plugins installed manually.
-2. Installed by Yaca from a marketplace or direct URL; see [Installing Plugins](#installing-plugins).
-3. Installed in Claude Code for the user (`scope: user` in `~/.claude/plugins/installed_plugins.json`). Yaca only reads them and never writes to Claude Code directories. If the same plugin exists in both Yaca and Claude Code, the Yaca copy is loaded by default. Duplicate copies appear as a warning on the active plugin's card; its expanded contents let you choose another discovered copy or ignore the warning. These choices are stored in Yaca's `plugins.json`.
-
-Toggles are stored in `plugins.json` in the settings directory and can be configured in the "Plugins" settings tab or via `yaca plugins --enable|--disable`. A plugin without an explicit toggle inherits its state from Claude Code's `enabledPlugins`, or defaults to enabled if local to Yaca. Changes apply to newly opened chats; an existing chat continues using the set it started with.
-
-Each component is namespaced by plugin prefix to prevent collisions:
-
-| Component | Identifier |
-|---|---|
-| Skill | `plugin:skill` in the model catalog and `/plugin:skill` |
-| Command | `/plugin:command` |
-| MCP Server | `plugin:plugin:server`, tools named `mcp__plugin_plugin_server__…` |
-
-MCP servers from enabled plugins start without separate approval: enabling the plugin implies consent. The server starts from the plugin root, with `PLUGIN_ROOT`, `PLUGIN_DATA`, `CLAUDE_PLUGIN_ROOT`, and `CLAUDE_PLUGIN_DATA` in its environment. In skill and command texts, `${CLAUDE_PLUGIN_ROOT}` is replaced with the path to the plugin. `PLUGIN_DATA` uses Yaca's own folder in `plugin-data`, not Claude Code's folder.
-
-### Plugin Hooks
-
-Plugin hooks follow Claude Code rules rather than project hook rules from `.yaca/settings.json`:
-
-| Event | When | Capabilities |
-|---|---|---|
-| `SessionStart` | On chat opening (`source`: `startup` or `resume`) | Add context: injected into system prompt for the entire session, survives compaction |
-| `UserPromptSubmit` | Before each user message | Block message from reaching model, or prepend/append context |
-| `PreToolUse` | Before invocation, after project hooks | Deny invocation (exit code 2 or `permissionDecision: "deny"`), or require confirmation (`"ask"`) |
-| `PostToolUse` | After invocation | Append a note for the model to the tool result |
-| `Stop` | When the model finishes its turn | Resume execution with a custom reason (up to 3 times per turn) |
-| `SubagentStop` | When a subagent is about to report | The same, for the subagent |
-| `PreCompact` | Before history is compacted (`matcher` against `manual` or `auto`) | Informational |
-| `SessionEnd` | When the chat closes | Informational |
-| `Notification` | When Yaca starts waiting for the human (`matcher` against `permission_prompt`, `question`, `elicitation`) | Informational, not waited for |
-
-A `PreToolUse` hook may also rewrite the call: `hookSpecificOutput.updatedInput` replaces its arguments, and the permission question is then asked about the rewritten call.
-
-Only exit code 2 or an explicit JSON denial blocks execution. A hook that fails, fails to launch, or times out becomes an informational note, allowing work to proceed (matching typical plugin expectations). In contrast, project hooks deny by default on failure. No hook can grant permissions: `permissionDecision: "allow"` is ignored.
-
-Command strings run via bash (on Windows, via Git Bash, matching Claude Code; configurable via `CLAUDE_CODE_GIT_BASH_PATH`). The `command` + `args` form runs the binary directly. Supported options include `matcher` (regex against Claude Code tool names: `PowerShell` maps to `Bash`, `AskUserQuestion` to `AskUser`), `if`, `timeout`, `async`, and `shell: "powershell"`. Any hook output outside the command invocation line is displayed in the feed as a separate entry.
-
-Not supported in plugins:
-
-- **Language servers and output styles** from plugins. Plugins containing them load, but these features are listed as unsupported.
-- **Hook `Setup`**, and hook types `prompt` and `agent`.
-- **`permissionDecision: "ask"` for tools without permissions** (`Read`, `Grep`): there is no confirmation prompt to trigger, so the hook response is ignored.
-- **Transcripts in Claude Code format.** `transcript_path` points to Yaca's log, which hooks expecting Claude Code format (e.g. claude-mem) will not understand.
-- **Project plugins** (`enabledPlugins` in repository `.claude/settings.json`, installations with `scope: project`).
-- **`sse` transport** for plugin MCP servers.
-- **`$1`, `$2` in plugin commands.** Only `$ARGUMENTS` is supported.
-
-## Installing Plugins
-
-Plugins can be installed from Claude Code format marketplaces (`.claude-plugin/marketplace.json`) — via the "Plugins" settings tab or from the command line:
+**Plugins.** Skills, commands, MCP servers and hooks packaged together, in Claude Code's format or [Agent Plugins](https://agent-plugins.org) 1.0. Plugins installed in Claude Code are read in place; others come from a marketplace or a direct address:
 
 ```bash
-yaca plugins marketplace list
 yaca plugins marketplace add owner/repo
-yaca plugins browse claude-plugins-official review
 yaca plugins install name@marketplace
-yaca plugins update
-yaca plugins uninstall name@marketplace
-yaca plugins preview name@marketplace
-yaca plugins confirm <preview-token>
-yaca plugins cancel <preview-token>
-yaca plugins prefer <plugin-name> <discovered-path>
-yaca plugins ignore-duplicates <plugin-name> [--restore]
+yaca plugins install <dir|owner/repo|git-url>
 ```
 
-The marketplace list includes the official `anthropics/claude-plugins-official` by default, alongside marketplaces known to Claude Code (`~/.claude/plugins/known_marketplaces.json`). Custom marketplaces can be added as GitHub `owner/repo`, git URL, or local directory; local directories are read in place. Nothing is downloaded until a marketplace is browsed or "Update" is clicked, at which point Yaca clones it into its `marketplaces` directory (without using Claude Code's clone). Built-in or Claude Code-imported marketplaces can be removed to hide them.
+Installed plugins are enabled by default, and their components are namespaced (`plugin:skill`, `/plugin:command`). Downloaded code is never run during installation; hooks and MCP servers only run inside a chat, under the usual permission rules.
 
-A plugin from a marketplace is fetched from a subfolder within the marketplace (`./path`), from its own repository (`url`, `github` with `ref`, `sha`, `path`), or from a subdirectory of another repository (`git-subdir`). Entries with `strict: false` or plugins without their own manifest use the catalog entry as their manifest. Sources like `npm`, `pip`, etc. are shown as unavailable.
+**MCP servers.** Configure them in `mcp.json` (user), `.mcp.json` (project) or `mcpServers` in `.yaca/settings.json`, by `command` for a local stdio server or `url` for Streamable HTTP; `${NAME}` and `${NAME:-default}` substitute environment variables. A project's `.mcp.json` needs explicit approval (`yaca mcp --approve <name>`) because it arrives with the repository. Remote servers that need OAuth are logged in from the `/mcp` panel, and their tokens go to the system keychain.
 
-Plugins without a marketplace (common for Agent Plugins) can be installed by address: `yaca plugins install <dir|owner/repo|git-url>`, named `plugin@direct`.
-
-Installation details:
-
-- Clones a single commit via git without history. Git is run non-interactively: if authentication is required, installation fails with a git error rather than hanging.
-- Downloaded content is first validated using the same loader used in sessions. Plugins that fail validation are not installed, leaving no leftover files.
-- Downloaded code is never run automatically: no `npm install`, no scripts. Plugin components (hooks, MCP servers) only run within a chat session under the same rules as manually installed plugins.
-- Installed plugins are enabled by default: installation implies consent, matching Claude Code. Settings separate installed plugins from marketplaces. Cards show nonzero component counts and expand to list skills, commands, hook commands and MCP launch commands or addresses. Claude Code installations cannot be removed by Yaca.
-- Catalog installation first stages a package for review, including its executable components. Confirmation installs those exact files, verifies that they have not changed, and does not fetch another revision. Leaving the catalog or cancelling discards an unused preview. The CLI's `preview`, `confirm` and `cancel` commands use the same workflow; `install` remains a direct installation command.
-- Available version chips use version metadata in fetched marketplace catalogs. Refresh a marketplace to read newer metadata; plugins whose sources do not publish version metadata can still be updated from their action menu.
-- Updates are manual only. Updating re-fetches the plugin and replaces files if changed; a new marketplace commit without changes in the plugin itself is not treated as an update.
-- Uninstallation removes plugin files, the installation record, and the toggle. The plugin's `plugin-data` folder is preserved to protect user data.
-
-Not supported in installation:
-
-- **`npm` and `pip` sources**, or marketplaces provided as a standalone JSON URL.
-- **Auto-updates** or update checks on startup.
-- **Signature verification** and publisher trust: trust is based on the source repository URL.
-- **Marketplace `renames`**: renamed plugins appear under the new name, while an older installation continues updating under the old name as long as that entry exists.
-- **Clone progress bars**: the UI indicates background activity without percentage completion.
-
-## MCP Servers
-
-Servers can be defined in one of three locations, where more specific scopes completely override servers of the same name from broader scopes:
-
-1. `mcp.json` in the app settings directory — user-wide servers for all projects;
-2. `.mcp.json` in the project root — shared configuration used by other tools;
-3. `mcpServers` in the project's `.yaca/settings.json`.
-
-The configuration syntax is identical everywhere:
-
-```json
-{
-  "mcpServers": {
-    "files": { "command": "npx", "args": ["-y", "@example/server-files", "."] },
-    "tracker": {
-      "url": "https://tracker.example.com/mcp",
-      "headers": { "Authorization": "Bearer ${TRACKER_TOKEN}" }
-    }
-  }
-}
-```
-
-`command` launches a local server and communicates over stdio; `url` connects via Streamable HTTP. `${NAME}` and `${NAME:-default}` substitute environment variables so tokens don't need to be hardcoded in files. Optional fields include `env`, `cwd`, `disabled`, `startupTimeoutSecs` (default: 30), and `toolTimeoutSecs` (default: 600).
-
-Server tools are presented to the model as `mcp__<server>__<tool>`. Tools marked as read-only by the server (`readOnlyHint`) run without confirmation prompts; others require confirmation similarly to network access. Servers defined in `.mcp.json` do not run until explicitly approved: the configuration file arrives with the repository, and stdio servers execute shell commands. Approval is granted in the `/mcp` panel or via `yaca mcp --approve <name>`, and persists until the definition changes.
-
-The server list is loaded upon opening a chat: modifications take effect in subsequent chats, while an active chat maintains its initial server set.
-
-### OAuth Login
-
-A remote server that answers `401` is marked "login needed" in the `/mcp` panel, with a **Log in** button (from a terminal: `yaca mcp --login <name>`). Yaca follows the protocol's authorization flow for a public client: it finds the authorization server through the server's metadata (RFC 9728, RFC 8414, or the specification's defaults), registers itself as a client (RFC 7591), and opens the login page in the browser with PKCE; the answer comes back to a one-time listener on `127.0.0.1`. The tokens are kept in the system keychain by the server's address and refreshed when they expire, and the server connects again on its own. **Log out** forgets them. A server whose declaration sets its own `Authorization` header is never sent a login.
-
-### Prompts and Forms
-
-- **Prompts.** A server's prompt templates are slash commands named `/mcp__<server>__<prompt>`. Words after the name fill the prompt's arguments in the order the server declares them, the last taking the rest of the line. The model gets the filled prompt; the feed keeps what was typed.
-- **Forms (elicitation).** A server may ask the human for input in the middle of its work. The form appears in the feed under the server's name, with its fields (text, number, yes/no, a choice), and **Send**, **Decline** or `Esc` answer it. An answer that does not fit the form is refused and the form stays open; a form nobody answers in 10 minutes is cancelled. In the CLI every form is declined.
-
-Not supported in the MCP client:
-
-- **Client registration without RFC 7591.** A server whose authorization server offers no dynamic registration cannot be logged in to; use `headers` with a token instead.
-- **Legacy SSE transport** (two endpoints instead of one). Such servers are marked as incompatible.
-- **Sampling**: the client does not advertise it and servers do not request it.
-- **Resource subscriptions.** Resources are read on-demand by the model; servers do not push change notifications.
-- **Progress notifications** during long-running tool calls: the feed displays the result once completed.
-
-## Browser
-
-The globe left of the panel button opens the browser column: a page of its own for each chat, between the feed and the right panel. The model works in it through an MCP server the app provides itself, `browser` (source "app" in the `/mcp` panel), so its calls get the same rows in the feed and the same permission questions as any other server's. The server runs inside the app and opens no port.
-
-| Tool | What it does | Asks first |
-|---|---|---|
-| `navigate` | Opens a URL, or goes back, forward, or reloads. A bare `localhost:5173` opens over http. | yes |
-| `screenshot` | The visible part, the whole page (up to three viewports down), or one element. In CSS pixels. | no |
-| `read_page` | A snapshot of headings, text and interactive elements with refs (`e12`) for `act`, or the readable content as Markdown. | no |
-| `act` | Click, double or right click, hover, type, press a key, scroll, choose in a `<select>`, wait for text or an element. Real input events. | yes |
-| `eval_js` | Runs JavaScript in the page and returns the value as JSON; promises are awaited. | yes |
-| `logs` | The page's console messages or network requests since it loaded. | no |
-| `viewport` | Lays the page out at a preset (desktop, tablet, mobile) or a size, or back at the column's size. | no |
-
-In Auto mode the reviewer model decides whether a call that asks first may run; it sees only the call, which is why `act` carries `element`, the model's own words for what it acts on. Each result begins with the page's URL and the size it is laid out at: the human may have clicked somewhere since the last call. While the column is open the page is the column's size; while it is closed the page keeps living out of sight at 1280×800, and screenshots go on working. A size set with `viewport` holds either way, and the column shows a larger page scaled down.
-
-Screenshots show in their row of the feed, and a click opens them in the image viewer. Like every image an MCP server returns, they are kept under the project's `.yaca/pasted`, named by their content.
-
-The human uses the same page: back, forward, reload, an address field, opening the page in the system browser, and DevTools. A teal line under the column's header runs while a call is in progress, the element the model acts on is ringed for a moment, and a dot on the globe shows that the model is using a page the human cannot see. The first page the model opens in a chat brings the column up. All chats share one profile (`browser\` in the app directory), separate from the window's own; pages cannot reach the app's commands, and the window's own pages cannot be opened in it.
-
-Not supported:
-
-- **macOS and Linux.** The engine is WebView2 driven over the DevTools Protocol. The tools are written against an engine interface (`src-tauri/src/browser/engine.rs`); WKWebView and WebKitGTK need implementations of it, and until then those builds show no globe.
-- **Tabs.** One page per chat; links that open a new window open in the same page.
-- **Downloads and uploads.** Downloads are blocked and reported to the model; file inputs cannot be filled.
-- **Permission per site.** "Always allow" covers a tool, not a site.
-- **Prompt dialogs.** `alert` and `confirm` are accepted on their own, `prompt` is dismissed, and the next result says so.
-- **The CLI.** It has no window, and so no browser.
-
-## PDFs and Notebooks
-
-`Read` handles two kinds of files that are not plain text:
-
-- **PDF.** The text is extracted page by page, in pure Rust, so nothing has to be installed next to the app, and it works with every provider, local models included. A document of up to 10 pages is read whole; a longer one needs `pages` (`"3"`, `"3-7"`, `"12-"`), at most 20 pages per call. A page without a text layer is marked as a scan rather than shown as blank.
-- **Jupyter notebook (`.ipynb`).** Cells come back as a person sees them: number, type, id, source, and text outputs, with tracebacks stripped of terminal colours. `offset` and `limit` count cells instead of lines.
-
-`NotebookEdit` changes one cell at a time: `replace` its source (optionally switching between code and markdown), `insert` a new cell after a named one or at the top, or `delete` one. Cells are named by `cell_id`, or by number in notebooks without ids. The tool writes the JSON itself, keeping the file's indentation, trailing newline, and the metadata of every untouched cell; replacing a code cell clears its outputs and execution count, since they belong to the old code. It follows the same rules as `Edit`: the notebook must have been read, must not have changed since, and the change shows up as a diff and in the file panel.
-
-Not supported:
-
-- **Scanned PDFs (OCR), images and figures inside PDFs,** and password-protected PDFs.
-- **Image and HTML outputs of notebook cells.** Only their type is shown (`[image/png output omitted]`).
-- **Running notebook cells.** Use `Bash` with `jupyter nbconvert --execute` or similar.
-
-## Chat mode and Office documents
-
-The composer's bottom row has two chips before the model: the **profile**, which says what the chat is for, and the **mode**, which says how far Yaca may go. They are separate on purpose — a chat about a report still asks before it writes a file or runs a script.
-
-- **Code** (the default) is the coding agent described in this README: language servers, notebooks, the code-writing rules in the prompt.
-- **Documents** is a chat about the person's files. Most tools are the same — reading, searching, writing and running a command are how a document is made too. What it leaves out is what only means something in a repository: `Lsp`, `Rename` and `NotebookEdit` are not in the request at all, and a call the model makes up is answered with "unknown tool". The prompt talks about Word, Excel and PowerPoint instead of source files, and carries the one rule a model gets wrong on its own: an office file is a ZIP of XML, so it is produced by a script, never written as text.
-
-The profile is chosen on the home screen with the first message, switched in the composer afterwards (`SetProfile`), and remembered per project in `.yaca/settings.json` (`profile`) and for the next new chat in the app's settings.
-
-### Reading Word, Excel and PowerPoint
-
-`Read` opens `.docx`, `.xlsx` and `.pptx` itself — pure Rust over the ZIP, nothing installed next to the app:
-
-- **Word.** Paragraphs, with headings as Markdown headings and tables as Markdown tables. Deleted text and tracked deletions are left out.
-- **Excel.** One table per sheet, up to 8 sheets, 200 rows and 40 columns each, and what was left out is said. Shared strings are resolved, and a date is shown as a date rather than Excel's day number.
-- **PowerPoint.** Slide by slide, with the speaker notes. A slide that is only a picture says so.
-- **Pictures.** The images embedded in the file go to the model as images, up to eight per read, right after the text. `ExtractImages` writes all of them out as files — `report media/image1.png` next to the document by default — so they can be inserted into another document, looked at with `ReadImage`, or sent.
-
-The macro-enabled and template extensions (`docm`, `dotx`, `xlsm`, `pptm`, …) are the same packages and are read the same way. Not supported: `.doc`, `.xls` and `.ppt` from before Office 2007 (convert them with LibreOffice), charts and SmartArt as data, and password-protected files.
-
-### Office skills
-
-Yaca ships four skills — `docx`, `xlsx`, `pptx` and `pdf` — adapted from [Anthropic's Agent Skills](https://github.com/anthropics/skills/tree/main/skills), building on Yaca's existing [AgentChat](https://github.com/Zorahm/AgentChat/tree/master/skills) workflows. The catalog exposes them to the model in **Code** and **Documents** chats. The model loads the relevant skill for Word layout and revisions, Excel formulas and recalculation, PowerPoint templates and visual checks, or PDF text, forms, OCR and page operations. The `docx` skill also ships `scripts/replace.py` for text that Word splits across multiple runs.
-
-A project's own `.yaca/skills` can override the bundled skills by name.
-
-## Token Savings
-
-Three tools prevent the model from echoing large blocks of text that already exist elsewhere:
-
-- **`SendText`** presents a file or a line range to the user as a dedicated feed block, complete with path and line numbers above the text. The model receives a single line confirming that the text was displayed, without routing the text payload through its own output tokens. The block preserves the displayed snapshot: reopening the session shows the original content even if the file has changed on disk.
-- **`SearchMessage`** searches across messages in the current conversation (user prompts and agent replies) and retrieves any of them verbatim by message number. It reads the session log directly, finding messages even after context compaction has purged them from the active window. Message numbers remain stable for the lifetime of the session.
-- **`ExtractMessage`** dumps a message to `.yaca/drafts/<session>/<number>.md`. The text can then be modified using standard `Edit` and displayed via `SendText`: the model only pays for modified lines rather than regenerating the entire body.
-
-`SearchMessage` and `ExtractMessage` are only available in sessions with disk logging enabled; they are not offered in ephemeral headless runs. None of the three tools are provided to subagents.
-
-Not supported:
-
-- **Output of foreground commands via `SendText`.** A background command's output is shown by its id (`command`), from the file its whole output goes to or from its buffer; a command that ran in the foreground has no output kept to show.
-- **Searching tool outputs or other sessions** via `SearchMessage`.
-- **Text displayed via `SendText` in session exports.** Exports are generated from the message log, recording only the invocation itself.
-
-Drafts in `.yaca/drafts/<session>` are deleted with their chat, and drafts of chats that no longer exist are removed when a chat opens.
-
-## Language Servers (LSP)
-
-The model navigates code beyond just `grep` and `Read`: if a language server is available on the system, it queries genuine definitions, references, and types using the `Lsp` tool:
-
-| `action` | Response |
-|---|---|
-| `definition` | Location where the identifier at the given position is defined |
-| `references` | All usages of the identifier |
-| `hover` | Type information and documentation |
-| `symbols` | Outline/structure of a single file |
-| `workspace_symbols` | Project-wide symbol search by name |
-| `diagnostics` | Server errors and warnings for a file |
-
-The position is specified as `path` + `line` + `symbol` (identifying substring within the line): the core calculates the exact column offset since models handle column counting poorly. The tool is strictly read-only and requires no permissions.
-
-**Renaming.** The `Rename` tool renames a symbol everywhere it is used: it takes the same position (`path` + `line` + `symbol`) and a `new_name`, asks the server for `textDocument/rename`, and applies every edit the server returns. Unlike a text replace, it changes only the uses that are the same symbol. The rename is all-or-nothing: every file is read and every edit placed before anything is written, and an edit that does not fit its file stops the whole rename. It asks for permission like an edit of the named file, noting that other files may change too. Files the server names outside the project, guarded files, and files in additional roots (which a rollback would not restore) refuse the rename. The feed shows one row for the rename with a row per changed file under it, each with its own diff.
-
-In addition to explicit queries, errors reported by the language server for newly written files are automatically appended to `Edit`, `Write`, and `Rename` results, allowing the model to immediately catch syntax or type errors it introduced. This only applies if a server for that file is already running; file edits do not start the server on their own.
-
-**Server Discovery.** Built-in defaults: `rust-analyzer`, `typescript-language-server` (TS and JS), `pyright-langserver` (Python), and `gopls`. Yaca detects the project's languages from source files and manifests, skipping dependency and build folders. Missing servers appear in the LSP panel and raise an installation offer. Installed servers are found on `PATH` or in Yaca's managed tools directory. Custom servers are configured in `lsp.json` in the app settings directory, alongside `mcp.json`:
-
-```json
-{
-  "lspServers": {
-    "clangd": { "command": "clangd", "extensions": ["c", "h", "cpp"] },
-    "gopls": { "disabled": true }
-  }
-}
-```
-
-A matching entry replaces the built-in configuration completely; `disabled` deactivates the server. Installed servers start with Yaca for remembered projects, and when a new project opens. Chats in the same working tree share servers; closing a chat does not stop them. The LSP panel's manual switch is remembered per project across application restarts. Exiting Yaca stops server processes without changing that preference. A crashed server triggers a "Language server not responding" warning banner, and subsequent queries attempt to relaunch it.
-
-Unlike MCP, projects cannot define LSP servers in their configuration: a stdio server executes arbitrary commands, and a cloned repository must not run unauthorized executables on the user's machine. Consequently, `.yaca/settings.json` has no `lspServers` section.
-
-Diagnostics come from the server's own publications (`publishDiagnostics`), or, from a server that declares pull diagnostics (`diagnosticProvider`), by asking it (`textDocument/diagnostic`) — some servers only answer when asked.
-
-**The `/lsp` panel** shows server cards with their status, supported extensions, launch command and failure details. **Enable / Disable** controls automatic startup; **Restart** reconnects a server. **Install** shows the command before it runs and starts the server after installation. Node-based servers are installed inside Yaca's configuration directory, Go's `gopls` uses a managed `GOBIN`, and Rust uses `rustup component add rust-analyzer`. The corresponding Node.js, Go or Rustup toolchain must already be installed. Installation errors stay visible with a retry action.
-
-The CLI exposes the same controls: `yaca -p <project> lsp`, `lsp enable <server>`, `lsp disable <server>`, `lsp install <server>`, and `lsp restart <server>`.
-
-Not supported in LSP integration:
-
-- **Code actions, autocomplete, or formatting.** Only navigation, diagnostics, and renaming.
-- **Renames that move files.** The client tells servers it cannot apply file operations; if a server still asks to create, rename, or delete a file as part of a rename, the whole rename is refused, and the model is told to rename the symbol with `Edit` and the file with `Move`.
-- **Filesystem watching.** Files modified outside Yaca are only re-inspected when the model queries them next.
-- **Multiple servers per language** or multiple workspace roots: the server is bound to the primary project root.
-- **Remote servers.** Only local processes communicating over stdio.
+**Language servers.** Yaca finds `rust-analyzer`, `typescript-language-server`, `pyright-langserver` and `gopls`, and offers to install the ones it is missing. The model uses them for definitions, references, types, diagnostics and project-wide renames, and diagnostics of freshly edited files are appended to the edit result. Custom servers go in `lsp.json`; projects cannot define them, because a cloned repository must not be able to start executables.
 
 ## Model Router
 
-The router picks the model that answers a message. It is a provider of its own (`router`) made of the providers in `providers.json`, so the session sees one virtual model and nothing else changes. In the window it appears in the model switcher under "Router" once `routing.json` is valid, and is set up at the bottom of Settings → Providers; from the command line pick it with `--provider router`.
-
-**How it works.** Per user message, a *decision model* — any model from `providers.json`, usually a small fast one — answers the typed questions (*signals*) you wrote in plain language, in one call. *Decisions* are rules over those answers; the highest-priority one that matches names the model. If nothing matches, or the questions time out, the message goes to `default`. The choice is made once per message and held for the whole tool loop: a thinking signature and a prompt cache are bound to their model, so switching mid-turn would break both.
+The router is a virtual provider (`router`) that picks a real model per message. A small decision model answers the questions (*signals*) you wrote in plain language, and the highest-priority matching rule (*decision*) chooses the model; otherwise the message goes to `default`. In the window it appears under "Router" once `routing.json` is valid, and is set up at the bottom of Settings → Providers; from the command line pick `--provider router`.
 
 `routing.json`, next to `providers.json`:
 
@@ -554,79 +167,49 @@ The router picks the model that answers a message. It is a provider of its own (
 }
 ```
 
-- **Questions.** `noul` (yes/no, answer is P(yes)) and `choice` (one of several options). Without a `predicate`, a `noul` signal needs P(yes) ≥ 0.5 and a `choice` label must be the most probable option.
-- **Rules.** `all`, `any`, `not` and `signal`, in three-valued logic: a signal the decision model did not answer is *unknown*, and `not(unknown)` stays unknown. What an unknown rule means is the decision's `onUnknown` (`noMatch` by default, so an unanswered question never sends a conversation to an expensive model).
-- **Failures.** A decision model that is late, refuses, or answers something unreadable yields the default route; it never fails the turn. The feed shows a "Route: … → model" line once per message, and the CLI prints `Route: … → provider/model`.
-- **A broken file.** It is never silently hidden: the switcher says why the router is missing, and Settings → Providers shows the same error the start would give.
-- **Cost.** A routed request is priced by the model that answered, not by the router's entry.
+Questions are `noul` (yes/no, answered with P(yes)) or `choice`; rules combine signals with `all`, `any` and `not`. An unanswered signal is *unknown*, and `onUnknown` says what that means for the rule. A late or unreadable answer falls back to `default` rather than failing the turn; a file that does not parse, or names a missing provider or model, is reported instead of silently ignored.
 
-A file that does not parse, or points at a provider or model that is not in `providers.json`, stops the start with a message naming the offending entry; it does not fall back to "no routing".
+## Browser
 
-### Asking the Decision model
+The globe beside the panel button opens the browser column: one page per chat, shared with you, driven by the model through a built-in `browser` MCP server. Navigate, read, screenshot, click, type, run JavaScript, read the console and network log, or change the viewport. Pages cannot reach the app's commands, and downloads and uploads are blocked. Windows only for now.
 
-The same small model is available to the agent as a tool, `Decision`. It takes a `question`, optional `state` with the context, and optional `choices` mapping option names to descriptions. Supply choices for a selection or classification; without them, ask a yes/no question. The tool first uses `POST /v1/systemone`: Jev-Style and compatible decision servers return a probability of yes (`noul`) or the selected option with probabilities (`choice`). Only a server without that route (404/405/501) is asked through its configured chat API for a short text answer; an authentication error, server failure or malformed decision answer is reported without a chat retry. The agent is told its answer is advice. The side model has no access to the conversation, files or tools, so the call has to carry everything it needs.
+## Phone Client
 
-The tool exists only when there is a model to ask, and is not in the request at all otherwise. The model is the one chosen for the router in `routing.json` (`decisionModel`) when that file is valid; without a router, the first model the **Decision** provider answered with. If the model refuses or does not answer within 30 seconds the agent is told to decide for itself and carry on.
+An Android phone can attach to the desktop app's live chats: list projects and chats, open or attach to one, send messages and answer permission requests. The agent still runs on the desktop, and a turn started at the desk can be approved from the phone.
 
-Not supported in the router:
+The server is off by default. Enabling it (`remote/settings.json` in the app settings directory, or the `set_remote` command) starts a TLS server whose certificate the phone pins from a pairing QR code; each paired phone then holds its own token, and the desktop keeps only its hash. The default port is 47820. Related commands: `remote_status`, `set_remote(enabled, port)`, `remote_pairing`, `revoke_device(id)`. For a headless machine, use `yaca serve`.
 
-- **`score`, `set` and `span` questions** and the selection algorithm where the decision model itself picks among candidate models. Only `noul` and `choice` with rule-based routing.
-- **Real probabilities.** The decision model reports its own confidence in its JSON answer; token log-probabilities are not read, so on a weak model the numbers are coarse.
-- **A form for every rule.** Settings → Providers has, under the list, a quick setup — pick the model that answers the questions, the default model and a strong one, and the editor is filled with one question ("does this need multi-step reasoning?") routing to the strong model — and below it a text editor that checks the file with the core's rules before writing it. Your own questions, several rules and `all`/`any`/`not` conditions are written in the editor; there is no structured form for them yet.
-- **Switching to or from the router in an open chat.** A chat's provider is fixed when it opens, so the router is picked for a new chat, and an open router chat keeps it.
-- **A stable decision across compaction.** If history is compacted in the middle of a tool loop, the router decides again (and drops reasoning made by another model); the turn may continue on a different model.
-- **A running decision model.** It is not started or checked for you: a local model must already be served.
-
-## Phone client
-
-An Android phone can be a remote client of the desktop app. The desktop hosts a small server (`crates/yaca-remote`, hosted by the shell in `src-tauri/src/remote`): the phone lists projects and chats, opens or attaches to a chat, sends commands and answers permission requests. It sees the same live chats the window has open, so a turn started at the desk can be approved from the phone. The agent still runs on the desktop.
-
-- **Off by default.** The server listens only when it is enabled. The connection is TLS with a certificate the phone pins from the pairing code; each paired phone then holds its own token, and the desktop keeps only its hash.
-- **Turning it on.** There is no switch in the window yet. The commands exist: `remote_status`, `set_remote(enabled, port)`, `remote_pairing` (a `yaca://pair` URI and its QR code) and `revoke_device(id)`. The setting is in `remote/settings.json` in the Yaca configuration directory (`enabled` and `port`), and the server starts with the application when it is enabled there. The default port is 47820.
-- **Pairing by QR.** `remote_pairing` issues a one-time code valid for five minutes; issuing a new one replaces the old.
-- **Gap: the window does not listen to `chats-changed` yet.** A chat the phone opens does not appear in the window's sidebar, and resuming that chat from the sidebar opens a second session on its journal. The window's own guard only knows the chats it opened.
-- **Gap: no settings screen.** Neither the server's switch, its port, the QR code nor the list of devices with revoke is in the window; they are reachable only through the commands above.
-
-### The Android app
-
-The client is in `android/`: Kotlin, Jetpack Compose, Material 3 (Material You, with Yaca's teal and graphite as the fallback below Android 12). Two Gradle builds: `android/core` is plain Kotlin/JVM (the wire types, the feed reducer ported from `src/core/feed.ts`, the connection client) and builds without the Android SDK; `android/app` is the application.
+The app is in `android/`: Kotlin, Jetpack Compose and Material 3. `android/core` (wire types, feed reducer, connection client) builds without the Android SDK:
 
 ```bash
-cd android && ./gradlew -p core test       # the core, no SDK needed
-cd android && ./gradlew :app:assembleDebug  # the app, needs the Android SDK (compileSdk 36)
+cd android && ./gradlew -p core test       # core, no SDK
+cd android && ./gradlew :app:assembleDebug  # app, needs compileSdk 36
 ```
 
-The wire is checked from both sides: `cargo test -p yaca-remote --test fixtures` writes an example of every message and event variant to `android/core/src/test/resources/fixtures/`, and the core's tests decode and re-encode every line.
+The wire format is checked from both sides: the Rust tests write an example of every message and event to `android/core/src/test/resources/fixtures/`, and the Kotlin tests decode and re-encode each line.
 
-- **Gap: the app has never been compiled.** The Android SDK was not installed when it was written; the core was built and tested, the app only read. Expect a first round of compile fixes.
-- **Gap: no whole-file tab in the diff panel**, and a file the host cannot read shows as unavailable without the reason (the core does not send it).
-- **Gap: no profile switch.** `SessionState` carries `profile` and the core takes `setProfile`, but the phone's composer only offers the modes, so a chat started there is about code. The field decodes and is ignored, so nothing on the phone is wrong — the switch simply is not there.
+## Known Gaps
+
+- **macOS and Linux bundles have never been built or run**, and updates there are untested. The browser column is Windows only: the engine interface is implemented for WebView2.
+- **No settings screen for the phone server:** enabling it, choosing a port, showing the QR code and revoking devices work only through the commands above.
+- **Phone-opened chats do not appear in the desktop sidebar**, and resuming one from the sidebar opens a second session on its journal.
+- **The Android app has never been compiled** (the SDK was not installed when it was written); the core is built and tested, the app only read.
+- **The phone has no profile switch**, no whole-file tab in the diff panel, and file downloads and rich previews stay on the desktop.
+- **Office previews show extracted text and tables, not the original page or slide layout.** Download keeps the original bytes.
+- **Formats from before Office 2007** (`.doc`, `.xls`, `.ppt`) and scanned PDFs need conversion or OCR first.
 
 ## Architecture
 
-`Send(path, title?, caption?, display_hint?)` delivers workspace files in desktop chat.
-The core validates workspace boundaries, copies the file into `.yaca/sent/<id>`,
-and journals MIME, size, SHA-256 and display metadata without placing file contents
-in the model context. Images have a lightbox, media use native players, PDF opens
-in the artifact panel, and HTML/Markdown/JSON/CSV offer Preview/Code tabs (CSV is sortable).
-HTML previews run in an isolated frame without application access; external
-subresource loads are blocked.
-Deliveries support files up to 1 GiB; text/office previews support up to 20 MiB.
-
-- **Gap: Office previews show extracted text and tables, not original page/slide layout.**
-  Download preserves the original DOCX/XLSX/PPTX bytes.
-- **Gap: file download and rich previews are desktop-only.** The phone receives delivery
-  metadata; its remote protocol does not yet transfer delivery bytes.
-
 ```
 crates/yaca-core/   core: agent loop, tools, permissions, checkpoints, model router
-crates/yaca-cli/    headless CLI interface to the core
+crates/yaca-cli/    headless CLI over the core
 crates/yaca-evals/  agent evaluation benchmarks
-src-tauri/          Tauri desktop wrapper
+crates/yaca-remote/ phone client's server (TLS + WebSocket)
+src-tauri/          Tauri desktop shell
 src/                React and TypeScript UI
 ```
 
-The core is completely decoupled from the GUI: it consumes commands and emits an event stream, and the frontend is purely a reactive projection of this stream.
+The core knows nothing about windows or webviews: it consumes commands and emits an event stream, and the UI is a reactive projection of that stream.
 
 ## Development
 
@@ -637,9 +220,9 @@ npm test
 npx tauri build --bundles nsis   # Windows installer in target/release/bundle/nsis/
 ```
 
-Pushing a `v*` tag (it must equal the version in `src-tauri/tauri.conf.json`) runs `.github/workflows/release.yml`, which builds the installer and creates a draft pre-release.
+Pushing a `v*` tag (it must equal the version in `src-tauri/tauri.conf.json`) runs `.github/workflows/release.yml`, which builds the installers and creates a draft release. Tags with a suffix are marked as pre-releases.
 
-Contribution and coding guidelines are in [CLAUDE.md](CLAUDE.md); open design questions and roadmap items are in [TODO.md](TODO.md).
+Coding guidelines are in [CLAUDE.md](CLAUDE.md); open questions are in [TODO.md](TODO.md).
 
 ## License
 

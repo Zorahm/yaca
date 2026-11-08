@@ -69,6 +69,47 @@ cd android && ./gradlew -p core test     # Android core, no SDK needed (GRADLE_U
 - Events added beyond the existing list are marked in the module header of
   `event.rs`; say so when you add one.
 
+## Decision models
+
+A decision model is not a chat model: it scores a statement and answers with
+probabilities. A server that serves one may expose two routes on the same
+address, and the core uses both:
+
+- `POST {base_url}/v1/systemone` — the typed route. In:
+  `{"model": "m", "state": "…", "questions": {"id": {"type": "noul", "instructions": "…"}}}`
+  (or `"type": "choice"` with `"criteria": {key: description}`). Out:
+  `{"answers": {"id": {"noul": 0.97}}}`, a choice with
+  `{"choice": "key", "probabilities": {…}}`, and a `usage` block priced into
+  the aside ledger.
+- `POST {base_url}/v1/chat/completions` — ordinary chat, a fallback only.
+
+`SystemOne` (`provider/systemone.rs`) is the client of the typed route. A
+404/405/501 there means the server has no such route; that is remembered for the
+session, and only then is the chat fallback used. A 400 is the server speaking
+the protocol (Ollama's "not a decision model"), not an absent route, and a
+failure on a route that exists is never retried in chat.
+
+Which model answers: `routing.json` → `decisionModel`; without a router, the
+first model of the `decision` provider preset (`router/attach.rs`).
+
+Who asks it, and what a failure means:
+
+- **Router signals** (`router/decision_model.rs`): every signal in one call,
+  typed first. A timeout (the config's `timeoutMs`, 1000 by default), a refusal
+  or an unreadable answer makes every signal `Unknown` and the turn goes to
+  `default` — routing never loses a message.
+- **Auto's reviewer** (`permission/review.rs`): a `noul` score ≥ 0.6 lets a
+  command run unasked; the chat fallback answers `SAFE`/`UNSAFE`. Anything that
+  is not a clear SAFE — a failure and a timeout included — asks the human.
+- **The `Decision` tool** (`tool/decision.rs`): typed first, chat second, a 30 s
+  deadline; a failure is an error telling the agent to decide itself.
+
+Page summaries are not decision work: `web_fetch_setup` uses the router's
+`default` route, else the session's own model. Never put a chat-shaped task (a
+summary, a title) on `decisionModel`: a server that serves only the typed route
+answers a chat request with **405 Method Not Allowed** — the page arrives and
+its summary does not.
+
 ## Language
 
 - Code, identifiers, comments, doc comments, test names, error codes: English.
