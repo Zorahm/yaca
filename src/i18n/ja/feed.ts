@@ -6,6 +6,23 @@
 import type { feed as source } from "../ru/feed";
 
 export const feed = {
+  "group.read.with.one": "{n} ファイルを読み取り",
+  "group.read.with.few": "{n} ファイルを読み取り",
+  "group.read.with.many": "{n} ファイルを読み取り",
+  "file_group.directories.one": "{n} 個のディレクトリ内",
+  "file_group.directories.few": "{n} 個のディレクトリ内",
+  "file_group.directories.many": "{n} 個のディレクトリ内",
+  "file_group.repeated_edit.one": "{name} ×{n} 回の編集",
+  "file_group.repeated_edit.few": "{name} ×{n} 回の編集",
+  "file_group.repeated_edit.many": "{name} ×{n} 回の編集",
+  "file_group.pending.one": "LSP: {n} 件待機中",
+  "file_group.pending.few": "LSP: {n} 件待機中",
+  "file_group.pending.many": "LSP: {n} 件待機中",
+  "file_group.checked": "LSP: {n} 件確認済み",
+  "file_group.progress": "{total} 件中 {completed} 件完了",
+  "file_group.show_diffs": "すべて展開",
+  "file_group.hide_diffs": "すべて折りたたむ",
+
   "sent.sending": "{name} を送信中",
   "sent.sent": "{name} を送信しました",
   "sent.download": "ダウンロード",

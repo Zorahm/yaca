@@ -294,6 +294,46 @@ async fn a_server_that_does_not_answer_is_said_so_not_taken_for_clean() {
 }
 
 #[tokio::test]
+async fn a_late_report_updates_the_finished_edit_without_delaying_its_result() {
+    let dir = source();
+    let provider = Arc::new(MockProvider::new(vec![
+        lsp(
+            "t1",
+            json!({ "action": "symbols", "path": "a.zz", "description": "Overview" }),
+        ),
+        Turn::Events(calls(&[(
+            "t2",
+            "Write",
+            json!({ "path": "b.zz", "content": "fine\n" }),
+        )])),
+        Turn::Events(script_text("Done.")),
+    ]));
+    let handle = open(&dir, provider.clone(), Some("--slow-edit"));
+    let mut rx = handle.subscribe();
+    ask(&handle, "edit").await;
+    let mut events = turn(&mut rx).await;
+
+    let (text, is_error) = tool_result_of(&provider, "t2");
+    assert!(!is_error && text.contains("did not arrive"), "{text}");
+    let is_report = |event: &AgentEvent| {
+        matches!(event, AgentEvent::ToolCallProgress { chunk, .. }
+        if chunk.contains("Diagnostics from fixture: 0 errors, 0 warnings in b.zz"))
+    };
+    if !events.iter().any(is_report) {
+        events.extend(until_within(&mut rx, ROPE, is_report).await);
+    }
+    let (index, report) = events
+        .iter()
+        .enumerate()
+        .find(|(_, event)| is_report(event))
+        .unwrap();
+    assert!(events[..index]
+        .iter()
+        .any(|event| matches!(event, AgentEvent::ToolCallFinished { .. }
+        if event.call_id() == report.call_id())));
+}
+
+#[tokio::test]
 async fn a_server_that_cannot_start_fails_with_its_own_words() {
     let dir = source();
     let provider = Arc::new(MockProvider::new(vec![

@@ -300,7 +300,7 @@ async fn diagnostics(
         before.saturating_sub(1)
     };
     let (items, arrived) = client
-        .diagnostics(uri, after, DIAGNOSTICS_WAIT, &ctx.cancel)
+        .diagnostics(uri, after, DIAGNOSTICS_WAIT, &ctx.cancel, None)
         .await;
     if !arrived && items.is_empty() {
         return Ok(ToolOutput::new(format!(

@@ -4,6 +4,23 @@
  */
 
 export const feed = {
+  "group.read.with.one": "прочитан {n} файл",
+  "group.read.with.few": "прочитано {n} файла",
+  "group.read.with.many": "прочитано {n} файлов",
+  "file_group.directories.one": "в {n} каталоге",
+  "file_group.directories.few": "в {n} каталогах",
+  "file_group.directories.many": "в {n} каталогах",
+  "file_group.repeated_edit.one": "{name} ×{n} правка",
+  "file_group.repeated_edit.few": "{name} ×{n} правки",
+  "file_group.repeated_edit.many": "{name} ×{n} правок",
+  "file_group.pending.one": "LSP: {n} ожидает",
+  "file_group.pending.few": "LSP: {n} ожидают",
+  "file_group.pending.many": "LSP: {n} ожидают",
+  "file_group.checked": "LSP: проверено {n}",
+  "file_group.progress": "Завершено {completed} из {total}",
+  "file_group.show_diffs": "Развернуть все",
+  "file_group.hide_diffs": "Свернуть все",
+
   "sent.sending": "Отправляет {name}",
   "sent.sent": "Отправлен {name}",
   "sent.download": "Скачать",

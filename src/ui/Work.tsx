@@ -12,7 +12,7 @@
  *
  * What the agent says is not in here: text divides the work (`core/work`).
  *
- * Expansion belongs to the reader; stream updates never open or close it.
+ * A file group with unapplied changes starts open. Explicit toggles take precedence.
  */
 
 import { Brain, CaretDown, CaretRight, Check } from "@phosphor-icons/react";
@@ -24,7 +24,9 @@ import { workRows } from "../core/work";
 import { t } from "../i18n";
 import { ActionRowView } from "./ActionRow";
 import { actionNotices } from "./editNotices";
-import { LspBadge } from "./LspBadge";
+import { FileActivity, FileActivitySlot } from "./FileActivityGroup";
+import { actionFailed, activityPath, groupFileSteps, pathKey, uniqueFileNames } from "./fileActivity";
+import { FileLspBadge, LspBadge } from "./LspBadge";
 import { Checkpoint } from "./Blocks";
 import { summary } from "./captions";
 import type { FeedActions } from "./Feed";
@@ -43,20 +45,27 @@ export function Work({
   preview: { id: string; files: CheckpointChange[] } | null;
   actions: FeedActions;
 }) {
-  const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState<boolean>();
 
   const rows = workRows(steps);
+  const fileGroups = groupFileSteps(steps);
+  const open = expanded ?? [...fileGroups.values()].some((group) => group?.steps.some(({ row }) => actionFailed(row)));
+  const names = open ? uniqueFileNames(rows.flatMap((row) => {
+    const path = activityPath(row);
+    return path ? [path] : [];
+  })) : new Map<string, string>();
   const head = summary(rows);
   const failed = head.failed > 0;
-  const notices = flatRows(rows).flatMap(actionNotices).filter((notice) => notice.kind !== "lsp-clean");
-  const lspIssues = notices.some((notice) => notice.kind !== "lsp-clean");
+  const files = flatRows(rows).map(actionNotices);
+  const notices = files.flat().filter((notice) => notice.kind !== "lsp-clean");
+  const lspIssues = notices.length > 0;
 
   return (
     <div className="group">
       <button
         className="group-head"
         aria-expanded={open}
-        onClick={() => setOpen(!open)}
+        onClick={() => setExpanded(!open)}
       >
         {live ? (
           <Spinner />
@@ -80,7 +89,7 @@ export function Work({
             </span>
           ))}
         </span>
-        <LspBadge notices={notices} />
+        {fileGroups.size ? <FileLspBadge files={files} /> : <LspBadge notices={notices} />}
         {(head.added > 0 || head.removed > 0) && (
           <span className="counts">
             <span className="count-add">+{head.added}</span>{" "}
@@ -96,14 +105,17 @@ export function Work({
         <div className="group-list">
           {steps.map((step, index) => {
             switch (step.kind) {
-              case "action":
-                return (
-                  <ActionRowView
-                    key={step.key}
-                    row={step.row}
-                    onOpenFile={actions.openFile}
-                  />
-                );
+              case "action": {
+                const path = activityPath(step.row);
+                if (!path) return <ActionRowView key={step.key} row={step.row} onOpenFile={actions.openFile} />;
+                const group = fileGroups.get(step.key);
+                const variant = group ? "group" : group === null ? "folded" : "single";
+                return <FileActivitySlot key={step.key} variant={variant} live={live}>
+                  {group ? <FileActivity group={group} onOpenFile={actions.openFile} /> : group === undefined
+                    ? <ActionRowView row={step.row} onOpenFile={actions.openFile} displayName={names.get(pathKey(path))} />
+                    : null}
+                </FileActivitySlot>;
+              }
               case "thought":
                 return (
                   <Thought

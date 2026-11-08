@@ -13,6 +13,20 @@
   user-select: text;
 }
 
+/* The rows take the width of the widest one, not the width of the visible
+   part: with horizontal scroll the colour of a row has to reach the end of its
+   text, not stop at the block's edge. `min-width` keeps a short diff filled to
+   the edge. */
+.diff-body {
+  width: max-content;
+  min-width: 100%;
+}
+
+/* A wrapped diff never scrolls sideways: the rows keep the block's width. */
+.diff-wrap .diff-body {
+  width: auto;
+}
+
 /* In an action row the diff is limited in height (§5.5.1); in the panel it
    takes up the whole of its height, and the panel sets the ceiling. */
 .diff-soft {
@@ -72,8 +86,8 @@
 }
 
 .diff-diagnostic-mark {
-  width: 5px;
-  height: 5px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
 }
 
@@ -102,7 +116,7 @@
 }
 
 .diff-has-diagnostics .diff-line {
-  grid-template-columns: 12px var(--gutter) 16px 1fr;
+  grid-template-columns: 18px var(--gutter) 16px 1fr;
 }
 
 .diff-sign {
@@ -157,7 +171,11 @@
 }
 
 .diff-soft.diff-has-diagnostics .diff-line {
-  grid-template-columns: 12px 22px calc(var(--digits, 3) * 1ch + 10px) 1fr;
+  grid-template-columns: 22px 18px calc(var(--digits, 3) * 1ch + 10px) 1fr;
+}
+
+.diff-soft.diff-has-diagnostics .diff-sign {
+  order: -3;
 }
 
 /* What a `Read` returned: no mark to show, and nothing changed for the lines

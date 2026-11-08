@@ -6,6 +6,23 @@
 import type { feed as source } from "../ru/feed";
 
 export const feed = {
+  "group.read.with.one": "读取了 {n} 个文件",
+  "group.read.with.few": "读取了 {n} 个文件",
+  "group.read.with.many": "读取了 {n} 个文件",
+  "file_group.directories.one": "位于 {n} 个目录",
+  "file_group.directories.few": "位于 {n} 个目录",
+  "file_group.directories.many": "位于 {n} 个目录",
+  "file_group.repeated_edit.one": "{name} ×{n} 次编辑",
+  "file_group.repeated_edit.few": "{name} ×{n} 次编辑",
+  "file_group.repeated_edit.many": "{name} ×{n} 次编辑",
+  "file_group.pending.one": "LSP：{n} 个待检查",
+  "file_group.pending.few": "LSP：{n} 个待检查",
+  "file_group.pending.many": "LSP：{n} 个待检查",
+  "file_group.checked": "LSP：已检查 {n} 个",
+  "file_group.progress": "已完成 {completed}/{total}",
+  "file_group.show_diffs": "全部展开",
+  "file_group.hide_diffs": "全部折叠",
+
   "sent.sending": "正在发送 {name}",
   "sent.sent": "已发送 {name}",
   "sent.download": "下载",

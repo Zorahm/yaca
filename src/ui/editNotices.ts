@@ -60,7 +60,7 @@ export function actionNotices(row: ActionRow): ActionNotice[] {
   if (row.state !== "done" || (!row.fact && !row.children.some((child) => child.fact))) {
     return [];
   }
-  return row.output.split(/\r?\n\r?\n(?=Diagnostics from )/).flatMap<ActionNotice>((block) => {
+  const notices = row.output.split(/\r?\n\r?\n(?=Diagnostics from )/).flatMap<ActionNotice>((block) => {
     const report = /^Diagnostics from (.+?): (\d+) errors(?:, (\d+) warnings)?(?: in ([^\r\n]+))?(?:\r?\n([\s\S]*))?$/.exec(block);
     if (report) {
       const errors = Number(report[2]);
@@ -71,10 +71,17 @@ export function actionNotices(row: ActionRow): ActionNotice[] {
         errors, warnings, detail: (report[5] ?? "").trim(),
       }];
     }
-    const pending = /^Diagnostics from (.+?) did not arrive within \d+ s:/.exec(block);
+    const pending = /^Diagnostics from (.+?) did not arrive within \d+ s:[^\r\n]*(?:\r?\nFile: ([^\r\n]+))?/.exec(block);
     return pending
-      ? [{ kind: "lsp-pending", server: pending[1], detail: "", errors: 0, warnings: 0 }]
+      ? [{ kind: "lsp-pending", server: pending[1], ...(pending[2] ? { path: pending[2] } : {}), detail: "", errors: 0, warnings: 0 }]
       : [];
+  });
+  return notices.filter((notice, index) => {
+    const path = notice.path ?? row.fact?.path;
+    return !path || !notices.slice(index + 1).some((next) => {
+      const nextPath = next.path ?? row.fact?.path;
+      return next.server === notice.server && nextPath !== undefined && sameDiagnosticPath(path, nextPath);
+    });
   });
 }
 

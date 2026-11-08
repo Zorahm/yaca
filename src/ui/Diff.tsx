@@ -160,12 +160,16 @@ export function Diff({
       style={{ "--digits": digits } as CSSProperties}
       ref={box}
     >
-      {slice.padTop > 0 && <div style={{ height: slice.padTop }} />}
-      {items.slice(slice.start, slice.end)}
-      {slice.padBottom > 0 && <div style={{ height: slice.padBottom }} />}
-      {truncated && (
-        <div className="diff-more">{t(body ? "file.truncated" : "row.diff_truncated")}</div>
-      )}
+      {/* The rows are sized by the widest of them, not by the block's edge:
+          a long line scrolls sideways and its colour follows it (diff.css). */}
+      <div className="diff-body">
+        {slice.padTop > 0 && <div style={{ height: slice.padTop }} />}
+        {items.slice(slice.start, slice.end)}
+        {slice.padBottom > 0 && <div style={{ height: slice.padBottom }} />}
+        {truncated && (
+          <div className="diff-more">{t(body ? "file.truncated" : "row.diff_truncated")}</div>
+        )}
+      </div>
     </div>
   );
 }

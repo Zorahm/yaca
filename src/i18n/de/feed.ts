@@ -6,6 +6,23 @@
 import type { feed as source } from "../ru/feed";
 
 export const feed = {
+  "group.read.with.one": "{n} Datei gelesen",
+  "group.read.with.few": "{n} Dateien gelesen",
+  "group.read.with.many": "{n} Dateien gelesen",
+  "file_group.directories.one": "in {n} Verzeichnis",
+  "file_group.directories.few": "in {n} Verzeichnissen",
+  "file_group.directories.many": "in {n} Verzeichnissen",
+  "file_group.repeated_edit.one": "{name} ×{n} Änderung",
+  "file_group.repeated_edit.few": "{name} ×{n} Änderungen",
+  "file_group.repeated_edit.many": "{name} ×{n} Änderungen",
+  "file_group.pending.one": "LSP: {n} ausstehend",
+  "file_group.pending.few": "LSP: {n} ausstehend",
+  "file_group.pending.many": "LSP: {n} ausstehend",
+  "file_group.checked": "LSP: {n} geprüft",
+  "file_group.progress": "{completed} von {total} abgeschlossen",
+  "file_group.show_diffs": "Alle aufklappen",
+  "file_group.hide_diffs": "Alle einklappen",
+
   "sent.sending": "Sendet {name}",
   "sent.sent": "{name} gesendet",
   "sent.download": "Herunterladen",

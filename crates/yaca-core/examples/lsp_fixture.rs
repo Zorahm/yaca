@@ -14,6 +14,7 @@
 //!
 //! Flags, for the ways a server goes wrong:
 //! * `--silent` — never publish diagnostics.
+//! * `--slow-edit` — publish diagnostics for b.zz after the edit's deadline.
 //! * `--pull` — never publish either, but answer `textDocument/diagnostic`
 //!   (pull diagnostics) and say so in its capabilities.
 //! * `--crash-on-hover` — exit when asked for a hover, mid-session.
@@ -179,6 +180,9 @@ fn main() {
 fn publish(flag: &str, uri: &str, text: &str) {
     if flag == "--silent" || flag == "--pull" {
         return;
+    }
+    if flag == "--slow-edit" && uri.ends_with("/b.zz") {
+        std::thread::sleep(std::time::Duration::from_secs(3));
     }
     send(&json!({
         "jsonrpc": "2.0", "method": "textDocument/publishDiagnostics",

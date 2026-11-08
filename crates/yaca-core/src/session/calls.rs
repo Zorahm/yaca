@@ -564,6 +564,7 @@ impl Caller {
         match outcome {
             Ok(mut out) => {
                 let changed = out.changed.is_some();
+                let mut pending_checks = Vec::new();
                 // What the language server makes of the file just written,
                 // in the same result: the model learns what it broke without
                 // asking. Before the feed gets the text, so the row shows it.
@@ -573,11 +574,12 @@ impl Caller {
                             let note = self
                                 .shared
                                 .lsp
-                                .after_edit(&abs, &change.fact.path, cancel)
+                                .check_after_edit(&abs, &change.fact.path, cancel)
                                 .await;
-                            if let Some(note) = note {
+                            if let Some((note, pending)) = note {
                                 out.text.push_str("\n\n");
                                 out.text.push_str(&note);
+                                pending_checks.extend(pending);
                             }
                         }
                     }
@@ -589,11 +591,12 @@ impl Caller {
                     let note = self
                         .shared
                         .lsp
-                        .after_edit(&file.abs, &file.change.fact.path, cancel)
+                        .check_after_edit(&file.abs, &file.change.fact.path, cancel)
                         .await;
-                    if let Some(note) = note {
+                    if let Some((note, pending)) = note {
                         out.text.push_str("\n\n");
                         out.text.push_str(&note);
+                        pending_checks.extend(pending);
                     }
                 }
                 // The feed gets the text exactly once. A streaming tool has already handed
@@ -644,12 +647,27 @@ impl Caller {
                     .await;
                 if !out.detached {
                     self.emit(AgentEvent::ToolCallFinished {
-                        call_id,
+                        call_id: call_id.clone(),
                         meta: ToolMeta {
                             duration_ms,
                             ..out.meta
                         },
                     });
+                    for pending in pending_checks {
+                        let shared = Arc::downgrade(&self.shared);
+                        let call_id = call_id.clone();
+                        let cancel = cancel.clone();
+                        tokio::spawn(async move {
+                            if let (Some(note), Some(shared)) =
+                                (pending.finish(&cancel).await, shared.upgrade())
+                            {
+                                shared.emit(AgentEvent::ToolCallProgress {
+                                    call_id,
+                                    chunk: format!("\n\n{note}"),
+                                });
+                            }
+                        });
+                    }
                 }
                 for (name, picture) in out.pictures {
                     shown.extend(ContentBlock::picture(&name, picture));

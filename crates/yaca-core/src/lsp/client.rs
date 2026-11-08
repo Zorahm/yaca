@@ -34,6 +34,7 @@ pub(crate) enum Notice {
 #[derive(Default)]
 struct Published {
     count: u64,
+    version: Option<i64>,
     items: Vec<Value>,
 }
 
@@ -140,7 +141,7 @@ impl Client {
                         },
                         "textDocument": {
                             "synchronization": { "didSave": true },
-                            "publishDiagnostics": {},
+                            "publishDiagnostics": { "versionSupport": true },
                             "definition": { "linkSupport": true },
                             "references": {},
                             "hover": { "contentFormat": ["plaintext", "markdown"] },
@@ -214,14 +215,26 @@ impl Client {
     /// Returns the address the server knows the document by, and whether the
     /// server was told anything new — an answer to wait for.
     pub(crate) async fn sync(&self, path: &Path, text: &str) -> Result<(String, bool), LspError> {
+        let (uri, told, _) = self.sync_versioned(path, text).await?;
+        Ok((uri, told))
+    }
+
+    pub(crate) async fn sync_versioned(
+        &self,
+        path: &Path,
+        text: &str,
+    ) -> Result<(String, bool, i64), LspError> {
         let uri = file_uri(path);
         let hash = blake3::hash(text.as_bytes());
         // Held across the sends: two calls syncing one file must reach the
         // server in the order their versions were taken.
         let mut docs = self.docs.lock().await;
         let mut told = true;
-        match docs.get_mut(&uri) {
-            Some(doc) if doc.hash == hash => told = false,
+        let version = match docs.get_mut(&uri) {
+            Some(doc) if doc.hash == hash => {
+                told = false;
+                doc.version
+            }
             Some(doc) => {
                 doc.version += 1;
                 doc.hash = hash;
@@ -236,6 +249,7 @@ impl Client {
                     "textDocument/didSave",
                     json!({ "textDocument": { "uri": uri } }),
                 )?;
+                doc.version
             }
             None => {
                 let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
@@ -249,9 +263,18 @@ impl Client {
                     } }),
                 )?;
                 docs.insert(uri.clone(), Doc { version: 1, hash });
+                1
             }
-        }
-        Ok((uri, told))
+        };
+        Ok((uri, told, version))
+    }
+
+    pub(crate) async fn is_current_version(&self, uri: &str, version: i64) -> bool {
+        self.docs
+            .lock()
+            .await
+            .get(uri)
+            .is_some_and(|doc| doc.version == version)
     }
 
     /// How many times the server has published diagnostics for `uri`.
@@ -273,6 +296,7 @@ impl Client {
         after: u64,
         wait: Duration,
         cancel: &CancellationToken,
+        version: Option<i64>,
     ) -> (Vec<Value>, bool) {
         // A server that answers when asked is asked: what it says is about the
         // text it was just sent, with no publication to wait for. Not every
@@ -294,20 +318,32 @@ impl Client {
         let mut ticks = self.diagnostics.tick.subscribe();
         let deadline = tokio::time::sleep(wait);
         tokio::pin!(deadline);
-        let arrived = loop {
-            if self.published(uri) > after {
-                break true;
+        loop {
+            let report = self
+                .diagnostics
+                .by_uri
+                .lock()
+                .unwrap()
+                .get(uri)
+                .and_then(|report| {
+                    let matches =
+                        version.is_none() || report.version.is_none() || report.version == version;
+                    (matches && report.count > after).then(|| report.items.clone())
+                });
+            if let Some(items) = report {
+                return (items, true);
             }
             tokio::select! {
-                _ = cancel.cancelled() => break false,
-                _ = &mut deadline => break false,
+                _ = cancel.cancelled() => break,
+                _ = self.alive.cancelled() => break,
+                _ = &mut deadline => break,
                 changed = ticks.changed() => {
                     if changed.is_err() {
-                        break false;
+                        break;
                     }
                 }
             }
-        };
+        }
         let items = self
             .diagnostics
             .by_uri
@@ -316,7 +352,7 @@ impl Client {
             .get(uri)
             .map(|p| p.items.clone())
             .unwrap_or_default();
-        (items, arrived)
+        (items, false)
     }
 }
 
@@ -368,6 +404,7 @@ async fn read(
                         let mut by_uri = diagnostics.by_uri.lock().unwrap();
                         let slot = by_uri.entry(uri.to_string()).or_default();
                         slot.count += 1;
+                        slot.version = params.get("version").and_then(Value::as_i64);
                         slot.items = items;
                     }
                     diagnostics.tick.send_modify(|n| *n += 1);

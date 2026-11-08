@@ -2,6 +2,7 @@ import { Check, Copy } from "@phosphor-icons/react";
 import type { FileDiff } from "../core/client";
 import { t } from "../i18n";
 import { diagnosticInChanges, parseDiagnostic, type ActionNotice } from "./editNotices";
+import { pathKey } from "./fileActivity";
 import { diagnosticCounts } from "./LspBadge";
 import { useCopy } from "./useCopy";
 
@@ -9,6 +10,7 @@ type NoticeProps = {
   onOpenFile: (path: string, line?: number) => void;
   diff?: FileDiff | null;
   path?: string;
+  directoryPrefix?: string;
 };
 
 export function ActionNotices({ notices, ...props }: NoticeProps & {
@@ -19,7 +21,7 @@ export function ActionNotices({ notices, ...props }: NoticeProps & {
   ));
 }
 
-function Notice({ notice, onOpenFile, diff, path }: NoticeProps & {
+function Notice({ notice, onOpenFile, diff, path, directoryPrefix }: NoticeProps & {
   notice: ActionNotice;
 }) {
   const { copied, copy } = useCopy();
@@ -43,13 +45,19 @@ function Notice({ notice, onOpenFile, diff, path }: NoticeProps & {
       {notice.detail && <div className="row-diagnostics-output">{notice.detail.split(/\r?\n/).map((line, index) => {
         const diagnostic = parseDiagnostic(line);
         const outside = diagnostic && diff && path !== undefined && !diagnosticInChanges(diagnostic, diff, path);
+        const diagnosticPath = diagnostic && pathKey(diagnostic.path);
+        const location = diagnostic && directoryPrefix && diagnosticPath && diagnosticPath.startsWith(directoryPrefix)
+          ? `${diagnosticPath.slice(directoryPrefix.length)}:${diagnostic.line}:${diagnostic.column}`
+          : diagnostic?.location;
         return <div className="diagnostic-entry" key={index}>
           {diagnostic ? <>
             <span className={`diagnostic-${diagnostic.severity}`}>{diagnostic.severity}</span>{" "}
             {diagnostic.code && <><span className="diagnostic-code">{diagnostic.code}</span>{" "}</>}
-            <button className="diagnostic-location" onClick={() => onOpenFile(diagnostic.path, diagnostic.line)}>{diagnostic.location}</button>{" "}
+            <button className="diagnostic-location" title={location !== diagnostic.location ? diagnostic.location : undefined}
+              onClick={() => onOpenFile(diagnostic.path, diagnostic.line)}>{location}</button>{" "}
             {diagnostic.message}
-            {diagnostic.source && <> <span className="diagnostic-code">[{diagnostic.source}]</span></>}
+            {diagnostic.source && diagnostic.source.toLowerCase() !== notice.server.toLowerCase() &&
+              <> <span className="diagnostic-code">[{diagnostic.source}]</span></>}
             {outside && <span className="diagnostic-scope">{t("row.lsp_outside_changes")}</span>}
           </> : line || "\u00a0"}
         </div>;

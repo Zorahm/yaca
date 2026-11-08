@@ -18,10 +18,11 @@ import { t, tp } from "../i18n";
 import { caption, fileChildren, isFileRow, rowCounts, rowFiles } from "./captions";
 import { ActionNotices } from "./ActionNotice";
 import { actionNotices, diagnosticsForPath, type ActionNotice } from "./editNotices";
+import { actionFailed, activityPath, pathKey, uniqueFileNames } from "./fileActivity";
 import { LspBadge } from "./LspBadge";
 import { CodeBlock } from "./CodeBlock";
 import { Diff } from "./Diff";
-import { plainPath } from "./format";
+import { baseName, plainPath } from "./format";
 import { parseRead } from "./readOutput";
 import { RowSign } from "./RowSign";
 import { Thumb } from "./Thumb";
@@ -30,13 +31,25 @@ export function ActionRowView({
   row,
   onOpenFile,
   inheritedNotices = [],
+  displayName,
+  fileDetail,
 }: {
   row: ActionRow;
   onOpenFile: (path: string, line?: number) => void;
   inheritedNotices?: ActionNotice[];
+  displayName?: string;
+  fileDetail?: {
+    label: string;
+    directoryPrefix: string;
+    sharedName: boolean;
+    attempt?: number;
+    open: boolean;
+    onToggle: () => void;
+  };
 }) {
   const running = row.state === "running";
-  const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const open = fileDetail?.open ?? expanded;
   const counts = rowCounts(row);
   const files = rowFiles(row);
   // What the model asked and what came back must not look alike: the request
@@ -54,6 +67,7 @@ export function ActionRowView({
   // A rename shows its files, each a row with its own diff, in place of the
   // list the tool wrote for the model: the rows are that list.
   const fileRows = fileChildren(row);
+  const childNames = uniqueFileNames(fileRows.flatMap((child) => child.fact ? [child.fact.path] : []));
   const boxed = !file;
   const path = row.fact?.path ?? row.target ?? "";
   const notices = [...actionNotices(row), ...inheritedNotices.filter((notice) =>
@@ -66,12 +80,20 @@ export function ActionRowView({
       <button
         className={file ? "row-head row-head-file" : "row-head"}
         aria-expanded={open}
-        onClick={() => setOpen(!open)}
+        title={file && path ? plainPath(path) : undefined}
+        onClick={fileDetail?.onToggle ?? (() => setExpanded(!open))}
       >
         <RowSign row={row} />
         {/* A click on the file name opens the file panel, a click elsewhere
             expands the row. Names of tools without a fact are not clickable. */}
-        <span className="row-caption">{caption(row, onOpenFile)}</span>
+        <span className="row-caption">{fileDetail ? <>
+          <span className="file-detail-directory">{fileDetail.label.slice(0, fileDetail.label.lastIndexOf("/") + 1)}</span>
+          <span className={fileDetail.sharedName ? "file-detail-name row-dim" : "file-detail-name"}>
+            {baseName(fileDetail.label)}
+          </span>
+          {fileDetail.attempt !== undefined && <span className="row-dim"> · #{fileDetail.attempt}</span>}
+          {actionFailed(row) && <span className="group-failed"> · {tp("group.failed", 1)}</span>}
+        </> : caption(row, onOpenFile, displayName)}</span>
         {counts && (
           <span className="counts counts-pill">
             <span className="count-add">+{counts.added}</span>
@@ -79,14 +101,15 @@ export function ActionRowView({
           </span>
         )}
         {files !== null && <span className="counts">{tp("row.files", files)}</span>}
-        <LspBadge notices={fileRows.length ? notices.filter((notice) => notice.kind !== "lsp-clean") : notices} />
+        <LspBadge compactClean={!!fileDetail}
+          notices={fileRows.length ? notices.filter((notice) => notice.kind !== "lsp-clean") : notices} />
         <span className="caret">{open ? <CaretDown size={12} /> : <CaretRight size={12} />}</span>
       </button>
 
       {open && (
         <div className={boxed ? "row-body row-body-cmd" : "row-body row-body-file"}>
           {/* The body's first line is the full path or the full command. */}
-          {row.target && !boxed && (
+          {row.target && !boxed && !fileDetail && (
             <div className="row-target">{plainPath(row.target)}</div>
           )}
           {row.target && boxed && (
@@ -108,9 +131,11 @@ export function ActionRowView({
 
           {fileRows.length > 0 ? (
             <div className="group-list">
-              {fileRows.map((child) => (
-                <ActionRowView key={child.callId} row={child} onOpenFile={onOpenFile} inheritedNotices={notices} />
-              ))}
+              {fileRows.map((child) => {
+                const childPath = activityPath(child);
+                return <ActionRowView key={child.callId} row={child} onOpenFile={onOpenFile}
+                  inheritedNotices={notices} displayName={childPath ? childNames.get(pathKey(childPath)) : undefined} />;
+              })}
             </div>
           ) : row.diff ? (
             <Diff diff={row.diff} soft path={path || undefined}
@@ -135,8 +160,9 @@ export function ActionRowView({
           <ActionNotices
             diff={row.diff}
             path={path}
+            directoryPrefix={fileDetail?.directoryPrefix}
             notices={fileRows.length ? notices.filter((notice) =>
-              notice.kind === "lsp-pending" || !fileRows.some((child) =>
+              !fileRows.some((child) =>
                 notice.path === child.fact?.path || diagnosticsForPath([notice], child.fact?.path ?? "").length > 0)) : notices}
             onOpenFile={onOpenFile}
           />

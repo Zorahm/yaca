@@ -6,6 +6,23 @@
 import type { feed as source } from "../ru/feed";
 
 export const feed = {
+  "group.read.with.one": "파일 {n}개 읽음",
+  "group.read.with.few": "파일 {n}개 읽음",
+  "group.read.with.many": "파일 {n}개 읽음",
+  "file_group.directories.one": "디렉터리 {n}개",
+  "file_group.directories.few": "디렉터리 {n}개",
+  "file_group.directories.many": "디렉터리 {n}개",
+  "file_group.repeated_edit.one": "{name} ×{n}회 편집",
+  "file_group.repeated_edit.few": "{name} ×{n}회 편집",
+  "file_group.repeated_edit.many": "{name} ×{n}회 편집",
+  "file_group.pending.one": "LSP: {n}개 대기 중",
+  "file_group.pending.few": "LSP: {n}개 대기 중",
+  "file_group.pending.many": "LSP: {n}개 대기 중",
+  "file_group.checked": "LSP: {n}개 확인됨",
+  "file_group.progress": "{total}개 중 {completed}개 완료",
+  "file_group.show_diffs": "모두 펼치기",
+  "file_group.hide_diffs": "모두 접기",
+
   "sent.sending": "{name} 전송 중",
   "sent.sent": "{name} 전송됨",
   "sent.download": "다운로드",
