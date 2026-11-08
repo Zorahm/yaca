@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="#license"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/Version-1.0.8-blue.svg" alt="Version: 1.0.8">
+  <img src="https://img.shields.io/badge/Version-1.0.9-blue.svg" alt="Version: 1.0.9">
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.85%2B-dea584.svg?logo=rust&logoColor=white" alt="Rust: 1.85+"></a>
   <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-v2-24C8DB.svg?logo=tauri&logoColor=white" alt="Tauri: v2"></a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg" alt="Platform: Windows | macOS | Linux">
@@ -19,7 +19,7 @@
 
 ---
 
-The current release is `1.0.8`. Installers (Windows NSIS, macOS dmg, Linux deb and AppImage) come from the release workflow and the GitHub Releases page. Only Windows has been run so far. The macOS and Linux builds are untested, and the browser column is Windows only.
+The current release is `1.0.9`. Installers (Windows NSIS, macOS dmg, Linux deb and AppImage) come from the release workflow and the GitHub Releases page. Only Windows has been run so far. The macOS and Linux builds are untested, and the browser column is Windows only.
 
 ## Features
 

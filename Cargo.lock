@@ -6494,7 +6494,7 @@ dependencies = [
 
 [[package]]
 name = "yaca-cli"
-version = "1.0.8"
+version = "1.0.9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6511,7 +6511,7 @@ dependencies = [
 
 [[package]]
 name = "yaca-core"
-version = "1.0.8"
+version = "1.0.9"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -6546,7 +6546,7 @@ dependencies = [
 
 [[package]]
 name = "yaca-desktop"
-version = "1.0.8"
+version = "1.0.9"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -6572,7 +6572,7 @@ dependencies = [
 
 [[package]]
 name = "yaca-evals"
-version = "1.0.8"
+version = "1.0.9"
 dependencies = [
  "anyhow",
  "clap",
@@ -6584,7 +6584,7 @@ dependencies = [
 
 [[package]]
 name = "yaca-remote"
-version = "1.0.8"
+version = "1.0.9"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
