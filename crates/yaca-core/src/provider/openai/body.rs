@@ -4,8 +4,8 @@
 //!
 //! * `stream_options.include_usage` is required. Without it the stream does not send
 //!   `usage` at all, and the token counter of §7.1 would silently stay at zero.
-//! * Reasoning blocks are not sent back. This shape has no field for the
-//!   signature, and reasoning without a signature is text nobody vouches for.
+//! * Reasoning is replayed only for the DeepSeek API's tool requests, where
+//!   unsigned `reasoning_content` is part of the conversation protocol.
 //! * The response ceiling goes in the field the provider accepts — see
 //!   [`MaxField`]. Sending both is not possible: on newer OpenAI models that is a 400.
 
@@ -38,19 +38,23 @@ impl MaxField {
     }
 }
 
-pub(super) fn build_body(req: &ProviderRequest, max_field: MaxField) -> Value {
+pub(super) fn build_body(req: &ProviderRequest, max_field: MaxField, deepseek: bool) -> Value {
+    let thinking_disabled = deepseek && req.effort == Some(Effort::None);
+    let replay_reasoning = deepseek && !thinking_disabled && !req.tools.is_empty();
     let mut body = json!({
         "model": req.model,
         "stream": true,
         "stream_options": { "include_usage": true },
-        "messages": wire_messages(req),
+        "messages": wire_messages(req, replay_reasoning),
     });
     body[max_field.key()] = json!(req.max_tokens);
 
     if !req.tools.is_empty() {
         body["tools"] = wire_tools(&req.tools);
     }
-    if let Some(effort) = req.effort.filter(|effort| *effort != Effort::Auto) {
+    if thinking_disabled {
+        body["thinking"] = json!({ "type": "disabled" });
+    } else if let Some(effort) = req.effort.filter(|effort| *effort != Effort::Auto) {
         body["reasoning_effort"] = json!(effort.as_api());
     }
     body
@@ -74,12 +78,12 @@ fn wire_tools(tools: &[ToolSchema]) -> Value {
     )
 }
 
-fn wire_messages(req: &ProviderRequest) -> Value {
+fn wire_messages(req: &ProviderRequest, replay_reasoning: bool) -> Value {
     let mut out = vec![json!({ "role": "system", "content": req.system })];
     for msg in &req.messages {
         match msg.role {
             Role::User => push_user(&mut out, msg),
-            Role::Assistant => push_assistant(&mut out, msg),
+            Role::Assistant => push_assistant(&mut out, msg, replay_reasoning),
         }
     }
     Value::Array(out)
@@ -149,9 +153,10 @@ fn push_user(out: &mut Vec<Value>, msg: &Message) {
     out.push(json!({ "role": "user", "content": content }));
 }
 
-fn push_assistant(out: &mut Vec<Value>, msg: &Message) {
+fn push_assistant(out: &mut Vec<Value>, msg: &Message, replay_reasoning: bool) {
     let mut text = String::new();
     let mut calls = Vec::new();
+    let mut reasoning = String::new();
 
     for block in &msg.content {
         match block {
@@ -170,19 +175,25 @@ fn push_assistant(out: &mut Vec<Value>, msg: &Message) {
                     "arguments": input.to_string(),
                 },
             })),
-            // This shape has no place for reasoning — see the module header.
+            ContentBlock::Thinking {
+                thinking,
+                signature: None,
+            } if replay_reasoning => reasoning.push_str(thinking),
             ContentBlock::Thinking { .. } | ContentBlock::RedactedThinking { .. } => {}
             ContentBlock::ToolResult { .. } | ContentBlock::Image { .. } => {}
         }
     }
 
-    // A turn that had only reasoning has nothing to send: a message
-    // with no text and no calls is rejected by OpenAI and by half the gateways.
-    if text.is_empty() && calls.is_empty() {
+    if text.is_empty() && calls.is_empty() && reasoning.is_empty() {
         return;
     }
 
     let mut message = json!({ "role": "assistant", "content": text });
+    if replay_reasoning {
+        // Older or compacted histories can have no reasoning for a message.
+        // DeepSeek still expects the field, so send an empty string in that case.
+        message["reasoning_content"] = json!(reasoning);
+    }
     if !calls.is_empty() {
         message["tool_calls"] = Value::Array(calls);
     }
@@ -192,6 +203,10 @@ fn push_assistant(out: &mut Vec<Value>, msg: &Message) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn build_body(req: &ProviderRequest, max_field: MaxField) -> Value {
+        super::build_body(req, max_field, false)
+    }
 
     fn req() -> ProviderRequest {
         ProviderRequest {
@@ -341,6 +356,63 @@ mod tests {
         assert!(!body.contains("I think"));
         assert!(!body.contains("sig"));
         assert!(body.contains("answer"));
+    }
+
+    #[test]
+    fn deepseek_replays_reasoning_with_tools_and_accepts_older_history() {
+        let mut r = req();
+        r.tools.push(ToolSchema {
+            name: "Read".into(),
+            description: "Read a file".into(),
+            input_schema: json!({ "type": "object" }),
+        });
+        r.messages.extend([
+            Message::assistant(vec![ContentBlock::Text {
+                text: "Ready.".into(),
+            }]),
+            Message::user_text("Read a.rs"),
+            Message::assistant(vec![
+                ContentBlock::Thinking {
+                    thinking: "Read ".into(),
+                    signature: None,
+                },
+                ContentBlock::Thinking {
+                    thinking: "a.rs".into(),
+                    signature: None,
+                },
+                ContentBlock::ToolUse {
+                    id: "call_1".into(),
+                    name: "Read".into(),
+                    input: json!({ "path": "a.rs" }),
+                },
+            ]),
+            Message::tool_results(vec![ContentBlock::ToolResult {
+                tool_use_id: "call_1".into(),
+                content: "file contents".into(),
+                is_error: false,
+            }]),
+        ]);
+
+        let body = super::build_body(&r, MaxField::default(), true);
+        let messages = &body["messages"];
+        assert_eq!(messages[2]["reasoning_content"], "");
+        assert_eq!(messages[4]["reasoning_content"], "Read a.rs");
+        assert_eq!(messages[4]["tool_calls"][0]["id"], "call_1");
+        assert_eq!(messages[5]["tool_call_id"], "call_1");
+        assert!(build_body(&r, MaxField::default())["messages"][4]
+            .get("reasoning_content")
+            .is_none());
+
+        r.effort = Some(Effort::None);
+        let body = super::build_body(&r, MaxField::default(), true);
+        assert_eq!(body["thinking"]["type"], "disabled");
+        assert!(body.get("reasoning_effort").is_none());
+        assert!(body["messages"][4].get("reasoning_content").is_none());
+
+        r.effort = None;
+        r.tools.clear();
+        let body = super::build_body(&r, MaxField::default(), true);
+        assert!(body["messages"][4].get("reasoning_content").is_none());
     }
 
     #[test]

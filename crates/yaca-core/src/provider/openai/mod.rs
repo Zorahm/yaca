@@ -5,9 +5,8 @@
 //! there are no block indexes and no explicit end of the message, so parsing the stream
 //! keeps state — see [`events`].
 //!
-//! What this shape cannot do, and so what is lost: the reasoning signature, writing
-//! to the prompt cache. Each place is marked where
-//! the translation drops them.
+//! This shape has no reasoning signature or prompt cache controls. DeepSeek's
+//! API uses unsigned reasoning text and requires it back when tools are enabled.
 //!
 //! One thing the provider tells us about itself — which field it takes the response
 //! ceiling in. See [`OpenAiProvider::stream`].
@@ -29,6 +28,7 @@ pub struct OpenAiProvider {
     http: reqwest::Client,
     spec: ProviderSpec,
     key: Option<String>,
+    deepseek: bool,
     /// Whether the provider asked for `max_completion_tokens` instead of `max_tokens`.
     ///
     /// It lives on the provider, not in the description: this is a property of the model, not of
@@ -42,10 +42,13 @@ impl OpenAiProvider {
     /// The key is optional: a local gateway usually does not ask for it, and
     /// requiring it would keep Yaca from reaching Ollama on the same machine.
     pub fn new(spec: ProviderSpec, key: Option<String>) -> Self {
+        let deepseek = reqwest::Url::parse(&spec.base_url)
+            .is_ok_and(|url| url.scheme() == "https" && url.host_str() == Some("api.deepseek.com"));
         OpenAiProvider {
             http: reqwest::Client::new(),
             spec,
             key,
+            deepseek,
             completion_tokens: AtomicBool::new(false),
         }
     }
@@ -69,7 +72,7 @@ impl OpenAiProvider {
             .http
             .post(self.spec.api("/chat/completions"))
             .headers(headers)
-            .json(&body::build_body(req, max_field))
+            .json(&body::build_body(req, max_field, self.deepseek))
             .send()
             .await
             .map_err(http::network_error)?;
@@ -122,6 +125,17 @@ impl Provider for OpenAiProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deepseek_replay_follows_the_endpoint_not_the_provider_id() {
+        let mut spec = ProviderSpec::openai();
+        spec.base_url = "https://api.deepseek.com/v1/".into();
+        assert!(OpenAiProvider::new(spec.clone(), None).deepseek);
+
+        spec.id = "deepseek".into();
+        spec.base_url = "https://api.deepseek.com.example.org/v1".into();
+        assert!(!OpenAiProvider::new(spec, None).deepseek);
+    }
 
     fn http(status: u16, message: &str) -> ProviderError {
         ProviderError::Http {
