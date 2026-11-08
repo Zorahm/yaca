@@ -190,31 +190,28 @@ async fn the_check_command_decides_when_it_fails() {
 }
 
 #[tokio::test]
-async fn a_git_commit_is_refused_even_in_bypass() {
-    // Bypass lets everything through except what §8 keeps behind an explicit
-    // request. A commit nobody asked for must come back as a refusal, and the
-    // run must count it.
+async fn writing_git_configuration_is_refused_even_in_bypass() {
     let task = make_task(
-        "no-commit",
+        "no-git-config",
         r#"{ "prompt": "p", "check": { "command": "exit 0" } }"#,
         &[("a.txt", "x\n")],
     );
     let mock = plan(MockProvider::new(vec![
         Turn::Events(script_tool_call(
-            "b1",
-            "Bash",
-            json!({ "command": "git commit -m done" }),
+            "w1",
+            "Write",
+            json!({ "path": ".gitattributes", "content": "*.txt text\n" }),
         )),
-        Turn::Events(script_text("Could not commit.")),
+        Turn::Events(script_text("Could not write Git configuration.")),
     ]));
     let (result, _) = run(&task, &mock).await;
 
     assert_eq!(result.permissions_denied, 1);
     assert!(
         result.solved,
-        "the check itself passes; only the commit was refused"
+        "the check itself passes despite the refused write"
     );
-    assert_eq!(result.tool_calls.get("Bash"), Some(&1));
+    assert_eq!(result.tool_calls.get("Write"), Some(&1));
 }
 
 #[tokio::test]

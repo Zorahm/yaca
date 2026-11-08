@@ -5,12 +5,9 @@
 //! the interface runs. What differs from a person at the keyboard is spelled
 //! out where it happens: the answers nobody is there to give.
 //!
-//! Invariants: bypass lets through everything the trust matrix would ask
-//! about, but not what §8 keeps behind an explicit request (a `git commit` or
-//! `git push` nobody asked for). Those still arrive as permission requests,
-//! and this runner answers them with a refusal, the same answer a person
-//! would be forced to give by walking away. An eval can therefore never commit
-//! or push, whatever a prompt says.
+//! Bypass skips ordinary permission prompts. Changes to Git configuration
+//! still require explicit approval. The runner declines those requests and
+//! counts the refusals.
 
 use std::path::Path;
 use std::time::{Duration, Instant};
