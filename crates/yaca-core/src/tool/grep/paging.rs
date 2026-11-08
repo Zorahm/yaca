@@ -167,6 +167,15 @@ async fn a_pattern_cannot_span_lines_unless_asked() {
 }
 
 #[tokio::test]
+async fn an_empty_file_has_no_line_for_a_zero_width_match() {
+    let dir = TempDir::new();
+    dir.write("empty.txt", "");
+    let out = search(&dir, json!({ "pattern": "^$", "multiline": true })).await;
+    assert_eq!(out.meta.items, Some(0));
+    assert_eq!(out.text, "[no matches found]\n");
+}
+
+#[tokio::test]
 async fn multiline_matches_across_lines_and_shows_every_line_of_the_match() {
     let dir = TempDir::new();
     dir.write("a.rs", "fn main() {\n    run();\n}\n\nfn other() {}\n");

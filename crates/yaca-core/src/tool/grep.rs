@@ -4,6 +4,8 @@ mod excerpts;
 #[cfg(test)]
 mod paging;
 
+use std::fs::File;
+use std::io::Read;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
@@ -240,6 +242,7 @@ impl Tool for Grep {
             targets.sort_by(|a, b| a.0.cmp(&b.0));
             targets.dedup_by(|a, b| a.0 == b.0);
 
+            let mut bytes = Vec::new();
             for (rel, path) in targets {
                 if cancel.is_cancelled() {
                     return Err(ToolError::Cancelled);
@@ -247,13 +250,18 @@ impl Tool for Grep {
                 if Instant::now() >= deadline {
                     return Err(overran(limit));
                 }
-                let Ok(bytes) = std::fs::read(&path) else {
+                // Reuse the buffer and enforce the size limit even if a file
+                // grew since the walk inspected it.
+                bytes.clear();
+                let read = File::open(&path)
+                    .and_then(|file| file.take(MAX_FILE_BYTES + 1).read_to_end(&mut bytes));
+                if read.is_err() || bytes.len() as u64 > MAX_FILE_BYTES {
                     continue;
-                };
-                if bytes.iter().take(8_192).any(|b| *b == 0) {
+                }
+                if bytes[..bytes.len().min(8_192)].contains(&0) {
                     continue; // binary
                 }
-                let text = String::from_utf8_lossy(&bytes).into_owned();
+                let text = String::from_utf8_lossy(&bytes);
 
                 if files_only {
                     let found = if multiline {
@@ -268,13 +276,12 @@ impl Tool for Grep {
                     continue;
                 }
 
-                // Context needs the lines around a match, so the file is
-                // split once and the matches are found by index.
-                let lines: Vec<&str> = text.lines().collect();
-                let hits = hits_of(&re, &text, &lines, multiline);
+                let hits = hits_of(&re, &text, multiline);
                 if hits.is_empty() {
                     continue;
                 }
+                // Only files with hits need indexed lines for the excerpts.
+                let lines: Vec<&str> = text.lines().collect();
                 // Matches of earlier files come first, so this file's share
                 // of the skipped ones is what is left of the offset.
                 let skip = offset.saturating_sub(total).min(hits.len());
@@ -347,22 +354,29 @@ impl Tool for Grep {
 /// The lines each match covers. Line by line a match is its own line; with
 /// `multiline` the pattern runs over the whole text and a match covers every
 /// line from where it starts to where it ends.
-fn hits_of(re: &regex::Regex, text: &str, lines: &[&str], multiline: bool) -> Vec<Hit> {
+fn hits_of(re: &regex::Regex, text: &str, multiline: bool) -> Vec<Hit> {
     if !multiline {
-        return (0..lines.len())
-            .filter(|&i| re.is_match(lines[i]))
-            .map(Hit::line)
+        return text
+            .lines()
+            .enumerate()
+            .filter(|(_, line)| re.is_match(line))
+            .map(|(i, _)| Hit::line(i))
             .collect();
     }
 
     // Byte offsets of the newlines: a position's line is the number of them
     // before it, which is what `str::lines` counts too.
     let newlines: Vec<usize> = text.match_indices('\n').map(|(at, _)| at).collect();
+    let line_count = newlines.len() + usize::from(!text.is_empty() && !text.ends_with('\n'));
     let line_of = |byte: usize| newlines.partition_point(|&at| at < byte);
 
     re.find_iter(text)
         .filter_map(|m| {
             let first = line_of(m.start());
+            // An empty match after the last newline is not on any line.
+            if first >= line_count {
+                return None;
+            }
             // A match that ends on a newline ends on the line before the one
             // that newline opens.
             let last = if m.end() > m.start() {
@@ -370,10 +384,9 @@ fn hits_of(re: &regex::Regex, text: &str, lines: &[&str], multiline: bool) -> Ve
             } else {
                 first
             };
-            // An empty match after the last newline is not on any line.
-            (first < lines.len()).then_some(Hit {
+            Some(Hit {
                 first,
-                last: last.min(lines.len() - 1),
+                last: last.min(line_count - 1),
             })
         })
         .collect()
