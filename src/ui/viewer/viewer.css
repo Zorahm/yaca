@@ -34,6 +34,20 @@
   white-space: nowrap;
 }
 
+.viewer-feedback {
+  max-width: 55%;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.viewer-feedback:empty {
+  position: absolute;
+}
+
+.pop.viewer-menu {
+  z-index: 62;
+}
+
 /* The frame the picture lives in: pan and scale are measured from its centre. */
 .viewer-stage {
   position: relative;

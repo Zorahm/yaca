@@ -160,6 +160,12 @@ export const panels = {
   "proj.skills_warning": "внимание",
 
   // --- image viewer ----------------------------------------------------
+  "viewer.actions": "Действия с изображением",
+  "viewer.copy": "Копировать изображение",
+  "viewer.save": "Сохранить изображение",
+  "viewer.copied": "Изображение скопировано",
+  "viewer.copy_failed": "Не удалось скопировать изображение",
+  "viewer.save_failed": "Не удалось сохранить изображение",
   "viewer.open": "Открыть {name}",
   "viewer.loading": "Загружаю…",
   "viewer.failed": "Картинку не открыть: файла нет или это не изображение",

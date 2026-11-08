@@ -156,6 +156,12 @@ export const panels = {
   "proj.skills_skipped": "已跳过",
   "proj.skills_warning": "注意",
 
+  "viewer.actions": "图像操作",
+  "viewer.copy": "复制图像",
+  "viewer.save": "保存图像",
+  "viewer.copied": "已复制图像",
+  "viewer.copy_failed": "无法复制图像",
+  "viewer.save_failed": "无法保存图像",
   "viewer.open": "打开 {name}",
   "viewer.loading": "加载中…",
   "viewer.failed": "无法打开图片：文件不存在，或不是图片",

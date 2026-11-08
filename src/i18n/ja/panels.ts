@@ -156,6 +156,12 @@ export const panels = {
   "proj.skills_skipped": "スキップ",
   "proj.skills_warning": "注意",
 
+  "viewer.actions": "画像の操作",
+  "viewer.copy": "画像をコピー",
+  "viewer.save": "画像を保存",
+  "viewer.copied": "画像をコピーしました",
+  "viewer.copy_failed": "画像をコピーできませんでした",
+  "viewer.save_failed": "画像を保存できませんでした",
   "viewer.open": "{name} を開く",
   "viewer.loading": "読み込み中…",
   "viewer.failed": "画像を開けません: ファイルがないか、画像ではありません",

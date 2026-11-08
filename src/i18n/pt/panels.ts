@@ -156,6 +156,12 @@ export const panels = {
   "proj.skills_skipped": "ignorada",
   "proj.skills_warning": "aviso",
 
+  "viewer.actions": "Ações da imagem",
+  "viewer.copy": "Copiar imagem",
+  "viewer.save": "Salvar imagem",
+  "viewer.copied": "Imagem copiada",
+  "viewer.copy_failed": "Não foi possível copiar a imagem",
+  "viewer.save_failed": "Não foi possível salvar a imagem",
   "viewer.open": "Abrir {name}",
   "viewer.loading": "Carregando…",
   "viewer.failed": "Não é possível abrir a imagem: o arquivo não existe ou não é uma imagem",

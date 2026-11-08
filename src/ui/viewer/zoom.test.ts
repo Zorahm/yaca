@@ -11,6 +11,7 @@ import {
   isFitted,
   panned,
   percent,
+  pinched,
   turned,
   zoomAt,
   type Size,
@@ -62,6 +63,23 @@ describe("viewer: zoom", () => {
 
   it("1:1 is one hundred percent", () => {
     expect(percent(actual(fitted(wide, box), wide, box))).toBe(100);
+  });
+
+  it("keeps the same image point under a moving pinch midpoint", () => {
+    const start = actual(fitted(wide, box), wide, box);
+    const view = pinched(start,
+      [{ x: -40, y: 30 }, { x: 80, y: 30 }],
+      [{ x: -100, y: 60 }, { x: 140, y: 60 }], wide, box);
+    expect(view).toEqual({ scale: 2, x: -20, y: 0, turns: 0 });
+  });
+
+  it("keeps a pinch finite when the contacts cross and clamps zoom to fit", () => {
+    const start = actual(fitted(wide, box), wide, box);
+    const together = { x: 20, y: 40 };
+    const close = pinched(start, [{ x: -80, y: 40 }, { x: 120, y: 40 }], [together, together], wide, box);
+    expect(close).toEqual(fitted(wide, box));
+    const apart = pinched(close, [together, together], [together, { x: 120, y: 40 }], wide, box);
+    expect(apart.scale).toBe(MAX_SCALE);
   });
 });
 

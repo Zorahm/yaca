@@ -156,6 +156,12 @@ export const panels = {
   "proj.skills_skipped": "건너뜀",
   "proj.skills_warning": "주의",
 
+  "viewer.actions": "이미지 작업",
+  "viewer.copy": "이미지 복사",
+  "viewer.save": "이미지 저장",
+  "viewer.copied": "이미지를 복사했습니다",
+  "viewer.copy_failed": "이미지를 복사할 수 없습니다",
+  "viewer.save_failed": "이미지를 저장할 수 없습니다",
   "viewer.open": "{name} 열기",
   "viewer.loading": "불러오는 중…",
   "viewer.failed": "이미지를 열 수 없습니다: 파일이 없거나 이미지가 아닙니다",

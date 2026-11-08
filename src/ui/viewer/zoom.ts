@@ -80,19 +80,28 @@ export function clamp(view: View, image: Size, box: Size): View {
  * `at` is relative to the frame's centre. Without this the wheel would pull toward the picture's
  * centre, and to look at a corner you would first have to drag it there.
  */
-export function zoomAt(view: View, factor: number, at: Point, image: Size, box: Size): View {
+export function zoomAt(view: View, factor: number, at: Point, image: Size, box: Size, to = at): View {
   const wanted = clamp({ ...view, scale: view.scale * factor }, image, box).scale;
   const ratio = wanted / view.scale;
   return clamp(
     {
       ...view,
       scale: wanted,
-      x: at.x - (at.x - view.x) * ratio,
-      y: at.y - (at.y - view.y) * ratio,
+      x: to.x - (at.x - view.x) * ratio,
+      y: to.y - (at.y - view.y) * ratio,
     },
     image,
     box,
   );
+}
+
+export function pinched(
+  view: View, before: [Point, Point], after: [Point, Point], image: Size, box: Size,
+): View {
+  const distance = ([a, b]: [Point, Point]) => Math.hypot(a.x - b.x, a.y - b.y);
+  const midpoint = ([a, b]: [Point, Point]) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  const factor = Math.max(1, distance(after)) / Math.max(1, distance(before));
+  return zoomAt(view, factor, midpoint(before), image, box, midpoint(after));
 }
 
 export function panned(view: View, dx: number, dy: number, image: Size, box: Size): View {

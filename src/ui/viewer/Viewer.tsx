@@ -17,11 +17,14 @@ import {
   ArrowsIn,
   CaretLeft,
   CaretRight,
+  Copy,
+  DotsThree,
+  DownloadSimple,
   MagnifyingGlassMinus,
   MagnifyingGlassPlus,
   X,
 } from "@phosphor-icons/react";
-import { Dialog } from "radix-ui";
+import { ContextMenu, Dialog, DropdownMenu } from "radix-ui";
 import {
   useCallback,
   useEffect,
@@ -30,29 +33,28 @@ import {
   useState,
   type KeyboardEvent,
   type MouseEvent,
-  type PointerEvent,
   type ReactNode,
-  type WheelEvent,
 } from "react";
 
-import { imageFull } from "../../core/client";
+import { imageFull, saveImage } from "../../core/client";
 import { sentImage } from "../../core/sentImage";
 import { useBrowserCover } from "../browser/cover";
 import { t } from "../../i18n";
 import { plainPath } from "../format";
 import { DeliveryRoot, OpenImage, PreviewRoot } from "./context";
+import { copyImage } from "./imageActions";
+import { useImageGestures } from "./useImageGestures";
 import {
   STEP,
   actual,
   clamp,
   fitted,
   hits,
-  isClick,
   isFitted,
-  panned,
   percent,
   turned,
   zoomAt,
+  type Point,
   type Size,
   type View,
 } from "./zoom";
@@ -107,7 +109,9 @@ export function Pictures({
   );
 }
 
-type Loaded = { src: string; size: Size };
+type Loaded = { element: HTMLImageElement; size: Size };
+type Action = "copy" | "save";
+type Feedback = "viewer.copied" | "viewer.copy_failed" | "viewer.save_failed";
 
 function Viewer({
   root,
@@ -133,15 +137,14 @@ function Viewer({
   // and the node does not exist yet at the first effect. With `useRef` the frame was never
   // measured, and the picture, having nothing to fit into, never appeared at all.
   const [stage, setStage] = useState<HTMLDivElement | null>(null);
-  const drag = useRef<{ x: number; y: number } | null>(null);
-  const [dragging, setDragging] = useState(false);
-  /** Where the press happened, to tell a click from a drag when it is released. */
-  const pressed = useRef<{ x: number; y: number } | null>(null);
+  const [contextOpen, setContextOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<{ path: string; message: Feedback } | null>(null);
   // Whether the view was "fitted" is remembered before the frame changes: after the change there
   // is nothing left to ask — the "fitted" scale has become a different one.
   const wasFitted = useRef(true);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     let alive = true;
     setImage(null);
     setView(null);
@@ -151,7 +154,7 @@ function Viewer({
         const probe = new Image();
         probe.onload = () => {
           if (alive) {
-            setImage({ src, size: { width: probe.naturalWidth, height: probe.naturalHeight } });
+            setImage({ element: probe, size: { width: probe.naturalWidth, height: probe.naturalHeight } });
           }
         };
         probe.onerror = () => alive && setImage("failed");
@@ -179,7 +182,7 @@ function Viewer({
   // The window was resized: a view that was "fitted" stays fitted, the rest stays within the new
   // frame. The first frame of a new picture also lands here.
   useEffect(() => {
-    if (size === null || box === null) return;
+    if (size === null || box === null || box.width === 0 || box.height === 0) return;
     setView((now) => {
       if (now === null) return fitted(size, box);
       return wasFitted.current ? fitted(size, box, now.turns) : clamp(now, size, box);
@@ -192,62 +195,68 @@ function Viewer({
   }, [view, size, box]);
 
   /** A gesture over the view; before loading there is nothing to change. */
-  function change(next: (view: View, size: Size, box: Size) => View) {
-    if (view === null || size === null || box === null) return;
-    setView(next(view, size, box));
-  }
+  const change = useCallback((next: (view: View, size: Size, box: Size) => View) => {
+    if (size === null || box === null || box.width === 0 || box.height === 0) return;
+    setView((current) => current === null ? null : next(current, size, box));
+  }, [size, box]);
 
   /** The event point relative to the frame's centre — `zoom` computes in these coordinates. */
-  function fromCentre(event: { clientX: number; clientY: number }) {
+  const fromCentre = useCallback((event: { clientX: number; clientY: number }) => {
     const rect = stage?.getBoundingClientRect();
     if (rect === undefined) return { x: 0, y: 0 };
     return {
       x: event.clientX - rect.left - rect.width / 2,
       y: event.clientY - rect.top - rect.height / 2,
     };
+  }, [stage]);
+
+  useEffect(() => {
+    if (stage === null) return;
+    function onWheel(event: WheelEvent) {
+      // Trackpad pinch is delivered as Ctrl+wheel and would also zoom the webview.
+      event.preventDefault();
+      const at = fromCentre(event);
+      const factor = Math.pow(STEP, -event.deltaY / 100);
+      change((v, s, b) => zoomAt(v, factor, at, s, b));
+    }
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", onWheel);
+  }, [stage, fromCentre, change]);
+
+  function onImage(at: Point) {
+    return view !== null && size !== null && hits(view, size, at);
   }
 
-  function onWheel(event: WheelEvent) {
-    const at = fromCentre(event);
-    // A mouse wheel steps in hundreds, a trackpad in units; the exponent smooths out both.
-    const factor = Math.pow(STEP, -event.deltaY / 100);
-    change((v, s, b) => zoomAt(v, factor, at, s, b));
+  function toggleZoom(at: Point, touch: boolean) {
+    change((v, s, b) => {
+      if (!isFitted(v, s, b)) return fitted(s, b, v.turns);
+      return zoomAt(v, touch && v.scale === 1 ? 2 : 1 / v.scale, at, s, b);
+    });
   }
 
-  function onPointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { x: event.clientX, y: event.clientY };
-    pressed.current = { x: event.clientX, y: event.clientY };
-    setDragging(true);
-  }
+  const gestures = useImageGestures(fromCentre, change, (at) => {
+    if (onImage(at)) return true;
+    onClose();
+    return false;
+  }, (at) => toggleZoom(at, true));
 
-  function release() {
-    drag.current = null;
-    pressed.current = null;
-    setDragging(false);
-  }
-
-  /**
-   * Released: a click on empty space closes the viewer.
-   *
-   * On the picture it does not: the picture is dragged and double-clicked, and when it is
-   * enlarged to fill the frame it leaves no empty space at all. While there is no picture — it
-   * is loading or failed to open — the whole frame is empty space.
-   */
-  function onPointerUp(event: PointerEvent) {
-    const from = pressed.current;
-    release();
-    if (from === null || !isClick(from, { x: event.clientX, y: event.clientY })) return;
-    const onImage = view !== null && size !== null && hits(view, size, fromCentre(event));
-    if (!onImage) onClose();
-  }
-
-  function onPointerMove(event: PointerEvent) {
-    const from = drag.current;
-    if (from === null) return;
-    drag.current = { x: event.clientX, y: event.clientY };
-    change((v, s, b) => panned(v, event.clientX - from.x, event.clientY - from.y, s, b));
+  const actionsDisabled = loaded === null || busy;
+  async function runAction(action: Action) {
+    if (loaded === null || busy) return;
+    setBusy(true);
+    setFeedback(null);
+    try {
+      if (action === "copy") {
+        await copyImage(imageRoot, path, loaded.element);
+        setFeedback({ path, message: "viewer.copied" });
+      } else {
+        await saveImage(imageRoot, path, t("viewer.save"));
+      }
+    } catch {
+      setFeedback({ path, message: action === "copy" ? "viewer.copy_failed" : "viewer.save_failed" });
+    } finally {
+      setBusy(false);
+    }
   }
 
   const centre = { x: 0, y: 0 };
@@ -257,7 +266,11 @@ function Viewer({
   const full = () => change(actual);
   const turn = () => change(turned);
   const many = list.length > 1;
-  const step = (by: number) => onIndex((index + by + list.length) % list.length);
+  const step = (by: number) => {
+    gestures.reset();
+    setFeedback(null);
+    onIndex((index + by + list.length) % list.length);
+  };
 
   /** The margins of the panels are the same empty space; there are no buttons or captions on them. */
   function closeOnBare(event: MouseEvent<HTMLElement>) {
@@ -265,6 +278,7 @@ function Viewer({
   }
 
   function onKeyDown(event: KeyboardEvent) {
+    if (event.defaultPrevented || (event.target as HTMLElement).closest('[role="menu"]')) return;
     switch (event.key) {
       case "ArrowLeft":
         if (many) step(-1);
@@ -311,6 +325,22 @@ function Viewer({
         >
           <header className="viewer-head" onClick={closeOnBare}>
             <Dialog.Title className="viewer-title">{sentImage(path)?.name ?? plainPath(path)}</Dialog.Title>
+            <span className="viewer-feedback" role="status">
+              {feedback?.path === path && t(feedback.message)}
+            </span>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger
+                className="top-icon"
+                aria-label={t("viewer.actions")}
+                title={t("viewer.actions")}
+                disabled={loaded === null}
+              >
+                <DotsThree size={18} weight="bold" />
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content className="pop viewer-menu" align="end" sideOffset={4}>
+                <ImageActions Item={DropdownMenu.Item} disabled={actionsDisabled} onAction={runAction} />
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
             <Dialog.Close
               className="top-icon"
               aria-label={t("common.close")}
@@ -320,38 +350,53 @@ function Viewer({
             </Dialog.Close>
           </header>
 
-          <div
-            ref={setStage}
-            className={dragging ? "viewer-stage viewer-dragging" : "viewer-stage"}
-            onWheel={onWheel}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={release}
-            // Double-click toggles back and forth between "fitted" and "1:1".
-            onDoubleClick={(event) => {
-              const at = fromCentre(event);
-              change((v, s, b) =>
-                isFitted(v, s, b) ? zoomAt(v, 1 / v.scale, at, s, b) : fitted(s, b, v.turns),
-              );
-            }}
-          >
-            {image === null && <span className="viewer-note">{t("viewer.loading")}</span>}
-            {image === "failed" && <span className="viewer-note">{t("viewer.failed")}</span>}
-            {loaded !== null && view !== null && (
-              <img
-                className="viewer-image"
-                src={loaded.src}
-                alt=""
-                draggable={false}
-                style={{
-                  width: loaded.size.width,
-                  height: loaded.size.height,
-                  transform: `translate(-50%, -50%) translate(${view.x}px, ${view.y}px) scale(${view.scale}) rotate(${view.turns * 90}deg)`,
+          <ContextMenu.Root open={contextOpen} onOpenChange={(open) => {
+            if (open && !gestures.canOpenMenu()) return;
+            if (open) gestures.reset();
+            setContextOpen(open);
+          }}>
+            <ContextMenu.Trigger asChild>
+              <div
+                ref={setStage}
+                tabIndex={-1}
+                className={gestures.dragging ? "viewer-stage viewer-dragging" : "viewer-stage"}
+                {...gestures.handlers}
+                onPointerDown={(event) => {
+                  gestures.handlers.onPointerDown(event);
+                  // Suppress Radix's long-press menu in the margins.
+                  if (event.pointerType !== "mouse" && !onImage(fromCentre(event))) event.preventDefault();
                 }}
-              />
-            )}
-          </div>
+                onContextMenu={(event) => {
+                  if (!onImage(fromCentre(event))) event.preventDefault();
+                }}
+                onDoubleClick={(event) => {
+                  if (!gestures.isTouch()) toggleZoom(fromCentre(event), false);
+                }}
+              >
+                {image === null && <span className="viewer-note">{t("viewer.loading")}</span>}
+                {image === "failed" && <span className="viewer-note">{t("viewer.failed")}</span>}
+                {loaded !== null && view !== null && (
+                  <img
+                    className="viewer-image"
+                    src={loaded.element.src}
+                    alt=""
+                    draggable={false}
+                    style={{
+                      width: loaded.size.width,
+                      height: loaded.size.height,
+                      transform: `translate(-50%, -50%) translate(${view.x}px, ${view.y}px) scale(${view.scale}) rotate(${view.turns * 90}deg)`,
+                    }}
+                  />
+                )}
+              </div>
+            </ContextMenu.Trigger>
+            <ContextMenu.Content className="pop viewer-menu" onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              stage?.focus({ preventScroll: true });
+            }}>
+              <ImageActions Item={ContextMenu.Item} disabled={actionsDisabled} onAction={runAction} />
+            </ContextMenu.Content>
+          </ContextMenu.Root>
 
           <footer className="viewer-bar" onClick={closeOnBare}>
             {many && (
@@ -395,6 +440,21 @@ function Viewer({
       </Dialog.Portal>
     </Dialog.Root>
   );
+}
+
+function ImageActions({ Item, disabled, onAction }: {
+  Item: typeof ContextMenu.Item | typeof DropdownMenu.Item;
+  disabled: boolean;
+  onAction: (action: Action) => Promise<void>;
+}) {
+  return <>
+    <Item className="pop-item" disabled={disabled} onSelect={() => void onAction("copy")}>
+      <Copy size={14} />{t("viewer.copy")}
+    </Item>
+    <Item className="pop-item" disabled={disabled} onSelect={() => void onAction("save")}>
+      <DownloadSimple size={14} />{t("viewer.save")}
+    </Item>
+  </>;
 }
 
 function Tool({

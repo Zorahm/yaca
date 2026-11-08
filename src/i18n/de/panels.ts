@@ -156,6 +156,12 @@ export const panels = {
   "proj.skills_skipped": "übersprungen",
   "proj.skills_warning": "Hinweis",
 
+  "viewer.actions": "Bildaktionen",
+  "viewer.copy": "Bild kopieren",
+  "viewer.save": "Bild speichern",
+  "viewer.copied": "Bild kopiert",
+  "viewer.copy_failed": "Bild konnte nicht kopiert werden",
+  "viewer.save_failed": "Bild konnte nicht gespeichert werden",
   "viewer.open": "{name} öffnen",
   "viewer.loading": "Lade…",
   "viewer.failed": "Bild kann nicht geöffnet werden: Die Datei fehlt oder ist kein Bild",

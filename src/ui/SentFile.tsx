@@ -30,23 +30,31 @@ export function SentFile({ file, onOpen }: { file: FileDelivery; onOpen: (file: 
   const audio = file.mime.startsWith("audio/");
   const video = file.mime.startsWith("video/");
   const inline = file.renderType === "inline";
-  return <div className="sent-file">
+  const format = /.+\.([a-z\d]{1,8})$/i.exec(file.name)?.[1]?.toUpperCase();
+  return <article className="sent-card" aria-label={file.title}>
+    <div className="sent-header">
+      <span className="sent-format">
+        {format ?? <File size={18} aria-hidden="true" />}
+      </span>
+      <div className="sent-details">
+        <strong className="sent-title">{file.title}</strong>
+        {file.caption && <p className="sent-caption">{file.caption}</p>}
+        <span className="sent-name" title={file.name}>{file.name}</span>
+      </div>
+    </div>
     {inline && image && !failed && <button className="sent-picture" onClick={() => openImage(sentImagePath(file))} aria-label={t("viewer.open", { name: file.title })}>
       <img src={url} alt={file.title} onError={() => setFailed(true)} />
     </button>}
     {inline && audio && <audio controls preload="metadata" src={url} aria-label={file.title} onError={() => setFailed(true)} />}
     {inline && video && <video controls preload="metadata" src={url} aria-label={file.title} onError={() => setFailed(true)} />}
-    <div className="sent-card">
-      <File size={22} aria-hidden="true" />
-      <div className="sent-details">
-        <strong>{file.title}</strong>
-        <span>{file.name} · {bytes(file.size)}</span>
-      </div>
-      {file.renderType === "artifact" && <button className="btn btn-small" onClick={() => onOpen(file)}><ArrowSquareOut size={16} />{t("sent.preview")}</button>}
-      <SentDownload root={root} file={file} />
-    </div>
     {file.renderType === "attachment" && <code className="sent-hash">SHA-256 {file.sha256}</code>}
-    {file.caption && <p className="sent-caption">{file.caption}</p>}
     {failed && <p className="sent-error" role="alert">{t("sent.unavailable")}</p>}
-  </div>;
+    <div className="sent-footer">
+      <span className="sent-size">{bytes(file.size)}</span>
+      <div className="sent-actions">
+        {file.renderType === "artifact" && <button className="btn btn-small" onClick={() => onOpen(file)}><ArrowSquareOut size={16} />{t("sent.preview")}</button>}
+        <SentDownload root={root} file={file} />
+      </div>
+    </div>
+  </article>;
 }

@@ -156,6 +156,12 @@ export const panels = {
   "proj.skills_skipped": "skipped",
   "proj.skills_warning": "warning",
 
+  "viewer.actions": "Image actions",
+  "viewer.copy": "Copy image",
+  "viewer.save": "Save image",
+  "viewer.copied": "Image copied",
+  "viewer.copy_failed": "Could not copy the image",
+  "viewer.save_failed": "Could not save the image",
   "viewer.open": "Open {name}",
   "viewer.loading": "Loading…",
   "viewer.failed": "Cannot open the image: the file is gone or is not an image",

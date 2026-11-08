@@ -1,8 +1,12 @@
 //! A read-only protocol over delivery snapshots, never arbitrary workspace files.
 
 use std::io::{Read, Seek, SeekFrom};
+
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use tauri::http::{Request, Response};
 use yaca_core::Workspace;
+
+const MAX_PREVIEW_BYTES: u64 = 64 * 1024 * 1024;
 
 pub fn response(request: Request<Vec<u8>>) -> Response<Vec<u8>> {
     match serve(&request) {
@@ -73,7 +77,7 @@ fn serve(request: &Request<Vec<u8>>) -> Result<Response<Vec<u8>>, String> {
     }
     let mut body = Vec::new();
     if request.method() != "HEAD" {
-        if count > 64 * 1024 * 1024 {
+        if count > MAX_PREVIEW_BYTES {
             return Err("Preview request exceeds 64 MiB; download the file instead".into());
         }
         input
@@ -124,6 +128,30 @@ pub async fn sent_preview(project: String, id: String) -> Result<String, String>
 }
 
 #[tauri::command]
+pub async fn sent_image_data(project: String, id: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let (file, path) =
+            yaca_core::sent::open(&workspace(&project)?, &id).map_err(|e| e.to_string())?;
+        let (mime, _) = yaca_core::sent::routing(&file.name, "auto").map_err(|e| e.to_string())?;
+        if !mime.starts_with("image/") || mime != file.mime {
+            return Err("The delivery is not an image".into());
+        }
+        let input = std::fs::File::open(path).map_err(|e| e.to_string())?;
+        let mut bytes = Vec::new();
+        input
+            .take(MAX_PREVIEW_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|e| e.to_string())?;
+        if bytes.len() as u64 > MAX_PREVIEW_BYTES {
+            return Err("Image exceeds 64 MiB".into());
+        }
+        Ok(format!("data:{mime};base64,{}", BASE64.encode(bytes)))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 pub async fn save_sent_file(
     project: String,
     id: String,
@@ -132,8 +160,7 @@ pub async fn save_sent_file(
     tauri::async_runtime::spawn_blocking(move || {
         let (_, source) =
             yaca_core::sent::open(&workspace(&project)?, &id).map_err(|e| e.to_string())?;
-        std::fs::copy(source, destination).map_err(|e| e.to_string())?;
-        Ok(())
+        crate::save_copy(&source, &destination).map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -142,6 +169,35 @@ pub async fn save_sent_file(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn image_delivery_keeps_its_bytes_for_copy_and_save() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_str().unwrap();
+        let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>"#;
+        std::fs::write(dir.path().join("shot.svg"), svg).unwrap();
+        let ws = workspace(root).unwrap();
+        let file = yaca_core::sent::deliver(&ws, "shot.svg", None, None, "auto").unwrap();
+        let id = file.id.to_string();
+        let (_, snapshot) = yaca_core::sent::open(&ws, &id).unwrap();
+        let destination = dir.path().join("saved.svg");
+        std::fs::write(&destination, b"old contents").unwrap();
+
+        tauri::async_runtime::block_on(async {
+            let data = sent_image_data(root.into(), id.clone()).await.unwrap();
+            let encoded = data.strip_prefix("data:image/svg+xml;base64,").unwrap();
+            assert_eq!(BASE64.decode(encoded).unwrap(), svg);
+            save_sent_file(root.into(), id.clone(), snapshot.to_str().unwrap().into())
+                .await
+                .unwrap();
+            save_sent_file(root.into(), id, destination.to_str().unwrap().into())
+                .await
+                .unwrap();
+        });
+
+        assert_eq!(std::fs::read(snapshot).unwrap(), svg);
+        assert_eq!(std::fs::read(destination).unwrap(), svg);
+    }
 
     #[test]
     fn protocol_serves_only_snapshots_and_supports_partial_media_requests() {
