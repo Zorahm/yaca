@@ -104,7 +104,7 @@ export const settings = {
   "tools.shell_pwsh": "PowerShell 7",
   "tools.shell_windows": "Windows PowerShell",
   "tools.web_summary": "WebFetch-Seiten zusammenfassen",
-  "tools.web_summary_hint": "Das kleine Routermodell fasst Seiten zusammen; ohne Router wird das gewählte Modell verwendet. Gilt für neue Chats.",
+  "tools.web_summary_hint": "Das Standardmodell des Routers fasst Seiten zusammen; ohne Router wird das Modell des Chats verwendet. Gilt für neue Chats.",
   "tools.robots": "robots.txt beachten",
   "tools.robots_hint":
     "Eine Seite, die eine Disallow-Regel sperrt, wird nicht geladen: Der Agent erhält eine Ablehnung mit Begründung. Ausschalten, wenn die gesperrte Seite die eigene ist – Disallow steht dort oft nur gegen die Indexierung durch Suchmaschinen.",

@@ -173,6 +173,26 @@ fn the_model_chosen_for_the_router_wins() {
 }
 
 #[test]
+fn the_page_summary_asks_a_chat_model_and_not_the_question_model() {
+    let dir = TempDir::new();
+    // `fast` answers the router's questions; `big` is where a turn goes, and
+    // that is a model that answers a prompt in text.
+    file::save(dir.path(), &config()).unwrap();
+
+    let setup = web_fetch_setup(dir.path(), &providers()).expect("a model to summarize with");
+
+    assert_eq!(setup.model, "big");
+    // A chat model, not the typed-decision route of the same server.
+    assert!(setup.systemone.is_none());
+}
+
+#[test]
+fn without_a_router_the_session_model_summarizes() {
+    let dir = TempDir::new();
+    assert!(web_fetch_setup(dir.path(), &providers()).is_none());
+}
+
+#[test]
 fn a_broken_routing_file_does_not_take_the_tool_down() {
     let dir = TempDir::new();
     dir.write(file::FILE, "{ not json");

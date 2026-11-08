@@ -186,7 +186,7 @@ impl Decision {
                 .await?
             {
                 if let Some(ledger) = &ctx.aside_ledger {
-                    ledger.add(question::usage(&reply), ctx.decision_pricing, None);
+                    ledger.add(SystemOne::usage(&reply), ctx.decision_pricing, None);
                 }
                 return question.read_answer(&reply);
             }

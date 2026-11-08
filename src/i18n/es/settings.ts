@@ -104,7 +104,7 @@ export const settings = {
   "tools.shell_pwsh": "PowerShell 7",
   "tools.shell_windows": "Windows PowerShell",
   "tools.web_summary": "Resumir páginas de WebFetch",
-  "tools.web_summary_hint": "El modelo pequeño del router resume páginas; sin router se usa el modelo elegido. Para chats nuevos.",
+  "tools.web_summary_hint": "El modelo predeterminado del router resume páginas; sin router se usa el modelo del chat. Para chats nuevos.",
   "tools.robots": "Respetar robots.txt",
   "tools.robots_hint":
     "Una página bloqueada por una regla Disallow no se descarga: el agente recibe una negativa y el motivo. Conviene desactivarlo cuando el sitio bloqueado es propio, porque un Disallow ahí suele estar solo contra la indexación.",

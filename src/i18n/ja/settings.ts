@@ -104,7 +104,7 @@ export const settings = {
   "tools.shell_pwsh": "PowerShell 7",
   "tools.shell_windows": "Windows PowerShell",
   "tools.web_summary": "WebFetch ページを要約",
-  "tools.web_summary_hint": "ルーターの小型モデルがページを要約します。ルーターがない場合は選択中のモデルを使用します。新しいチャットに適用されます。",
+  "tools.web_summary_hint": "ルーターの既定モデルがページを要約します。ルーターがない場合はチャットのモデルを使用します。新しいチャットに適用されます。",
   "tools.robots": "robots.txt を遵守",
   "tools.robots_hint":
     "Disallow ルールで閉じられたページは取得されず、エージェントは拒否と理由を受け取ります。閉じているのが自分のサイトの場合はオフにしてください。そこでの Disallow は多くの場合、検索エンジンへの制限にすぎません。",

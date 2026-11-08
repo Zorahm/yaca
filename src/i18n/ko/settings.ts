@@ -104,7 +104,7 @@ export const settings = {
   "tools.shell_pwsh": "PowerShell 7",
   "tools.shell_windows": "Windows PowerShell",
   "tools.web_summary": "WebFetch 페이지 요약",
-  "tools.web_summary_hint": "라우터의 소형 모델이 페이지를 요약합니다. 라우터가 없으면 선택한 모델을 사용합니다. 새 채팅에 적용됩니다.",
+  "tools.web_summary_hint": "라우터의 기본 모델이 페이지를 요약합니다. 라우터가 없으면 채트의 모델을 사용합니다. 새 채팅에 적용됩니다.",
   "tools.robots": "robots.txt 준수",
   "tools.robots_hint":
     "Disallow 규칙으로 막힌 페이지는 가져오지 않습니다. 에이전트는 거부와 그 이유를 받습니다. 막힌 사이트가 본인 사이트라면 끄세요. 거기 있는 Disallow는 대개 검색 엔진 색인만 막으려는 것입니다.",

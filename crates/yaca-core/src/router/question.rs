@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 use super::config::{Answers, Choice, Question, Signal, SignalValue};
 
@@ -106,9 +106,14 @@ fn user_message(request_text: &str) -> String {
     )
 }
 
-/// The request cut to [`REQUEST_CAP_CHARS`], with any closing tag neutralised,
-/// and a marker saying how much was dropped so the model knows it saw a part.
 fn request_body(request_text: &str) -> String {
+    neutralise_closing_tag(&cut_request(request_text))
+}
+
+/// The request cut to [`REQUEST_CAP_CHARS`], with a marker saying how much was
+/// dropped so the model knows it saw a part. The typed route takes the same
+/// text as its `state`, and a pasted log crowds out the answer there too.
+pub(super) fn cut_request(request_text: &str) -> String {
     let total = request_text.chars().count();
     let (kept, omitted) = match request_text.char_indices().nth(REQUEST_CAP_CHARS) {
         // `nth` yields the byte offset where the first dropped character starts,
@@ -116,13 +121,10 @@ fn request_body(request_text: &str) -> String {
         Some((cut, _)) => (&request_text[..cut], total - REQUEST_CAP_CHARS),
         None => (request_text, 0),
     };
-    let mut body = neutralise_closing_tag(kept);
-    if omitted > 0 {
-        body.push_str(&format!(
-            "\n[request truncated: {omitted} characters omitted]"
-        ));
+    if omitted == 0 {
+        return kept.to_string();
     }
-    body
+    format!("{kept}\n[request truncated: {omitted} characters omitted]")
 }
 
 /// A request containing `</request>` would close the block early and turn the
@@ -199,6 +201,58 @@ fn choice_probabilities(choices: &[Choice], value: &Value) -> Option<BTreeMap<St
         out.insert(key.clone(), probability(raw)?);
     }
     (!out.is_empty()).then_some(out)
+}
+
+/// The same signals as typed questions — `{"name": {"type": "noul", …}}` —
+/// for a decision server's `/v1/systemone`.
+pub(super) fn typed_questions(signals: &[Signal]) -> Value {
+    let mut questions = Map::new();
+    for signal in signals {
+        questions.insert(signal.name.clone(), typed_question(&signal.question));
+    }
+    Value::Object(questions)
+}
+
+fn typed_question(question: &Question) -> Value {
+    match question {
+        Question::Noul { instructions } => {
+            json!({ "type": "noul", "instructions": instructions })
+        }
+        Question::Choice {
+            instructions,
+            choices,
+        } => json!({
+            "type": "choice",
+            "instructions": instructions,
+            "criteria": choices
+                .iter()
+                .map(|choice| (choice.key.as_str(), choice.description.as_str()))
+                .collect::<BTreeMap<_, _>>(),
+        }),
+    }
+}
+
+/// Read a typed reply: `answers` keyed by signal name, each `{"noul": 0.9}` or
+/// `{"probabilities": {…}}`. As in chat, an answer that is missing or unusable
+/// becomes [`SignalValue::Unknown`] rather than an error: an unanswered
+/// question is a routing input, not a failed turn.
+pub(super) fn read_typed(signals: &[Signal], reply: &Value) -> Answers {
+    signals
+        .iter()
+        .map(|signal| {
+            let answer = &reply["answers"][signal.name.as_str()];
+            let value = match &signal.question {
+                Question::Noul { .. } => {
+                    probability(&answer["noul"]).map_or(SignalValue::Unknown, SignalValue::Noul)
+                }
+                Question::Choice { choices, .. } => {
+                    choice_probabilities(choices, &answer["probabilities"])
+                        .map_or(SignalValue::Unknown, SignalValue::Choice)
+                }
+            };
+            (signal.name.clone(), value)
+        })
+        .collect()
 }
 
 /// The first top-level `{...}` in `reply` that parses as a JSON object. Prose

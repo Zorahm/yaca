@@ -41,10 +41,14 @@ pub fn status(config_dir: &Path, providers: &Providers) -> Status {
         Err(e) => return Status::Broken(e.to_string()),
     };
     // Backends are built without keys: only the validation and the virtual
-    // model are wanted here, and neither sends anything.
-    match RouterProvider::new(cfg, providers, |spec| {
-        provider::build_with_key(spec.clone(), None)
-    }) {
+    // model are wanted here, and neither sends anything. The typed-decision
+    // client would read the keychain, so it is not built at all.
+    match RouterProvider::new(
+        cfg,
+        providers,
+        |spec| provider::build_with_key(spec.clone(), None),
+        |_| None,
+    ) {
         Ok((_, offered)) => Status::Ready(offered),
         Err(e) => Status::Broken(e.to_string()),
     }
@@ -89,9 +93,17 @@ pub fn decision_setup(config_dir: &Path, providers: &Providers) -> Option<Decisi
     Some(setup)
 }
 
-/// The router's small model, without the Decision provider fallback.
+/// The chat model that summarizes fetched pages: the router's default route,
+/// without the Decision provider fallback.
+///
+/// Not the model that answers the router's questions
+/// (`RoutingConfig::decision_model`): a decision model scores a statement rather
+/// than answering a prompt in text, and a server that serves only the typed
+/// route answers a chat-completions request with 405 — the page arrives, the
+/// summary does not. Without a router there is no side model here, and the
+/// session summarizes with its own (`session::calls`).
 pub fn web_fetch_setup(config_dir: &Path, providers: &Providers) -> Option<DecisionSetup> {
-    let target = file::load(config_dir).ok().flatten()?.decision_model.model;
+    let target = file::load(config_dir).ok().flatten()?.default;
     let spec = providers.get(&target.provider)?;
     spec.model(&target.model)?;
     Some(DecisionSetup {

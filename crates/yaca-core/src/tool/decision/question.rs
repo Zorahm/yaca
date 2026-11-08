@@ -6,7 +6,6 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::error::{ProviderError, ToolError};
-use crate::usage::TokenCounts;
 
 #[derive(Deserialize)]
 pub(super) struct Question {
@@ -99,18 +98,4 @@ impl Question {
 
 fn probability(value: &Value) -> Option<f64> {
     value.as_f64().filter(|p| (0.0..=1.0).contains(p))
-}
-
-pub(super) fn usage(reply: &Value) -> TokenCounts {
-    let count = |key: &str| {
-        reply["usage"][key]
-            .as_u64()
-            .and_then(|n| u32::try_from(n).ok())
-            .unwrap_or(0)
-    };
-    TokenCounts {
-        input: count("input_tokens"),
-        output: count("output_tokens"),
-        ..TokenCounts::default()
-    }
 }

@@ -22,6 +22,7 @@ use serde_json::{json, Value};
 use super::http;
 use super::registry::ProviderSpec;
 use crate::error::ProviderError;
+use crate::usage::TokenCounts;
 
 /// The id the one question goes under. The answer is read back by it.
 const QUESTION: &str = "q";
@@ -57,6 +58,22 @@ impl SystemOne {
             spec,
             key,
             absent: AtomicBool::new(false),
+        }
+    }
+
+    /// The tokens a reply says it spent. A server that reports none counts as
+    /// zero: usage is a price note, not part of the answer.
+    pub fn usage(reply: &Value) -> TokenCounts {
+        let count = |key: &str| {
+            reply["usage"][key]
+                .as_u64()
+                .and_then(|n| u32::try_from(n).ok())
+                .unwrap_or(0)
+        };
+        TokenCounts {
+            input: count("input_tokens"),
+            output: count("output_tokens"),
+            ..TokenCounts::default()
         }
     }
 

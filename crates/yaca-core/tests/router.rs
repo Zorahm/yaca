@@ -115,7 +115,7 @@ async fn one_message_is_one_decision_and_the_chosen_model_answers() {
             _ => big.clone(),
         }
     };
-    let (router, offered) = RouterProvider::new(config(), &providers(), backend).unwrap();
+    let (router, offered) = RouterProvider::new(config(), &providers(), backend, |_| None).unwrap();
 
     let mut cfg = SessionConfig::new(dir.path());
     cfg.mode = Mode::Manual;

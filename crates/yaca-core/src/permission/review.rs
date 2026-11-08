@@ -322,44 +322,8 @@ mod tests {
 
     // --- typed-decision route ---------------------------------------------------
 
-    use std::sync::Arc;
-
     use crate::provider::registry::{Protocol, ProviderSpec};
-
-    /// A server that answers every request with `status` and `body`, and keeps
-    /// the request lines it saw. One connection per request, which is all the
-    /// client makes.
-    async fn serve(
-        status: u16,
-        body: &'static str,
-    ) -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let log = seen.clone();
-        tokio::spawn(async move {
-            loop {
-                let Ok((mut socket, _)) = listener.accept().await else {
-                    return;
-                };
-                let log = log.clone();
-                tokio::spawn(async move {
-                    let mut buf = vec![0u8; 16 * 1024];
-                    let n = socket.read(&mut buf).await.unwrap_or(0);
-                    let text = String::from_utf8_lossy(&buf[..n]).to_string();
-                    log.lock().unwrap().push(text);
-                    let reply = format!(
-                        "HTTP/1.1 {status} X\r\ncontent-type: application/json\r\n\
-                         content-length: {}\r\nconnection: close\r\n\r\n{body}",
-                        body.len()
-                    );
-                    let _ = socket.write_all(reply.as_bytes()).await;
-                });
-            }
-        });
-        (format!("http://{addr}"), seen)
-    }
+    use crate::testutil::json_server;
 
     fn client(base_url: &str) -> SystemOne {
         SystemOne::new(
@@ -377,7 +341,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_high_score_lets_the_call_through_and_chat_is_not_asked() {
-        let (url, seen) = serve(200, r#"{"answers":{"q":{"type":"noul","noul":0.97}}}"#).await;
+        let (url, seen) = json_server(200, r#"{"answers":{"q":{"type":"noul","noul":0.97}}}"#).await;
         let chat = MockProvider::text("UNSAFE");
         let client = client(&url);
 
@@ -392,7 +356,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_middling_score_goes_to_the_human() {
-        let (url, _) = serve(200, r#"{"answers":{"q":{"type":"noul","noul":0.5}}}"#).await;
+        let (url, _) = json_server(200, r#"{"answers":{"q":{"type":"noul","noul":0.5}}}"#).await;
         let chat = MockProvider::text("SAFE");
         let client = client(&url);
 
@@ -402,7 +366,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_server_without_the_route_is_asked_in_chat_and_remembered() {
-        let (url, seen) = serve(404, r#"{"error":"not found"}"#).await;
+        let (url, seen) = json_server(404, r#"{"error":"not found"}"#).await;
         let chat = MockProvider::new(vec![
             crate::provider::mock::Turn::Events(crate::provider::mock::script_text("SAFE")),
             crate::provider::mock::Turn::Events(crate::provider::mock::script_text("SAFE")),
@@ -420,7 +384,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_failing_route_goes_to_the_human_without_a_chat_retry() {
-        let (url, _) = serve(500, r#"{"error":"scoring failed"}"#).await;
+        let (url, _) = json_server(500, r#"{"error":"scoring failed"}"#).await;
         let chat = MockProvider::text("SAFE");
         let client = client(&url);
 

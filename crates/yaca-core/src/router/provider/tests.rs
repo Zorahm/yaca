@@ -134,7 +134,7 @@ impl Rig {
     }
 
     fn router_for(&self, cfg: RoutingConfig) -> (RouterProvider, ModelInfo) {
-        RouterProvider::new(cfg, &providers(), |spec| self.build(spec)).unwrap()
+        RouterProvider::new(cfg, &providers(), |spec| self.build(spec), |_| None).unwrap()
     }
 
     fn router(&self) -> (RouterProvider, ModelInfo) {
@@ -528,7 +528,7 @@ async fn an_unknown_provider_in_the_config_is_refused() {
     let mut cfg = config();
     cfg.default = model("elsewhere", "x");
 
-    assert!(RouterProvider::new(cfg, &providers(), |spec| rig.build(spec)).is_err());
+    assert!(RouterProvider::new(cfg, &providers(), |spec| rig.build(spec), |_| None).is_err());
 }
 
 #[tokio::test]
@@ -547,7 +547,7 @@ async fn the_offered_model_aggregates_its_targets() {
         ..info("tiny", 8_000, 1_000, false, false)
     };
     let (router, offered) =
-        RouterProvider::new(config(), &providers, |spec| rig.build(spec)).unwrap();
+        RouterProvider::new(config(), &providers, |spec| rig.build(spec), |_| None).unwrap();
 
     assert_eq!(offered.id, "auto");
     assert_eq!(offered.provider_id, ROUTER_ID);

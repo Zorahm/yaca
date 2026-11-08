@@ -104,7 +104,7 @@ export const settings = {
   "tools.shell_pwsh": "PowerShell 7",
   "tools.shell_windows": "Windows PowerShell",
   "tools.web_summary": "Résumer les pages WebFetch",
-  "tools.web_summary_hint": "Le petit modèle du routeur résume les pages ; sans routeur, le modèle choisi est utilisé. Pour les nouvelles conversations.",
+  "tools.web_summary_hint": "Le modèle par défaut du routeur résume les pages ; sans routeur, le modèle de la conversation est utilisé. Pour les nouvelles conversations.",
   "tools.robots": "Respecter robots.txt",
   "tools.robots_hint":
     "Une page fermée par une règle Disallow n'est pas chargée : l'agent reçoit un refus et la raison. Désactivez cette option quand le site fermé ainsi est le vôtre ; un Disallow y vise souvent seulement l'indexation par les moteurs de recherche.",

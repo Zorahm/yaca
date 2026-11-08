@@ -104,7 +104,7 @@ export const settings = {
   "tools.shell_pwsh": "PowerShell 7",
   "tools.shell_windows": "Windows PowerShell",
   "tools.web_summary": "总结 WebFetch 页面",
-  "tools.web_summary_hint": "路由器的小模型总结页面；没有路由器时使用所选模型。适用于新聊天。",
+  "tools.web_summary_hint": "路由器的默认模型总结页面；没有路由器时使用聊天模型。适用于新聊天。",
   "tools.robots": "遵守 robots.txt",
   "tools.robots_hint":
     "被 Disallow 规则禁止的页面不会被加载：智能体会收到拒绝及其原因。当该站点是你自己的网站时请关闭此项——那里的 Disallow 通常只是针对搜索引擎的收录限制。",

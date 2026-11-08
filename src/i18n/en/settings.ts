@@ -104,7 +104,7 @@ export const settings = {
   "tools.shell_pwsh": "PowerShell 7",
   "tools.shell_windows": "Windows PowerShell",
   "tools.web_summary": "Summarize WebFetch pages",
-  "tools.web_summary_hint": "The router’s small model summarizes pages for the agent; without a router, the selected model is used. Applies to new chats.",
+  "tools.web_summary_hint": "The router’s default model summarizes pages for the agent; without a router, the chat’s model is used. Applies to new chats.",
   "tools.robots": "Honour robots.txt",
   "tools.robots_hint":
     "A page closed by a Disallow rule is not fetched: the agent gets a refusal and the reason. Turn it off when the site closed that way is your own — a Disallow there is often only about search engines.",

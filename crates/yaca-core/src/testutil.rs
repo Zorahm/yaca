@@ -2,6 +2,7 @@
 //! do not justify one more crate in the build tree.
 
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 pub struct TempDir(PathBuf);
 
@@ -37,4 +38,42 @@ impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
     }
+}
+
+/// A real socket that answers every request with `status` and `body`, and keeps
+/// what it was sent.
+///
+/// A socket rather than a mocked client: a mock would only prove the mock
+/// answers the way the test thinks, and it would say nothing about the path and
+/// the body that actually leave the process. Every answer closes its
+/// connection, so the next request arrives as a new one.
+pub async fn json_server(status: u16, body: &'static str) -> (String, Arc<Mutex<Vec<String>>>) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let log = Arc::clone(&seen);
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut socket, _)) = listener.accept().await else {
+                return;
+            };
+            let log = Arc::clone(&log);
+            tokio::spawn(async move {
+                let mut buf = vec![0u8; 64 * 1024];
+                let n = socket.read(&mut buf).await.unwrap_or(0);
+                log.lock()
+                    .unwrap()
+                    .push(String::from_utf8_lossy(&buf[..n]).to_string());
+                let reply = format!(
+                    "HTTP/1.1 {status} X\r\ncontent-type: application/json\r\n\
+                     content-length: {}\r\nconnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = socket.write_all(reply.as_bytes()).await;
+            });
+        }
+    });
+    (format!("http://{addr}"), seen)
 }

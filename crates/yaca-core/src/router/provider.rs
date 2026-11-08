@@ -19,6 +19,7 @@ use futures_util::stream::{self, StreamExt};
 use crate::error::{CoreError, ProviderError};
 use crate::message::{strip_thinking, ContentBlock, Message, Role};
 use crate::provider::registry::{ProviderSpec, Providers};
+use crate::provider::systemone::SystemOne;
 use crate::provider::{Provider, ProviderEvent, ProviderRequest, ProviderStream};
 use crate::router::config::{ModelRef, RoutingConfig};
 use crate::router::decision_model::ask_with_usage;
@@ -47,6 +48,10 @@ pub struct RouterProvider {
     /// Index of the default in `targets`.
     default: usize,
     decision: Arc<dyn Provider>,
+    /// The same server's typed-decision route, when there is one to build. A
+    /// decision model scores rather than writes, so it is asked here and
+    /// `decision` answers only a server without the route (`decision_model`).
+    decision_systemone: Option<Arc<SystemOne>>,
     decision_pricing: crate::usage::Pricing,
     /// Each decision's name and the index of its model in `targets`.
     decisions: Vec<DecisionRoute>,
@@ -89,10 +94,16 @@ struct Sticky {
 impl RouterProvider {
     /// Validates `cfg` against `providers`, builds one backend per provider the
     /// config refers to, and returns the router with the virtual model to offer.
+    ///
+    /// The second builder is the typed-decision client of the same server, or
+    /// `None` where none is to be built: the caller that only validates the
+    /// file (`attach::status`) must not read the keychain, and the client is
+    /// then not offered.
     pub fn new(
         cfg: RoutingConfig,
         providers: &Providers,
         build: impl Fn(&ProviderSpec) -> Arc<dyn Provider>,
+        build_systemone: impl Fn(&ProviderSpec) -> Option<Arc<SystemOne>>,
     ) -> Result<(Self, ModelInfo), CoreError> {
         file::validate(&cfg, providers)?;
         let mut pool = Pool {
@@ -102,6 +113,11 @@ impl RouterProvider {
             targets: Vec::new(),
         };
         let decision = pool.backend(&cfg.decision_model.model.provider)?;
+        // `validate` has just said the provider is there, and only its model id
+        // was checked; the client is the same address, asked another way.
+        let decision_systemone = providers
+            .get(&cfg.decision_model.model.provider)
+            .and_then(build_systemone);
         let decision_pricing = providers
             .get(&cfg.decision_model.model.provider)
             .and_then(|p| p.model(&cfg.decision_model.model.model))
@@ -126,6 +142,7 @@ impl RouterProvider {
             targets,
             default,
             decision,
+            decision_systemone,
             decision_pricing,
             decisions,
             sticky: Mutex::new(HashMap::new()),
@@ -139,7 +156,12 @@ impl RouterProvider {
         cfg: RoutingConfig,
         providers: &Providers,
     ) -> Result<(Self, ModelInfo), CoreError> {
-        Self::new(cfg, providers, |spec| crate::provider::build(spec.clone()))
+        Self::new(
+            cfg,
+            providers,
+            |spec| crate::provider::build(spec.clone()),
+            |spec| Some(crate::provider::build_systemone(spec.clone())),
+        )
     }
 
     /// Every real model the config can route to, with `provider_id` set. The
@@ -162,6 +184,7 @@ impl RouterProvider {
     async fn decide(&self, text: &str) -> (Pick, Option<(crate::usage::TokenCounts, Option<f64>)>) {
         let timeout = Duration::from_millis(u64::from(self.cfg.decision_model.timeout_ms));
         let (answers, usage) = ask_with_usage(
+            self.decision_systemone.as_deref(),
             self.decision.as_ref(),
             &self.cfg.decision_model.model.model,
             &self.cfg.signals,
