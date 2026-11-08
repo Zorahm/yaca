@@ -2,8 +2,8 @@
 //!
 //! `providers.json` used to carry six hand-written numbers per model, and every
 //! one of them was a guess that goes stale: a context window that grew, an
-//! output cap that shrank, an `effort` a new model learned. Both wire shapes
-//! answer `GET /v1/models`, so the numbers can be asked for instead.
+//! output cap that shrank, an `effort` a new model learned. Most endpoints
+//! answer `GET /v1/models`; DeepSeek publishes a shared `GET /models` catalog.
 //!
 //! **What is asked for is what makes a model run.** Whether a model accepts
 //! `output_config.effort` and adaptive thinking decides between an answer and a
@@ -38,6 +38,7 @@ use crate::usage::{ContextSource, ModelFacts, ModelInfo};
 
 mod anthropic;
 mod catalog;
+mod deepseek;
 mod local;
 mod models_dev;
 mod openai;
@@ -60,9 +61,13 @@ pub async fn discover(
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| ProviderError::Network(e.to_string()))?;
-    let mut models = match spec.protocol {
-        Protocol::Anthropic => anthropic(&client, spec, key).await?,
-        Protocol::OpenAi => openai(&client, spec, key).await?,
+    let mut models = if let Some(url) = deepseek::catalog_url(spec) {
+        deepseek::discover(&client, spec, key, url).await?
+    } else {
+        match spec.protocol {
+            Protocol::Anthropic => anthropic(&client, spec, key).await?,
+            Protocol::OpenAi => openai(&client, spec, key).await?,
+        }
     };
     // Ollama and LM Studio say nothing about context on the OpenAI shape, and
     // their own endpoints do; the probe only fires for a loopback address.
@@ -225,6 +230,7 @@ pub async fn residency(
 ) -> Result<HashMap<String, bool>, ProviderError> {
     match spec.protocol {
         Protocol::Anthropic => Ok(HashMap::new()),
+        Protocol::OpenAi if deepseek::catalog_url(spec).is_some() => Ok(HashMap::new()),
         Protocol::OpenAi => openai::residency(&reqwest::Client::new(), spec, key).await,
     }
 }
@@ -240,14 +246,24 @@ async fn get(
     key: Option<&str>,
     path: &str,
 ) -> Result<Value, ProviderError> {
-    let mut headers = http::header_map(spec, key)?;
+    let url = spec.api(path);
+    get_at(client, spec, key, &url, http::header_map(spec, key)?).await
+}
+
+async fn get_at(
+    client: &reqwest::Client,
+    spec: &ProviderSpec,
+    key: Option<&str>,
+    url: &str,
+    mut headers: reqwest::header::HeaderMap,
+) -> Result<Value, ProviderError> {
     headers.insert(
         reqwest::header::ACCEPT,
         reqwest::header::HeaderValue::from_static("application/json"),
     );
 
     let resp = client
-        .get(spec.api(path))
+        .get(url)
         .headers(headers)
         .send()
         .await
@@ -261,8 +277,7 @@ async fn get(
 
     serde_json::from_str(&text).map_err(|e| {
         ProviderError::Config(format!(
-            "{} answered with JSON that the model list does not expect: {e}",
-            spec.api(path)
+            "{url} answered with JSON that the model list does not expect: {e}"
         ))
     })
 }

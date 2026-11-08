@@ -16,7 +16,7 @@ const SOURCE_LABEL: Record<KeyState["kind"], TranslationKey> = {
   loading: "prov.key_checking", unknown: "prov.key_unavailable",
 };
 
-export function ProviderRow({ spec, source, poll, status, pollError, now, muted, current, locked, onAsk, onEdit, onDelete }: {
+export function ProviderRow({ spec, source, poll, status, pollError, now, muted, current, locked, onOpen, onAsk, onEdit, onDelete }: {
   spec: ProviderSpec;
   source: KeyState;
   poll?: ProviderPoll;
@@ -26,6 +26,7 @@ export function ProviderRow({ spec, source, poll, status, pollError, now, muted,
   muted: boolean;
   current: boolean;
   locked: boolean;
+  onOpen: () => void;
   onAsk: () => void;
   onEdit: (focusKey?: boolean) => void;
   onDelete: () => void;
@@ -49,9 +50,9 @@ export function ProviderRow({ spec, source, poll, status, pollError, now, muted,
   const textAction = ["missing_key", "unknown", "error", "empty", "unasked"].includes(status);
 
   return <div className={`provider-row${muted ? " provider-row-muted" : ""}`} data-status={status} aria-busy={status === "asking"}>
-    <button type="button" className="provider-open" disabled={locked} onClick={() => onEdit()}
+    <button type="button" className="provider-open" disabled={locked} onClick={onOpen}
       title={[spec.baseUrl, poll ? dateTimeOf(poll.checkedAt) : ""].filter(Boolean).join(" · ")}
-      aria-label={`${t("prov.edit_row")}: ${spec.displayName}`} />
+      aria-label={`${t("prov.form_models")}: ${spec.displayName}`} />
     <div className="provider-identity">
       <span className="provider-avatar" aria-hidden="true">
         <ProviderMark id={spec.id} size={20} fallbackName={spec.displayName} />

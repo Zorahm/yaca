@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 
 import type { ProviderSpec } from "../../core/client";
 import { t } from "../../i18n";
+import { useBackClose } from "../back";
+import { ModelCatalog } from "./ModelCatalog";
 import { ProviderForm } from "./ProviderForm";
 import { ProviderRow } from "./ProviderRow";
 import { draftFromSpec, emptyDraft, type ProviderDraft } from "./provider";
@@ -18,6 +20,7 @@ export function ProvidersSection({ onChanged, currentProvider }: {
   currentProvider?: string;
 }) {
   const { providers, error, keySources, pollErrors, reload, save, remove, ask } = useProviders();
+  const [openedId, setOpenedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [search, setSearch] = useState("");
   const [asking, setAsking] = useState<ReadonlySet<string>>(new Set());
@@ -50,11 +53,14 @@ export function ProvidersSection({ onChanged, currentProvider }: {
     void reload();
     onChanged();
   };
+  const opened = providers?.list.find((spec) => spec.id === openedId);
+  useBackClose(opened !== undefined, () => setOpenedId(null));
+  useBackClose(editing !== null, closeForm);
 
   if (editing !== null) {
     return <>
       <button type="button" className="prov-back" onClick={closeForm}>
-        <CaretLeft size={13} /> {t("prov.title")}
+        <CaretLeft size={13} /> {opened?.displayName ?? t("prov.title")}
       </button>
       <ProviderForm
         key={editing.isNew ? "new" : editing.draft.id}
@@ -63,6 +69,28 @@ export function ProvidersSection({ onChanged, currentProvider }: {
         onSave={save} onSaved={closeForm} onCancel={closeForm}
         checkedAt={providers?.polls[editing.draft.id]?.checkedAt}
       />
+    </>;
+  }
+
+  if (opened) {
+    return <>
+      <button type="button" className="prov-back" autoFocus onClick={() => setOpenedId(null)}>
+        <CaretLeft size={13} /> {t("prov.title")}
+      </button>
+      <div className="set-head providers-head">
+        <h1 className="set-title">{opened.displayName}</h1>
+        <button type="button" className="btn btn-small"
+          onClick={() => setEditing({ draft: draftFromSpec(opened), isNew: false })}>
+          {t("prov.edit_row")}
+        </button>
+      </div>
+      {error !== null && <div className="set-error" role="alert">{error}</div>}
+      <ModelCatalog key={opened.id} spec={opened} checkedAt={providers?.polls[opened.id]?.checkedAt}
+        onSave={async (spec) => {
+          const saved = await save(spec);
+          if (saved) onChanged();
+          return saved;
+        }} />
     </>;
   }
 
@@ -123,6 +151,7 @@ export function ProvidersSection({ onChanged, currentProvider }: {
           {group.list.map((spec) => <ProviderRow key={spec.id} spec={spec} source={sourceOf(spec)}
             poll={providers.polls[spec.id]} status={statusOf(spec)} pollError={pollErrors[spec.id]} now={now}
             muted={group.muted} current={currentProvider === spec.id} locked={refreshing || asking.has(spec.id)}
+            onOpen={() => setOpenedId(spec.id)}
             onAsk={() => void askRow(spec)}
             onEdit={(focusKey = false) => setEditing({ draft: draftFromSpec(spec), isNew: false, focusKey })}
             onDelete={() => void remove(spec.id).then(onChanged)} />)}

@@ -4,7 +4,6 @@ import { t } from "../../i18n";
 import { chatModels, modelKey, modelLabel } from "../modelSearch";
 import { Row, Select } from "./Row";
 import { RoutingSection } from "./RoutingSection";
-import { ModelCatalog } from "./ModelCatalog";
 
 const NONE = "<none>";
 
@@ -69,7 +68,6 @@ export function ModelsSection({ values, models, onPatch, onChanged }: {
           onPatch({ names });
         }} />)}
     </section>
-    <ModelCatalog onChanged={onChanged} />
   </>;
 }
 

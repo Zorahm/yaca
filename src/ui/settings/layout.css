@@ -12,8 +12,6 @@
 .set-model-override summary { cursor: pointer; font-size: 13px; font-weight: 600; }
 .set-model-override .set-rows { margin-top: 12px; }
 .set-local-models { margin-top: 24px; }
-.set-model-catalog { margin-top: 24px; }
-.set-model-catalog > .select { margin-bottom: 12px; }
 .set-local-name { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, 240px) auto; gap: 10px; align-items: center; padding: 10px 0; }
 .set-local-name code { overflow-wrap: anywhere; color: var(--muted); font: 11.5px var(--mono); }
 .set-instructions-preview { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--sunk); color: var(--ink); font: 12px/1.6 var(--mono); }

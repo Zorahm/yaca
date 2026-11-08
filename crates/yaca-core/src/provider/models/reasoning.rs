@@ -43,6 +43,15 @@ pub(super) fn openrouter(value: &Value) -> Option<ReasoningCapabilities> {
     })
 }
 
+pub(super) fn deepseek(value: &Value) -> Option<ReasoningCapabilities> {
+    value.as_object()?;
+    Some(ReasoningCapabilities {
+        supported_efforts: levels(&value["supported_levels"]),
+        default_effort: effort(&value["default_level"]),
+        ..Default::default()
+    })
+}
+
 pub(super) fn models_dev(model: &Value) -> Option<ReasoningCapabilities> {
     let options = model["reasoning_options"].as_array();
     let supported_efforts = options.and_then(|options| {
