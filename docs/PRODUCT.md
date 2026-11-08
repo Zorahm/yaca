@@ -25,8 +25,8 @@ core runs from a command line (`yaca-cli`) with no window at all.
 
 The interface is a pure function of the core's event stream and never lies
 about state: a running tool pulses, a finished one is ticked, stale context is
-marked, irreversible actions ask first. There is one confirmation, before the
-write. Only the human commits.
+marked, and actions that require approval ask before they run. Git commands
+follow the session's command permission policy.
 
 ## Operating Context
 

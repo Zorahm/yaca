@@ -25,8 +25,8 @@ The current release is `1.0.8`. Installers (Windows NSIS `.exe`, macOS `.dmg`, L
 
 - **Conversations with models about code.** Streaming responses, thinking/reasoning, task lists, token and cost tracking.
 - **Project manipulation.** Read, search, edit, and delete files, including the text of PDFs, Word, Excel and PowerPoint files, and the cells of Jupyter notebooks; see [PDFs and Notebooks](#pdfs-and-notebooks) and [Chat mode and Office documents](#chat-mode-and-office-documents). Run shell commands and background processes, and wait for a line of their output or for them to end with `BashWait` instead of polling.
-- **Permissions.** Modes: "Plan", "Manual", "Auto", and "Edits" — ranging from read-only to editing without confirmation. Git commit and push always require approval.
-- **Two kinds of chat.** *Code* is the coding agent; *Documents* is a chat about the person's files, with a prompt about Word, Excel and PowerPoint and the office skills Yaca ships with; see [Chat mode and Office documents](#chat-mode-and-office-documents).
+- **Permissions.** Modes: "Plan", "Manual", "Auto", and "Edits" — ranging from read-only to editing without confirmation. Git commands follow the same rules as other shell commands. In Auto, the Decision model or the session model reviews commands that require approval.
+- **Two kinds of chat.** *Code* is the coding agent; *Documents* is a chat about the person's files, with a prompt about Word, Excel, PowerPoint and PDF. Both have access to Yaca's [Office skills](#office-skills).
 - **Checkpoints.** Snapshots project state before edits and commands, allowing you to roll back changes. The list of points is saved with the session, so it survives a window reload, closing and reopening the chat, and a restart.
 - **Reloading the window does not stop the agent.** Ctrl+R (or a hot reload in development) only redraws the window: running turns, background commands and open questions carry on in the app, and the window picks the chats up again where they are. Restarting the application itself still ends them.
 - **Background command results resume the agent.** The model can keep working after starting a background command. When that command exits on its own, its status and unread output are delivered at the next agent step, or wake an idle model in a new turn. Explicitly stopped commands do not trigger a new turn. The output included in the notification is bounded; the full output file remains available when provided.
@@ -92,12 +92,13 @@ Application settings and chats are stored in a single directory. On Windows, thi
 ├─ browser\               the browser column's profile: its cookies and site storage
 └─ chats\<project>-<path-hash>\
    ├─ project.json         identifies the project
+   ├─ workspaces\<hash>\    files a document chat made, and its attachments
    └─ <id>.jsonl, <id>.messages.jsonl, <id>.meta.json, <id>.checkpoints.json
 ```
 
 On macOS, this is `~/Library/Application Support/Yaca`; on Linux, `$XDG_CONFIG_HOME/Yaca`. Both the desktop app and `yaca-cli` read and write to the same location, so a session started in one can be resumed in the other.
 
-The project's own `.yaca` directory holds its local settings, commands, shadow repository for checkpoints, worktrees, and drafts. Chat sessions are no longer stored there.
+The project's own `.yaca` directory holds its local settings, commands, shadow repository for checkpoints, worktrees, and drafts. Chat sessions are no longer stored there. Deleting a chat removes its folder in `workspaces`, its journals, its drafts and, for an isolated chat, its worktree in `.yaca/worktrees`; the branch `yaca/<id>` stays, so the commits on it can still be merged.
 
 The shadow repository holds what the snapshots contain; `<id>.checkpoints.json` says which snapshots belong to which chat and in what order. Snapshots a chat's list names are kept for as long as the chat exists, and deleting the chat frees them. A point whose snapshot has gone missing is left out of the list rather than offered as a rollback that cannot work.
 
@@ -163,7 +164,7 @@ Where Yaca looks for skills, in descending order of precedence:
 
 A project skill overrides a user skill with the same name; within the same scope, `.yaca` overrides `.agents`, which in turn overrides `.claude`. Yaca only reads these directories, so skills from Claude Code and other clients work without copying.
 
-Yaca writes to one of them: the `docx`, `xlsx` and `pptx` skills it ships with are installed into `skills/` in the app settings directory on start, rewritten only when the bundled text changes. They are ordinary skills from then on — editable, shadowed by a project skill of the same name, visible in `yaca skills` and in Settings. See [Office skills](#office-skills).
+Yaca writes to one of them: the `docx`, `xlsx`, `pptx` and `pdf` skills it ships with are installed into `skills/` in the app settings directory on start and updated when the bundled version changes. They are ordinary skills from then on — editable, shadowed by a project skill of the same name, visible in `yaca skills` and in Settings. See [Office skills](#office-skills).
 
 The model sees a catalog: the name and description of each skill. It loads a matching skill using the `Skill` tool, and reads skill files using the same tool (`file`), even if the skill is located outside the project. Skill scripts run via standard `Bash` with the usual permission prompt. Skills can also be invoked manually via `/name arguments`. A command with the same name in `.yaca/commands/` takes precedence over the skill there too. The list in the prompt is read when opening a chat, while the skill content is read upon invocation, so skill edits take effect immediately, while newly added skills appear in the list starting with the next chat.
 
@@ -449,9 +450,9 @@ The macro-enabled and template extensions (`docm`, `dotx`, `xlsm`, `pptm`, …) 
 
 ### Office skills
 
-Yaca ships three skills — `docx`, `xlsx`, `pptx` — adapted from [AgentChat](https://github.com/Zorahm/AgentChat/tree/master/skills) for Yaca's tools. They are installed into the user's skills folder (`<config>/skills`) on start, rewritten only when the bundled text changes, and listed in the catalog like any other skill, so the model loads one when a document is the job: the library to use (python-docx, openpyxl/pandas, python-pptx), how to build tables, charts, images and speaker notes, how to edit a file without rewriting it, and how to check the result. The `docx` skill carries `scripts/replace.py`, a run-aware find-and-replace for Word files, where a visible word is often split across several runs.
+Yaca ships four skills — `docx`, `xlsx`, `pptx` and `pdf` — adapted from [Anthropic's Agent Skills](https://github.com/anthropics/skills/tree/main/skills), building on Yaca's existing [AgentChat](https://github.com/Zorahm/AgentChat/tree/master/skills) workflows. The catalog exposes them to the model in **Code** and **Documents** chats. The model loads the relevant skill for Word layout and revisions, Excel formulas and recalculation, PowerPoint templates and visual checks, or PDF text, forms, OCR and page operations. The `docx` skill also ships `scripts/replace.py` for text that Word splits across multiple runs.
 
-A project's own `.yaca/skills` and the user's own skills shadow the bundled ones by name.
+A project's own `.yaca/skills` can override the bundled skills by name.
 
 ## Token Savings
 
