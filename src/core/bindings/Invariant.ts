@@ -3,11 +3,8 @@
 /**
  * A question that no standing rule and no bypass can settle for the human (§8).
  *
- * The invariants of §8 that no rule settles: a commit or a push needs an
- * explicit command from the human, and a write into git's configuration runs
- * programs when git next reads it. The core cannot know whether the human
- * gave a command, or whether a configuration is theirs to change, so every
- * such call is put to them. No "always" is offered for these questions, and a
- * grant that matches one is ignored.
+ * A write into Git's configuration can run programs when Git next reads it.
+ * No "always" is offered for these questions, and a matching grant is ignored.
+ * The command variants remain for persisted permission events and BashRestart.
  */
 export type Invariant = "gitCommit" | "gitPush" | "gitUnresolved" | "gitConfig";

@@ -1,23 +1,17 @@
-//! Finding the git commands that §8 keeps behind the human's own word.
-//!
-//! Committing and pushing without an explicit command are forbidden in every
-//! mode, bypass included. The core cannot forbid them outright, because the
-//! human may ask for them; it can make sure every one of them is put to the
-//! human first. That is what this module decides.
+//! Finding Git commands that must be retried through Bash and paths that
+//! require explicit permission to modify.
 //!
 //! The search is deliberately wide. A `git push` is found wherever a word is
 //! `git` (or `git.exe`, or a path to either), in any simple command, after any
 //! separator, inside `sh -c "…"`, inside `$(…)`, and behind env prefixes. A
-//! word that looks like a command line of its own is read as one. A false
-//! alarm costs one question; a missed push runs with nobody asked.
+//! word that looks like a command line of its own is read as one. This keeps
+//! BashRestart from reusing permission when the contents to push may differ.
 //!
 //! The same section of §8 covers writes into git's own configuration, which
 //! run programs when git reads them: see [`of_path`].
 //!
-//! What is not seen: a subcommand the shell produces from a variable (reported
-//! as [`Invariant::GitUnresolved`] when it is visible), a git alias defined in
-//! the configuration, and a script that runs git. Those are named in the
-//! README as open, not papered over here.
+//! A visible dynamic subcommand is reported as [`Invariant::GitUnresolved`].
+//! Aliases defined in Git configuration and scripts that run Git are opaque.
 
 use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
@@ -42,7 +36,7 @@ const VALUE_OPTIONS: [&str; 7] = [
     "--config-env",
 ];
 
-/// The invariant this command runs into, if it runs into one.
+/// Whether BashRestart should send the command back through Bash, and why.
 pub fn of_command(command: &str) -> Option<Invariant> {
     scan(command, 0)
 }

@@ -22,7 +22,7 @@ use super::{Narration, Tool, ToolCtx, ToolOutput};
 use crate::checkpoint::CheckpointReason;
 use crate::error::ToolError;
 use crate::intent::Intent;
-use crate::permission::{invariant, readonly, unsaved, PermissionKind, PermissionNeed};
+use crate::permission::{readonly, unsaved, PermissionKind, PermissionNeed};
 use crate::process::output::{clamp, Lines, Ring, Utf8Stream, RING_LINES};
 use crate::process::{kill, shell};
 use crate::workspace::Workspace;
@@ -143,19 +143,6 @@ impl Tool for Bash {
         // question is about to let a command loose somewhere, and `.` does not
         // say where.
         let cwd = working_dir(ws, input).unwrap_or_else(|_| ws.root().to_path_buf());
-
-        // §8: a commit or push is put to the human in every mode, whatever the
-        // command is wrapped in. Checked first, so a read-only shortcut can
-        // never skip it.
-        if let Some(invariant) = invariant::of_command(command) {
-            return Some(
-                PermissionNeed::new(PermissionKind::RunCommand, self.name(), head(command))
-                    .detail(command)
-                    .note(cwd.to_string_lossy())
-                    .command(command)
-                    .invariant(invariant),
-            );
-        }
 
         // A command that changes nothing runs without a question (§7.1, §8).
         if readonly::is_read_only_in(command, &search_dirs(ws, &cwd)) {
@@ -716,14 +703,14 @@ mod tests {
     }
 
     #[test]
-    fn a_push_is_an_invariant_even_when_it_looks_read_only() {
+    fn a_push_in_a_command_chain_needs_ordinary_command_permission() {
         let dir = TempDir::new();
         let ws = Workspace::open(dir.path()).unwrap();
         let need = Bash
             .permission(&ws, &json!({ "command": "echo ok && git push" }))
             .unwrap();
-        assert_eq!(need.invariant, Some(crate::permission::Invariant::GitPush));
-        assert!(need.scopes(ws.root()).is_empty());
+        assert_eq!(need.kind, PermissionKind::RunCommand);
+        assert_eq!(need.invariant, None);
     }
 
     #[test]

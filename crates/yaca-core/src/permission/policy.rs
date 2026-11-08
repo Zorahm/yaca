@@ -50,8 +50,8 @@ impl Policy {
     ///
     /// 1. A standing refusal stops the call in every mode, bypass included:
     ///    bypass means "stop asking me", not "do what I said no to".
-    /// 2. An invariant is asked about in every mode, bypass included. A grant
-    ///    does not reach it: "always allow git" must not let a push through.
+    /// 2. An invariant is asked about in every mode, bypass included, even
+    ///    when a grant matches it.
     /// 3. A standing grant lets the call through.
     /// 4. Bypass lets everything else through.
     /// 5. A deletion that loses what no snapshot keeps is asked about in every
@@ -168,61 +168,26 @@ mod tests {
         }
     }
 
-    fn command(line: &str) -> PermissionNeed {
-        PermissionNeed::new(PermissionKind::RunCommand, "Bash", line).command(line)
-    }
-
-    fn git_push() -> PermissionNeed {
-        command("git push").invariant(Invariant::GitPush)
-    }
-
-    fn git_grant() -> Standing {
-        Standing::Granted
-    }
-
-    #[test]
-    fn an_invariant_is_asked_in_every_mode_and_under_bypass() {
-        for trust in [TrustMode::Manual, TrustMode::Auto, TrustMode::Edits] {
-            for bypass in [false, true] {
-                let p = Policy { trust, bypass };
-                assert_eq!(
-                    p.decide(&git_push(), None),
-                    Decision::Ask,
-                    "{trust:?} bypass={bypass}"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn a_grant_for_the_command_does_not_reach_an_invariant() {
-        // "Always allow git" covers `git push` as a command. It must not pass
-        // the push, in Auto or under bypass.
-        let grant = git_grant();
-        for bypass in [false, true] {
-            let p = Policy {
-                trust: TrustMode::Auto,
-                bypass,
-            };
-            assert_eq!(p.decide(&git_push(), Some(&grant)), Decision::Ask);
-        }
+    fn git_config_edit() -> PermissionNeed {
+        PermissionNeed::new(PermissionKind::EditFile, "Edit", ".git/config")
+            .invariant(Invariant::GitConfig)
     }
 
     #[test]
     fn a_standing_refusal_still_stops_an_invariant_without_a_question() {
         let refusal = Standing::Refused(crate::permission::Refusal::new(
-            crate::permission::ScopeKey::CommandPrefix {
-                prefix: "git".into(),
+            crate::permission::ScopeKey::Tool {
+                name: "Edit".into(),
             },
-            Some("no pushes today".into()),
+            Some("no configuration changes".into()),
         ));
         let p = Policy {
             trust: TrustMode::Auto,
             bypass: true,
         };
         assert_eq!(
-            p.decide(&git_push(), Some(&refusal)),
-            Decision::Refuse(Some("no pushes today".into()))
+            p.decide(&git_config_edit(), Some(&refusal)),
+            Decision::Refuse(Some("no configuration changes".into()))
         );
     }
 
@@ -247,16 +212,17 @@ mod tests {
         };
         assert_eq!(bypass.decide(&loses, None), Decision::Pass);
         // A grant the human gave earlier is theirs to keep.
-        assert_eq!(auto.decide(&loses, Some(&git_grant())), Decision::Pass);
+        assert_eq!(
+            auto.decide(&loses, Some(&Standing::Granted)),
+            Decision::Pass
+        );
     }
 
     #[test]
     fn a_git_configuration_write_is_asked_in_every_mode_and_under_bypass() {
         // The write is the step a later `git status` would run, so no mode and
         // no bypass lets it through unasked, and a grant does not either.
-        let edit = PermissionNeed::new(PermissionKind::EditFile, "Edit", "config")
-            .invariant(Invariant::GitConfig);
-        let grant = git_grant();
+        let edit = git_config_edit();
         for trust in [TrustMode::Manual, TrustMode::Auto, TrustMode::Edits] {
             for bypass in [false, true] {
                 let p = Policy { trust, bypass };
@@ -266,7 +232,7 @@ mod tests {
                     "{trust:?} bypass={bypass}"
                 );
                 assert_eq!(
-                    p.decide(&edit, Some(&grant)),
+                    p.decide(&edit, Some(&Standing::Granted)),
                     Decision::Ask,
                     "{trust:?} bypass={bypass}"
                 );

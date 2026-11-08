@@ -175,12 +175,9 @@ impl Refusal {
 
 /// A question that no standing rule and no bypass can settle for the human (§8).
 ///
-/// The invariants of §8 that no rule settles: a commit or a push needs an
-/// explicit command from the human, and a write into git's configuration runs
-/// programs when git next reads it. The core cannot know whether the human
-/// gave a command, or whether a configuration is theirs to change, so every
-/// such call is put to them. No "always" is offered for these questions, and a
-/// grant that matches one is ignored.
+/// A write into Git's configuration can run programs when Git next reads it.
+/// No "always" is offered for these questions, and a matching grant is ignored.
+/// The command variants remain for persisted permission events and BashRestart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
@@ -190,7 +187,7 @@ pub enum Invariant {
     /// `git push`.
     GitPush,
     /// A git command whose subcommand the shell produces at run time, so it may
-    /// be a commit or a push. Asked about rather than guessed at.
+    /// be a commit or a push.
     GitUnresolved,
     /// A write, edit, delete or move that touches git's own configuration or
     /// attributes: anything under a `.git` directory or `.git` file (a
@@ -198,7 +195,7 @@ pub enum Invariant {
     /// `.gitmodules` file. Git runs what those files name (`core.fsmonitor`,
     /// diff and filter drivers, hooks) the next time it reads the repository,
     /// so the write is the moment to ask: a later `git status` would run it
-    /// unasked. Asked in every mode, bypass included, as a push is.
+    /// unasked. Asked in every mode, bypass included.
     GitConfig,
 }
 

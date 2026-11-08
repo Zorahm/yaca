@@ -142,13 +142,11 @@ impl Tool for BashRestart {
             .processes
             .summary(id)
             .ok_or_else(|| ToolError::failed(format!("no background command with id {id}")))?;
-        // Restarting runs the command again without a question, which is only
-        // sound for commands that were never questions of their own (§8). A
-        // commit or a push is asked about every time it runs, however it got
-        // started, so it is run again through `Bash`, where the question is.
+        // A commit or push can act on different changes after a restart.
+        // Route it through Bash so the current permission policy applies.
         if invariant::of_command(&summary.command).is_some() {
             return Err(ToolError::failed(format!(
-                "command {id} cannot be restarted: commit and push can only be run via Bash, with permission from the human"
+                "command {id} cannot be restarted: run the Git command again via Bash so the current permission policy applies"
             )));
         }
         // Resolved before anything is killed: a directory that is gone should
@@ -300,7 +298,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_command_that_is_an_invariant_is_not_restarted_unasked() {
+    async fn a_push_must_be_run_again_through_bash() {
         let dir = TempDir::new();
         let (ctx, _ws) = ctx_for(&dir);
         let id = ctx

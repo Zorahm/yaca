@@ -559,58 +559,54 @@ fn saw(events: &[AgentEvent], kind: &str) -> bool {
     events.iter().any(|e| e.kind() == kind)
 }
 
-/// A git push is put to the human under bypass: the flag turns permissions
-/// off, and a push is an invariant, not a permission (§8).
-#[tokio::test]
-async fn a_push_is_asked_under_bypass() {
-    let dir = TempProject::new();
-    let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(bash("t1", "git push origin main")),
-        Turn::Events(script_text("Stopped.")),
-    ]));
-    let handle = session(&dir, provider, Mode::Auto);
-    let mut rx = handle.subscribe();
-    handle.send(Command::SetBypass { on: true }).await.unwrap();
+// Git fails before touching a repository or a remote.
+const GIT_COMMIT: &str = "git -C missing commit -m wip";
+const GIT_PUSH: &str = "git -C missing push origin main";
 
-    ask(&handle, "publish").await;
-    let asking = until(&mut rx, |e| {
-        matches!(e, AgentEvent::PermissionRequested { .. })
-    })
-    .await;
-    let request = first_request(&asking).unwrap();
-    assert_eq!(request.invariant, Some(Invariant::GitPush));
+fn assert_git_ran(events: &[AgentEvent], id: &str) {
     assert!(
-        request.scopes.is_empty(),
-        "no rule may be offered for a push"
-    );
-
-    handle
-        .send(Command::AnswerPermission {
-            request_id: request.id,
-            answer: PermissionAnswer::Deny { reason: None },
-        })
-        .await
-        .unwrap();
-    let rest = until(&mut rx, is_turn_over).await;
-    assert!(
-        saw(&rest, "toolCallDenied"),
-        "the refused push must not run"
+        events.iter().any(|event| matches!(
+            event,
+            AgentEvent::ToolCallFailed { call_id, message }
+                if call_id.as_str() == id && message.contains("\"git\" exited with code")
+        )),
+        "{events:?}"
     );
 }
 
-/// "Always allow git" covers `git` as a command. It must not pass a commit,
-/// even under bypass: the question is put again.
 #[tokio::test]
-async fn an_always_allow_for_git_does_not_pass_a_commit() {
+async fn bypass_runs_a_git_push_without_review() {
     let dir = TempProject::new();
-    let provider = Arc::new(MockProvider::new(vec![
-        Turn::Events(bash("t1", "mkdir made")),
-        // Auto's reviewer is the session's own model here, and it declines.
-        Turn::Events(script_text("UNSAFE")),
-        Turn::Events(bash("t2", "git commit -m wip")),
+    let main = Arc::new(MockProvider::new(vec![
+        Turn::Events(bash("t1", GIT_PUSH)),
         Turn::Events(script_text("Done.")),
     ]));
-    let handle = session(&dir, provider, Mode::Auto);
+    let decision = Arc::new(MockProvider::text("UNSAFE"));
+    let handle = auto_with_decision(&dir, main, decision.clone());
+    let mut rx = handle.subscribe();
+    handle.send(Command::SetBypass { on: true }).await.unwrap();
+    until(
+        &mut rx,
+        |e| matches!(e, AgentEvent::StateChanged { state } if state.bypass),
+    )
+    .await;
+
+    ask(&handle, "publish").await;
+    let rest = until(&mut rx, is_turn_over).await;
+    assert!(!saw(&rest, "permissionRequested"), "{rest:?}");
+    assert_git_ran(&rest, "t1");
+    assert!(decision.seen.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn manual_asks_about_git_and_a_standing_grant_passes_the_next_command() {
+    let dir = TempProject::new();
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(bash("t1", GIT_PUSH)),
+        Turn::Events(bash("t2", GIT_COMMIT)),
+        Turn::Events(script_text("Done.")),
+    ]));
+    let handle = session(&dir, provider, Mode::Manual);
     let mut rx = handle.subscribe();
 
     ask(&handle, "work").await;
@@ -618,35 +614,23 @@ async fn an_always_allow_for_git_does_not_pass_a_commit() {
         matches!(e, AgentEvent::PermissionRequested { .. })
     })
     .await;
-    // A "git" grant is stored, then bypass is switched on: the commit is still asked.
-    let mkdir = first_request(&first).unwrap();
+    let push = first_request(&first).unwrap();
+    let scope = ScopeKey::CommandPrefix {
+        prefix: "git".into(),
+    };
+    assert_eq!(push.invariant, None);
+    assert!(push.scopes.contains(&scope));
     handle
         .send(Command::AnswerPermission {
-            request_id: mkdir.id,
-            answer: PermissionAnswer::AllowAlways {
-                scope: ScopeKey::CommandPrefix {
-                    prefix: "git".into(),
-                },
-            },
+            request_id: push.id,
+            answer: PermissionAnswer::AllowAlways { scope },
         })
         .await
         .unwrap();
 
-    handle.send(Command::SetBypass { on: true }).await.unwrap();
-    let second = until(&mut rx, |e| {
-        matches!(e, AgentEvent::PermissionRequested { .. })
-    })
-    .await;
-    let commit = first_request(&second).unwrap();
-    assert_eq!(commit.invariant, Some(Invariant::GitCommit));
-    handle
-        .send(Command::AnswerPermission {
-            request_id: commit.id,
-            answer: PermissionAnswer::Deny { reason: None },
-        })
-        .await
-        .unwrap();
-    until(&mut rx, is_turn_over).await;
+    let rest = until(&mut rx, is_turn_over).await;
+    assert!(!saw(&rest, "permissionRequested"), "{rest:?}");
+    assert_git_ran(&rest, "t2");
 }
 
 /// Plan refuses a write before any question is put: a question about an action
@@ -1045,58 +1029,48 @@ async fn auto_asks_the_human_when_the_decision_model_fails() {
 /// No Decision model: the session's own model reviews the call, in a request
 /// of its own between its two turns.
 #[tokio::test]
-async fn auto_without_a_decision_model_has_the_session_model_review() {
+async fn auto_without_a_decision_model_has_the_session_model_review_git() {
     let dir = TempProject::new();
     let main = Arc::new(MockProvider::new(vec![
-        Turn::Events(bash("t1", "mkdir made")),
+        Turn::Events(bash("t1", GIT_COMMIT)),
         Turn::Events(script_text("SAFE")),
-        Turn::Events(script_text("Made it.")),
+        Turn::Events(script_text("Done.")),
     ]));
     let handle = session(&dir, main.clone(), Mode::Auto);
     let mut rx = handle.subscribe();
 
-    ask(&handle, "make a folder").await;
+    ask(&handle, "commit").await;
     let rest = until(&mut rx, is_turn_over).await;
 
     assert!(!saw(&rest, "permissionRequested"), "{rest:?}");
-    assert!(dir.path().join("made").is_dir());
+    assert_git_ran(&rest, "t1");
 
     let seen = main.seen.lock().unwrap();
     assert_eq!(seen.len(), 3);
     assert!(seen[1].tools.is_empty(), "the reviewer is given no tools");
-    assert!(format!("{:?}", seen[1].messages).contains("mkdir made"));
+    assert!(format!("{:?}", seen[1].messages).contains(GIT_COMMIT));
 }
 
-/// The reviewer settles only what the mode asked. A commit is an invariant:
-/// it is put to the human and the reviewer is not even consulted.
 #[tokio::test]
-async fn the_reviewer_does_not_settle_an_invariant() {
+async fn auto_runs_a_git_push_the_decision_model_calls_safe() {
     let dir = TempProject::new();
     let main = Arc::new(MockProvider::new(vec![
-        Turn::Events(bash("t1", "git commit -m wip")),
-        Turn::Events(script_text("Stopped.")),
+        Turn::Events(bash("t1", GIT_PUSH)),
+        Turn::Events(script_text("Done.")),
     ]));
     let decision = Arc::new(MockProvider::text("SAFE"));
-    let handle = auto_with_decision(&dir, main, decision.clone());
+    let handle = auto_with_decision(&dir, main.clone(), decision.clone());
     let mut rx = handle.subscribe();
 
-    ask(&handle, "commit").await;
-    let asking = until(&mut rx, |e| {
-        matches!(e, AgentEvent::PermissionRequested { .. })
-    })
-    .await;
-    let request = first_request(&asking).unwrap();
-    assert_eq!(request.invariant, Some(Invariant::GitCommit));
-    assert!(decision.seen.lock().unwrap().is_empty());
+    ask(&handle, "publish").await;
+    let rest = until(&mut rx, is_turn_over).await;
+    assert!(!saw(&rest, "permissionRequested"), "{rest:?}");
+    assert_git_ran(&rest, "t1");
 
-    handle
-        .send(Command::AnswerPermission {
-            request_id: request.id,
-            answer: PermissionAnswer::Deny { reason: None },
-        })
-        .await
-        .unwrap();
-    until(&mut rx, is_turn_over).await;
+    let seen = decision.seen.lock().unwrap();
+    assert_eq!(seen.len(), 1);
+    assert!(format!("{:?}", seen[0].messages).contains(GIT_PUSH));
+    assert_eq!(main.seen.lock().unwrap().len(), 2);
 }
 
 /// Manual never consults a reviewer: the human is the only one asked.
