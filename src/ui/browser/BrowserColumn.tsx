@@ -87,7 +87,7 @@ export function BrowserColumn({
   const changeZoom = (direction: number) => {
     const next = direction === 0 ? 100 : direction > 0
       ? ZOOM.find((level) => level > zoom)
-      : ZOOM.findLast((level) => level < zoom);
+      : ZOOM.filter((level) => level < zoom).pop();
     if (next !== undefined) void run(browser.zoom(session, next));
   };
   const newTab = () => void run(browser.tab(session, "new"));
