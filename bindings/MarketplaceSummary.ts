@@ -12,4 +12,4 @@ fetched: boolean, plugins: number | null,
 /**
  * Why the fetched copy cannot be read.
  */
-error: string | null, };
+error: string | null, updatedAt: number | null, };
