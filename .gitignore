@@ -14,6 +14,8 @@ dist-ssr
 
 # Rust
 /target
+# ts-rs exports to src/core/bindings (see .cargo/config.toml); a copy at the root is stale
+/bindings/
 
 # Данные проекта: журнал сессий, теневой репозиторий
 .yaca/
