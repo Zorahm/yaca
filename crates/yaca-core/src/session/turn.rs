@@ -24,16 +24,21 @@ use crate::workspace::Workspace;
 use crate::checkpoint::CheckpointReason;
 
 use super::accumulator::{Accumulator, RouteDecision};
-use super::binding::{self, Fingerprint};
+use super::binding::Fingerprint;
 use super::calls::{Caller, ModelPick};
 use super::guard::{self, Flow, RepeatGuard};
 use super::inbox::Inbox;
 use super::questions::Questions;
+use super::window::RequestHead;
 use super::{checkpoints, compact, environment, Job, Shared, ToolRegistry};
 
 /// Cap on one response. Streaming removes the question of timeouts, but the window
 /// is finite, and there is no reason to give the model all 128k for one reply.
 const MAX_OUTPUT_TOKENS: u32 = 64_000;
+
+const OUTPUT_LIMIT_RETRY: &str =
+    "[Output limit] The previous response was cut short. Continue the task. \
+     Keep the next step concise and split large tool arguments across calls.";
 
 /// How a turn came to its end.
 enum End {
@@ -74,6 +79,7 @@ pub(super) struct Worker {
     /// What the plugins' `SessionStart` hooks said, for the system prompt
     /// (`plugin_hooks`).
     pub(super) plugin_context: Option<Arc<str>>,
+    pub(super) request_head: Option<RequestHead>,
     pub(super) history: Vec<Message>,
     /// What the reasoning in `history` was produced under (`binding`).
     /// `None` until the first request, or for a session recorded before
@@ -279,6 +285,8 @@ impl Worker {
         // Set once a request refused as too long has been compacted and sent
         // again, until one gets through.
         let mut rescued = false;
+        let mut retried_output_limit = false;
+        let mut retry_note = None;
         // Answers received in this turn, against the ceiling in the settings.
         // A request that was refused and sent again is one answer, not two.
         let max_steps = self.shared.settings.max_steps();
@@ -300,7 +308,7 @@ impl Worker {
             // turn of many calls fills the window between its steps (§6.1.1).
             self.compact_if_full(turn_id, cancel).await;
 
-            let request = self.build_request(turn_id);
+            let request = self.build_request(turn_id, retry_note);
             let mut stream = match self.open_stream(request, cancel).await {
                 Ok(s) => s,
                 // The provider measured what the estimate did not. Compacted
@@ -318,6 +326,7 @@ impl Worker {
                 Err(err) => return End::Failed(err),
             };
             rescued = false;
+            retry_note = None;
 
             let mut acc = Accumulator::new(turn_id.clone());
             let caller = self.caller();
@@ -355,16 +364,19 @@ impl Worker {
                 .blocks
                 .iter()
                 .any(|b| matches!(b, ContentBlock::Text { text } if !text.trim().is_empty()));
-            if !done.blocks.is_empty() {
+            let cut_without_answer =
+                done.stop_reason == StopReason::MaxTokens && done.calls.is_empty() && !spoke;
+            // Thinking can be cut before its signature arrives. It was streamed
+            // to the feed, but replaying it would make a Messages API retry fail.
+            if !done.blocks.is_empty() && !cut_without_answer {
                 self.remember(turn_id, Message::assistant(done.blocks));
             }
             // The figure just recorded covers everything sent and answered.
             self.measured = self.history.len();
             // After the answer is in the history: the figure counts it, and
             // the split of the figure (`window`) has to count it too.
-            self.emit(AgentEvent::UsageUpdated {
-                usage: self.usage_snapshot(),
-            });
+            let usage = self.usage_snapshot();
+            self.emit(AgentEvent::UsageUpdated { usage });
 
             // Calls run whatever the stop reason says. A `tool_use` left
             // without its result makes the provider reject this conversation
@@ -374,6 +386,16 @@ impl Worker {
             // cap ends with its last call half-written — that one is answered
             // with an error rather than run (`calls::garbled`).
             if done.calls.is_empty() {
+                // A text fragment can look like a final answer even though the
+                // model ran out of tokens before it could finish or act.
+                if done.stop_reason == StopReason::MaxTokens
+                    && !retried_output_limit
+                    && steps < max_steps
+                {
+                    retried_output_limit = true;
+                    retry_note = Some(OUTPUT_LIMIT_RETRY);
+                    continue;
+                }
                 if let Some(note) = self.process_note() {
                     self.remember(
                         turn_id,
@@ -682,22 +704,38 @@ impl Worker {
         }
         self.registry = Arc::new(self.shared.tools(more));
         self.mcp_notes = self.shared.mcp.prompt_section().map(Arc::from);
+        self.request_head = None;
     }
 
-    fn build_request(&mut self, turn_id: &TurnId) -> ProviderRequest {
+    fn build_request(&mut self, turn_id: &TurnId, retry_note: Option<&str>) -> ProviderRequest {
         let state = self.shared.state.lock().unwrap().clone();
         let info = self.shared.model_info(&state.model);
         let intent = state.mode.intent();
-        let (system, tools) = self.head(intent, state.profile);
+        let head = self.head(intent, state.profile);
+        let (system, tools, fingerprint) = (
+            head.system.clone(),
+            head.tools.clone(),
+            head.fingerprint.clone(),
+        );
         // Before the history is copied: a prefix that moved takes the
         // reasoning bound to the old one with it.
-        self.rebind(turn_id, binding::fingerprint(&system, &tools));
+        self.rebind(turn_id, fingerprint);
         // Whatever the history holds, the request must not carry a call with
         // no answer: the provider would refuse every request from here on
         // (`message::answer_dangling_calls`). In the copy, so the journal and
         // the history stay as they were written.
         let mut messages = self.shared.shown_to(&info, &self.history);
         crate::message::answer_dangling_calls(&mut messages);
+        if let Some(note) = retry_note {
+            match messages.last_mut() {
+                Some(message) if message.role == Role::User => {
+                    message
+                        .content
+                        .push(ContentBlock::Text { text: note.into() });
+                }
+                _ => messages.push(Message::user_text(note)),
+            }
+        }
         ProviderRequest {
             model: state.model,
             system,
@@ -764,9 +802,8 @@ impl Worker {
             self.usage.record_aside(counts, pricing);
             self.usage.reconcile_cost(counts, pricing, cost);
         }
-        self.emit(AgentEvent::UsageUpdated {
-            usage: self.usage_snapshot(),
-        });
+        let usage = self.usage_snapshot();
+        self.emit(AgentEvent::UsageUpdated { usage });
     }
 
     /// The turn used all its steps. Ended with the error block rather than

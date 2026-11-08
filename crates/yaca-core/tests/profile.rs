@@ -75,11 +75,12 @@ async fn a_chat_about_code_keeps_the_coding_tools() {
 }
 
 #[tokio::test]
-async fn switching_the_profile_moves_the_prefix_and_the_tools() {
+async fn the_profile_is_fixed_but_switching_mode_moves_the_prefix_and_tools() {
     let dir = TempProject::new();
     let provider = Arc::new(MockProvider::new(vec![
         Turn::Events(script_text("First.")),
         Turn::Events(script_text("Second.")),
+        Turn::Events(script_text("Third.")),
     ]));
     let mut cfg = SessionConfig::new(dir.path());
     cfg.mode = Mode::Auto;
@@ -98,18 +99,32 @@ async fn switching_the_profile_moves_the_prefix_and_the_tools() {
         .unwrap();
     until(
         &mut rx,
-        |e| matches!(e, AgentEvent::StateChanged { state } if state.profile == Profile::Chat),
+        |e| matches!(e, AgentEvent::Error { code, .. } if code == "profile_fixed"),
     )
     .await;
 
     ask(&handle, "two").await;
     until(&mut rx, is_turn_over).await;
 
+    handle
+        .send(Command::SetMode { mode: Mode::Plan })
+        .await
+        .unwrap();
+    until(
+        &mut rx,
+        |e| matches!(e, AgentEvent::StateChanged { state } if state.mode == Mode::Plan),
+    )
+    .await;
+    ask(&handle, "three").await;
+    until(&mut rx, is_turn_over).await;
+
     let seen = provider.seen.lock().unwrap().clone();
-    assert_eq!(seen.len(), 2);
-    assert!(tool_names(&seen[0]).contains(&"NotebookEdit"));
-    assert!(!tool_names(&seen[1]).contains(&"NotebookEdit"));
-    assert_ne!(seen[0].system, seen[1].system);
+    assert_eq!(seen.len(), 3);
+    assert!(tool_names(&seen[0]).contains(&"Write"));
+    assert_eq!(tool_names(&seen[0]), tool_names(&seen[1]));
+    assert_eq!(seen[0].system, seen[1].system);
+    assert!(!tool_names(&seen[2]).contains(&"Write"));
+    assert_ne!(seen[1].system, seen[2].system);
 }
 
 #[tokio::test]

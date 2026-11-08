@@ -916,6 +916,7 @@ pub fn spawn(
             skills: shared.skills.scan().listing().map(Arc::new),
             agents_section: crate::agents::section(&shared.agents).map(Arc::from),
             plugin_context: None,
+            request_head: None,
             ws,
             provider,
             registry: Arc::new(shared.tools(Vec::new())),

@@ -1,12 +1,11 @@
-//! A response with nothing in it for the human: reasoning alone, or not even
-//! that. The turn must end with a block that says so, not close as if the
-//! model had finished.
+//! Recovery from truncated responses and errors for turns with no answer.
 
 mod common;
 
 use std::sync::Arc;
 
 use yaca_core::event::{AgentEvent, StopReason};
+use yaca_core::message::ContentBlock;
 use yaca_core::provider::mock::{script_text, MockProvider, Turn};
 use yaca_core::provider::{BlockKind, ProviderEvent};
 use yaca_core::Mode;
@@ -98,10 +97,11 @@ async fn reasoning_with_no_answer_ends_the_turn_with_an_error_block() {
 #[tokio::test]
 async fn reasoning_that_ate_the_output_budget_says_so() {
     let dir = TempProject::new();
-    let provider = Arc::new(MockProvider::new(vec![Turn::Events(thinking_only(
-        StopReason::MaxTokens,
-    ))]));
-    let handle = session(&dir, provider, Mode::Manual);
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(thinking_only(StopReason::MaxTokens)),
+        Turn::Events(thinking_only(StopReason::MaxTokens)),
+    ]));
+    let handle = session(&dir, provider.clone(), Mode::Manual);
     let mut rx = handle.subscribe();
 
     ask(&handle, "go on").await;
@@ -109,6 +109,38 @@ async fn reasoning_that_ate_the_output_budget_says_so() {
 
     let (_, message, _) = error_of(&events).expect("the turn closed without a word");
     assert!(message.contains("output budget"), "{message}");
+    assert_eq!(provider.seen.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn the_model_can_finish_after_spending_its_output_budget_on_reasoning() {
+    let dir = TempProject::new();
+    let mut cut = thinking_only(StopReason::MaxTokens);
+    cut.retain(|event| !matches!(event, ProviderEvent::SignatureDelta { .. }));
+    let provider = Arc::new(MockProvider::new(vec![
+        Turn::Events(cut),
+        Turn::Events(script_text("Done")),
+    ]));
+    let handle = session(&dir, provider.clone(), Mode::Manual);
+    let mut rx = handle.subscribe();
+
+    ask(&handle, "go on").await;
+    let events = until(&mut rx, is_turn_over).await;
+
+    assert_eq!(error_of(&events), None);
+    assert!(matches!(
+        events.last(),
+        Some(AgentEvent::TurnFinished {
+            stop_reason: StopReason::EndTurn,
+            ..
+        })
+    ));
+    let requests = provider.seen.lock().unwrap();
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[1].messages.len(), 1);
+    let (note, original) = requests[1].messages[0].content.split_last().unwrap();
+    assert_eq!(original, requests[0].messages[0].content.as_slice());
+    assert!(matches!(note, ContentBlock::Text { text } if text.contains("cut short")));
 }
 
 #[tokio::test]

@@ -6,9 +6,8 @@
 //! part's text. The total stays a fact and the split is an estimate; the parts
 //! always add up to the total, so the two cannot disagree on screen.
 //!
-//! Nothing here is cached: the prompt and the schemas are put together again
-//! for every snapshot, from the same pieces the request is built from. A copy
-//! kept on the worker would be a second version of what the request holds.
+//! Requests and usage snapshots share the same prepared prompt and schemas.
+//! The conversation's weight is still measured on every snapshot.
 
 use crate::intent::Intent;
 use crate::mcp::TOOL_PREFIX;
@@ -16,6 +15,7 @@ use crate::profile::Profile;
 use crate::provider::ToolSchema;
 use crate::usage::{ContextBreakdown, UsageSnapshot};
 
+use super::binding::{self, Fingerprint};
 use super::turn::Worker;
 use super::{compact, prompt};
 
@@ -32,9 +32,31 @@ struct Weights {
     messages: usize,
 }
 
+pub(super) struct RequestHead {
+    intent: Intent,
+    profile: Profile,
+    pub(super) system: String,
+    pub(super) tools: Vec<ToolSchema>,
+    pub(super) fingerprint: Fingerprint,
+    weights: Weights,
+}
+
 impl Worker {
-    /// The system prompt and the tools: the cached head of every request.
-    pub(super) fn head(&self, intent: Intent, profile: Profile) -> (String, Vec<ToolSchema>) {
+    /// The session context is fixed after startup. A refreshed registry and
+    /// its MCP notes invalidate this slot together in `take_mcp`.
+    pub(super) fn head(&mut self, intent: Intent, profile: Profile) -> &RequestHead {
+        if self
+            .request_head
+            .as_ref()
+            .is_none_or(|head| (head.intent, head.profile) != (intent, profile))
+        {
+            self.request_head = Some(self.build_head(intent, profile));
+        }
+        // The slot was either current or filled above.
+        self.request_head.as_ref().unwrap()
+    }
+
+    fn build_head(&self, intent: Intent, profile: Profile) -> RequestHead {
         let system = prompt::build_with_memory(
             self.ws.root(),
             intent,
@@ -50,29 +72,39 @@ impl Worker {
         // the human's setup speaking, not an external program.
         let system = prompt::with_mcp(system, self.plugin_context.as_deref());
         let system = prompt::with_mcp(system, self.mcp_notes.as_deref());
-        (system, self.registry.schemas(intent, profile))
+        let tools = self.registry.schemas(intent, profile);
+        let fingerprint = binding::fingerprint(&system, &tools);
+        let weights = self.head_weights(&system, &tools);
+        RequestHead {
+            intent,
+            profile,
+            system,
+            tools,
+            fingerprint,
+            weights,
+        }
     }
 
     /// The meter's snapshot with the window taken apart.
-    pub(super) fn usage_snapshot(&self) -> UsageSnapshot {
+    pub(super) fn usage_snapshot(&mut self) -> UsageSnapshot {
         let context_max = self.context_max();
         let mut usage = self.usage.snapshot(context_max);
-        usage.breakdown = ContextBreakdown {
-            reserved: self
-                .compact_limit()
-                .map_or(0, |limit| context_max.saturating_sub(limit)),
-            ..split(usage.context_used, self.weights())
-        };
-        usage
-    }
-
-    fn weights(&self) -> Weights {
         let (intent, profile) = {
             let state = self.shared.state.lock().unwrap();
             (state.mode.intent(), state.profile)
         };
-        let (system, tools) = self.head(intent, profile);
+        let mut weights = self.head(intent, profile).weights;
+        weights.messages = compact::weight(&self.history);
+        usage.breakdown = ContextBreakdown {
+            reserved: self
+                .compact_limit()
+                .map_or(0, |limit| context_max.saturating_sub(limit)),
+            ..split(usage.context_used, weights)
+        };
+        usage
+    }
 
+    fn head_weights(&self, system: &str, tools: &[ToolSchema]) -> Weights {
         // Each section goes into the prompt after a newline of its own
         // (`prompt::build_with_memory`), and that newline is the section's.
         let section = |text: Option<String>| text.map_or(0, |s| s.chars().count() + 1);
@@ -83,20 +115,7 @@ impl Worker {
         let skills = section(self.skills.as_deref().map(prompt::skills_section));
         let mcp_notes = section(self.mcp_notes.as_deref().map(str::to_string));
 
-        let (mcp, own): (Vec<_>, Vec<_>) =
-            tools.iter().partition(|t| t.name.starts_with(TOOL_PREFIX));
-        let schemas = |tools: &[&ToolSchema]| -> usize {
-            tools
-                .iter()
-                .map(|t| {
-                    t.name.chars().count()
-                        + t.description.chars().count()
-                        + t.input_schema.to_string().chars().count()
-                })
-                .sum()
-        };
-
-        Weights {
+        let mut weights = Weights {
             system_prompt: system
                 .chars()
                 .count()
@@ -104,11 +123,20 @@ impl Worker {
             instructions,
             memory,
             skills,
-            tools: schemas(&own),
-            mcp_tools: schemas(&mcp),
             mcp_notes,
-            messages: compact::weight(&self.history),
+            ..Weights::default()
+        };
+        for tool in tools {
+            let size = tool.name.chars().count()
+                + tool.description.chars().count()
+                + tool.input_schema.to_string().chars().count();
+            if tool.name.starts_with(TOOL_PREFIX) {
+                weights.mcp_tools += size;
+            } else {
+                weights.tools += size;
+            }
         }
+        weights
     }
 }
 

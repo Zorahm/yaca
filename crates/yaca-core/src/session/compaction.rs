@@ -148,9 +148,8 @@ impl Worker {
         self.emit(AgentEvent::ContextCompacted { summary, freed });
         // The ring and §6.1.1's bar both read the context, and both would go
         // on insisting it is full until the next answer without this.
-        self.emit(AgentEvent::UsageUpdated {
-            usage: self.usage_snapshot(),
-        });
+        let usage = self.usage_snapshot();
+        self.emit(AgentEvent::UsageUpdated { usage });
         true
     }
 
